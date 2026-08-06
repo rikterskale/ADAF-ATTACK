@@ -42,7 +42,7 @@ def _extract_cipher_and_etype(ticket: Any) -> tuple[bytes | None, int | None]:
                 cipher = bytes.fromhex(cipher)
             else:
                 cipher = cipher.encode()
-        if cipher is not None and not isinstance(cipher, (bytes, bytearray)):
+        if cipher is not None and not isinstance(cipher, bytes | bytearray):
             cipher = bytes(cipher)
     except Exception:  # noqa: BLE001
         return None, None

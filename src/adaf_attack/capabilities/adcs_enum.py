@@ -58,6 +58,7 @@ CA_ATTRS = [
     "msPKI-Enrollment-Servers",
 ]
 
+
 def _int_attr(entry: Any, name: str) -> int:
     val = getattr(entry, name, None)
     if val is None or val.value is None:
@@ -75,7 +76,7 @@ def _list_attr(entry: Any, name: str) -> list[str]:
     raw = val.value if hasattr(val, "value") else val
     if raw is None:
         return []
-    if isinstance(raw, (list, tuple)):
+    if isinstance(raw, list | tuple):
         return [str(x) for x in raw]
     return [str(raw)]
 
@@ -187,7 +188,11 @@ class AdcsEnum:
                     "manage_principals": [],
                 }
                 ca_id = f"CA@{(ca['cn'] or 'UNKNOWN').upper()}@{target.domain.upper()}"
-                graph.add_node(ca_id, "CA", **{k: v for k, v in ca.items() if v is not None and k != "manage_principals"})
+                graph.add_node(
+                    ca_id,
+                    "CA",
+                    **{k: v for k, v in ca.items() if v is not None and k != "manage_principals"},
+                )
 
                 # ESC8: HTTP enrollment endpoints
                 for srv in ca["enrollment_servers"]:
@@ -217,7 +222,11 @@ class AdcsEnum:
                                 graph.add_edge(src, ca_id, ace.right)
                                 if ace.right in ("ManageCA", "ManageCertificates", "GenericAll"):
                                     result["esc7_ca_acl"].append(
-                                        {"ca": ca["cn"], "sid": ace.principal_sid, "right": ace.right}
+                                        {
+                                            "ca": ca["cn"],
+                                            "sid": ace.principal_sid,
+                                            "right": ace.right,
+                                        }
                                     )
                                     graph.add_edge(src, ca_id, "ESC7")
                     except Exception as exc:  # noqa: BLE001
@@ -227,7 +236,6 @@ class AdcsEnum:
                 console.print(f"  CA: [cyan]{ca['cn']}[/cyan]  ({ca['dns']})")
         except Exception as exc:  # noqa: BLE001
             console.print(f"[yellow]CA enumeration limited: {exc}[/yellow]")
-
 
         # ESC5-ish: dangerous ACLs on other PKI container objects (AIA, CDP, NTAuth, KRA)
         result.setdefault("esc5_pki_acl", [])
@@ -289,7 +297,12 @@ class AdcsEnum:
                 if sd:
                     try:
                         for ace in parse_interesting_aces(sd):
-                            if ace.right in ("Enroll", "AutoEnroll", "GenericAll", "AllExtendedRights"):
+                            if ace.right in (
+                                "Enroll",
+                                "AutoEnroll",
+                                "GenericAll",
+                                "AllExtendedRights",
+                            ):
                                 enroll_principals.append(
                                     {"sid": ace.principal_sid, "right": ace.right}
                                 )
@@ -304,9 +317,7 @@ class AdcsEnum:
                                 "GenericWrite",
                                 "WriteProperty",
                             ):
-                                acl_dangerous.append(
-                                    {"sid": ace.principal_sid, "right": ace.right}
-                                )
+                                acl_dangerous.append({"sid": ace.principal_sid, "right": ace.right})
                     except RuntimeError:
                         raise
                     except Exception as exc:  # noqa: BLE001
@@ -362,17 +373,12 @@ class AdcsEnum:
                         {"template": tmpl["cn"], "aces": acl_dangerous}
                     )
                     graph.add_edge(tmpl_id, tmpl_id, "ESC4")
-                    console.print(
-                        f"  [red]ESC4 ACL[/red]: {tmpl['cn']}  aces={len(acl_dangerous)}"
-                    )
+                    console.print(f"  [red]ESC4 ACL[/red]: {tmpl['cn']}  aces={len(acl_dangerous)}")
 
                 if not tmpl["esc_tags"] and not acl_dangerous:
-                    console.print(
-                        f"  Template: {tmpl['cn']}  enroll_aces={len(enroll_principals)}"
-                    )
+                    console.print(f"  Template: {tmpl['cn']}  enroll_aces={len(enroll_principals)}")
         except Exception as exc:  # noqa: BLE001
             console.print(f"[yellow]Template enumeration limited: {exc}[/yellow]")
-
 
         # ESC6 probe (certutil local and/or Impacket remote registry)
         ca_hosts = [c.get("dns") for c in result["cas"] if c.get("dns")]

@@ -3,10 +3,10 @@
 import json
 from pathlib import Path
 
+from adaf_attack.capabilities.report import Report
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
-from adaf_attack.capabilities.report import Report
 
 
 def test_report_builds_md_html(tmp_path: Path) -> None:
@@ -19,11 +19,32 @@ def test_report_builds_md_html(tmp_path: Path) -> None:
     g.add_edge("USER@ALICE@CORP.LOCAL", "GROUP@DOMAIN ADMINS@CORP.LOCAL", "MemberOf")
     g.save(sess.path("graph.json"))
     sess.path("interesting.json").write_text(
-        json.dumps({"top_paths": [{"path": ["USER@ALICE@CORP.LOCAL", "GROUP@DOMAIN ADMINS@CORP.LOCAL"], "score": 1.5, "length": 1}]}),
+        json.dumps(
+            {
+                "top_paths": [
+                    {
+                        "path": ["USER@ALICE@CORP.LOCAL", "GROUP@DOMAIN ADMINS@CORP.LOCAL"],
+                        "score": 1.5,
+                        "length": 1,
+                    }
+                ]
+            }
+        ),
         encoding="utf-8",
     )
     sess.path("adcs-enum.json").write_text(
-        json.dumps({"cas": [], "templates": [], "esc1_candidates": ["User"], "esc2_candidates": [], "esc4_acl_templates": [], "esc7_ca_acl": [], "esc8_web_enrollment": [], "esc6": {"resolved": False}}),
+        json.dumps(
+            {
+                "cas": [],
+                "templates": [],
+                "esc1_candidates": ["User"],
+                "esc2_candidates": [],
+                "esc4_acl_templates": [],
+                "esc7_ca_acl": [],
+                "esc8_web_enrollment": [],
+                "esc6": {"resolved": False},
+            }
+        ),
         encoding="utf-8",
     )
 

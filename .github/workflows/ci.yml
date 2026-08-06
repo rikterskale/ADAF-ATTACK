@@ -45,7 +45,7 @@ jobs:
           for i in 1 2 3; do
             if python -m pip install --upgrade pip && \
               python -m pip install --no-deps --requirement requirements-ci.txt && \
-              python -m pip install --no-deps -e ".[dev]" && \
+              python -m pip install --no-build-isolation --no-deps -e ".[dev]" && \
               python -m pip check; then
               installed=1
               break
@@ -95,7 +95,7 @@ jobs:
           for i in 1 2 3; do
             if python -m pip install --upgrade pip && \
               python -m pip install --no-deps --requirement requirements-ci.txt && \
-              python -m pip install --no-deps -e ".[dev,kerberos]" && \
+              python -m pip install --no-build-isolation --no-deps -e ".[dev,kerberos]" && \
               python -m pip check; then
               installed=1
               break

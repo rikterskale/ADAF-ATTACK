@@ -19,9 +19,7 @@ class Session:
     def __init__(self, base_dir: Path | str | None = None) -> None:
         base = default_workspace_dir() if base_dir is None else normalize_path(base_dir)
         self.base_dir = ensure_dir(base)
-        self.session_id = (
-            datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
-        )
+        self.session_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
         self.root = ensure_dir(self.base_dir / self.session_id)
         self._events: list[dict[str, Any]] = []
         self._write_meta()

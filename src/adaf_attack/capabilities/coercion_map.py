@@ -45,7 +45,9 @@ def _smb_pipe_check(host: str, target: Target) -> dict[str, Any]:
     try:
         smb = SMBConnection(host, host, timeout=3)
         if target.hashes:
-            smb.login(target.username or "", target.password or "", target.domain, lmhash=lm, nthash=nt)
+            smb.login(
+                target.username or "", target.password or "", target.domain, lmhash=lm, nthash=nt
+            )
         elif target.username and target.password:
             smb.login(target.username, target.password, target.domain)
         else:

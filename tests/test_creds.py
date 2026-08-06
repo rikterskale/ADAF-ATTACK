@@ -62,9 +62,7 @@ def test_load_credentials_json_wrapped(tmp_path: Path) -> None:
 
 
 def test_dump_redacted() -> None:
-    cs = CredentialSet(
-        credentials=[Credential(username="a", password="secret", hashes="lm:nt")]
-    )
+    cs = CredentialSet(credentials=[Credential(username="a", password="secret", hashes="lm:nt")])
     dumped = cs.dump_redacted()
     assert dumped[0]["password"] == "***"
     assert dumped[0]["hashes"] == "***"

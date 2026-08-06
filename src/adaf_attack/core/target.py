@@ -40,11 +40,7 @@ class Target:
     @property
     def has_credentials(self) -> bool:
         return bool(
-            self.password
-            or self.hashes
-            or self.aes_key
-            or self.ccache
-            or self.use_kerberos
+            self.password or self.hashes or self.aes_key or self.ccache or self.use_kerberos
         )
 
     def lm_nt_hashes(self) -> tuple[str, str]:

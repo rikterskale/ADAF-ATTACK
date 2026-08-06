@@ -80,7 +80,9 @@ def _analyze_trust(entry: Any, local_domain: str) -> dict[str, Any]:
 
     risk_notes = []
     if direction in (1, 3) and not sid_filtering and not within_forest:
-        risk_notes.append("Inbound/bidirectional trust without SID filtering (SID history attacks possible)")
+        risk_notes.append(
+            "Inbound/bidirectional trust without SID filtering (SID history attacks possible)"
+        )
     if "USES_RC4_ENCRYPTION" in flags:
         risk_notes.append("RC4 allowed on trust")
     if forest_trust and direction in (1, 3):

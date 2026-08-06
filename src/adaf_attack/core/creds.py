@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from adaf_attack.core.target import Target
 
@@ -25,7 +26,9 @@ class Credential:
     tags: list[str] = field(default_factory=list)
 
     def has_secrets(self) -> bool:
-        return bool(self.password or self.hashes or self.aes_key or self.ccache or self.use_kerberos)
+        return bool(
+            self.password or self.hashes or self.aes_key or self.ccache or self.use_kerberos
+        )
 
     def to_target(self, dc_ip: str, domain: str | None = None, *, ldaps: bool = False) -> Target:
         return Target(
@@ -78,7 +81,9 @@ class CredentialSet:
         *,
         ldaps: bool = False,
     ) -> list[Target]:
-        return [c.to_target(dc_ip, domain=domain or c.domain, ldaps=ldaps) for c in self.credentials]
+        return [
+            c.to_target(dc_ip, domain=domain or c.domain, ldaps=ldaps) for c in self.credentials
+        ]
 
     def dump_redacted(self) -> list[dict[str, Any]]:
         out = []

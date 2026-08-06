@@ -36,6 +36,7 @@ def _parse_security_descriptor_sids(raw: Any) -> list[str]:
         else:
             text = str(raw)
         import re
+
         sids = re.findall(r"S-1-5-\d+(?:-\d+)+", text)
     except Exception:  # noqa: BLE001
         pass
@@ -119,7 +120,13 @@ class Rbcd:
                 continue
             try:
                 for ace in parse_interesting_aces(sd):
-                    if ace.right in ("GenericAll", "GenericWrite", "WriteProperty", "WriteDacl", "WriteOwner"):
+                    if ace.right in (
+                        "GenericAll",
+                        "GenericWrite",
+                        "WriteProperty",
+                        "WriteDacl",
+                        "WriteOwner",
+                    ):
                         result["writable_computers"].append(
                             {
                                 "computer": sam,
@@ -137,14 +144,14 @@ class Rbcd:
                 pass
 
         # De-dupe writable list for console summary
-        uniq = {(w["computer"], w["principal_sid"], w["right"]) for w in result["writable_computers"]}
+        uniq = {
+            (w["computer"], w["principal_sid"], w["right"]) for w in result["writable_computers"]
+        }
         console.print(f"  Writable RBCD surfaces: [cyan]{len(uniq)}[/cyan] ACE hits")
 
         if set_on:
             if not force:
-                console.print(
-                    "[yellow]RBCD set requested without --force — enum only.[/yellow]"
-                )
+                console.print("[yellow]RBCD set requested without --force — enum only.[/yellow]")
                 result["set_attempt"] = {"set_on": set_on, "skipped": "force_required"}
             elif not set_from:
                 result["set_attempt"] = {

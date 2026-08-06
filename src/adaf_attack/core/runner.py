@@ -47,6 +47,7 @@ def _resolve_target(
 
     Returns (chosen_target, attempt_log).
     """
+
     def _log(msg: str) -> None:
         if log:
             log(msg)
@@ -62,7 +63,9 @@ def _resolve_target(
 
     if cs and len(cs) > 0:
         for cred in cs:
-            t = cred.to_target(target.dc_ip, domain=target.domain or cred.domain, ldaps=target.ldaps)
+            t = cred.to_target(
+                target.dc_ip, domain=target.domain or cred.domain, ldaps=target.ldaps
+            )
             candidates.append(t)
         # Also try the primary CLI target last if it has distinct credentials
         if target.has_credentials:
@@ -89,9 +92,7 @@ def _resolve_target(
             attempts.append(f"{label}: bind failed")
             _log(f"Credential failed: {label}")
 
-        raise RunError(
-            "All credentials failed LDAP bind. Attempts: " + "; ".join(attempts)
-        )
+        raise RunError("All credentials failed LDAP bind. Attempts: " + "; ".join(attempts))
 
     # Single credentialed target — still probe once for clearer errors
     cand = candidates[0]

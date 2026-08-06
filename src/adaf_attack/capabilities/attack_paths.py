@@ -80,8 +80,7 @@ class AttackPaths:
 
         summary = graph.summary()
         console.print(
-            f"Graph: [cyan]{summary['nodes']}[/cyan] nodes, "
-            f"[cyan]{summary['edges']}[/cyan] edges"
+            f"Graph: [cyan]{summary['nodes']}[/cyan] nodes, [cyan]{summary['edges']}[/cyan] edges"
         )
 
         starts = [start] if start else None
@@ -99,9 +98,7 @@ class AttackPaths:
         table.add_column("Path")
 
         for i, p in enumerate(ranked[:15], 1):
-            short = " → ".join(
-                (x.split("@")[1] if "@" in x else x) for x in p["path"][:8]
-            )
+            short = " → ".join((x.split("@")[1] if "@" in x else x) for x in p["path"][:8])
             if len(p["path"]) > 8:
                 short += " → …"
             table.add_row(str(i), f"{p['score']:.1f}", str(p["length"]), short)
@@ -109,7 +106,9 @@ class AttackPaths:
         if ranked:
             console.print(table)
         else:
-            console.print("[yellow]No paths found — expand enum coverage or raise max_depth[/yellow]")
+            console.print(
+                "[yellow]No paths found — expand enum coverage or raise max_depth[/yellow]"
+            )
 
         result: dict[str, Any] = {
             "domain": target.domain,

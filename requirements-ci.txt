@@ -1,6 +1,7 @@
 # CI dependency lock. Regenerate deliberately when upgrading dependencies.
 # This includes the complete resolved dependency set for the package's CI extras.
 annotated-types==0.7.0
+anyio==4.8.0
 blinker==1.9.0
 build==1.2.2.post1
 certifi==2025.1.31
@@ -9,7 +10,7 @@ charset-normalizer==3.4.1
 click==8.1.8
 colorama==0.4.6
 coverage==7.6.12
-cryptography==44.0.1
+cryptography==42.0.8
 dnspython==2.7.0
 flask==3.1.0
 h11==0.14.0
@@ -38,7 +39,8 @@ pydantic==2.10.6
 pydantic_core==2.27.2
 pydantic-settings==2.7.1
 Pygments==2.19.1
-pyOpenSSL==25.0.0
+pyOpenSSL==24.0.0
+pyreadline3==3.5.4 ; sys_platform == "win32"
 pyproject_hooks==1.2.0
 pytest==8.3.5
 pytest-cov==6.0.0
@@ -49,6 +51,9 @@ rich==13.9.4
 ruff==0.9.10
 setuptools==75.8.0
 six==1.17.0
+shellingham==1.5.4
+sniffio==1.3.1
+typer==0.15.1
 typing_extensions==4.12.2
 typing-inspection==0.4.0
 types-requests==2.32.0.20250306
