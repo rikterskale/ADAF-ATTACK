@@ -92,8 +92,13 @@ def generate_report_bundle(session: Path, *, engagement_id: str = "unassigned") 
     output = session / "reports"
     output.mkdir(exist_ok=True)
     counts = Counter(item["severity"] for item in rich)
+    try:
+        cleanup = json.loads((session / "cleanup.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        cleanup = []
+    cleanup_counts = Counter(item.get("status", "pending") for item in cleanup)
     summary = "".join(f"<tr><td>{html.escape(severity.title())}</td><td>{count}</td></tr>" for severity, count in sorted(counts.items())) or "<tr><td>None</td><td>0</td></tr>"
-    executive_body = f"<h2>Engagement overview</h2><p>Engagement: <b>{html.escape(engagement_id)}</b>. The assessment identified <b>{len(rich)}</b> evidence-backed findings.</p><h2>Risk posture</h2><table><tr><th>Severity</th><th>Findings</th></tr>{summary}</table><h2>Priority decisions</h2>{''.join(_finding_html(item, False) for item in rich[:10])}"
+    executive_body = f"<h2>Engagement overview</h2><p>Engagement: <b>{html.escape(engagement_id)}</b>. The assessment identified <b>{len(rich)}</b> evidence-backed findings.</p><h2>Risk posture</h2><table><tr><th>Severity</th><th>Findings</th></tr>{summary}</table><h2>Cleanup status</h2><p>Pending: {cleanup_counts['pending']} | Completed: {cleanup_counts['completed']} | Failed: {cleanup_counts['failed']}</p><h2>Priority decisions</h2>{''.join(_finding_html(item, False) for item in rich[:10])}"
     technical_body = "<h2>Evidence-backed findings</h2>" + "".join(_finding_html(item, True) for item in rich) + "<h2>Scope limitation</h2><p>Results represent only the authorized target scope and collected evidence.</p>"
     remediation_rows = "".join(f"<tr><td>{html.escape(item['severity'])}</td><td>{html.escape(item['title'])}</td><td>{html.escape(item['remediation'])}</td><td>Identity / platform owner</td></tr>" for item in rich)
     remediation_body = f"<h2>Prioritized remediation backlog</h2><table><tr><th>Priority</th><th>Finding</th><th>Action</th><th>Suggested owner</th></tr>{remediation_rows}</table><h2>Verification</h2><p>Re-run the affected collection capability after the approved remediation change.</p>"
