@@ -48,7 +48,16 @@ EDGE_WEIGHTS: dict[str, float] = {
     "MemberOf": 3.0,
     "TrustedBy": 4.0,
     "Default": 5.0,
+    "HasKeyCredentialLink": 1.6,
+    "WriteKeyCredentialLink": 1.2,
+    "AllowedToAct": 1.3,
+    "WriteRBCD": 1.2,
+    "WriteGPO": 1.4,
+    "GPLink": 3.5,
+    "SpoolerOpen": 2.2,
+    "EfsrpcOpen": 2.0,
 }
+
 
 # High-value group names (bonus when reached)
 HIGH_VALUE_GROUPS = {

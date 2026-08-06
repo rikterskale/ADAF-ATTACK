@@ -73,6 +73,9 @@ class ADAFAttackApp(App[None]):
                     yield Input(placeholder="DC IP / hostname", id="dc_ip")
                     yield Input(placeholder="Username (optional)", id="username")
                     yield Input(placeholder="Password (optional)", password=True, id="password")
+                    yield Input(placeholder="Creds JSON file (optional rotation)", id="creds_file")
+                    yield Input(placeholder="ACL scope: high-value | domain", id="scope", value="high-value")
+                    yield Input(placeholder="Attack-path start principal (optional)", id="start")
                     with Horizontal():
                         yield Label("Include secrets")
                         yield Switch(id="include_secrets", value=False)
@@ -142,6 +145,9 @@ class ADAFAttackApp(App[None]):
 
         username = self.query_one("#username", Input).value.strip() or None
         password = self.query_one("#password", Input).value or None
+        creds_file = self.query_one("#creds_file", Input).value.strip() or None
+        scope = self.query_one("#scope", Input).value.strip() or "high-value"
+        start = self.query_one("#start", Input).value.strip() or None
         include_secrets = self.query_one("#include_secrets", Switch).value
         force = self.query_one("#force", Switch).value
 
@@ -154,6 +160,8 @@ class ADAFAttackApp(App[None]):
 
         log = self.query_one("#log-panel", Log)
         log.write(f"\n[bold]→ {self.selected_cap}[/] on {domain} @ {dc_ip}")
+        if creds_file:
+            log.write(f"  creds-file={creds_file} (rotation)")
         self._running = True
         self._update_status()
 
@@ -161,13 +169,18 @@ class ADAFAttackApp(App[None]):
             def log_fn(msg: str) -> None:
                 self.call_from_thread(log.write, f"  {msg}")
 
+            extra = {"scope": scope}
+            if start:
+                extra["start"] = start
             try:
                 out = execute_capability(
                     self.selected_cap,  # type: ignore[arg-type]
                     target,
                     force=force,
                     include_secrets=include_secrets,
+                    creds_file=creds_file,
                     log=log_fn,
+                    **extra,
                 )
                 interesting = out.get("interesting") or {}
                 summary = out.get("graph_summary") or {}

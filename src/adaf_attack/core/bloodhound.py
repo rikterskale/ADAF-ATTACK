@@ -65,7 +65,16 @@ EDGE_MAP = {
     "UnconstrainedDelegation": "AllowedToDelegate",
     "AllowedToDelegate": "AllowedToDelegate",
     "HasSIDHistory": "HasSIDHistory",
+    "HasKeyCredentialLink": "AddKeyCredentialLink",
+    "WriteKeyCredentialLink": "AddKeyCredentialLink",
+    "AllowedToAct": "AllowedToAct",
+    "WriteRBCD": "AddAllowedToAct",
+    "WriteGPO": "WriteGPO",
+    "GPLink": "GPLink",
+    "SpoolerOpen": "SpoolerOpen",
+    "EfsrpcOpen": "EfsrpcOpen",
 }
+
 
 
 def _domain_from_id(node_id: str) -> str:

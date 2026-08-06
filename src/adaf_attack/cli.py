@@ -199,6 +199,22 @@ def run_capability(
         "--max-objects",
         help="Max objects for domain-wide ACL crawl",
     ),
+    template: str | None = typer.Option(
+        None, "--template", help="Cert template name (cert-request / ESC1)"
+    ),
+    ca: str | None = typer.Option(None, "--ca", help="CA name for cert-request"),
+    alt_name: str | None = typer.Option(
+        None, "--alt-name", help="UPN/DNS alt name for ESC1-style request"
+    ),
+    write_target: str | None = typer.Option(
+        None, "--write-target", help="SAM for shadow-creds write (requires --force)"
+    ),
+    set_on: str | None = typer.Option(
+        None, "--set-on", help="Computer SAM for RBCD set target (requires --force)"
+    ),
+    set_from: str | None = typer.Option(
+        None, "--set-from", help="Controlled computer SAM for RBCD set"
+    ),
 ) -> None:
     """Run a capability against a target."""
     target = _build_target(
@@ -223,6 +239,18 @@ def run_capability(
     extra["limit"] = limit
     extra["scope"] = scope
     extra["max_objects"] = max_objects
+    if template:
+        extra["template"] = template
+    if ca:
+        extra["ca"] = ca
+    if alt_name:
+        extra["alt_name"] = alt_name
+    if write_target:
+        extra["write_target"] = write_target
+    if set_on:
+        extra["set_on"] = set_on
+    if set_from:
+        extra["set_from"] = set_from
 
     try:
         out = execute_capability(
