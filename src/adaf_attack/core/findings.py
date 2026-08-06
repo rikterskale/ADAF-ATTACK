@@ -84,6 +84,10 @@ def findings_from_session(session: Path) -> list[Finding]:
         candidates = data.get(key) or []
         if candidates:
             findings.append(_finding(f"ADAF-ADCS-{key.upper().replace('_', '-')}", f"AD CS {key.replace('_', ' ')}", "critical", "Certificate services misconfiguration may enable domain privilege escalation.", "Restrict enrollment and template modification permissions; validate certificate template settings.", adcs, pointer=f"/{key}", techniques=(technique,), assets=tuple(str(x) for x in candidates[:20]), capability="adcs-enum"))
+    for key in ("esc9_candidates", "esc10_candidates", "esc11_candidates", "esc13_candidates"):
+        candidates = data.get(key) or []
+        if candidates:
+            findings.append(_finding(f"ADAF-ADCS-{key.upper().replace('_', '-')}", f"AD CS {key.replace('_', ' ')}", "high", "Certificate mapping or enrollment policy may permit unintended authentication.", "Validate the affected CA and template configuration against the current AD CS hardening baseline.", adcs, pointer=f"/{key}", techniques=("T1649",), assets=tuple(str(x) for x in candidates[:20]), capability="adcs-enum"))
 
     acl = session / "acl-enum.json"
     data = _load(acl) or {}
