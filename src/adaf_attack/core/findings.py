@@ -94,6 +94,12 @@ def findings_from_session(session: Path) -> list[Finding]:
     principals = data.get("dcsync_principals") or []
     if principals:
         findings.append(_finding("ADAF-ACL-DCSYNC-001", "Directory replication rights assigned", "critical", "Directory replication rights can expose directory credential material.", "Remove unnecessary replication rights and investigate the assigned principals.", acl, pointer="/dcsync_principals", techniques=("T1003.006",), assets=tuple(str(x) for x in principals[:20]), capability="acl-enum"))
+    policy = session / "adcs-policy-probe.json"
+    policy_data = _load(policy) or {}
+    for key in ("esc10_candidates", "esc11_candidates", "esc13_candidates"):
+        candidates = policy_data.get(key) or []
+        if candidates:
+            findings.append(_finding(f"ADAF-ADCS-{key.upper().replace('_', '-')}", f"AD CS {key.replace('_', ' ')}", "high", "Authorized CA/DC policy evidence indicates a certificate authentication control gap.", "Review the collected policy setting and remediate it under the AD CS hardening standard.", policy, pointer=f"/{key}", techniques=("T1649",), assets=tuple(str(x) for x in candidates[:20]), capability="adcs-policy-probe"))
     return sorted(findings, key=lambda item: (item.severity, item.id))
 
 
