@@ -17,6 +17,8 @@ Windows guide: [docs/WINDOWS.md](docs/WINDOWS.md)
 
 Kali guide: [docs/KALI.md](docs/KALI.md)
 
+Command guides: [Windows](docs/WINDOWS_COMMAND_GUIDE.md) · [Linux](docs/LINUX_COMMAND_GUIDE.md)
+
 ## Philosophy
 
 - No plan-only / lab-cert / containment gates
