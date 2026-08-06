@@ -48,4 +48,24 @@ class TicketLifecycle:
             destination.write_bytes(_pfx_from_pem(key.read_bytes(), cert.read_bytes()))
             vault.put("certificate", "pfx", {"path": str(destination)}, secret=True, metadata={"converted_from": [key.name, cert.name]})
             return {"operation": operation, "pfx": str(destination), "vault_item": "certificate"}
+        if operation == "export-ccache":
+            value = vault.get("tgt")
+            source = Path(str(value.get("path") or ""))
+            if not source.is_file():
+                raise RuntimeError("Vault TGT does not reference an available ccache")
+            destination = session.path("exported.ccache")
+            shutil.copy2(source, destination)
+            return {"operation": operation, "ccache": str(destination)}
+        if operation == "pfx-to-pem":
+            source = Path(str(artifact or ""))
+            if not source.is_file():
+                raise RuntimeError("artifact must name an existing PFX file")
+            from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, pkcs12
+            key, cert, _cas = pkcs12.load_key_and_certificates(source.read_bytes(), None)
+            if key is None or cert is None:
+                raise RuntimeError("PFX does not contain both a private key and certificate")
+            key_path, cert_path = session.path("converted.key.pem"), session.path("converted.cert.pem")
+            key_path.write_bytes(key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()))
+            cert_path.write_bytes(cert.public_bytes(Encoding.PEM))
+            return {"operation": operation, "key": str(key_path), "cert": str(cert_path)}
         raise RuntimeError(f"Unsupported operation: {operation}")
