@@ -369,6 +369,11 @@ class AdcsEnum:
                     graph.add_edge(tmpl_id, tmpl_id, "ESC2")
                     console.print(f"  [red]ESC2[/red]: {tmpl['cn']}")
 
+                if tmpl["no_security_extension"] and tmpl["client_auth_eku"]:
+                    result["esc9_candidates"].append(tmpl["cn"])
+                    graph.add_edge(tmpl_id, tmpl_id, "ESC9")
+                    console.print(f"  [yellow]ESC9 candidate[/yellow]: {tmpl['cn']}")
+
                 if tmpl["esc3_agent_template"]:
                     result["esc3_agent_templates"].append(tmpl["cn"])
                     graph.add_edge(tmpl_id, tmpl_id, "ESC3Agent")
