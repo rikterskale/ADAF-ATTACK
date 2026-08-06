@@ -5,6 +5,7 @@ Importing this package registers all available capabilities.
 
 from adaf_attack.capabilities import (  # noqa: F401
     acl_enum,
+    acl_write,
     adcs_enum,
     adcs_policy_probe,
     asrep_roast,
