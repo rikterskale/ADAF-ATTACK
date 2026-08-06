@@ -57,6 +57,8 @@ CA_ATTRS = [
     "certificateTemplates",
     "nTSecurityDescriptor",
     "msPKI-Enrollment-Servers",
+    "msPKI-Enrollment-Flag",
+    "msPKI-RA-Policies",
 ]
 
 
@@ -195,6 +197,8 @@ class AdcsEnum:
                     "cert_dn": str(entry.cACertificateDN) if entry.cACertificateDN else None,
                     "templates": _list_attr(entry, "certificateTemplates"),
                     "enrollment_servers": _list_attr(entry, "msPKI-Enrollment-Servers"),
+                    "enrollment_flags": _int_attr(entry, "msPKI-Enrollment-Flag"),
+                    "issuance_policies": _list_attr(entry, "msPKI-RA-Policies"),
                     "manage_principals": [],
                 }
                 ca_id = f"CA@{(ca['cn'] or 'UNKNOWN').upper()}@{target.domain.upper()}"
