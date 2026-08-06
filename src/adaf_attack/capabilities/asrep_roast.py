@@ -7,7 +7,7 @@ AS-REQ traffic to the KDC.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from ldap3 import SUBTREE
 from rich.console import Console
@@ -175,4 +175,4 @@ class AsrepRoast:
         console.print(f"Results → {out_path}")
         if not include_secrets:
             console.print("[dim]Hashes redacted. Use --include-secrets to keep them.[/dim]")
-        return redacted
+        return cast(dict[str, Any], redacted)

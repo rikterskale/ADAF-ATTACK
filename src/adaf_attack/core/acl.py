@@ -66,7 +66,7 @@ def _sid_to_str(sid_bytes: bytes) -> str:
         from impacket.ldap.ldaptypes import LDAP_SID
 
         sid = LDAP_SID(sid_bytes)
-        return sid.formatCanonical()
+        return str(sid.formatCanonical())
     except Exception:  # noqa: BLE001
         if len(sid_bytes) < 8:
             return sid_bytes.hex()

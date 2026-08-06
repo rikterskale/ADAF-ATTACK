@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from pathlib import Path
 from typing import Any
 
 from rich.console import Console
@@ -113,7 +112,7 @@ class CertRequest:
         if alt_name:
             cmd.extend(["-upn", alt_name])
 
-        playbook_lines = [
+        [
             f"# certipy req for {user}@{target.domain}",
             " ".join(
                 c if c != target.password else "'***'"

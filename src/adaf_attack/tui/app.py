@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from typing import Any
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -25,7 +26,7 @@ from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.target import Target
 
 
-class CapabilityItem(ListItem):
+class CapabilityItem(ListItem):  # type: ignore[misc]
     def __init__(self, cap_id: str, summary: str) -> None:
         super().__init__()
         self.cap_id = cap_id
@@ -35,7 +36,7 @@ class CapabilityItem(ListItem):
         yield Label(f"[bold cyan]{self.cap_id}[/]  {self.summary}")
 
 
-class ADAFAttackApp(App[None]):
+class ADAFAttackApp(App[None]):  # type: ignore[misc]
     CSS = """
     Screen { layout: vertical; }
     #sidebar { width: 42; border: solid $accent; padding: 0 1; }
@@ -171,7 +172,7 @@ class ADAFAttackApp(App[None]):
             def log_fn(msg: str) -> None:
                 self.call_from_thread(log.write, f"  {msg}")
 
-            extra = {"scope": scope}
+            extra: dict[str, Any] = {"scope": scope}
             if start:
                 extra["start"] = start
             try:

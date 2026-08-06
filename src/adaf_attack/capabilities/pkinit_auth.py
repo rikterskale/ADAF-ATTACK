@@ -9,11 +9,10 @@ Requires --force (obtains a usable TGT). Secrets redacted unless --include-secre
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from rich.console import Console
 
@@ -52,12 +51,12 @@ def _pfx_from_pem(key_pem: bytes, cert_pem: bytes, password: bytes = b"") -> byt
 
     key = load_pem_private_key(key_pem, password=None)
     cert = load_pem_x509_certificate(cert_pem)
-    encryption = NoEncryption() if not password else None
+    NoEncryption() if not password else None
     # cryptography >= 42 uses serialize_key_and_certificates differently
     try:
         return pkcs12.serialize_key_and_certificates(
             name=b"shadow",
-            key=key,
+            key=cast(Any, key),
             cert=cert,
             cas=None,
             encryption_algorithm=NoEncryption(),
@@ -65,7 +64,7 @@ def _pfx_from_pem(key_pem: bytes, cert_pem: bytes, password: bytes = b"") -> byt
     except TypeError:
         return pkcs12.serialize_key_and_certificates(
             name=b"shadow",
-            key=key,
+            key=cast(Any, key),
             cert=cert,
             cas=None,
             encryption_algorithm=NoEncryption(),
@@ -118,7 +117,7 @@ class PkinitAuth:
             key_path = found.get("key")
             cert_path = found.get("cert")
             if not sam and found.get("sam"):
-                sam = found["sam"]  # type: ignore[assignment]
+                sam = str(found["sam"])
                 result["sam"] = sam
 
         if pfx_path:
@@ -146,7 +145,7 @@ class PkinitAuth:
 
         # Method 1: certipy
         try:
-            out_ccache = session.path(f"pkinit-{(identity)}.ccache")
+            session.path(f"pkinit-{(identity)}.ccache")
             cmd = [
                 sys.executable,
                 "-m",

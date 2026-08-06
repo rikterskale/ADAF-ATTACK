@@ -97,11 +97,13 @@ class AttackPaths:
         table.add_column("Len", justify="right")
         table.add_column("Path")
 
-        for i, p in enumerate(ranked[:15], 1):
-            short = " → ".join((x.split("@")[1] if "@" in x else x) for x in p["path"][:8])
-            if len(p["path"]) > 8:
+        for i, ranked_path in enumerate(ranked[:15], 1):
+            short = " → ".join(
+                (x.split("@")[1] if "@" in x else x) for x in ranked_path["path"][:8]
+            )
+            if len(ranked_path["path"]) > 8:
                 short += " → …"
-            table.add_row(str(i), f"{p['score']:.1f}", str(p["length"]), short)
+            table.add_row(str(i), f"{ranked_path['score']:.1f}", str(ranked_path["length"]), short)
 
         if ranked:
             console.print(table)

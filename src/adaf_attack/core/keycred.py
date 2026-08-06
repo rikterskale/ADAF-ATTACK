@@ -62,7 +62,7 @@ def build_bcrypt_rsakey_blob(public_numbers: Any, bit_length: int = 2048) -> byt
         0,
         0,
     )
-    return header + exp + mod
+    return bytes(header + exp + mod)
 
 
 def build_keycredential_blob(

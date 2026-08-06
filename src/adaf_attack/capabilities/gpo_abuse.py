@@ -68,7 +68,7 @@ class GpoAbuse:
             if not cn:
                 continue
             dn = str(entry.distinguishedName)
-            gpo = {
+            gpo: dict[str, Any] = {
                 "cn": cn,
                 "display_name": display,
                 "dn": dn,

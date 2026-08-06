@@ -58,13 +58,13 @@ def sid_from_ldap_value(sid_val: Any) -> str | None:
         return None
     try:
         if hasattr(sid_val, "formatCanonical"):
-            return sid_val.formatCanonical()
+            return str(sid_val.formatCanonical())
         if isinstance(sid_val, bytes):
             try:
                 from impacket.ldap.ldaptypes import LDAP_SID
 
                 s = LDAP_SID(sid_val)
-                return s.formatCanonical()
+                return str(s.formatCanonical())
             except Exception:  # noqa: BLE001
                 pass
     except Exception:  # noqa: BLE001

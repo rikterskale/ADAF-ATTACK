@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from ldap3 import SUBTREE
 from rich.console import Console
@@ -109,24 +109,24 @@ class Kerberoast:
                     )
 
                     hashcat_line = format_tgs_hashcat(spn, sam, target.domain, tgs)
-                    entry: dict[str, Any] = {
+                    roast_entry: dict[str, Any] = {
                         "account": sam,
                         "spn": spn,
                         "format": "hashcat-13100" if hashcat_line else "impacket-raw",
                     }
                     if hashcat_line:
-                        entry["hash"] = hashcat_line
+                        roast_entry["hash"] = hashcat_line
                         hash_lines.append(hashcat_line)
                         # Detect etype from hashcat prefix when present
                         if "$krb5tgs$18$" in hashcat_line or "$krb5tgs$17$" in hashcat_line:
-                            entry["format"] = "hashcat-aes"
+                            roast_entry["format"] = "hashcat-aes"
                         elif "$krb5tgs$23$" in hashcat_line:
-                            entry["format"] = "hashcat-13100"
+                            roast_entry["format"] = "hashcat-13100"
                     else:
-                        entry["ticket"] = str(tgs)
-                        entry["note"] = "Could not build hashcat line; raw ticket kept"
+                        roast_entry["ticket"] = str(tgs)
+                        roast_entry["note"] = "Could not build hashcat line; raw ticket kept"
 
-                    roasted.append(entry)
+                    roasted.append(roast_entry)
                     console.print(f"  [green]✓[/green] {sam}  ({spn})")
                 except Exception as exc:  # noqa: BLE001
                     console.print(f"  [red]✗[/red] {sam}/{spn}  ({exc})")
@@ -152,4 +152,4 @@ class Kerberoast:
         console.print(f"Results → {out_path}")
         if not include_secrets:
             console.print("[dim]Hashes redacted. Use --include-secrets to keep them.[/dim]")
-        return redacted
+        return cast(dict[str, Any], redacted)

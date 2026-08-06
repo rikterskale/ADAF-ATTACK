@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from ldap3 import SUBTREE
 from rich.console import Console
@@ -215,7 +215,7 @@ class TrustsEnum:
         session.log("trusts-enum.complete", count=len(trusts))
         console.print(
             f"[green]Done[/green]  trusts={len(trusts)}  "
-            f"inbound-no-sid-filter={len(result['inbound_without_sid_filter'])}"
+            f"inbound-no-sid-filter={len(cast(list[Any], result['inbound_without_sid_filter']))}"
         )
         console.print(f"Results → {out_path}")
         return result

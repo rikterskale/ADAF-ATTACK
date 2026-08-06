@@ -8,7 +8,7 @@ password NTLM binds so the core toolkit stays usable without [kerberos].
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
 from rich.console import Console
 
@@ -62,28 +62,34 @@ def get_kerberos_tgt(target: Target) -> tuple[Any, Any, Any, Any]:
         # Empty password + useCache path inside Impacket when KRB5CCNAME set
         user = target.username or ""
         principal = Principal(user, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-        return getKerberosTGT(
-            principal,
-            "",
-            target.domain.upper(),
-            lmhash,
-            nthash,
-            aes_key,
-            target.dc_ip,
+        return cast(
+            tuple[Any, Any, Any, Any],
+            getKerberosTGT(
+                principal,
+                "",
+                target.domain.upper(),
+                lmhash,
+                nthash,
+                aes_key,
+                target.dc_ip,
+            ),
         )
 
     if not target.username:
         raise RuntimeError("Username required for password/hash/AES Kerberos auth")
 
     principal = Principal(target.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-    return getKerberosTGT(
-        principal,
-        target.password or "",
-        target.domain.upper(),
-        lmhash,
-        nthash,
-        aes_key,
-        target.dc_ip,
+    return cast(
+        tuple[Any, Any, Any, Any],
+        getKerberosTGT(
+            principal,
+            target.password or "",
+            target.domain.upper(),
+            lmhash,
+            nthash,
+            aes_key,
+            target.dc_ip,
+        ),
     )
 
 
