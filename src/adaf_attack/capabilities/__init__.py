@@ -23,6 +23,7 @@ from adaf_attack.capabilities import (  # noqa: F401
     rbcd,
     report,
     shadow_creds,
+    sysvol_hunt,
     ticket_lifecycle,
     trusts_enum,
     workflow_wrappers,
