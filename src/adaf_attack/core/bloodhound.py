@@ -76,7 +76,6 @@ EDGE_MAP = {
 }
 
 
-
 def _domain_from_id(node_id: str) -> str:
     parts = node_id.split("@")
     if len(parts) >= 3:

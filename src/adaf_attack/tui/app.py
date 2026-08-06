@@ -74,7 +74,9 @@ class ADAFAttackApp(App[None]):
                     yield Input(placeholder="Username (optional)", id="username")
                     yield Input(placeholder="Password (optional)", password=True, id="password")
                     yield Input(placeholder="Creds JSON file (optional rotation)", id="creds_file")
-                    yield Input(placeholder="ACL scope: high-value | domain", id="scope", value="high-value")
+                    yield Input(
+                        placeholder="ACL scope: high-value | domain", id="scope", value="high-value"
+                    )
                     yield Input(placeholder="Attack-path start principal (optional)", id="start")
                     with Horizontal():
                         yield Label("Include secrets")
@@ -194,9 +196,7 @@ class ADAFAttackApp(App[None]):
                     self.call_from_thread(log.write, "[bold]Top paths[/]")
                     for p in top[:5]:
                         short = " → ".join(x.split("@")[0] for x in p["path"][:5])
-                        self.call_from_thread(
-                            log.write, f"  score={p['score']:>5}  {short}"
-                        )
+                        self.call_from_thread(log.write, f"  score={p['score']:>5}  {short}")
                 self.call_from_thread(
                     self.notify, f"Completed {self.selected_cap}", severity="information"
                 )

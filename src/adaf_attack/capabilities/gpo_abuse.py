@@ -92,9 +92,7 @@ class GpoAbuse:
                             "WriteProperty",
                             "CreateChild",
                         ):
-                            gpo["writers"].append(
-                                {"sid": ace.principal_sid, "right": ace.right}
-                            )
+                            gpo["writers"].append({"sid": ace.principal_sid, "right": ace.right})
                             src = f"SID@{ace.principal_sid}"
                             graph.add_node(src, "Base", sid=ace.principal_sid)
                             graph.add_edge(src, gpo_id, "WriteGPO", right=ace.right)
@@ -104,7 +102,12 @@ class GpoAbuse:
             result["gpos"].append(gpo)
             if gpo["writers"]:
                 result["writable_gpos"].append(
-                    {"cn": cn, "display_name": display, "writers": gpo["writers"], "sysvol": gpo["sysvol"]}
+                    {
+                        "cn": cn,
+                        "display_name": display,
+                        "writers": gpo["writers"],
+                        "sysvol": gpo["sysvol"],
+                    }
                 )
                 console.print(
                     f"  [red]Writable GPO[/red]  {display}  writers={len(gpo['writers'])}"

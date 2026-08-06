@@ -66,7 +66,9 @@ def doctor() -> None:
 
         checks.append("[green]✓[/green] impacket (kerberoast / ACL / ADCS / ticket auth)")
     except ImportError:
-        checks.append("[yellow]![/yellow] impacket (optional — pip install 'adaf-attack[kerberos]')")
+        checks.append(
+            "[yellow]![/yellow] impacket (optional — pip install 'adaf-attack[kerberos]')"
+        )
 
     try:
         import textual  # noqa: F401

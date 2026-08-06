@@ -225,9 +225,7 @@ class AttackGraph:
         """BFS with cumulative edge-weight scoring. Lower score = more interesting."""
         goal_kinds_set = set(goal_kinds)
         found: list[RankedPath] = []
-        queue: list[tuple[str, list[str], list[str], float]] = [
-            (start, [start], [], 0.0)
-        ]
+        queue: list[tuple[str, list[str], list[str], float]] = [(start, [start], [], 0.0)]
         visited_depth: dict[str, int] = {start: 0}
 
         while queue:
@@ -265,9 +263,7 @@ class AttackGraph:
                     continue
                 visited_depth[nxt] = depth
                 w = self._edge_weight(edge.kind)
-                queue.append(
-                    (nxt, path + [nxt], edge_kinds + [edge.kind], score + w)
-                )
+                queue.append((nxt, path + [nxt], edge_kinds + [edge.kind], score + w))
 
         found.sort(key=lambda p: (p.score, p.length))
         return found[:limit]
@@ -293,7 +289,10 @@ class AttackGraph:
         merged: list[dict[str, Any]] = []
         for start in candidates:
             for p in self.rank_paths(
-                start, goal_kinds=("Group", "Domain", "Computer"), max_depth=max_depth, limit=per_start
+                start,
+                goal_kinds=("Group", "Domain", "Computer"),
+                max_depth=max_depth,
+                limit=per_start,
             ):
                 d = p.to_dict()
                 d["start"] = start

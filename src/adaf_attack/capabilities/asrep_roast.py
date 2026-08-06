@@ -138,8 +138,7 @@ class AsrepRoast:
                 cipher = bytes(enc_part["cipher"])
 
                 hashcat_line = (
-                    f"$krb5asrep${etype}${sam}@{domain}:"
-                    f"{cipher[:16].hex()}${cipher[16:].hex()}"
+                    f"$krb5asrep${etype}${sam}@{domain}:{cipher[:16].hex()}${cipher[16:].hex()}"
                 )
                 hash_lines.append(hashcat_line)
 

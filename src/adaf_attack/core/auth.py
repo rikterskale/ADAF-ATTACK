@@ -75,9 +75,7 @@ def get_kerberos_tgt(target: Target) -> tuple[Any, Any, Any, Any]:
     if not target.username:
         raise RuntimeError("Username required for password/hash/AES Kerberos auth")
 
-    principal = Principal(
-        target.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value
-    )
+    principal = Principal(target.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
     return getKerberosTGT(
         principal,
         target.password or "",

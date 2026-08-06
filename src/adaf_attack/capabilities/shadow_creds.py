@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ldap3 import BASE, SUBTREE
+from ldap3 import SUBTREE
 from rich.console import Console
 
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
@@ -32,7 +32,7 @@ def _list_attr(entry: Any, name: str) -> list[Any]:
     raw = val.value if hasattr(val, "value") else val
     if raw is None:
         return []
-    if isinstance(raw, (list, tuple)):
+    if isinstance(raw, list | tuple):
         return list(raw)
     return [raw]
 
@@ -78,7 +78,9 @@ class ShadowCreds:
             sam = str(entry.sAMAccountName) if entry.sAMAccountName else None
             if not sam:
                 continue
-            classes = [str(c).lower() for c in (entry.objectClass.values if entry.objectClass else [])]
+            classes = [
+                str(c).lower() for c in (entry.objectClass.values if entry.objectClass else [])
+            ]
             kind = "Computer" if "computer" in classes else "User"
             values = _list_attr(entry, ATTR)
             item = {
@@ -135,7 +137,9 @@ class ShadowCreds:
                 )
                 result["write_attempt"] = {"sam": write_target, "skipped": "force_required"}
             else:
-                result["write_attempt"] = self._write_keycred(conn, base_dn, target, write_target, session)
+                result["write_attempt"] = self._write_keycred(
+                    conn, base_dn, target, write_target, session
+                )
 
         conn.unbind()
 

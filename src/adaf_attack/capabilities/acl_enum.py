@@ -63,7 +63,6 @@ def _sid_index(conn: Any, base_dn: str) -> dict[str, dict[str, str]]:
     return index
 
 
-
 def _domain_targets(
     conn: Any, base_dn: str, domain: str, *, limit: int = 500
 ) -> list[tuple[str, str, str]]:
@@ -261,10 +260,22 @@ class AclEnum:
 
         conn.unbind()
 
-        interesting = [e for e in edges_out if not e["noisy"] and e["right"] in {
-            "GenericAll", "WriteDacl", "WriteOwner", "GenericWrite",
-            "ForceChangePassword", "GetChangesAll", "GetChanges", "AllExtendedRights",
-        }]
+        interesting = [
+            e
+            for e in edges_out
+            if not e["noisy"]
+            and e["right"]
+            in {
+                "GenericAll",
+                "WriteDacl",
+                "WriteOwner",
+                "GenericWrite",
+                "ForceChangePassword",
+                "GetChangesAll",
+                "GetChanges",
+                "AllExtendedRights",
+            }
+        ]
 
         result = {
             "domain": target.domain,

@@ -43,6 +43,8 @@ def test_all_creds_fail_raises() -> None:
             Credential(username="b", password="y"),
         ]
     )
-    with patch("adaf_attack.core.runner._probe_ldap", return_value=False):
-        with pytest.raises(RunError, match="All credentials failed"):
-            _resolve_target(primary, credential_set=cs)
+    with (
+        patch("adaf_attack.core.runner._probe_ldap", return_value=False),
+        pytest.raises(RunError, match="All credentials failed"),
+    ):
+        _resolve_target(primary, credential_set=cs)

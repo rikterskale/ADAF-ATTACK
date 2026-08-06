@@ -102,11 +102,12 @@ def to_dn_binary(blob: bytes, object_dn: str) -> str:
 
 def generate_shadow_material(sam: str, object_dn: str) -> dict[str, Any]:
     """Generate RSA keypair + KeyCredential DN-Binary value for LDAP add."""
+    import datetime
+
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.x509.oid import NameOID
-    import datetime
 
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     pub = key.public_key().public_numbers()

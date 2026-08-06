@@ -87,7 +87,7 @@ def _list_attr(entry: Any, name: str) -> list[str]:
     raw = val.value if hasattr(val, "value") else val
     if raw is None:
         return []
-    if isinstance(raw, (list, tuple)):
+    if isinstance(raw, list | tuple):
         return [str(x) for x in raw]
     return [str(raw)]
 
@@ -176,9 +176,7 @@ class LdapEnum:
 
             for spn in constrained:
                 graph.add_edge(user_id, f"SPN@{spn.upper()}", "AllowedToDelegate", spn=spn)
-                result["delegation"].append(
-                    {"account": sam, "kind": "constrained", "target": spn}
-                )
+                result["delegation"].append({"account": sam, "kind": "constrained", "target": spn})
 
             for sid in sid_hist:
                 result["sid_history"].append({"account": sam, "sid": sid})
@@ -216,9 +214,7 @@ class LdapEnum:
                 )
             for spn in constrained:
                 graph.add_edge(computer_id, f"SPN@{spn.upper()}", "AllowedToDelegate", spn=spn)
-                result["delegation"].append(
-                    {"account": sam, "kind": "constrained", "target": spn}
-                )
+                result["delegation"].append({"account": sam, "kind": "constrained", "target": spn})
 
         # --- Groups ---
         conn.search(base_dn, GROUP_FILTER, search_scope=SUBTREE, attributes=GROUP_ATTRS)
