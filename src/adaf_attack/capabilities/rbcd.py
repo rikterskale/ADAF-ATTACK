@@ -161,6 +161,8 @@ class Rbcd:
                 }
             else:
                 result["set_attempt"] = self._set_rbcd(conn, base_dn, set_on, set_from)
+                if result["set_attempt"].get("ok"):
+                    session.register_cleanup({"kind": "rbcd", "target": result["set_attempt"].get("set_on_dn"), "rollback": "Restore the previous msDS-AllowedToActOnBehalfOfOtherIdentity value from the engagement change record."})
 
         conn.unbind()
         out_path = session.path("rbcd.json")

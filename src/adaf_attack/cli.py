@@ -649,6 +649,7 @@ target:
   domain: corp.example
   dc_ip: 10.0.0.10
 allowed_targets: [10.0.0.10]
+opsec_profile: balanced  # stealth | balanced | loud
 allowed_capabilities: [ldap-enum, trusts-enum, adcs-enum, acl-enum, report]
 phases:
   - name: discovery
@@ -707,6 +708,25 @@ def engagement_report(ctx: typer.Context, session: Path = typer.Option(..., "--s
         raise typer.Exit(code=error.exit_code)
     result = generate_report_bundle(session, engagement_id=engagement_id)
     _emit(ctx, {"ok": True, **result}, Panel(f"Findings: {result['finding_count']}\nReport directory: {session / 'reports'}", title="Client report bundle"))
+
+
+@engagement_app.command("package")
+def engagement_package(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session"),
+    output: Path = typer.Option(Path("engagement-package.zip"), "--output", "-o"),
+    profile: str = typer.Option("client", "--profile", help="operator, purple, or client"),
+) -> None:
+    """Create a redacted evidence archive without including the session vault."""
+    from adaf_attack.core.control_plane import package_evidence
+
+    try:
+        result = package_evidence(session, output, profile=profile)
+    except ValueError as exc:
+        error = ActionableError("ENGAGEMENT_PACKAGE_FAILED", str(exc), "Use an existing session and redaction profile.")
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+    _emit(ctx, {"ok": True, **result}, Panel(f"Archive: {result['archive']}\nFiles: {result['file_count']}\nProfile: {result['profile']}", title="Engagement evidence package"))
 
 
 @app.command("rank-paths")

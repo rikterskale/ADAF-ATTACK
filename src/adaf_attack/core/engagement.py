@@ -33,6 +33,7 @@ class EngagementPlan:
     allowed_capabilities: tuple[str, ...]
     phases: tuple[dict[str, Any], ...]
     allowed_targets: tuple[str, ...]
+    opsec_profile: str = "balanced"
 
 
 def load_plan(path: Path) -> EngagementPlan:
@@ -53,7 +54,11 @@ def load_plan(path: Path) -> EngagementPlan:
     invalid = [item for item in caps if capability_registry.get(item) is None]
     if invalid:
         raise EngagementError(f"Unknown allowed capabilities: {', '.join(invalid)}")
-    return EngagementPlan(str(raw["engagement_id"]), str(target["domain"]), str(target["dc_ip"]), caps, tuple(raw["phases"]), tuple(str(x) for x in raw.get("allowed_targets", [target["dc_ip"]])))
+    from adaf_attack.core.control_plane import resolve_opsec
+
+    profile = str(raw.get("opsec_profile", "balanced"))
+    resolve_opsec(profile)
+    return EngagementPlan(str(raw["engagement_id"]), str(target["domain"]), str(target["dc_ip"]), caps, tuple(raw["phases"]), tuple(str(x) for x in raw.get("allowed_targets", [target["dc_ip"]])), profile)
 
 
 def _b64(value: bytes) -> str:
@@ -94,7 +99,10 @@ def run_engagement(plan: EngagementPlan, *, workspace: Path, username: str | Non
     session = Session(base_dir=workspace)
     target = Target(domain=plan.domain, dc_ip=plan.dc_ip, username=username, password=password)
     graph = AttackGraph()
-    session.log("engagement.start", engagement_id=plan.engagement_id, allowed_capabilities=list(plan.allowed_capabilities), target=plan.dc_ip)
+    from adaf_attack.core.control_plane import resolve_opsec
+
+    opsec = resolve_opsec(plan.opsec_profile)
+    session.log("engagement.start", engagement_id=plan.engagement_id, allowed_capabilities=list(plan.allowed_capabilities), target=plan.dc_ip, opsec=opsec)
     complete: list[str] = []
     for phase in plan.phases:
         name = str(phase.get("name", "unnamed"))
@@ -113,7 +121,7 @@ def run_engagement(plan: EngagementPlan, *, workspace: Path, username: str | Non
                 session.log("approval.accepted", approval_id=approval.get("approval_id"), capability=capability, approver=approval.get("approved_by"))
                 force = True
             session.log("phase.start", phase=name, capability=capability)
-            cap.runner.run(target, session, graph, force=force, include_secrets=False, **dict(phase.get("options", {})))
+            cap.runner.run(target, session, graph, force=force, include_secrets=False, opsec=opsec, **dict(phase.get("options", {})))
             session.log("phase.complete", phase=name, capability=capability)
             complete.append(capability)
     graph.resolve_dn_edges()

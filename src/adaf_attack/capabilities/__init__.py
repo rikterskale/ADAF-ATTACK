@@ -9,6 +9,7 @@ from adaf_attack.capabilities import (  # noqa: F401
     asrep_roast,
     attack_paths,
     bloodhound_export,
+    campaign_analysis,
     cert_request,
     coercion_map,
     gmsa_laps_enum,
