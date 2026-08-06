@@ -7,8 +7,9 @@ containment gates — only a lightweight `destructive` flag that requires
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session

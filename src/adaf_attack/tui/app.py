@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import threading
-from typing import Any
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical
 from textual.widgets import (
     Button,
     Footer,

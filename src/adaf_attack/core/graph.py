@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 # Edge weights for simple path scoring (lower = more interesting / shorter effort)
 EDGE_WEIGHTS: dict[str, float] = {
@@ -95,9 +96,6 @@ class AttackGraph:
                 if real_id:
                     target = real_id
                     resolved += 1
-                else:
-                    # keep unresolved for visibility
-                    pass
             new_edge = Edge(
                 source=edge.source,
                 target=target,
@@ -156,7 +154,6 @@ class AttackGraph:
             node = self.nodes.get(current)
 
             if node and node.kind in goal_kinds_set and len(path) > 1:
-                # Prefer Domain Admins / high-value groups
                 bonus = 0.0
                 name = (node.properties.get("sam") or "").upper()
                 if name in {"DOMAIN ADMINS", "ENTERPRISE ADMINS", "ADMINISTRATORS"}:
@@ -193,19 +190,19 @@ class AttackGraph:
     def interesting_summary(self, limit: int = 15) -> dict[str, Any]:
         """High-signal overview used by CLI and TUI."""
         asrep = [
-            n.id for n in self.nodes.values()
+            n.id
+            for n in self.nodes.values()
             if n.kind == "User" and n.properties.get("dont_req_preauth")
         ]
         spn_users = [
-            n.id for n in self.nodes.values()
-            if n.kind == "User" and n.properties.get("spns")
+            n.id for n in self.nodes.values() if n.kind == "User" and n.properties.get("spns")
         ]
         admin_groups = [
-            n.id for n in self.nodes.values()
+            n.id
+            for n in self.nodes.values()
             if n.kind == "Group" and n.properties.get("admin_count")
         ]
 
-        # Sample paths from a few high-value starting users
         sample_paths: list[dict[str, Any]] = []
         for user in self.nodes_of_kind("User")[:30]:
             paths = self.rank_paths(user.id, goal_kinds=("Group", "Domain"), limit=3)
