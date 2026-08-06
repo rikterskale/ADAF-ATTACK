@@ -60,6 +60,27 @@ adaf-attack paths
 adaf-attack start
 ```
 
+## CLI output and safety UX
+
+Every non-interactive command supports a stable JSON document with
+`--format json`; use `--no-color` for plain human-readable output and
+`--non-interactive` to prevent interactive-only commands from launching.
+
+```bash
+# Diagnose prerequisites and receive specific remediation steps
+adaf-attack --format json doctor --explain
+
+# Inspect every capability or one complete generated reference
+adaf-attack capability-help
+adaf-attack capability-help shadow-creds
+
+# Preview network effects and destructive-risk requirements before execution
+adaf-attack --no-color plan shadow-creds -d corp.local --dc-ip 10.0.0.10
+
+# Inspect session artifacts and read-only cleanup status
+adaf-attack --format json sessions
+```
+
 Default workspaces:
 
 - Linux: `~/.local/share/adaf-attack/workspaces`
