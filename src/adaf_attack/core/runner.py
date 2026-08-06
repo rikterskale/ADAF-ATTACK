@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from adaf_attack.core.graph import AttackGraph
-from adaf_attack.core.registry import Capability, capability_registry
+from adaf_attack.core.paths import default_workspace_dir, normalize_path
+from adaf_attack.core.registry import capability_registry
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -21,7 +22,7 @@ def execute_capability(
     *,
     force: bool = False,
     include_secrets: bool = False,
-    workspace: Path | str = "workspaces",
+    workspace: Path | str | None = None,
     log: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Run a capability and return a structured result dict."""
@@ -43,11 +44,13 @@ def execute_capability(
     if cap.runner is None:
         raise RunError(f"Capability '{capability_id}' has no runner implemented yet.")
 
-    session = Session(base_dir=workspace)
+    ws = normalize_path(workspace) if workspace else default_workspace_dir()
+    session = Session(base_dir=ws)
     graph = AttackGraph()
 
     _log(f"Running {capability_id} against {target.domain} @ {target.dc_ip}")
     _log(f"Session: {session.session_id}")
+    _log(f"Workspace: {session.root}")
 
     session.log(
         "run.start",
@@ -65,15 +68,16 @@ def execute_capability(
             include_secrets=include_secrets,
             force=force,
         )
-        # Resolve DN-based edges after collection
         resolved = graph.resolve_dn_edges()
         if resolved:
             graph.save(session.path("graph.json"))
             _log(f"Resolved {resolved} MemberOf DN edges")
 
         interesting = graph.interesting_summary()
-        (session.path("interesting.json")).write_text(
-            __import__("json").dumps(interesting, indent=2, default=str)
+        session.path("interesting.json").write_text(
+            __import__("json").dumps(interesting, indent=2, default=str) + "\n",
+            encoding="utf-8",
+            newline="\n",
         )
 
         session.log("run.complete", capability=capability_id, ok=True)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +12,12 @@ from rich.panel import Panel
 from rich.table import Table
 
 from adaf_attack import __version__
+from adaf_attack.core.paths import (
+    default_workspace_dir,
+    platform_name,
+    user_config_dir,
+    user_data_dir,
+)
 from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.target import Target
 
@@ -35,7 +42,12 @@ def main(
 @app.command("doctor")
 def doctor() -> None:
     """Check local prerequisites (no network)."""
-    checks = []
+    checks: list[str] = []
+    checks.append(f"Platform: [cyan]{platform_name()}[/cyan]  Python {sys.version.split()[0]}")
+    checks.append(f"Data dir: {user_data_dir()}")
+    checks.append(f"Config dir: {user_config_dir()}")
+    checks.append(f"Default workspace: {default_workspace_dir()}")
+
     try:
         import ldap3  # noqa: F401
 
@@ -46,7 +58,7 @@ def doctor() -> None:
     try:
         import impacket  # noqa: F401
 
-        checks.append("[green]✓[/green] impacket (kerberoast / asrep)")
+        checks.append("[green]✓[/green] impacket (kerberoast / ACL / ADCS SD)")
     except ImportError:
         checks.append("[yellow]![/yellow] impacket (optional — pip install 'adaf-attack[kerberos]')")
 
@@ -56,6 +68,13 @@ def doctor() -> None:
         checks.append("[green]✓[/green] textual (TUI)")
     except ImportError:
         checks.append("[yellow]![/yellow] textual (optional — pip install 'adaf-attack[tui]')")
+
+    if sys.platform == "win32":
+        checks.append("[green]✓[/green] Windows path profile active (LOCALAPPDATA)")
+        # Soft check for PowerShell
+        checks.append(
+            "[dim]PowerShell helpers: scripts\\Install-AdafAttack.ps1 , scripts\\AdafAttack.psm1[/dim]"
+        )
 
     console.print(Panel("\n".join(checks), title="ADAF-ATTACK doctor", subtitle=f"v{__version__}"))
 
@@ -84,6 +103,19 @@ def list_capabilities() -> None:
     console.print(table)
 
 
+@app.command("paths")
+def show_paths() -> None:
+    """Show platform data / workspace paths."""
+    table = Table(title="ADAF-ATTACK paths", show_header=True)
+    table.add_column("Name")
+    table.add_column("Path")
+    table.add_row("platform", platform_name())
+    table.add_row("data", str(user_data_dir()))
+    table.add_row("config", str(user_config_dir()))
+    table.add_row("workspace", str(default_workspace_dir()))
+    console.print(table)
+
+
 @app.command("run")
 def run_capability(
     capability: str = typer.Argument(..., help="Capability ID (see list-capabilities)"),
@@ -97,7 +129,11 @@ def run_capability(
     include_secrets: bool = typer.Option(
         False, "--include-secrets", help="Do not redact tickets/hashes in output"
     ),
-    workspace: Path = typer.Option(Path("workspaces"), "--workspace"),
+    workspace: Optional[Path] = typer.Option(
+        None,
+        "--workspace",
+        help="Session root directory (default: platform data dir / workspaces)",
+    ),
 ) -> None:
     """Run a capability against a target."""
     target = Target(
