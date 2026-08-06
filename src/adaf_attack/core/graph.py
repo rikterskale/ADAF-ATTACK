@@ -56,7 +56,12 @@ EDGE_WEIGHTS: dict[str, float] = {
     "GPLink": 3.5,
     "SpoolerOpen": 2.2,
     "EfsrpcOpen": 2.0,
+    "WriteSYSVOL": 1.3,
+    "GMSAPasswordReadable": 1.5,
+    "LAPSReadable": 1.5,
+    "EnrolledCertificate": 1.4,
 }
+
 
 
 # High-value group names (bonus when reached)

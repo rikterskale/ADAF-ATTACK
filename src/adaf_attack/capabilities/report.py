@@ -29,6 +29,9 @@ FINDING_FILES = [
     ("rbcd.json", "RBCD"),
     ("gpo-abuse.json", "GPO abuse"),
     ("coercion-map.json", "Coercion surface"),
+    ("pkinit-auth.json", "PKINIT auth"),
+    ("cert-request.json", "Certificate request"),
+    ("gpo-sysvol.json", "GPO SYSVOL"),
     ("attack-paths.json", "Attack paths"),
     ("interesting.json", "Interesting graph summary"),
 ]

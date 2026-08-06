@@ -1,19 +1,17 @@
-# ADAF-ATTACK v0.9.0
+# ADAF-ATTACK v0.10.0
 
-## Tier 1
-- **shadow-creds** — enum + in-process KeyCredentialLink LDAP write (`--force --write-target`)
-- **rbcd** — enum + in-process AllowedToAct SD write (`--force --set-on/--set-from`)
-- **gpo-abuse** — writable GPOs and GPLink surfaces
-- **report** — session Markdown + HTML operator report
+## Tier A — close attack loops
 
-## Tier 2
-- **cert-request** — ESC1 enroll playbook (`--force --template`)
-- **coercion-map** — detect-only Spooler/EFSRPC map
-- TUI: creds-file, scope, start principal
-- CLI kwargs for template/CA/alt-name/write-target/RBCD set
-- Windows helpers: Report, ShadowCreds, RBCD, PATH install
+- **pkinit-auth** — PKINIT TGT from shadow-cred key/cert (certipy when available; PFX + playbook always). Requires --force.
+- **cert-request** — Real ESC1 enroll via certipy req; seeds template/CA from adcs-enum. Requires --force.
+- **gmsa-laps-enum** — Secret read with --include-secrets (gMSA ManagedPassword blob parse + LAPS attrs).
+- **gpo-sysvol** — SYSVOL reachability/write probe; optional stage with --force --gpo --payload.
 
-## Write-path notes
-- Shadow creds builds KEYCREDENTIALLINK_BLOB (v2) + DN-Binary and LDAP ADD
-- RBCD builds Impacket SR_SECURITY_DESCRIPTOR and LDAP REPLACE
-- Both require `--force` and appropriate rights in the target domain
+## CLI
+
+- --sam, --key, --cert, --pfx (pkinit)
+- --gpo, --payload or @file (sysvol stage)
+
+## Tests
+
+56 unit tests (gMSA blob parser, PFX roundtrip, prior suite).

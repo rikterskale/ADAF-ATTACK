@@ -215,6 +215,18 @@ def run_capability(
     set_from: str | None = typer.Option(
         None, "--set-from", help="Controlled computer SAM for RBCD set"
     ),
+    sam: str | None = typer.Option(
+        None, "--sam", help="Account SAM for pkinit-auth / shadow target"
+    ),
+    key: str | None = typer.Option(None, "--key", help="PEM private key for pkinit-auth"),
+    cert: str | None = typer.Option(None, "--cert", help="PEM cert for pkinit-auth"),
+    pfx: str | None = typer.Option(None, "--pfx", help="PFX path for pkinit-auth"),
+    gpo: str | None = typer.Option(
+        None, "--gpo", help="GPO CN/display name for sysvol stage"
+    ),
+    payload: str | None = typer.Option(
+        None, "--payload", help="File path or inline XML/script for GPO stage"
+    ),
 ) -> None:
     """Run a capability against a target."""
     target = _build_target(
@@ -251,6 +263,23 @@ def run_capability(
         extra["set_on"] = set_on
     if set_from:
         extra["set_from"] = set_from
+    if sam:
+        extra["sam"] = sam
+    if key:
+        extra["key"] = key
+    if cert:
+        extra["cert"] = cert
+    if pfx:
+        extra["pfx"] = pfx
+    if gpo:
+        extra["gpo"] = gpo
+    if payload:
+        from pathlib import Path as _P
+        if payload.startswith("@"):
+            extra["payload"] = _P(payload[1:]).read_text(encoding="utf-8")
+        else:
+            p = _P(payload)
+            extra["payload"] = p.read_text(encoding="utf-8") if p.is_file() else payload
 
     try:
         out = execute_capability(

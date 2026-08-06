@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adaf-attack"
-version = "0.9.0"
+version = "0.10.0"
 description = "Aggressive Active Directory offensive toolkit for senior internal red teamers"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -52,6 +52,7 @@ dev = [
 tui = [
     "textual>=0.80.0",
 ]
+certipy = ["certipy-ad>=4.8.0"]
 kerberos = [
     "impacket>=0.12.0",
 ]
