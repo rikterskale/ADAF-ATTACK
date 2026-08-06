@@ -24,6 +24,7 @@ app = typer.Typer(
     name="adaf-attack",
     help="Aggressive Active Directory offensive toolkit for senior internal red teamers.",
     no_args_is_help=True,
+    invoke_without_command=True,
     rich_markup_mode="rich",
 )
 console = Console()
@@ -31,10 +32,15 @@ console = Console()
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     version: bool = typer.Option(False, "--version", "-V", help="Show version and exit."),
 ) -> None:
     if version:
         console.print(f"adaf-attack {__version__}")
+        raise typer.Exit()
+    if ctx.invoked_subcommand is None:
+        # no_args_is_help already covers bare invocation; keep explicit for clarity
+        console.print(ctx.get_help())
         raise typer.Exit()
 
 
