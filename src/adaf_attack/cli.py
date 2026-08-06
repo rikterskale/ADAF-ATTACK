@@ -11,6 +11,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 from adaf_attack import __version__
+from adaf_attack.core.auth import describe_auth
+from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.paths import (
     default_workspace_dir,
     platform_name,
@@ -39,7 +41,6 @@ def main(
         console.print(f"adaf-attack {__version__}")
         raise typer.Exit()
     if ctx.invoked_subcommand is None:
-        # no_args_is_help already covers bare invocation; keep explicit for clarity
         console.print(ctx.get_help())
         raise typer.Exit()
 
@@ -63,7 +64,7 @@ def doctor() -> None:
     try:
         import impacket  # noqa: F401
 
-        checks.append("[green]✓[/green] impacket (kerberoast / ACL / ADCS SD)")
+        checks.append("[green]✓[/green] impacket (kerberoast / ACL / ADCS / ticket auth)")
     except ImportError:
         checks.append("[yellow]![/yellow] impacket (optional — pip install 'adaf-attack[kerberos]')")
 
@@ -120,6 +121,30 @@ def show_paths() -> None:
     console.print(table)
 
 
+def _build_target(
+    domain: str,
+    dc_ip: str,
+    username: str | None,
+    password: str | None,
+    hashes: str | None,
+    aes_key: str | None,
+    ccache: str | None,
+    use_kerberos: bool,
+    ldaps: bool,
+) -> Target:
+    return Target(
+        domain=domain,
+        dc_ip=dc_ip,
+        username=username,
+        password=password,
+        hashes=hashes,
+        aes_key=aes_key,
+        ccache=ccache,
+        use_kerberos=use_kerberos,
+        ldaps=ldaps,
+    )
+
+
 @app.command("run")
 def run_capability(
     capability: str = typer.Argument(..., help="Capability ID (see list-capabilities)"),
@@ -128,6 +153,15 @@ def run_capability(
     username: str | None = typer.Option(None, "--username", "-u"),
     password: str | None = typer.Option(None, "--password", "-p"),
     hashes: str | None = typer.Option(None, "--hashes", help="LM:NT or NT hash"),
+    aes_key: str | None = typer.Option(
+        None, "--aes-key", help="AES128/256 key (hex) for Kerberos auth"
+    ),
+    ccache: str | None = typer.Option(
+        None, "--ccache", help="Path to Kerberos ccache (sets KRB5CCNAME)"
+    ),
+    use_kerberos: bool = typer.Option(
+        False, "-k", "--kerberos", help="Prefer Kerberos ticket auth (ccache / KRB5CCNAME)"
+    ),
     ldaps: bool = typer.Option(False, "--ldaps", help="Use LDAPS"),
     force: bool = typer.Option(False, "--force", help="Required for destructive capabilities"),
     include_secrets: bool = typer.Option(
@@ -138,23 +172,40 @@ def run_capability(
         "--workspace",
         help="Session root directory (default: platform data dir / workspaces)",
     ),
+    graph: Path | None = typer.Option(
+        None,
+        "--graph",
+        help="Existing graph.json for attack-paths (optional)",
+    ),
+    start: str | None = typer.Option(
+        None,
+        "--start",
+        help="Start principal for attack-paths (SAM or node id)",
+    ),
+    max_depth: int = typer.Option(6, "--max-depth", help="Max path depth for ranking"),
+    limit: int = typer.Option(25, "--limit", help="Max ranked paths to return"),
 ) -> None:
     """Run a capability against a target."""
-    target = Target(
-        domain=domain,
-        dc_ip=dc_ip,
-        username=username,
-        password=password,
-        hashes=hashes,
-        ldaps=ldaps,
+    target = _build_target(
+        domain, dc_ip, username, password, hashes, aes_key, ccache, use_kerberos, ldaps
     )
 
     console.print(
         Panel(
-            f"[bold]{capability}[/bold]\n\nTarget: {domain} @ {dc_ip}",
+            f"[bold]{capability}[/bold]\n\n"
+            f"Target: {domain} @ {dc_ip}\n"
+            f"Auth: {describe_auth(target)}",
             title="Running",
         )
     )
+
+    extra: dict = {}
+    if graph is not None:
+        extra["graph_path"] = graph
+    if start is not None:
+        extra["start"] = start
+    extra["max_depth"] = max_depth
+    extra["limit"] = limit
 
     try:
         out = execute_capability(
@@ -164,6 +215,7 @@ def run_capability(
             include_secrets=include_secrets,
             workspace=workspace,
             log=lambda m: console.print(f"[dim]{m}[/dim]"),
+            **extra,
         )
         interesting = out.get("interesting") or {}
         top = interesting.get("top_paths") or []
@@ -178,6 +230,51 @@ def run_capability(
     except RunError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
+
+
+@app.command("rank-paths")
+def rank_paths_cmd(
+    graph: Path = typer.Option(..., "--graph", "-g", help="Path to graph.json"),
+    start: str | None = typer.Option(None, "--start", "-s", help="Start principal (SAM or id)"),
+    max_depth: int = typer.Option(6, "--max-depth"),
+    limit: int = typer.Option(25, "--limit"),
+    output: Path | None = typer.Option(None, "--output", "-o", help="Write ranked JSON here"),
+) -> None:
+    """Rank attack paths from a saved graph.json (offline, no DC contact)."""
+    if not graph.is_file():
+        console.print(f"[red]Graph not found:[/red] {graph}")
+        raise typer.Exit(code=1)
+
+    g = AttackGraph.from_file(graph)
+    console.print(
+        f"Loaded [cyan]{g.summary()['nodes']}[/cyan] nodes / "
+        f"[cyan]{g.summary()['edges']}[/cyan] edges from {graph}"
+    )
+
+    starts = [start] if start else None
+    ranked = g.rank_from_principals(starts, max_depth=max_depth, limit=limit)
+
+    table = Table(title="Ranked attack paths", show_header=True, header_style="bold")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Score", justify="right")
+    table.add_column("Len", justify="right")
+    table.add_column("Path")
+
+    for i, p in enumerate(ranked[:20], 1):
+        short = " → ".join((x.split("@")[1] if "@" in x else x) for x in p["path"][:8])
+        if len(p["path"]) > 8:
+            short += " → …"
+        table.add_row(str(i), f"{p['score']:.1f}", str(p["length"]), short)
+
+    if ranked:
+        console.print(table)
+    else:
+        console.print("[yellow]No paths found[/yellow]")
+
+    payload = {"graph": str(graph), "start": start, "paths": ranked, "count": len(ranked)}
+    if output:
+        output.write_text(__import__("json").dumps(payload, indent=2) + "\n", encoding="utf-8")
+        console.print(f"Wrote {output}")
 
 
 @app.command("start")

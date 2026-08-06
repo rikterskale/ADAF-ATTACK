@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from adaf_attack.core.auth import describe_auth
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.paths import default_workspace_dir, normalize_path
 from adaf_attack.core.registry import capability_registry
@@ -25,6 +26,7 @@ def execute_capability(
     include_secrets: bool = False,
     workspace: Path | str | None = None,
     log: Callable[[str], None] | None = None,
+    **runner_kwargs: Any,
 ) -> dict[str, Any]:
     """Run a capability and return a structured result dict."""
     import adaf_attack.capabilities  # noqa: F401
@@ -50,6 +52,7 @@ def execute_capability(
     graph = AttackGraph()
 
     _log(f"Running {capability_id} against {target.domain} @ {target.dc_ip}")
+    _log(f"Auth: {describe_auth(target)}")
     _log(f"Session: {session.session_id}")
     _log(f"Workspace: {session.root}")
 
@@ -59,6 +62,7 @@ def execute_capability(
         domain=target.domain,
         dc_ip=target.dc_ip,
         username=target.username,
+        auth=describe_auth(target),
     )
 
     try:
@@ -68,6 +72,7 @@ def execute_capability(
             graph,
             include_secrets=include_secrets,
             force=force,
+            **runner_kwargs,
         )
         resolved = graph.resolve_dn_edges()
         if resolved:
