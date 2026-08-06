@@ -1,20 +1,13 @@
-"""Export current attack graph to BloodHound-friendly JSON.
-
-This capability expects graph data to already exist in the session (from
-ldap-enum / trusts-enum / adcs-enum / roasting). If the in-memory graph is
-empty it will attempt to load workspaces/*/graph.json from the active session
-only — otherwise it runs a quick ldap-enum first.
-"""
+"""Export attack graph to BloodHound JSON + CE ingest zip."""
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from rich.console import Console
 
-from adaf_attack.core.bloodhound import save_bloodhound
+from adaf_attack.core.bloodhound import save_bloodhound, save_bloodhound_zip
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import register_capability
 from adaf_attack.core.session import Session
@@ -45,9 +38,9 @@ def _hydrate_graph_from_session(session: Session, graph: AttackGraph) -> bool:
 
 @register_capability(
     id="bloodhound-export",
-    summary="Export attack graph to BloodHound CE-friendly JSON",
+    summary="Export attack graph to BloodHound CE JSON + ingest zip",
     category="export",
-    tags=("bloodhound", "graph", "export"),
+    tags=("bloodhound", "graph", "export", "zip"),
 )
 class BloodhoundExport:
     def run(
@@ -79,28 +72,29 @@ class BloodhoundExport:
                 )
                 graph.resolve_dn_edges()
 
-        out = session.path("bloodhound.json")
-        save_bloodhound(graph, out, domain=target.domain)
+        json_path = session.path("bloodhound.json")
+        zip_path = session.path("bloodhound.zip")
+        save_bloodhound(graph, json_path, domain=target.domain)
+        save_bloodhound_zip(graph, zip_path, domain=target.domain)
 
         summary = graph.summary()
         session.log(
             "bloodhound-export.complete",
             nodes=summary.get("nodes", 0),
             edges=summary.get("edges", 0),
-            path=str(out),
+            json=str(json_path),
+            zip=str(zip_path),
         )
 
         console.print(
             f"[green]Exported[/green]  nodes={summary.get('nodes', 0)}  "
             f"edges={summary.get('edges', 0)}"
         )
-        console.print(f"BloodHound JSON → {out}")
-        console.print(
-            "[dim]Import into BloodHound CE via file ingest, or use the nodes/edges arrays directly.[/dim]"
-        )
-
+        console.print(f"JSON → {json_path}")
+        console.print(f"Zip  → {zip_path}  (bloodhound.json / nodes.json / edges.json / meta.json)")
         return {
             "domain": target.domain,
-            "path": str(out),
+            "json_path": str(json_path),
+            "zip_path": str(zip_path),
             "summary": summary,
         }

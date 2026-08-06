@@ -1,15 +1,15 @@
-"""BloodHound CE-friendly export from AttackGraph."""
+"""BloodHound CE-friendly export (JSON + zip)."""
 
 from __future__ import annotations
 
 import json
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from adaf_attack.core.graph import AttackGraph
 
-# Map our kinds → BloodHound labels
 KIND_MAP = {
     "User": "User",
     "Computer": "Computer",
@@ -17,9 +17,10 @@ KIND_MAP = {
     "Domain": "Domain",
     "CA": "EnterpriseCA",
     "CertTemplate": "CertificateTemplate",
+    "Container": "Container",
+    "Base": "Base",
 }
 
-# Map our edges → BH relationship names where possible
 EDGE_MAP = {
     "MemberOf": "MemberOf",
     "AdminTo": "AdminTo",
@@ -29,27 +30,26 @@ EDGE_MAP = {
     "ExternalTrust": "ExternalTrust",
     "GenericAll": "GenericAll",
     "GenericWrite": "GenericWrite",
+    "WriteDacl": "WriteDacl",
+    "WriteOwner": "WriteOwner",
     "ForceChangePassword": "ForceChangePassword",
     "AddMember": "AddMember",
+    "AllExtendedRights": "AllExtendedRights",
+    "GetChanges": "GetChanges",
+    "GetChangesAll": "GetChangesAll",
+    "DCSync": "DCSync",
     "HasSPN": "HasSPN",
     "CanASREP": "CanASREP",
     "ESC1Candidate": "ESC1Candidate",
+    "ESC1Enrollable": "ESC1Enrollable",
+    "Enroll": "Enroll",
+    "AutoEnroll": "AutoEnroll",
+    "GMSAPasswordReadable": "GMSAPasswordReadable",
+    "LAPSReadable": "LAPSReadable",
 }
 
 
-def _node_properties(node: Any) -> dict[str, Any]:
-    props = dict(node.properties)
-    # BH-ish conventional fields
-    if "sam" in props and "name" not in props:
-        props["name"] = props["sam"]
-    if "dn" in props:
-        props["distinguishedname"] = props["dn"]
-    props["domain"] = props.get("domain") or _domain_from_id(node.id)
-    return props
-
-
 def _domain_from_id(node_id: str) -> str:
-    # USER@SAM@DOMAIN.COM → DOMAIN.COM
     parts = node_id.split("@")
     if len(parts) >= 3:
         return parts[-1]
@@ -58,8 +58,17 @@ def _domain_from_id(node_id: str) -> str:
     return ""
 
 
+def _node_properties(node: Any) -> dict[str, Any]:
+    props = dict(node.properties)
+    if "sam" in props and "name" not in props:
+        props["name"] = props["sam"]
+    if "dn" in props:
+        props["distinguishedname"] = props["dn"]
+    props["domain"] = props.get("domain") or _domain_from_id(node.id)
+    return props
+
+
 def export_bloodhound(graph: AttackGraph, domain: str | None = None) -> dict[str, Any]:
-    """Build a BloodHound CE-oriented graph document."""
     nodes = []
     for n in graph.nodes.values():
         label = KIND_MAP.get(n.kind, n.kind)
@@ -74,8 +83,6 @@ def export_bloodhound(graph: AttackGraph, domain: str | None = None) -> dict[str
 
     edges = []
     for e in graph.edges:
-        # Skip self-loop signal edges from BH classic pathing if desired;
-        # keep them as custom relationships for visibility.
         rel = EDGE_MAP.get(e.kind, e.kind)
         edges.append(
             {
@@ -97,11 +104,7 @@ def export_bloodhound(graph: AttackGraph, domain: str | None = None) -> dict[str
 
     return {
         "meta": meta,
-        "graph": {
-            "nodes": nodes,
-            "edges": edges,
-        },
-        # Flat convenience form some tools accept
+        "graph": {"nodes": nodes, "edges": edges},
         "nodes": nodes,
         "edges": [
             {
@@ -119,3 +122,27 @@ def save_bloodhound(graph: AttackGraph, path: Path, domain: str | None = None) -
     doc = export_bloodhound(graph, domain=domain)
     path.write_text(json.dumps(doc, indent=2, default=str))
     return path
+
+
+def save_bloodhound_zip(
+    graph: AttackGraph,
+    zip_path: Path,
+    domain: str | None = None,
+) -> Path:
+    """Write a zip suitable for BloodHound CE file ingest.
+
+    Contains:
+      - bloodhound.json (full CE-oriented document)
+      - nodes.json / edges.json (split arrays)
+      - meta.json
+    """
+    doc = export_bloodhound(graph, domain=domain)
+    zip_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("bloodhound.json", json.dumps(doc, indent=2, default=str))
+        zf.writestr("nodes.json", json.dumps(doc["nodes"], indent=2, default=str))
+        zf.writestr("edges.json", json.dumps(doc["edges"], indent=2, default=str))
+        zf.writestr("meta.json", json.dumps(doc["meta"], indent=2, default=str))
+
+    return zip_path

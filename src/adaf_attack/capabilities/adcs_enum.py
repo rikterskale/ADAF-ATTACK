@@ -1,13 +1,14 @@
-"""AD CS enumeration — CAs, templates, ESC1-style indicators."""
+"""AD CS enumeration — CAs, templates, ESC1 candidates + enrollment rights."""
 
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from ldap3 import BASE, LEVEL, SUBTREE
+from ldap3 import LEVEL
 from rich.console import Console
 
+from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_util import ldap_connect
 from adaf_attack.core.registry import register_capability
@@ -16,16 +17,8 @@ from adaf_attack.core.target import Target
 
 console = Console()
 
-# msPKI-Certificate-Name-Flag
 CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT = 0x00000001
-CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT_ALT_NAME = 0x00010000
-
-# msPKI-Enrollment-Flag
 CT_FLAG_PEND_ALL_REQUESTS = 0x00000002
-CT_FLAG_PUBLISH_TO_DS = 0x00000008
-CT_FLAG_AUTO_ENROLLMENT = 0x00000020
-
-# Common EKUs
 EKU_CLIENT_AUTH = "1.3.6.1.5.5.7.3.2"
 EKU_SMART_CARD = "1.3.6.1.4.1.311.20.2.2"
 EKU_ANY = "2.5.29.37.0"
@@ -36,20 +29,10 @@ TEMPLATE_ATTRS = [
     "msPKI-Certificate-Name-Flag",
     "msPKI-Enrollment-Flag",
     "msPKI-RA-Signature",
-    "msPKI-Minimal-Key-Size",
     "pKIExtendedKeyUsage",
-    "pKIExpirationPeriod",
-    "nTSecurityDescriptor",
-    "flags",
-]
-
-CA_ATTRS = [
-    "cn",
-    "dNSHostName",
-    "cACertificateDN",
-    "certificateTemplates",
     "nTSecurityDescriptor",
 ]
+CA_ATTRS = ["cn", "dNSHostName", "cACertificateDN", "certificateTemplates"]
 
 
 def _int_attr(entry: Any, name: str) -> int:
@@ -83,18 +66,10 @@ def _analyze_template(entry: Any) -> dict[str, Any]:
     enrollee_supplies = bool(name_flags & CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT)
     requires_manager = bool(enroll_flags & CT_FLAG_PEND_ALL_REQUESTS)
     client_auth = (
-        not ekus
-        or EKU_CLIENT_AUTH in ekus
-        or EKU_ANY in ekus
-        or EKU_SMART_CARD in ekus
+        not ekus or EKU_CLIENT_AUTH in ekus or EKU_ANY in ekus or EKU_SMART_CARD in ekus
     )
-
-    # Simplified ESC1 signal (does not prove enrollment rights)
     esc1_candidate = (
-        enrollee_supplies
-        and client_auth
-        and not requires_manager
-        and ra_sig == 0
+        enrollee_supplies and client_auth and not requires_manager and ra_sig == 0
     )
 
     return {
@@ -108,14 +83,15 @@ def _analyze_template(entry: Any) -> dict[str, Any]:
         "requires_manager_approval": requires_manager,
         "client_auth_eku": client_auth,
         "esc1_candidate": esc1_candidate,
+        "dn": str(entry.entry_dn),
     }
 
 
 @register_capability(
     id="adcs-enum",
-    summary="Enumerate AD CS CAs, certificate templates, and ESC1-style misconfigs",
+    summary="Enumerate AD CS CAs/templates, ESC1 candidates, and enrollment rights",
     category="enumeration",
-    tags=("adcs", "pki", "esc1", "templates"),
+    tags=("adcs", "pki", "esc1", "templates", "enroll"),
 )
 class AdcsEnum:
     def run(
@@ -145,9 +121,10 @@ class AdcsEnum:
             "cas": [],
             "templates": [],
             "esc1_candidates": [],
+            "esc1_with_enroll_principals": [],
         }
 
-        # --- Certificate Authorities (Enrollment Services) ---
+        # CAs
         try:
             conn.search(
                 enrollment_base,
@@ -169,7 +146,7 @@ class AdcsEnum:
         except Exception as exc:  # noqa: BLE001
             console.print(f"[yellow]CA enumeration limited: {exc}[/yellow]")
 
-        # --- Certificate Templates ---
+        # Templates + enrollment rights
         try:
             conn.search(
                 templates_base,
@@ -179,23 +156,65 @@ class AdcsEnum:
             )
             for entry in conn.entries:
                 tmpl = _analyze_template(entry)
+                enroll_principals: list[dict[str, str]] = []
+
+                # Proof of enrollment rights via DACL
+                sd = fetch_sd(conn, tmpl["dn"])
+                if sd:
+                    try:
+                        for ace in parse_interesting_aces(sd):
+                            if ace.right in ("Enroll", "AutoEnroll", "GenericAll", "AllExtendedRights"):
+                                enroll_principals.append(
+                                    {
+                                        "sid": ace.principal_sid,
+                                        "right": ace.right,
+                                    }
+                                )
+                                tmpl_id = f"TEMPLATE@{(tmpl['cn'] or 'UNKNOWN').upper()}"
+                                src = f"SID@{ace.principal_sid}"
+                                graph.add_node(src, "Base", sid=ace.principal_sid)
+                                graph.add_edge(src, tmpl_id, ace.right)
+                    except RuntimeError:
+                        raise
+                    except Exception as exc:  # noqa: BLE001
+                        console.print(f"  [yellow]SD parse {tmpl['cn']}: {exc}[/yellow]")
+
+                tmpl["enroll_principals"] = enroll_principals
+                tmpl["enroll_principal_count"] = len(enroll_principals)
                 result["templates"].append(tmpl)
+
                 tmpl_id = f"TEMPLATE@{(tmpl['cn'] or 'UNKNOWN').upper()}"
                 graph.add_node(
                     tmpl_id,
                     "CertTemplate",
-                    **{k: v for k, v in tmpl.items() if k != "ekus"},
-                    ekus=tmpl["ekus"],
+                    cn=tmpl["cn"],
+                    esc1_candidate=tmpl["esc1_candidate"],
+                    enrollee_supplies_subject=tmpl["enrollee_supplies_subject"],
                 )
+
                 if tmpl["esc1_candidate"]:
                     result["esc1_candidates"].append(tmpl["cn"])
                     graph.add_edge(tmpl_id, tmpl_id, "ESC1Candidate")
-                    console.print(
-                        f"  [red]ESC1 candidate[/red]: {tmpl['cn']}  "
-                        f"(enrollee supplies subject, client auth, no manager approval)"
-                    )
+                    if enroll_principals:
+                        result["esc1_with_enroll_principals"].append(
+                            {
+                                "template": tmpl["cn"],
+                                "enroll_principals": enroll_principals,
+                            }
+                        )
+                        graph.add_edge(tmpl_id, tmpl_id, "ESC1Enrollable")
+                        console.print(
+                            f"  [red]ESC1 + enroll rights[/red]: {tmpl['cn']}  "
+                            f"principals={len(enroll_principals)}"
+                        )
+                    else:
+                        console.print(
+                            f"  [yellow]ESC1 candidate (no enroll ACE resolved)[/yellow]: {tmpl['cn']}"
+                        )
                 else:
-                    console.print(f"  Template: {tmpl['cn']}")
+                    console.print(
+                        f"  Template: {tmpl['cn']}  enroll_aces={len(enroll_principals)}"
+                    )
         except Exception as exc:  # noqa: BLE001
             console.print(f"[yellow]Template enumeration limited: {exc}[/yellow]")
 
@@ -204,18 +223,19 @@ class AdcsEnum:
         out_path = session.path("adcs-enum.json")
         out_path.write_text(json.dumps(result, indent=2, default=str))
         graph.save(session.path("graph.json"))
-
         session.log(
             "adcs-enum.complete",
             cas=len(result["cas"]),
             templates=len(result["templates"]),
             esc1=len(result["esc1_candidates"]),
+            esc1_enrollable=len(result["esc1_with_enroll_principals"]),
         )
 
         console.print(
             f"[green]Done[/green]  CAs={len(result['cas'])}  "
             f"templates={len(result['templates'])}  "
-            f"ESC1-candidates={len(result['esc1_candidates'])}"
+            f"ESC1={len(result['esc1_candidates'])}  "
+            f"ESC1+enroll={len(result['esc1_with_enroll_principals'])}"
         )
         console.print(f"Results → {out_path}")
         return result
