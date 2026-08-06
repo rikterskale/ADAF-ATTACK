@@ -8,11 +8,14 @@
 
 | OS | Support |
 |----|---------|
-| **Linux** | Primary |
+| **Kali Linux** | First-class (installer, platform detection, XDG paths) |
+| **Linux** | Primary (generic distributions) |
 | **Windows** | First-class (PowerShell install, paths, scheduled tasks) |
 | **macOS** | Supported (same Python stack) |
 
 Windows guide: [docs/WINDOWS.md](docs/WINDOWS.md)
+
+Kali guide: [docs/KALI.md](docs/KALI.md)
 
 ## Philosophy
 
@@ -38,6 +41,13 @@ Windows guide: [docs/WINDOWS.md](docs/WINDOWS.md)
 
 ```bash
 pip install -e ".[full]"
+adaf-attack doctor
+```
+
+**Kali Linux**
+
+```bash
+bash scripts/install-kali.sh
 adaf-attack doctor
 ```
 

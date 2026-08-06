@@ -19,11 +19,29 @@ def is_linux() -> bool:
     return sys.platform.startswith("linux")
 
 
+def is_kali(os_release_path: Path = Path("/etc/os-release")) -> bool:
+    """Return whether the current Linux distribution identifies as Kali."""
+    if not is_linux():
+        return False
+    try:
+        values: dict[str, str] = {}
+        for line in os_release_path.read_text(encoding="utf-8").splitlines():
+            if "=" not in line or line.lstrip().startswith("#"):
+                continue
+            key, value = line.split("=", 1)
+            values[key] = value.strip().strip('"').lower()
+        return values.get("ID") == "kali" or "kali" in values.get("ID_LIKE", "").split()
+    except OSError:
+        return False
+
+
 def platform_name() -> str:
     if is_windows():
         return "Windows"
     if is_macos():
         return "macOS"
+    if is_kali():
+        return "Kali Linux"
     if is_linux():
         return "Linux"
     return sys.platform
