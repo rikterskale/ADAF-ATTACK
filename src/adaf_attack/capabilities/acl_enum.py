@@ -8,7 +8,7 @@ from typing import Any
 from ldap3 import SUBTREE
 from rich.console import Console
 
-from adaf_attack.core.acl import InterestingAce, fetch_sd, parse_interesting_aces
+from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_util import ldap_connect
 from adaf_attack.core.registry import register_capability
@@ -73,16 +73,6 @@ def _high_value_targets(conn: Any, base_dn: str, domain: str) -> list[tuple[str,
     asd = f"CN=AdminSDHolder,CN=System,{base_dn}"
     targets.append((f"ADMINSDHOLDER@{domain.upper()}", asd, "AdminSDHolder"))
 
-    privileged = {
-        "Domain Admins",
-        "Enterprise Admins",
-        "Schema Admins",
-        "Administrators",
-        "Account Operators",
-        "Backup Operators",
-        "Server Operators",
-        "Print Operators",
-    }
     conn.search(
         base_dn,
         "(|(adminCount=1)(sAMAccountName=Domain Admins)(sAMAccountName=Enterprise Admins))",

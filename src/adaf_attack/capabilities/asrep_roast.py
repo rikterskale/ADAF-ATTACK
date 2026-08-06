@@ -10,7 +10,6 @@ from rich.console import Console
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.redaction import redact
 from adaf_attack.core.registry import register_capability
-from adaf_attack.core.roast_format import format_asrep_hashcat
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -35,14 +34,15 @@ class AsrepRoast:
         **kwargs: Any,
     ) -> dict[str, Any]:
         try:
+            import datetime
+            import random
+
             from impacket.krb5 import constants
             from impacket.krb5.asn1 import AS_REQ, KERB_PA_PAC_REQUEST
             from impacket.krb5.kerberosv5 import sendReceive
-            from impacket.krb5.types import KerberosTime, Principal
+            from impacket.krb5.types import KerberosTime
             from pyasn1.codec.der import decoder, encoder
             from pyasn1.type.univ import noValue
-            import datetime
-            import random
         except ImportError as exc:
             raise RuntimeError(
                 "AS-REP roasting requires Impacket. Install with: pip install 'adaf-attack[kerberos]'"
@@ -92,7 +92,6 @@ class AsrepRoast:
         for sam in candidates:
             try:
                 # Build a minimal AS-REQ without pre-auth (classic AS-REP roast)
-                user_name = Principal(sam, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
                 domain = target.domain.upper()
 
                 as_req = AS_REQ()
@@ -126,7 +125,7 @@ class AsrepRoast:
                 )
                 as_req["req-body"]["cname"]["name-string"][0] = sam
 
-                now = datetime.datetime.now(datetime.timezone.utc)
+                now = datetime.datetime.now(datetime.UTC)
                 as_req["req-body"]["till"] = KerberosTime.to_asn1(now + datetime.timedelta(days=1))
                 as_req["req-body"]["rtime"] = KerberosTime.to_asn1(now + datetime.timedelta(days=1))
                 as_req["req-body"]["nonce"] = random.getrandbits(31)

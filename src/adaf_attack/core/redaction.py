@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 SENSITIVE_KEYS = {
     "password",
     "hash",
