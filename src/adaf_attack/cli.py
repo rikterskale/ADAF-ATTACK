@@ -184,6 +184,21 @@ def run_capability(
     ),
     max_depth: int = typer.Option(6, "--max-depth", help="Max path depth for ranking"),
     limit: int = typer.Option(25, "--limit", help="Max ranked paths to return"),
+    creds_file: Path | None = typer.Option(
+        None,
+        "--creds-file",
+        help="JSON file with multiple credentials (rotated until LDAP bind succeeds)",
+    ),
+    scope: str = typer.Option(
+        "high-value",
+        "--scope",
+        help="ACL crawl scope: high-value (default) | domain | full",
+    ),
+    max_objects: int = typer.Option(
+        500,
+        "--max-objects",
+        help="Max objects for domain-wide ACL crawl",
+    ),
 ) -> None:
     """Run a capability against a target."""
     target = _build_target(
@@ -194,7 +209,7 @@ def run_capability(
         Panel(
             f"[bold]{capability}[/bold]\n\n"
             f"Target: {domain} @ {dc_ip}\n"
-            f"Auth: {describe_auth(target)}",
+            f"Auth: {describe_auth(target) if not creds_file else f'creds-file={creds_file} (rotation)'}",
             title="Running",
         )
     )
@@ -206,6 +221,8 @@ def run_capability(
         extra["start"] = start
     extra["max_depth"] = max_depth
     extra["limit"] = limit
+    extra["scope"] = scope
+    extra["max_objects"] = max_objects
 
     try:
         out = execute_capability(
@@ -214,6 +231,7 @@ def run_capability(
             force=force,
             include_secrets=include_secrets,
             workspace=workspace,
+            creds_file=creds_file,
             log=lambda m: console.print(f"[dim]{m}[/dim]"),
             **extra,
         )
@@ -226,6 +244,10 @@ def run_capability(
                     f"  score={p['score']:>5}  len={p['length']}  "
                     + " → ".join(x.split("@")[0] for x in p["path"][:6])
                 )
+        if out.get("cred_attempts"):
+            console.print(f"[dim]Cred attempts: {out['cred_attempts']}[/dim]")
+        if out.get("username"):
+            console.print(f"[dim]Using principal: {out['username']} ({out.get('auth')})[/dim]")
         console.print(f"\n[green]Session:[/green] {out['session_path']}")
     except RunError as exc:
         console.print(f"[red]Error:[/red] {exc}")

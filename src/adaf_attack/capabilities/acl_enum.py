@@ -63,6 +63,43 @@ def _sid_index(conn: Any, base_dn: str) -> dict[str, dict[str, str]]:
     return index
 
 
+
+def _domain_targets(
+    conn: Any, base_dn: str, domain: str, *, limit: int = 500
+) -> list[tuple[str, str, str]]:
+    """Broader crawl: domain root + AdminSDHolder + users/groups/computers up to limit."""
+    targets = _high_value_targets(conn, base_dn, domain)
+    seen = {t[1].lower() for t in targets}
+
+    conn.search(
+        base_dn,
+        "(|(objectClass=user)(objectClass=group)(objectClass=computer))",
+        search_scope=SUBTREE,
+        attributes=["sAMAccountName", "distinguishedName", "objectClass"],
+        size_limit=limit,
+    )
+    for entry in conn.entries:
+        if len(targets) >= limit:
+            break
+        sam = str(entry.sAMAccountName) if entry.sAMAccountName else None
+        dn = str(entry.distinguishedName)
+        if not sam or dn.lower() in seen:
+            continue
+        seen.add(dn.lower())
+        classes = [str(c).lower() for c in (entry.objectClass.values if entry.objectClass else [])]
+        if "computer" in classes:
+            node_id = f"COMPUTER@{sam.upper()}@{domain.upper()}"
+            label = "Computer"
+        elif "group" in classes:
+            node_id = f"GROUP@{sam.upper()}@{domain.upper()}"
+            label = "Group"
+        else:
+            node_id = f"USER@{sam.upper()}@{domain.upper()}"
+            label = "User"
+        targets.append((node_id, dn, label))
+    return targets
+
+
 def _high_value_targets(conn: Any, base_dn: str, domain: str) -> list[tuple[str, str, str]]:
     """Return list of (node_id, dn, label) for domain root + privileged groups + adminCount."""
     targets: list[tuple[str, str, str]] = []
@@ -108,7 +145,7 @@ def _high_value_targets(conn: Any, base_dn: str, domain: str) -> list[tuple[str,
 
 @register_capability(
     id="acl-enum",
-    summary="Enumerate interesting ACL edges (GenericAll, WriteDacl, WriteOwner, DCSync, …)",
+    summary="Enumerate interesting ACL edges (high-value or domain-wide scope)",
     category="enumeration",
     tags=("acl", "dacl", "genericall", "writedacl", "dcsync"),
 )
@@ -123,7 +160,12 @@ class AclEnum:
         force: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        console.print(f"[bold]ACL enum[/bold] → {target.domain} @ {target.dc_ip}")
+        # scope: high-value (default) | domain
+        # max_objects: hard cap for domain-wide crawl (default 500)
+        scope = str(kwargs.get("scope") or "high-value").lower()
+        max_objects = int(kwargs.get("max_objects") or 500)
+
+        console.print(f"[bold]ACL enum[/bold] → {target.domain} @ {target.dc_ip}  scope={scope}")
 
         conn, base_dn, _cfg = ldap_connect(target)
         domain_id = f"DOMAIN@{target.domain.upper()}"
@@ -143,8 +185,15 @@ class AclEnum:
                 nid = f"USER@{info['sam'].upper()}@{target.domain.upper()}"
             graph.add_node(nid, info["kind"], sam=info["sam"], dn=info["dn"], sid=sid)
 
-        hv = _high_value_targets(conn, base_dn, target.domain)
-        console.print(f"Scanning DACLs on {len(hv)} high-value objects…")
+        if scope in ("domain", "full", "all"):
+            hv = _domain_targets(conn, base_dn, target.domain, limit=max_objects)
+            console.print(
+                f"Scanning DACLs domain-wide on up to {len(hv)} objects "
+                f"(max_objects={max_objects})…"
+            )
+        else:
+            hv = _high_value_targets(conn, base_dn, target.domain)
+            console.print(f"Scanning DACLs on {len(hv)} high-value objects…")
 
         edges_out: list[dict[str, Any]] = []
         dcsync_principals: set[str] = set()
@@ -219,6 +268,7 @@ class AclEnum:
 
         result = {
             "domain": target.domain,
+            "scope": scope,
             "objects_scanned": len(hv),
             "edges": edges_out,
             "interesting_edge_count": len(interesting),

