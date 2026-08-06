@@ -7,6 +7,7 @@ from adaf_attack.capabilities import (  # noqa: F401
     acl_enum,
     adcs_enum,
     asrep_roast,
+    attack_paths,
     bloodhound_export,
     gmsa_laps_enum,
     kerberoast,

@@ -6,26 +6,26 @@ from ldap3 import ALL, Connection, Server
 from ldap3.core.exceptions import LDAPException
 from rich.console import Console
 
+from adaf_attack.core.auth import describe_auth, ldap3_bind_kwargs
 from adaf_attack.core.target import Target
 
 console = Console()
 
 
 def ldap_connect(target: Target) -> tuple[Connection, str, str | None]:
-    """Bind and return (connection, default_nc, config_nc)."""
+    """Bind and return (connection, default_nc, config_nc).
+
+    Uses ldap3 NTLM for password (and best-effort hash). Kerberos ticket/AES
+    auth for LDAP is primarily consumed by Impacket-backed capabilities;
+    this helper still records the selected auth mode for session logs.
+    """
+    console.print(f"[dim]Auth mode: {describe_auth(target)}[/dim]")
+
     server = Server(target.dc_ip, get_info=ALL, use_ssl=target.ldaps)
-    if target.username and (target.password or target.hashes):
-        if target.hashes:
-            console.print(
-                "[yellow]Hash bind via ldap3 is limited — prefer password for full results[/yellow]"
-            )
-        conn = Connection(
-            server,
-            user=target.auth_user or target.username,
-            password=target.password or "",
-            authentication="NTLM",
-            auto_bind=True,
-        )
+    kwargs = ldap3_bind_kwargs(target)
+
+    if "user" in kwargs:
+        conn = Connection(server, **kwargs)
     else:
         console.print("[dim]Anonymous / unauthenticated bind[/dim]")
         conn = Connection(server, auto_bind=True)

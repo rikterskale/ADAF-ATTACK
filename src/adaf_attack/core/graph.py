@@ -19,11 +19,31 @@ EDGE_WEIGHTS: dict[str, float] = {
     "WriteDacl": 1.3,
     "WriteOwner": 1.3,
     "AddMember": 1.4,
+    "AllExtendedRights": 1.2,
+    "DCSync": 1.1,
+    "GetChanges": 1.1,
+    "GetChangesAll": 1.1,
+    "ReadGMSAPassword": 1.2,
+    "ReadLAPSPassword": 1.2,
+    "Enroll": 1.6,
+    "ESC1": 1.4,
     "CanASREP": 2.0,
     "HasSPN": 2.5,
     "MemberOf": 3.0,
     "TrustedBy": 4.0,
     "Default": 5.0,
+}
+
+# High-value group names (bonus when reached)
+HIGH_VALUE_GROUPS = {
+    "DOMAIN ADMINS",
+    "ENTERPRISE ADMINS",
+    "ADMINISTRATORS",
+    "SCHEMA ADMINS",
+    "ACCOUNT OPERATORS",
+    "BACKUP OPERATORS",
+    "SERVER OPERATORS",
+    "PRINT OPERATORS",
 }
 
 
@@ -48,6 +68,16 @@ class RankedPath:
     edges: list[str]
     score: float
     length: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "path": self.nodes,
+            "edges": self.edges,
+            "score": round(self.score, 2),
+            "length": self.length,
+            "start": self.nodes[0] if self.nodes else None,
+            "end": self.nodes[-1] if self.nodes else None,
+        }
 
 
 class AttackGraph:
@@ -117,6 +147,27 @@ class AttackGraph:
     def nodes_of_kind(self, kind: str) -> list[Node]:
         return [n for n in self.nodes.values() if n.kind == kind]
 
+    def find_node(self, query: str) -> str | None:
+        """Resolve a start principal: full id, SAM, or USER@SAM@DOMAIN fragment."""
+        q = query.strip()
+        if q in self.nodes:
+            return q
+        upper = q.upper()
+        if upper in self.nodes:
+            return upper
+        # Match by SAM
+        for nid, node in self.nodes.items():
+            sam = str(node.properties.get("sam") or "").upper()
+            if sam == upper:
+                return nid
+            if nid.upper().endswith(f"@{upper}") or f"@{upper}@" in nid.upper():
+                return nid
+        # USER@NAME@DOMAIN pattern without kind prefix
+        for nid in self.nodes:
+            if upper in nid.upper():
+                return nid
+        return None
+
     def summary(self) -> dict[str, Any]:
         kind_counts: dict[str, int] = defaultdict(int)
         for n in self.nodes.values():
@@ -138,7 +189,7 @@ class AttackGraph:
         self,
         start: str,
         goal_kinds: Iterable[str] = ("Group", "Domain"),
-        max_depth: int = 5,
+        max_depth: int = 6,
         limit: int = 20,
     ) -> list[RankedPath]:
         """BFS with cumulative edge-weight scoring. Lower score = more interesting."""
@@ -155,9 +206,11 @@ class AttackGraph:
 
             if node and node.kind in goal_kinds_set and len(path) > 1:
                 bonus = 0.0
-                name = (node.properties.get("sam") or "").upper()
-                if name in {"DOMAIN ADMINS", "ENTERPRISE ADMINS", "ADMINISTRATORS"}:
-                    bonus = -2.0
+                name = (node.properties.get("sam") or node.properties.get("name") or "").upper()
+                if name in HIGH_VALUE_GROUPS:
+                    bonus = -2.5
+                elif node.properties.get("admin_count"):
+                    bonus = -1.0
                 found.append(
                     RankedPath(
                         nodes=path,
@@ -166,7 +219,9 @@ class AttackGraph:
                         length=len(path) - 1,
                     )
                 )
-                continue
+                # Keep exploring alternate routes unless this is a pure HV hit
+                if bonus <= -2.5:
+                    continue
 
             if len(path) >= max_depth:
                 continue
@@ -187,6 +242,36 @@ class AttackGraph:
         found.sort(key=lambda p: (p.score, p.length))
         return found[:limit]
 
+    def rank_from_principals(
+        self,
+        starts: Iterable[str] | None = None,
+        *,
+        max_depth: int = 6,
+        limit: int = 25,
+        per_start: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Rank paths from many principals; return merged sorted dicts."""
+        if starts is None:
+            candidates = [n.id for n in self.nodes_of_kind("User")[:80]]
+        else:
+            candidates = []
+            for s in starts:
+                resolved = self.find_node(s)
+                if resolved:
+                    candidates.append(resolved)
+
+        merged: list[dict[str, Any]] = []
+        for start in candidates:
+            for p in self.rank_paths(
+                start, goal_kinds=("Group", "Domain", "Computer"), max_depth=max_depth, limit=per_start
+            ):
+                d = p.to_dict()
+                d["start"] = start
+                merged.append(d)
+
+        merged.sort(key=lambda x: (x["score"], x["length"]))
+        return merged[:limit]
+
     def interesting_summary(self, limit: int = 15) -> dict[str, Any]:
         """High-signal overview used by CLI and TUI."""
         asrep = [
@@ -203,26 +288,13 @@ class AttackGraph:
             if n.kind == "Group" and n.properties.get("admin_count")
         ]
 
-        sample_paths: list[dict[str, Any]] = []
-        for user in self.nodes_of_kind("User")[:30]:
-            paths = self.rank_paths(user.id, goal_kinds=("Group", "Domain"), limit=3)
-            for p in paths:
-                sample_paths.append(
-                    {
-                        "start": user.id,
-                        "path": p.nodes,
-                        "edges": p.edges,
-                        "score": round(p.score, 2),
-                        "length": p.length,
-                    }
-                )
-        sample_paths.sort(key=lambda x: x["score"])
+        sample_paths = self.rank_from_principals(limit=limit, per_start=3)
 
         return {
             "asrep_roastable": asrep[:50],
             "kerberoastable": spn_users[:50],
             "admin_groups": admin_groups,
-            "top_paths": sample_paths[:limit],
+            "top_paths": sample_paths,
             "graph": self.summary(),
         }
 
@@ -245,5 +317,26 @@ class AttackGraph:
             "interesting": self.interesting_summary(),
         }
 
+    def load_dict(self, data: dict[str, Any]) -> None:
+        """Populate from a previously saved graph dict (nodes + edges)."""
+        for n in data.get("nodes") or []:
+            self.add_node(n["id"], n.get("kind", "Unknown"), **(n.get("properties") or {}))
+        for e in data.get("edges") or []:
+            self.add_edge(
+                e["source"],
+                e["target"],
+                e.get("kind", "Default"),
+                **(e.get("properties") or {}),
+            )
+        self.resolve_dn_edges()
+
+    @classmethod
+    def from_file(cls, path: Path | str) -> AttackGraph:
+        p = Path(path)
+        data = json.loads(p.read_text(encoding="utf-8"))
+        g = cls()
+        g.load_dict(data)
+        return g
+
     def save(self, path: Path) -> None:
-        path.write_text(json.dumps(self.to_dict(), indent=2, default=str))
+        path.write_text(json.dumps(self.to_dict(), indent=2, default=str), encoding="utf-8")
