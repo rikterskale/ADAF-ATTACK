@@ -24,22 +24,32 @@ SENSITIVE_KEYS = {
 }
 
 
-def redact(obj: Any, include_secrets: bool = False) -> Any:
+PROFILES: dict[str, set[str]] = {
+    "operator": SENSITIVE_KEYS,
+    "purple": SENSITIVE_KEYS | {"path", "dn_binary"},
+    "client": SENSITIVE_KEYS | {"path", "dn", "sid", "username", "principal"},
+}
+
+
+def redact(obj: Any, include_secrets: bool = False, profile: str = "operator") -> Any:
     """Recursively redact sensitive values unless include_secrets is True."""
     if include_secrets:
         return obj
 
+    sensitive = PROFILES.get(profile)
+    if sensitive is None:
+        raise ValueError(f"Unknown redaction profile: {profile}")
     if isinstance(obj, dict):
         out = {}
         for k, v in obj.items():
             key_lower = str(k).lower()
-            if any(s in key_lower for s in SENSITIVE_KEYS):
+            if any(s in key_lower for s in sensitive):
                 out[k] = "[REDACTED]"
             else:
-                out[k] = redact(v, include_secrets=False)
+                out[k] = redact(v, include_secrets=False, profile=profile)
         return out
 
     if isinstance(obj, list):
-        return [redact(item, include_secrets=False) for item in obj]
+        return [redact(item, include_secrets=False, profile=profile) for item in obj]
 
     return obj

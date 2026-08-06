@@ -10,9 +10,12 @@ import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from adaf_attack.core.paths import default_workspace_dir, ensure_dir, normalize_path
+
+if TYPE_CHECKING:
+    from adaf_attack.core.vault import SessionVault
 
 
 class Session:
@@ -49,3 +52,8 @@ class Session:
         p = self.root.joinpath(*parts)
         p.parent.mkdir(parents=True, exist_ok=True)
         return p
+
+    def vault(self) -> SessionVault:
+        from adaf_attack.core.vault import SessionVault
+
+        return SessionVault(self.root)

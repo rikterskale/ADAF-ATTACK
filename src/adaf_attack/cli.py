@@ -525,6 +525,10 @@ def run_capability(
     payload: str | None = typer.Option(
         None, "--payload", help="File path or inline XML/script for GPO stage"
     ),
+    operation: str | None = typer.Option(None, "--operation", help="Lifecycle helper operation"),
+    artifact: str | None = typer.Option(None, "--artifact", help="Lifecycle helper source artifact"),
+    impersonate: str | None = typer.Option(None, "--impersonate", help="Approved S4U identity"),
+    spn: str | None = typer.Option(None, "--spn", help="Service principal name for a ticket workflow"),
 ) -> None:
     """Run a capability against a target."""
     target = _build_target(
@@ -580,6 +584,14 @@ def run_capability(
         else:
             p = _P(payload)
             extra["payload"] = p.read_text(encoding="utf-8") if p.is_file() else payload
+    if operation:
+        extra["operation"] = operation
+    if artifact:
+        extra["artifact"] = artifact
+    if impersonate:
+        extra["impersonate"] = impersonate
+    if spn:
+        extra["spn"] = spn
 
     try:
         out = execute_capability(

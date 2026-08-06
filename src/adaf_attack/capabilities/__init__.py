@@ -16,9 +16,12 @@ from adaf_attack.capabilities import (  # noqa: F401
     gpo_sysvol,
     kerberoast,
     ldap_enum,
+    next_actions,
     pkinit_auth,
     rbcd,
     report,
     shadow_creds,
+    ticket_lifecycle,
     trusts_enum,
+    workflow_wrappers,
 )

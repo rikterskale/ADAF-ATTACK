@@ -151,6 +151,29 @@ For a deterministic, no-network demonstration of the reporting pipeline:
 python scripts/render_demo_engagement.py
 ```
 
+## Session vault and workflow helpers
+
+Set a per-engagement Fernet key to store secret vault entries encrypted at
+rest. The public vault index remains redacted and records only typed material
+references and safe metadata.
+
+```bash
+export ADAF_SESSION_VAULT_KEY='<Fernet key from your secret manager>'
+adaf-attack run ticket-lifecycle -d corp.local --dc-ip 10.0.0.10 \
+  --operation import-ccache --artifact ./operator.ccache
+```
+
+`next-actions` turns evidence-backed graph relations into ranked, reviewed
+plans with risk and approval tags. It recommends commands but never executes
+them automatically. `ticket-lifecycle` inventories or imports CCache material
+and converts PEM key/certificate pairs to PFX for approved follow-on use.
+
+The force-gated `shadow-pkinit-workflow` joins an approved Shadow Credentials
+write with PKINIT TGT acquisition. `rbcd-ticket-workflow` joins an approved
+RBCD write with a scoped S4U ticket-request handoff; a configured provider and
+controlled-computer credential are still required before a ticket request is
+made. Both workflows log their artifacts and decisions in the session.
+
 Default workspaces:
 
 - Linux: `~/.local/share/adaf-attack/workspaces`
