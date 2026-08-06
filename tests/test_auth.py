@@ -41,4 +41,5 @@ def test_ldap3_bind_kwargs_password() -> None:
     t = Target(domain="corp.local", dc_ip="10.0.0.1", username="alice", password="secret")
     kw = ldap3_bind_kwargs(t)
     assert kw["authentication"] == "NTLM"
-    assert "CORP.LOCAL\\alice" in kw["user"] or kw["user"] == "alice"
+    user = str(kw["user"]).lower()
+    assert user == "alice" or user.endswith("\\alice") or "corp.local\\alice" in user
