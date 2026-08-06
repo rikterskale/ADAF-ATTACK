@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adaf-attack"
-version = "0.1.0"
+version = "0.2.0"
 description = "Aggressive Active Directory offensive toolkit for senior internal red teamers"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -36,6 +36,7 @@ dependencies = [
     "pydantic>=2.7.0",
     "pydantic-settings>=2.4.0",
     "httpx>=0.27.0",
+    "ldap3>=2.9.1",
 ]
 
 [project.optional-dependencies]
@@ -49,10 +50,11 @@ dev = [
 tui = [
     "textual>=0.80.0",
 ]
-full = [
-    "adaf-attack[dev,tui]",
-    "ldap3>=2.9.1",
+kerberos = [
     "impacket>=0.12.0",
+]
+full = [
+    "adaf-attack[dev,tui,kerberos]",
 ]
 
 [project.scripts]

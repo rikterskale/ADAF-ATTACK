@@ -8,7 +8,24 @@ containment gates — only a lightweight `destructive` flag that requires
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable, Protocol
+
+from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.session import Session
+from adaf_attack.core.target import Target
+
+
+class CapabilityRunner(Protocol):
+    def run(
+        self,
+        target: Target,
+        session: Session,
+        graph: AttackGraph,
+        *,
+        include_secrets: bool = False,
+        force: bool = False,
+        **kwargs: Any,
+    ) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True)
@@ -17,8 +34,8 @@ class Capability:
     summary: str
     destructive: bool = False
     category: str = "general"
-    # Future: entrypoint callable, required tools, etc.
     tags: tuple[str, ...] = field(default_factory=tuple)
+    runner: CapabilityRunner | None = None
 
 
 class CapabilityRegistry:
@@ -51,9 +68,11 @@ def register_capability(
     category: str = "general",
     tags: tuple[str, ...] = (),
 ) -> Callable[[type], type]:
-    """Decorator helper for future capability classes."""
+    """Decorator that registers a capability class implementing .run()."""
 
     def decorator(cls: type) -> type:
+        instance = cls()
+        runner = instance if hasattr(instance, "run") else None
         capability_registry.register(
             Capability(
                 id=id,
@@ -61,6 +80,7 @@ def register_capability(
                 destructive=destructive,
                 category=category,
                 tags=tags,
+                runner=runner,
             )
         )
         return cls

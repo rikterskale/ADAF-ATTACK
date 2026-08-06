@@ -2,72 +2,75 @@
 
 **Aggressive Active Directory offensive toolkit for senior internal red teamers.**
 
-ADAF-ATTACK is designed for experienced operators who already have authorization and operational judgment. It prioritizes speed and breadth over heavy safety gates.
-
-> This tool is intended for authorized internal red team use only.
+> Authorized internal red team use only.
 
 ## Philosophy
 
 - No plan-only mode
 - No lab certification gates
-- No containment / labAddressRanges checks
+- No containment checks
 - Lightweight professional controls only:
   - `--force` required for destructive actions
   - Clear visual warnings
-  - Secrets redacted by default (opt-in with `--include-secrets`)
+  - Secrets redacted by default (`--include-secrets` to keep them)
   - Full session / workspace logging
 
-## Status
+## Current Capabilities
 
-Early development. Both pure CLI and interactive Textual TUI are available.
+| ID | Category | Description |
+|----|----------|-------------|
+| `ldap-enum` | enumeration | Users, computers, groups, trusts, SPNs via LDAP |
+| `kerberoast` | credential-access | Request TGS tickets for SPN accounts |
+| `asrep-roast` | credential-access | Roast accounts with DONT_REQ_PREAUTH |
 
-Current registered capabilities (stubs):
+Attack-path graph is built automatically during collection (MemberOf, HasSPN, CanASREP, TrustedBy edges).
 
-- `ldap-enum` — Domain enumeration via LDAP
-- `kerberoast` — Kerberoasting
-- `asrep-roast` — AS-REP roasting
-
-## Quick Start (development)
+## Install
 
 ```bash
-# Core CLI only
-python -m pip install -e ".[dev]"
+# Core (LDAP enum works out of the box)
+pip install -e ".[dev]"
 
-# With interactive TUI
-python -m pip install -e ".[dev,tui]"
+# + Kerberos attacks
+pip install -e ".[dev,kerberos]"
 
-adaf-attack --help
-adaf-attack list-capabilities
-adaf-attack doctor
-adaf-attack start          # launches Textual TUI
+# + TUI
+pip install -e ".[dev,tui]"
+
+# Everything
+pip install -e ".[full]"
 ```
+
+## Usage
+
+```bash
+adaf-attack doctor
+adaf-attack list-capabilities
+
+# LDAP enumeration
+adaf-attack run ldap-enum -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1'
+
+# Kerberoasting (tickets redacted by default)
+adaf-attack run kerberoast -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1'
+
+# Keep tickets in output
+adaf-attack run kerberoast -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1' --include-secrets
+
+# AS-REP roasting
+adaf-attack run asrep-roast -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1'
+
+# Interactive TUI
+adaf-attack start
+```
+
+Results and the attack graph are written under `workspaces/<session-id>/`.
 
 ## Interface
 
 | Mode | Command | Notes |
 |------|---------|-------|
-| Pure CLI | `adaf-attack <command>` | Always available |
-| Interactive TUI | `adaf-attack start` | Requires `textual` (`pip install 'adaf-attack[tui]'`) |
-
-## Design Goals
-
-- Single CLI covering the major AD attack surface
-- Modular capability system (easy to extend)
-- Native attack-path graph generation
-- High-quality Textual TUI
-- Clean result packaging and evidence handling
-- Optional engagement metadata (logging only, never enforced)
-
-## Relationship to ADAF-RedTeam
-
-| Aspect              | ADAF-RedTeam              | ADAF-ATTACK                          |
-|---------------------|---------------------------|--------------------------------------|
-| Primary use         | Controlled validation     | Aggressive internal red team ops     |
-| Plan-only           | Default                   | None                                 |
-| Lab certification   | Required                  | None                                 |
-| Containment checks  | Hard gate                 | None                                 |
-| Destructive actions | Heavily gated             | `--force` + warning                  |
-| Secrets             | Always redacted           | Redacted by default, opt-in override |
+| Pure CLI | `adaf-attack run ...` | Always available |
+| Interactive TUI | `adaf-attack start` | Requires `textual` |
 
 ## License
 

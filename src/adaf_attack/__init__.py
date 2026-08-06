@@ -1,3 +1,3 @@
 """ADAF-ATTACK — Aggressive AD offensive toolkit for senior internal red teamers."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
