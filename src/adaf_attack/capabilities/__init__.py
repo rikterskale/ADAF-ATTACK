@@ -16,6 +16,7 @@ from adaf_attack.capabilities import (  # noqa: F401
     coercion_map,
     gmsa_laps_enum,
     gpo_abuse,
+    gpo_link,
     gpo_sysvol,
     identity_bridge,
     kerberoast,

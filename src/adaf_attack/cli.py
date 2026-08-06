@@ -517,7 +517,16 @@ def run_capability(
         None, "--alt-name", help="UPN/DNS alt name for ESC1-style request"
     ),
     write_target: str | None = typer.Option(
-        None, "--write-target", help="SAM for shadow-creds write (requires --force)"
+        None, "--write-target", help="Approved write target DN/SAM (requires --force)"
+    ),
+    attribute: str | None = typer.Option(
+        None, "--attribute", help="LDAP attribute for an approved identity write"
+    ),
+    value: str | None = typer.Option(
+        None, "--value", help="Approved value for a mutation or lifecycle operation"
+    ),
+    descriptor_hex: str | None = typer.Option(
+        None, "--descriptor-hex", help="Binary security descriptor as hexadecimal"
     ),
     set_on: str | None = typer.Option(
         None, "--set-on", help="Computer SAM for RBCD set target (requires --force)"
@@ -572,6 +581,12 @@ def run_capability(
         extra["alt_name"] = alt_name
     if write_target:
         extra["write_target"] = write_target
+    if attribute:
+        extra["attribute"] = attribute
+    if value:
+        extra["value"] = value
+    if descriptor_hex:
+        extra["descriptor_hex"] = descriptor_hex
     if set_on:
         extra["set_on"] = set_on
     if set_from:
