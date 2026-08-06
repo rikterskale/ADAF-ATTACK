@@ -420,6 +420,16 @@ def sessions(
     _emit(ctx, payload, table)
 
 
+@app.command("cleanup")
+def cleanup_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session"), domain: str = typer.Option(..., "--domain", "-d"), dc_ip: str = typer.Option(..., "--dc-ip"), username: str | None = typer.Option(None, "--username", "-u"), password: str | None = typer.Option(None, "--password", "-p"), force: bool = typer.Option(False, "--force")) -> None:
+    """Execute recorded session rollbacks; requires explicit force."""
+    if not force:
+        raise typer.BadParameter("cleanup execution requires --force")
+    from adaf_attack.core.cleanup import execute_cleanup
+    result = execute_cleanup(session, Target(domain=domain, dc_ip=dc_ip, username=username, password=password))
+    _emit(ctx, {"ok": True, **result}, Panel(f"Completed: {result['completed']}", title="Cleanup"))
+
+
 def _build_target(
     domain: str,
     dc_ip: str,
