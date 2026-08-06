@@ -979,6 +979,59 @@ def forest_campaign_cmd(ctx: typer.Context, session: list[Path] = typer.Option(.
     _emit(ctx, {"ok": True, **payload}, Panel(f"Domains: {len(payload['domains'])}\nTrust transitions: {len(payload['trust_transitions'])}", title="Forest-aware campaign"))
 
 
+@app.command("campaign-run")
+def campaign_run_cmd(
+    ctx: typer.Context,
+    campaign: Path = typer.Option(..., "--campaign", help="Campaign YAML with ordered engagement plans"),
+    workspace: Path = typer.Option(Path("workspaces"), "--workspace"),
+    username: str | None = typer.Option(None, "--username", "-u"),
+    password: str | None = typer.Option(None, "--password", "-p"),
+    approval_tokens: Path | None = typer.Option(
+        None,
+        "--approval-tokens",
+        help="JSON mapping of engagement ID to approval token",
+    ),
+) -> None:
+    """Run ordered, independently scoped engagement plans from a campaign YAML."""
+    from adaf_attack.core.forest_campaign import CampaignError, run_campaign
+
+    try:
+        token_map = (
+            json.loads(approval_tokens.read_text(encoding="utf-8"))
+            if approval_tokens is not None
+            else {}
+        )
+        if not isinstance(token_map, dict) or not all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in token_map.items()
+        ):
+            raise CampaignError("--approval-tokens must be a JSON object of engagement IDs to tokens")
+        payload = run_campaign(
+            campaign,
+            workspace=workspace,
+            username=username,
+            password=password,
+            approval_tokens=token_map,
+        )
+    except (CampaignError, OSError, json.JSONDecodeError) as exc:
+        error = ActionableError(
+            "CAMPAIGN_RUN_FAILED",
+            str(exc),
+            "Validate the campaign plans, scopes, and approval-token mapping.",
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+    _emit(
+        ctx,
+        {"ok": not payload["stopped"], **payload},
+        Panel(
+            f"Campaign: {payload['campaign_id']}\nCompleted: {len(payload['completed'])}\n"
+            f"Stopped: {'yes' if payload['stopped'] else 'no'}",
+            title="Campaign runner",
+        ),
+    )
+
+
 @app.command("purple-handoff")
 def purple_handoff_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
     """Build a detection-aware handoff from recorded evidence."""

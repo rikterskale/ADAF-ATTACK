@@ -6,7 +6,97 @@ import json
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from adaf_attack.core.graph import AttackGraph
+
+
+class CampaignError(ValueError):
+    """Raised when a campaign manifest is malformed or cannot be executed."""
+
+
+def load_campaign_manifest(path: Path) -> tuple[str, list[Path]]:
+    """Load an ordered set of engagement plans from a campaign YAML file."""
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise CampaignError(f"Cannot load campaign YAML: {exc}") from exc
+    campaign_id = str(raw.get("campaign_id", "")).strip()
+    entries = raw.get("engagements")
+    if not campaign_id or not isinstance(entries, list) or not entries:
+        raise CampaignError("campaign_id and a non-empty engagements list are required")
+    plans: list[Path] = []
+    for entry in entries:
+        value = entry.get("plan") if isinstance(entry, dict) else entry
+        if not value:
+            raise CampaignError("Each engagement must specify a plan path")
+        plan = (path.parent / str(value)).resolve()
+        if not plan.is_file():
+            raise CampaignError(f"Engagement plan not found: {plan}")
+        plans.append(plan)
+    return campaign_id, plans
+
+
+def run_campaign(
+    manifest: Path,
+    *,
+    workspace: Path,
+    username: str | None = None,
+    password: str | None = None,
+    approval_tokens: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Execute ordered, independently authorized engagement plans.
+
+    Each plan retains its target and capability scope.  A destructive phase only
+    receives the token mapped to that engagement ID, so credentials and approval
+    do not silently cross a domain boundary.
+    """
+    from adaf_attack.core.engagement import load_plan, run_engagement
+
+    campaign_id, plan_paths = load_campaign_manifest(manifest)
+    approval_tokens = approval_tokens or {}
+    completed: list[dict[str, Any]] = []
+    session_paths: list[Path] = []
+    for plan_path in plan_paths:
+        plan = load_plan(plan_path)
+        try:
+            result = run_engagement(
+                plan,
+                workspace=workspace / campaign_id,
+                username=username,
+                password=password,
+                approval_token=approval_tokens.get(plan.engagement_id),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return {
+                "campaign_id": campaign_id,
+                "completed": completed,
+                "stopped": True,
+                "failed_engagement": plan.engagement_id,
+                "error": str(exc),
+                "next_step": "Resolve the failed scoped engagement before resuming the campaign.",
+            }
+        completed.append(
+            {
+                "engagement_id": plan.engagement_id,
+                "domain": plan.domain,
+                "session_path": result["session_path"],
+            }
+        )
+        session_paths.append(Path(result["session_path"]))
+
+    forest = compose_forest_campaign(session_paths)
+    result = {
+        "campaign_id": campaign_id,
+        "completed": completed,
+        "stopped": False,
+        "forest": forest,
+        "next_step": "Review the merged evidence and cleanup status for every completed engagement.",
+    }
+    output = workspace / campaign_id / "campaign.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    return result
 
 
 def compose_forest_campaign(sessions: list[Path]) -> dict[str, Any]:
