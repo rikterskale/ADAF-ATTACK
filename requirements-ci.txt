@@ -1,7 +1,7 @@
 # CI dependency lock. Regenerate deliberately when upgrading dependencies.
 # This includes the complete resolved dependency set for the package's CI extras.
 annotated-types==0.7.0
-anyio==4.8.0
+anyio==4.14.2
 blinker==1.9.0
 build==1.2.2.post1
 certifi==2025.1.31
