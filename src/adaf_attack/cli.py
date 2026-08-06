@@ -940,6 +940,20 @@ def campaign_compose_cmd(
     )
 
 
+@app.command("forest-campaign")
+def forest_campaign_cmd(ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")) -> None:
+    """Compose a forest-aware, read-only campaign from completed sessions."""
+    from adaf_attack.core.forest_campaign import compose_forest_campaign
+
+    try:
+        payload = compose_forest_campaign(_offline_sessions(session))
+    except (ActionableError, ValueError) as exc:
+        error = ActionableError("FOREST_CAMPAIGN_FAILED", str(exc), "Pass completed, authorized session directories.")
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+    _emit(ctx, {"ok": True, **payload}, Panel(f"Domains: {len(payload['domains'])}\nTrust transitions: {len(payload['trust_transitions'])}", title="Forest-aware campaign"))
+
+
 @app.command("purple-handoff")
 def purple_handoff_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
     """Build a detection-aware handoff from recorded evidence."""
