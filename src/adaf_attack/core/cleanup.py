@@ -22,6 +22,9 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
         elif item.get("kind") == "rbcd":
             previous = [bytes.fromhex(value) for value in item.get("previous", [])]
             ok = conn.modify(item["target"], {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_REPLACE, previous)]})
+        elif item.get("kind") == "acl":
+            previous = bytes.fromhex(item["previous_hex"])
+            ok = conn.modify(item["target"], {"nTSecurityDescriptor": [(MODIFY_REPLACE, [previous])]})
         else:
             continue
         item["status"] = "completed" if ok else "failed"; item["result"] = str(conn.result)
