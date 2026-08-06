@@ -146,7 +146,7 @@ class LdapEnum:
             proto_transition = _uac_has(uac, UAC_TRUSTED_TO_AUTH_FOR_DELEGATION)
 
             user_id = f"USER@{sam.upper()}@{target.domain.upper()}"
-            props = {
+            props: dict[str, Any] = {
                 "sam": sam,
                 "dn": str(entry.distinguishedName),
                 "admin_count": bool(entry.adminCount.value) if entry.adminCount else False,

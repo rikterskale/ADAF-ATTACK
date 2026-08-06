@@ -7,9 +7,10 @@ containment gates — only a lightweight `destructive` flag that requires
 
 from __future__ import annotations
 
+from builtins import list as builtin_list
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session
@@ -54,7 +55,7 @@ class CapabilityRegistry:
     def list(self) -> list[Capability]:
         return sorted(self._capabilities.values(), key=lambda c: c.id)
 
-    def ids(self) -> list[str]:
+    def ids(self) -> builtin_list[str]:
         return sorted(self._capabilities.keys())
 
 
@@ -73,7 +74,7 @@ def register_capability(
 
     def decorator(cls: type) -> type:
         instance = cls()
-        runner = instance if hasattr(instance, "run") else None
+        runner = cast(CapabilityRunner, instance) if hasattr(instance, "run") else None
         capability_registry.register(
             Capability(
                 id=id,

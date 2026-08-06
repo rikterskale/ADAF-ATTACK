@@ -179,7 +179,7 @@ class AdcsEnum:
                 attributes=CA_ATTRS,
             )
             for entry in conn.entries:
-                ca = {
+                ca: dict[str, Any] = {
                     "cn": str(entry.cn) if entry.cn else None,
                     "dns": str(entry.dNSHostName) if entry.dNSHostName else None,
                     "cert_dn": str(entry.cACertificateDN) if entry.cACertificateDN else None,

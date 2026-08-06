@@ -114,7 +114,9 @@ class GmsaLapsEnum:
                 if entry["msDS-ManagedPasswordInterval"]
                 else None,
             }
-            membership = entry["msDS-GroupMSAMembership"] if entry["msDS-GroupMSAMembership"] else None
+            membership = (
+                entry["msDS-GroupMSAMembership"] if entry["msDS-GroupMSAMembership"] else None
+            )
             if membership:
                 item["group_msa_membership_raw"] = str(membership.value)[:200]
 
@@ -137,7 +139,7 @@ class GmsaLapsEnum:
                     raw = mp.value
                     if isinstance(raw, str):
                         raw = raw.encode("latin-1", errors="replace")
-                    if isinstance(raw, (bytes, bytearray)):
+                    if isinstance(raw, bytes | bytearray):
                         parsed = _parse_managed_password_blob(bytes(raw))
                         if parsed and parsed.get("current_password"):
                             item["managed_password"] = parsed

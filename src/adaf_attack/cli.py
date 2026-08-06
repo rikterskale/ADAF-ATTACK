@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -223,9 +224,7 @@ def run_capability(
     key: str | None = typer.Option(None, "--key", help="PEM private key for pkinit-auth"),
     cert: str | None = typer.Option(None, "--cert", help="PEM cert for pkinit-auth"),
     pfx: str | None = typer.Option(None, "--pfx", help="PFX path for pkinit-auth"),
-    gpo: str | None = typer.Option(
-        None, "--gpo", help="GPO CN/display name for sysvol stage"
-    ),
+    gpo: str | None = typer.Option(None, "--gpo", help="GPO CN/display name for sysvol stage"),
     payload: str | None = typer.Option(
         None, "--payload", help="File path or inline XML/script for GPO stage"
     ),
@@ -244,7 +243,7 @@ def run_capability(
         )
     )
 
-    extra: dict = {}
+    extra: dict[str, Any] = {}
     if graph is not None:
         extra["graph_path"] = graph
     if start is not None:
@@ -277,6 +276,7 @@ def run_capability(
         extra["gpo"] = gpo
     if payload:
         from pathlib import Path as _P
+
         if payload.startswith("@"):
             extra["payload"] = _P(payload[1:]).read_text(encoding="utf-8")
         else:
@@ -298,10 +298,10 @@ def run_capability(
         top = interesting.get("top_paths") or []
         if top:
             console.print("\n[bold]Top ranked paths (sample)[/bold]")
-            for p in top[:5]:
+            for ranked_path in top[:5]:
                 console.print(
-                    f"  score={p['score']:>5}  len={p['length']}  "
-                    + " → ".join(x.split("@")[0] for x in p["path"][:6])
+                    f"  score={ranked_path['score']:>5}  len={ranked_path['length']}  "
+                    + " → ".join(x.split("@")[0] for x in ranked_path["path"][:6])
                 )
         if out.get("cred_attempts"):
             console.print(f"[dim]Cred attempts: {out['cred_attempts']}[/dim]")

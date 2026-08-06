@@ -91,7 +91,7 @@ def _object_id(node: Any) -> str:
     for key in ("objectid", "sid", "objectSid"):
         if props.get(key):
             return str(props[key])
-    return node.id
+    return str(node.id)
 
 
 def _node_properties(node: Any) -> dict[str, Any]:
@@ -133,7 +133,7 @@ def export_bloodhound(graph: AttackGraph, domain: str | None = None) -> dict[str
     # id remap: graph internal id → objectid for edge endpoints when available
     id_map = {n.id: _object_id(n) for n in graph.nodes.values()}
 
-    edges = []
+    edges: list[dict[str, Any]] = []
     for e in graph.edges:
         rel = EDGE_MAP.get(e.kind, e.kind)
         edges.append(
