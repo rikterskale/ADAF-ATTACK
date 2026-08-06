@@ -12,6 +12,7 @@ from rich.console import Console
 from adaf_attack import __version__
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import register_capability
+from adaf_attack.core.reporting import generate_report_bundle
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -88,7 +89,7 @@ class Report:
         lines.append(f"- **Principal:** `{target.username or 'anonymous'}`")
         lines.append("")
 
-        summary = graph.summary() if graph.nodes else {"nodes": 0, "edges": 0}
+        summary: dict[str, Any] = graph.summary() if graph.nodes else {"nodes": 0, "edges": 0}
         lines.append("## Graph summary")
         lines.append("")
         lines.append(f"- Nodes: **{summary.get('nodes', 0)}**")
@@ -208,7 +209,9 @@ class Report:
         html_path = session.path("report.html")
         html_path.write_text(html, encoding="utf-8")
 
-        session.log("report.complete", md=str(md_path), html=str(html_path))
+        bundle = generate_report_bundle(session.root)
+
+        session.log("report.complete", md=str(md_path), html=str(html_path), bundle=bundle)
         console.print(f"[green]Markdown[/green] → {md_path}")
         console.print(f"[green]HTML[/green]     → {html_path}")
         return {
@@ -217,4 +220,5 @@ class Report:
             "html_path": str(html_path),
             "artifacts_used": list(findings_index.keys()),
             "graph_summary": summary,
+            "report_bundle": bundle,
         }

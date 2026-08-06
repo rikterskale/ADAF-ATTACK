@@ -1,0 +1,7 @@
+engagement_id: DEMO-2026-001
+target:
+  domain: corp.example
+  dc_ip: 10.0.0.10
+allowed_targets: [10.0.0.10]
+allowed_capabilities: [ldap-enum]
+phases: []

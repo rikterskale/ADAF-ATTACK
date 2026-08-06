@@ -1,0 +1,10 @@
+version: "15"
+techniques:
+  T1003.006: "OS Credential Dumping: DCSync"
+  T1098: "Account Manipulation"
+  T1134.001: "Access Token Manipulation: Token Impersonation/Theft"
+  T1222.001: "File and Directory Permissions Modification"
+  T1484.001: "Domain Policy Modification: Group Policy Modification"
+  T1558.003: "Steal or Forge Kerberos Tickets: Kerberoasting"
+  T1558.004: "Steal or Forge Kerberos Tickets: AS-REP Roasting"
+  T1649: "Steal or Forge Authentication Certificates"

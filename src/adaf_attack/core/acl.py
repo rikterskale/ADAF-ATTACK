@@ -183,4 +183,4 @@ def fetch_sd(conn: Any, dn: str) -> bytes | None:
     if not entry.nTSecurityDescriptor:
         return None
     raw = entry.nTSecurityDescriptor.raw_values[0]
-    return raw if isinstance(raw, bytes | bytearray) else None
+    return bytes(raw) if isinstance(raw, bytes | bytearray) else None

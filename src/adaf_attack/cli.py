@@ -32,6 +32,8 @@ app = typer.Typer(
     invoke_without_command=True,
     rich_markup_mode="rich",
 )
+engagement_app = typer.Typer(help="Scoped engagement plans, execution, and report bundles.")
+app.add_typer(engagement_app, name="engagement")
 
 
 def _console(ctx: typer.Context) -> Console:
@@ -145,7 +147,7 @@ def doctor(
     )
     return
 
-    checks: list[str] = []
+    checks: list[str] = []  # type: ignore[no-redef]  # Unreachable legacy display block.
     checks.append(f"Platform: [cyan]{platform_name()}[/cyan]  Python {sys.version.split()[0]}")
     checks.append(f"Data dir: {user_data_dir()}")
     checks.append(f"Config dir: {user_config_dir()}")
@@ -619,6 +621,80 @@ def run_capability(
         error = error_for(code, message=text, details={"capability": capability})
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code) from exc
+
+
+@engagement_app.command("init")
+def engagement_init(
+    output: Path = typer.Option(Path("engagement.yaml"), "--output", "-o"),
+) -> None:
+    """Write a conservative engagement-plan template."""
+    if output.exists():
+        raise typer.BadParameter(f"Refusing to overwrite existing file: {output}")
+    output.write_text(
+        """# Complete and review this scope before running.
+engagement_id: ENG-YYYY-001
+target:
+  domain: corp.example
+  dc_ip: 10.0.0.10
+allowed_targets: [10.0.0.10]
+allowed_capabilities: [ldap-enum, trusts-enum, adcs-enum, acl-enum, report]
+phases:
+  - name: discovery
+    capabilities: [ldap-enum, trusts-enum, adcs-enum, acl-enum]
+  - name: reporting
+    capabilities: [report]
+""",
+        encoding="utf-8",
+    )
+    typer.echo(f"Wrote {output}")
+
+
+@engagement_app.command("validate")
+def engagement_validate(ctx: typer.Context, plan: Path = typer.Argument(...)) -> None:
+    """Validate a plan without contacting a target."""
+    from adaf_attack.core.engagement import EngagementError, load_plan
+
+    try:
+        value = load_plan(plan)
+    except EngagementError as exc:
+        error = ActionableError("ENGAGEMENT_PLAN_INVALID", str(exc), "Correct the YAML scope and validate again.")
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+    _emit(ctx, {"ok": True, "engagement_id": value.engagement_id, "target": value.dc_ip, "allowed_capabilities": list(value.allowed_capabilities), "phase_count": len(value.phases)}, Panel(f"{value.engagement_id}\nTarget: {value.domain} @ {value.dc_ip}\nPhases: {len(value.phases)}", title="Engagement plan valid"))
+
+
+@engagement_app.command("run")
+def engagement_run(
+    ctx: typer.Context,
+    plan: Path = typer.Argument(...),
+    workspace: Path = typer.Option(Path("workspaces"), "--workspace"),
+    username: str | None = typer.Option(None, "--username", "-u"),
+    password: str | None = typer.Option(None, "--password", "-p"),
+    approval_token: str | None = typer.Option(None, "--approval-token", envvar="ADAF_APPROVAL_TOKEN"),
+) -> None:
+    """Execute only the capabilities authorized by a validated engagement plan."""
+    from adaf_attack.core.engagement import EngagementError, load_plan, run_engagement
+
+    try:
+        result = run_engagement(load_plan(plan), workspace=workspace, username=username, password=password, approval_token=approval_token)
+    except EngagementError as exc:
+        error = ActionableError("ENGAGEMENT_RUN_BLOCKED", str(exc), "Review target scope, authorization, and phase configuration.")
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+    _emit(ctx, {"ok": True, **result}, Panel(f"Engagement: {result['engagement_id']}\nCapabilities: {len(result['capabilities'])}\nFindings: {result['finding_count']}\nSession: {result['session_path']}", title="Engagement complete"))
+
+
+@engagement_app.command("report")
+def engagement_report(ctx: typer.Context, session: Path = typer.Option(..., "--session"), engagement_id: str = typer.Option("unassigned", "--engagement-id")) -> None:
+    """Generate executive, technical, and remediation HTML/PDF reports from evidence."""
+    from adaf_attack.core.reporting import generate_report_bundle
+
+    if not session.is_dir():
+        error = ActionableError("SESSION_NOT_FOUND", "The session directory does not exist.", "Pass a completed engagement session with --session.")
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    result = generate_report_bundle(session, engagement_id=engagement_id)
+    _emit(ctx, {"ok": True, **result}, Panel(f"Findings: {result['finding_count']}\nReport directory: {session / 'reports'}", title="Client report bundle"))
 
 
 @app.command("rank-paths")

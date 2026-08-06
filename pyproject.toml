@@ -39,6 +39,8 @@ dependencies = [
     "pydantic-settings>=2.4.0",
     "httpx>=0.27.0",
     "ldap3>=2.9.1",
+    "PyYAML>=6.0",
+    "cryptography>=42.0",
 ]
 
 [project.optional-dependencies]
@@ -57,8 +59,12 @@ kerberos = [
     "impacket>=0.12.0",
 ]
 full = [
-    "adaf-attack[dev,tui,kerberos]",
+    "adaf-attack[dev,tui,kerberos,reports]",
 ]
+reports = ["reportlab>=4.0", "pypdf>=5.0"]
+
+[tool.setuptools.package-data]
+adaf_attack = ["mappings/*.yaml"]
 
 [project.scripts]
 adaf-attack = "adaf_attack.cli:app"

@@ -113,6 +113,44 @@ adaf-attack bloodhound-reconcile --session /evidence/session-a --bloodhound ./bl
 adaf-attack workflow-profiles purple-team
 ```
 
+## Engagement automation and client reporting
+
+ADAF-ATTACK can execute a reviewed, target-scoped engagement plan and preserve
+an audit trail in the session evidence. Start with a template, review its
+allowlist and phases, then validate it before any network action:
+
+```bash
+adaf-attack engagement init --output engagement.yaml
+adaf-attack engagement validate engagement.yaml
+adaf-attack engagement run engagement.yaml --workspace ./workspaces -u alice -p 'Password1'
+```
+
+The plan permits only the listed targets and capabilities. Destructive
+capabilities additionally require an approval token issued by your internal
+authorization service. Tokens are short-lived, target- and capability-scoped,
+and logged as `approval.accepted` events. The minimal verifier uses
+`ADAF_APPROVAL_HMAC_KEY`; replace it with your internal service's asymmetric
+JWKS verifier for production deployment.
+
+Every completed engagement emits a canonical, redacted `findings.json` with
+artifact hashes. Create executive, technical, and remediation deliverables
+from the saved evidence without contacting the target again:
+
+```bash
+adaf-attack engagement report --session ./workspaces/<session-id> --engagement-id ENG-2026-001
+```
+
+The bundle contains print-ready HTML and, when installed with
+`pip install -e ".[reports]"`, PDF reports. Findings map to MITRE ATT&CK and
+NIS2 Article 21 themes in `src/adaf_attack/mappings/`. These mappings support
+assessment and remediation; they do not constitute a compliance certification.
+
+For a deterministic, no-network demonstration of the reporting pipeline:
+
+```bash
+python scripts/render_demo_engagement.py
+```
+
 Default workspaces:
 
 - Linux: `~/.local/share/adaf-attack/workspaces`

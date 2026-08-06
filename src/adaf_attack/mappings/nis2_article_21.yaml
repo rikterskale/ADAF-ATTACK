@@ -1,0 +1,17 @@
+version: "Directive (EU) 2022/2555 Article 21"
+notice: "Assessment mapping only; this does not determine legal compliance."
+themes:
+  access-control: "Access-control and asset-management measures"
+  incident-handling: "Incident handling and effectiveness assessment"
+  supply-chain: "Supply-chain security measures"
+  business-continuity: "Business continuity and crisis management"
+finding_mappings:
+  ADAF-KERB-001: [access-control]
+  ADAF-ASREP-001: [access-control]
+  ADAF-ACL-DCSYNC-001: [access-control, incident-handling]
+  ADAF-ADCS-ESC1-CANDIDATES: [access-control]
+  ADAF-ADCS-ESC2-CANDIDATES: [access-control]
+  ADAF-ADCS-ESC4-ACL-TEMPLATES: [access-control]
+  ADAF-RBCD-001: [access-control]
+  ADAF-SHADOW-001: [access-control]
+  ADAF-GPO-001: [access-control, business-continuity]
