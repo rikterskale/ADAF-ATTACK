@@ -8,7 +8,6 @@ from typer.testing import CliRunner
 
 from adaf_attack.cli import app
 
-
 runner = CliRunner()
 
 
@@ -18,13 +17,24 @@ def test_doctor_json_has_stable_remediation_contract() -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert {"ok", "version", "checks", "next_step"} <= payload.keys()
-    assert all({"id", "status", "value", "remediation"} <= check.keys() for check in payload["checks"])
+    assert all(
+        {"id", "status", "value", "remediation"} <= check.keys() for check in payload["checks"]
+    )
 
 
 def test_plan_json_explicitly_reports_destructive_risk() -> None:
     result = runner.invoke(
         app,
-        ["--format", "json", "plan", "shadow-creds", "--domain", "corp.example", "--dc-ip", "10.0.0.10"],
+        [
+            "--format",
+            "json",
+            "plan",
+            "shadow-creds",
+            "--domain",
+            "corp.example",
+            "--dc-ip",
+            "10.0.0.10",
+        ],
     )
 
     assert result.exit_code == 0, result.output

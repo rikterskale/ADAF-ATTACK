@@ -17,7 +17,15 @@ def _session(root: Path) -> Path:
     session = root / "session-a"
     session.mkdir()
     (session / "graph.json").write_text(
-        json.dumps({"nodes": [{"id": "user-a"}], "edges": [{"source": "user-a", "target": "host-a", "kind": "AllowedToDelegate"}, {"source": "user-a", "target": "ca-a", "kind": "ESC1"}]}),
+        json.dumps(
+            {
+                "nodes": [{"id": "user-a"}],
+                "edges": [
+                    {"source": "user-a", "target": "host-a", "kind": "AllowedToDelegate"},
+                    {"source": "user-a", "target": "ca-a", "kind": "ESC1"},
+                ],
+            }
+        ),
         encoding="utf-8",
     )
     (session / "ticket.ccache").write_text("not a real ticket", encoding="utf-8")

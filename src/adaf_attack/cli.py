@@ -32,6 +32,8 @@ app = typer.Typer(
     invoke_without_command=True,
     rich_markup_mode="rich",
 )
+
+
 def _console(ctx: typer.Context) -> Console:
     config = ctx.ensure_object(dict)
     return Console(no_color=config.get("no_color", False), highlight=False)
@@ -52,7 +54,9 @@ def _emit_error(ctx: typer.Context, error: ActionableError) -> None:
     if _json_mode(ctx):
         typer.echo(json.dumps(error.payload(), indent=2, sort_keys=True))
     else:
-        _console(ctx).print(f"Error [{error.code}]: {error.message}\nNext step: {error.remediation}")
+        _console(ctx).print(
+            f"Error [{error.code}]: {error.message}\nNext step: {error.remediation}"
+        )
 
 
 console = Console()
@@ -64,11 +68,17 @@ def main(
     version: bool = typer.Option(False, "--version", "-V", help="Show version and exit."),
     output_format: str = typer.Option("human", "--format", help="Output format: human or json."),
     no_color: bool = typer.Option(False, "--no-color", help="Disable terminal color and styling."),
-    non_interactive: bool = typer.Option(False, "--non-interactive", help="Never prompt; suitable for scripts and CI."),
+    non_interactive: bool = typer.Option(
+        False, "--non-interactive", help="Never prompt; suitable for scripts and CI."
+    ),
 ) -> None:
     if output_format not in {"human", "json"}:
         raise typer.BadParameter("must be 'human' or 'json'", param_hint="--format")
-    ctx.ensure_object(dict).update(output_format=output_format, no_color=no_color or output_format == "json", non_interactive=non_interactive)
+    ctx.ensure_object(dict).update(
+        output_format=output_format,
+        no_color=no_color or output_format == "json",
+        non_interactive=non_interactive,
+    )
     if version:
         _emit(ctx, {"ok": True, "version": __version__}, f"adaf-attack {__version__}")
         raise typer.Exit()
@@ -88,7 +98,12 @@ def doctor(
         {"id": "python", "status": "ok", "value": sys.version.split()[0], "remediation": None},
         {"id": "data_dir", "status": "ok", "value": str(user_data_dir()), "remediation": None},
         {"id": "config_dir", "status": "ok", "value": str(user_config_dir()), "remediation": None},
-        {"id": "workspace", "status": "ok", "value": str(default_workspace_dir()), "remediation": None},
+        {
+            "id": "workspace",
+            "status": "ok",
+            "value": str(default_workspace_dir()),
+            "remediation": None,
+        },
     ]
     for package, optional, remediation in (
         ("ldap3", False, "Install the base package dependencies: pip install -e ."),
@@ -97,13 +112,37 @@ def doctor(
     ):
         try:
             __import__(package)
-            checks.append({"id": package, "status": "ok", "value": "installed", "remediation": None})
+            checks.append(
+                {"id": package, "status": "ok", "value": "installed", "remediation": None}
+            )
         except ImportError:
-            checks.append({"id": package, "status": "warning" if optional else "error", "value": "missing", "remediation": remediation})
+            checks.append(
+                {
+                    "id": package,
+                    "status": "warning" if optional else "error",
+                    "value": "missing",
+                    "remediation": remediation,
+                }
+            )
     blocking = next((c for c in checks if c["status"] == "error"), None)
-    payload = {"ok": blocking is None, "version": __version__, "checks": checks, "next_step": blocking["remediation"] if blocking else "Run `adaf-attack capability-help` to choose a capability."}
-    lines = [f"{c['status'].upper():7} {c['id']}: {c['value']}" + (f"\n  Next step: {c['remediation']}" if explain and c["remediation"] else "") for c in checks]
-    _emit(ctx, payload, Panel("\n".join(lines), title="ADAF-ATTACK doctor", subtitle=f"v{__version__}"))
+    payload = {
+        "ok": blocking is None,
+        "version": __version__,
+        "checks": checks,
+        "next_step": blocking["remediation"]
+        if blocking
+        else "Run `adaf-attack capability-help` to choose a capability.",
+    }
+    lines = [
+        f"{c['status'].upper():7} {c['id']}: {c['value']}"
+        + (f"\n  Next step: {c['remediation']}" if explain and c["remediation"] else "")
+        for c in checks
+    ]
+    _emit(
+        ctx,
+        payload,
+        Panel("\n".join(lines), title="ADAF-ATTACK doctor", subtitle=f"v{__version__}"),
+    )
     return
 
     checks: list[str] = []
@@ -165,7 +204,16 @@ def list_capabilities(ctx: typer.Context) -> None:
         flags = ["[red]DESTRUCTIVE[/red]"] if cap.destructive else []
         table.add_row(cap.id, cap.category, cap.summary, " ".join(flags) or "-")
 
-    _emit(ctx, {"ok": True, "capabilities": [_capability_payload(cap) for cap in caps], "count": len(caps), "next_step": "Run `adaf-attack capability-help <id>` for details."}, table)
+    _emit(
+        ctx,
+        {
+            "ok": True,
+            "capabilities": [_capability_payload(cap) for cap in caps],
+            "count": len(caps),
+            "next_step": "Run `adaf-attack capability-help <id>` for details.",
+        },
+        table,
+    )
 
 
 @app.command("paths")
@@ -178,7 +226,17 @@ def show_paths(ctx: typer.Context) -> None:
     table.add_row("data", str(user_data_dir()))
     table.add_row("config", str(user_config_dir()))
     table.add_row("workspace", str(default_workspace_dir()))
-    _emit(ctx, {"ok": True, "platform": platform_name(), "data": str(user_data_dir()), "config": str(user_config_dir()), "workspace": str(default_workspace_dir())}, table)
+    _emit(
+        ctx,
+        {
+            "ok": True,
+            "platform": platform_name(),
+            "data": str(user_data_dir()),
+            "config": str(user_config_dir()),
+            "workspace": str(default_workspace_dir()),
+        },
+        table,
+    )
 
 
 def _capability_payload(cap: Any) -> dict[str, Any]:
@@ -190,13 +248,17 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
         "tags": list(cap.tags),
         "required_options": ["--domain", "--dc-ip"],
         "optional_options": ["--username", "--password", "--hashes", "--kerberos", "--workspace"],
-        "example": f"adaf-attack run {cap.id} --domain corp.example --dc-ip 10.0.0.10" + (" --force" if cap.destructive else ""),
+        "example": f"adaf-attack run {cap.id} --domain corp.example --dc-ip 10.0.0.10"
+        + (" --force" if cap.destructive else ""),
         "next_step": f"Run `adaf-attack plan {cap.id} --domain <domain> --dc-ip <host>` before execution.",
     }
 
 
 @app.command("capability-help")
-def capability_help(ctx: typer.Context, capability: str | None = typer.Argument(None, help="Capability ID; omit for all capabilities.")) -> None:
+def capability_help(
+    ctx: typer.Context,
+    capability: str | None = typer.Argument(None, help="Capability ID; omit for all capabilities."),
+) -> None:
     """Generated capability reference, requirements, risks, and examples."""
     import adaf_attack.capabilities  # noqa: F401
     from adaf_attack.core.registry import capability_registry
@@ -205,15 +267,34 @@ def capability_help(ctx: typer.Context, capability: str | None = typer.Argument(
     if capability:
         cap = capability_registry.get(capability)
         if cap is None:
-            error = error_for("UNKNOWN_CAPABILITY", message=f"Unknown capability: {capability}", details={"capability": capability})
+            error = error_for(
+                "UNKNOWN_CAPABILITY",
+                message=f"Unknown capability: {capability}",
+                details={"capability": capability},
+            )
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code)
         payload = {"ok": True, "capability": _capability_payload(cap)}
         item = _capability_payload(cap)
-        human = Panel("\n".join([item["summary"], f"Risk: {'destructive; --force required' if item['destructive'] else 'network enumeration or offline analysis'}", f"Example: {item['example']}", f"Next step: {item['next_step']}"]), title=f"Capability: {cap.id}")
+        human = Panel(
+            "\n".join(
+                [
+                    item["summary"],
+                    f"Risk: {'destructive; --force required' if item['destructive'] else 'network enumeration or offline analysis'}",
+                    f"Example: {item['example']}",
+                    f"Next step: {item['next_step']}",
+                ]
+            ),
+            title=f"Capability: {cap.id}",
+        )
         _emit(ctx, payload, human)
         return
-    payload = {"ok": True, "capabilities": [_capability_payload(cap) for cap in caps], "count": len(caps), "next_step": "Run `adaf-attack capability-help <id>` for a complete command example."}
+    payload = {
+        "ok": True,
+        "capabilities": [_capability_payload(cap) for cap in caps],
+        "count": len(caps),
+        "next_step": "Run `adaf-attack capability-help <id>` for a complete command example.",
+    }
     table = Table(title="Capability reference", show_header=True)
     table.add_column("ID")
     table.add_column("Risk")
@@ -229,7 +310,9 @@ def plan(
     capability: str = typer.Argument(..., help="Capability ID to preview."),
     domain: str = typer.Option(..., "--domain", "-d"),
     dc_ip: str = typer.Option(..., "--dc-ip"),
-    force: bool = typer.Option(False, "--force", help="Indicate that execution would be authorized."),
+    force: bool = typer.Option(
+        False, "--force", help="Indicate that execution would be authorized."
+    ),
 ) -> None:
     """Preview the target, effects, and risk of a proposed capability run."""
     import adaf_attack.capabilities  # noqa: F401
@@ -237,14 +320,43 @@ def plan(
 
     cap = capability_registry.get(capability)
     if cap is None:
-        error = error_for("UNKNOWN_CAPABILITY", message=f"Unknown capability: {capability}", details={"capability": capability})
+        error = error_for(
+            "UNKNOWN_CAPABILITY",
+            message=f"Unknown capability: {capability}",
+            details={"capability": capability},
+        )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
     risk = "high" if cap.destructive else "moderate"
     requires_force = cap.destructive
-    next_step = f"adaf-attack run {cap.id} --domain {domain} --dc-ip {dc_ip}" + (" --force" if requires_force else "")
-    payload = {"ok": True, "mode": "preview", "capability": _capability_payload(cap), "target": {"domain": domain, "dc_ip": dc_ip}, "risk": {"level": risk, "network_contact": True, "may_modify_target": cap.destructive, "force_provided": force, "requires_force": requires_force}, "next_step": next_step}
-    human = Panel("\n".join([f"Target: {domain} @ {dc_ip}", f"Risk: {risk}; {'may modify target state' if cap.destructive else 'performs network/offline analysis only'}", f"--force: {'provided' if force else 'not provided'}", f"Next step: {next_step}"]), title=f"Plan preview: {cap.id}")
+    next_step = f"adaf-attack run {cap.id} --domain {domain} --dc-ip {dc_ip}" + (
+        " --force" if requires_force else ""
+    )
+    payload = {
+        "ok": True,
+        "mode": "preview",
+        "capability": _capability_payload(cap),
+        "target": {"domain": domain, "dc_ip": dc_ip},
+        "risk": {
+            "level": risk,
+            "network_contact": True,
+            "may_modify_target": cap.destructive,
+            "force_provided": force,
+            "requires_force": requires_force,
+        },
+        "next_step": next_step,
+    }
+    human = Panel(
+        "\n".join(
+            [
+                f"Target: {domain} @ {dc_ip}",
+                f"Risk: {risk}; {'may modify target state' if cap.destructive else 'performs network/offline analysis only'}",
+                f"--force: {'provided' if force else 'not provided'}",
+                f"Next step: {next_step}",
+            ]
+        ),
+        title=f"Plan preview: {cap.id}",
+    )
     _emit(ctx, payload, human)
 
 
@@ -252,7 +364,9 @@ def plan(
 def sessions(
     ctx: typer.Context,
     workspace: Path | None = typer.Option(None, "--workspace"),
-    session_id: str | None = typer.Option(None, "--session", help="Show one session's metadata and event status."),
+    session_id: str | None = typer.Option(
+        None, "--session", help="Show one session's metadata and event status."
+    ),
 ) -> None:
     """Navigate persisted sessions and report cleanup status (read-only)."""
     root = workspace or default_workspace_dir()
@@ -267,19 +381,40 @@ def sessions(
             except json.JSONDecodeError:
                 meta = {"session_id": path.name, "metadata_error": True}
             events = path / "events.jsonl"
-            entry = {"session_id": meta.get("session_id", path.name), "created_at": meta.get("created_at"), "path": str(path), "events_present": events.is_file(), "bytes": sum(p.stat().st_size for p in path.rglob("*") if p.is_file())}
+            entry = {
+                "session_id": meta.get("session_id", path.name),
+                "created_at": meta.get("created_at"),
+                "path": str(path),
+                "events_present": events.is_file(),
+                "bytes": sum(p.stat().st_size for p in path.rglob("*") if p.is_file()),
+            }
             entries.append(entry)
     if session_id:
         entries = [entry for entry in entries if entry["session_id"] == session_id]
     total_bytes = sum(entry["bytes"] for entry in entries)
-    payload = {"ok": True, "workspace": str(root), "sessions": entries, "cleanup": {"action": "read-only status", "session_count": len(entries), "bytes": total_bytes, "next_step": "Review session paths, then remove only explicitly selected sessions outside this command."}}
+    payload = {
+        "ok": True,
+        "workspace": str(root),
+        "sessions": entries,
+        "cleanup": {
+            "action": "read-only status",
+            "session_count": len(entries),
+            "bytes": total_bytes,
+            "next_step": "Review session paths, then remove only explicitly selected sessions outside this command.",
+        },
+    }
     table = Table(title="Workspace sessions", show_header=True)
     table.add_column("Session")
     table.add_column("Created")
     table.add_column("Events")
     table.add_column("Bytes", justify="right")
     for entry in entries:
-        table.add_row(entry["session_id"], str(entry["created_at"] or "unknown"), "yes" if entry["events_present"] else "no", str(entry["bytes"]))
+        table.add_row(
+            entry["session_id"],
+            str(entry["created_at"] or "unknown"),
+            "yes" if entry["events_present"] else "no",
+            str(entry["bytes"]),
+        )
     _emit(ctx, payload, table)
 
 
@@ -397,10 +532,10 @@ def run_capability(
     if not _json_mode(ctx):
         _console(ctx).print(
             Panel(
-            f"[bold]{capability}[/bold]\n\n"
-            f"Target: {domain} @ {dc_ip}\n"
-            f"Auth: {describe_auth(target) if not creds_file else f'creds-file={creds_file} (rotation)'}",
-            title="Running",
+                f"[bold]{capability}[/bold]\n\n"
+                f"Target: {domain} @ {dc_ip}\n"
+                f"Auth: {describe_auth(target) if not creds_file else f'creds-file={creds_file} (rotation)'}",
+                title="Running",
             )
         )
 
@@ -503,7 +638,9 @@ def rank_paths_cmd(
 
     g = AttackGraph.from_file(graph)
     if not _json_mode(ctx):
-        _console(ctx).print(f"Loaded {g.summary()['nodes']} nodes / {g.summary()['edges']} edges from {graph}")
+        _console(ctx).print(
+            f"Loaded {g.summary()['nodes']} nodes / {g.summary()['edges']} edges from {graph}"
+        )
 
     starts = [start] if start else None
     ranked = g.rank_from_principals(starts, max_depth=max_depth, limit=limit)
@@ -553,62 +690,116 @@ def rank_paths_cmd(
 def _offline_sessions(values: list[Path]) -> list[Path]:
     missing = [str(path) for path in values if not path.is_dir()]
     if missing:
-        raise ActionableError("SESSION_NOT_FOUND", "One or more session directories do not exist.", "Pass an existing session directory created by a prior authorized run.", details={"missing": missing})
+        raise ActionableError(
+            "SESSION_NOT_FOUND",
+            "One or more session directories do not exist.",
+            "Pass an existing session directory created by a prior authorized run.",
+            details={"missing": missing},
+        )
     return values
 
 
 @app.command("credential-exposure")
-def credential_exposure_cmd(ctx: typer.Context, session: list[Path] = typer.Option(..., "--session", help="Session directory; repeat to correlate.")) -> None:
+def credential_exposure_cmd(
+    ctx: typer.Context,
+    session: list[Path] = typer.Option(
+        ..., "--session", help="Session directory; repeat to correlate."
+    ),
+) -> None:
     """Prioritize credential-exposure evidence without disclosing secret values."""
     from adaf_attack.core.workflows import credential_exposure
+
     try:
         payload = credential_exposure(_offline_sessions(session))
     except ActionableError as error:
         _emit_error(ctx, error)
-        raise typer.Exit(code=error.exit_code)
-    _emit(ctx, {"ok": True, **payload}, Panel(f"Exposure artifacts: {payload['count']}\nNext step: {payload['next_step']}", title="Credential exposure correlation"))
+        raise typer.Exit(code=error.exit_code) from error
+    _emit(
+        ctx,
+        {"ok": True, **payload},
+        Panel(
+            f"Exposure artifacts: {payload['count']}\nNext step: {payload['next_step']}",
+            title="Credential exposure correlation",
+        ),
+    )
 
 
 @app.command("bloodhound-reconcile")
-def bloodhound_reconcile_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session"), bloodhound: Path = typer.Option(..., "--bloodhound")) -> None:
+def bloodhound_reconcile_cmd(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session"),
+    bloodhound: Path = typer.Option(..., "--bloodhound"),
+) -> None:
     """Reconcile a saved session graph with a BloodHound JSON export."""
     from adaf_attack.core.workflows import bloodhound_reconcile
+
     try:
         _offline_sessions([session])
         if not bloodhound.is_file():
-            raise ActionableError("BLOODHOUND_FILE_NOT_FOUND", "The BloodHound JSON file does not exist.", "Pass a valid JSON export with --bloodhound.")
+            raise ActionableError(
+                "BLOODHOUND_FILE_NOT_FOUND",
+                "The BloodHound JSON file does not exist.",
+                "Pass a valid JSON export with --bloodhound.",
+            )
         payload = bloodhound_reconcile(session, bloodhound)
     except ActionableError as error:
         _emit_error(ctx, error)
-        raise typer.Exit(code=error.exit_code)
-    _emit(ctx, {"ok": True, **payload}, Panel(f"Only local: {len(payload['only_local'])}\nOnly BloodHound: {len(payload['only_bloodhound'])}\nNext step: {payload['next_step']}", title="BloodHound reconciliation"))
+        raise typer.Exit(code=error.exit_code) from error
+    _emit(
+        ctx,
+        {"ok": True, **payload},
+        Panel(
+            f"Only local: {len(payload['only_local'])}\nOnly BloodHound: {len(payload['only_bloodhound'])}\nNext step: {payload['next_step']}",
+            title="BloodHound reconciliation",
+        ),
+    )
 
 
 @app.command("trust-correlation")
-def trust_correlation_cmd(ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")) -> None:
+def trust_correlation_cmd(
+    ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")
+) -> None:
     """Correlate trust artifacts and cross-forest graph evidence."""
     from adaf_attack.core.workflows import correlate_trusts
+
     try:
         payload = correlate_trusts(_offline_sessions(session))
     except ActionableError as error:
         _emit_error(ctx, error)
-        raise typer.Exit(code=error.exit_code)
-    _emit(ctx, {"ok": True, **payload}, Panel(f"Sessions correlated: {len(payload['records'])}\nNext step: {payload['next_step']}", title="Trust and identity correlation"))
+        raise typer.Exit(code=error.exit_code) from error
+    _emit(
+        ctx,
+        {"ok": True, **payload},
+        Panel(
+            f"Sessions correlated: {len(payload['records'])}\nNext step: {payload['next_step']}",
+            title="Trust and identity correlation",
+        ),
+    )
 
 
 def _surface_command(ctx: typer.Context, session: Path, kind: str, title: str) -> None:
     from adaf_attack.core.workflows import validate_surface
+
     try:
         _offline_sessions([session])
         payload = validate_surface(session, kind)
     except ActionableError as error:
         _emit_error(ctx, error)
-        raise typer.Exit(code=error.exit_code)
-    _emit(ctx, {"ok": True, **payload}, Panel(f"Validated: {'yes' if payload['validated'] else 'no evidence found'}\nNext step: {payload['next_step']}", title=title))
+        raise typer.Exit(code=error.exit_code) from error
+    _emit(
+        ctx,
+        {"ok": True, **payload},
+        Panel(
+            f"Validated: {'yes' if payload['validated'] else 'no evidence found'}\nNext step: {payload['next_step']}",
+            title=title,
+        ),
+    )
 
 
 @app.command("delegation-validation")
-def delegation_validation_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
+def delegation_validation_cmd(
+    ctx: typer.Context, session: Path = typer.Option(..., "--session")
+) -> None:
     """Validate delegation/RBCD evidence from an authorized session."""
     _surface_command(ctx, session, "delegation", "Delegation path validation")
 
@@ -620,28 +811,46 @@ def adcs_validation_cmd(ctx: typer.Context, session: Path = typer.Option(..., "-
 
 
 @app.command("campaign-compose")
-def campaign_compose_cmd(ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")) -> None:
+def campaign_compose_cmd(
+    ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")
+) -> None:
     """Compose a read-only multi-session attack-path campaign."""
     from adaf_attack.core.workflows import compose_campaign
+
     try:
         payload = compose_campaign(_offline_sessions(session))
     except ActionableError as error:
         _emit_error(ctx, error)
-        raise typer.Exit(code=error.exit_code)
-    _emit(ctx, {"ok": True, **payload}, Panel(f"Campaign phases: {len(payload['phases'])}\nNext step: {payload['next_step']}", title="Multi-session campaign composer"))
+        raise typer.Exit(code=error.exit_code) from error
+    _emit(
+        ctx,
+        {"ok": True, **payload},
+        Panel(
+            f"Campaign phases: {len(payload['phases'])}\nNext step: {payload['next_step']}",
+            title="Multi-session campaign composer",
+        ),
+    )
 
 
 @app.command("purple-handoff")
 def purple_handoff_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
     """Build a detection-aware handoff from recorded evidence."""
     from adaf_attack.core.workflows import purple_handoff
+
     try:
         _offline_sessions([session])
         payload = purple_handoff(session)
     except ActionableError as error:
         _emit_error(ctx, error)
-        raise typer.Exit(code=error.exit_code)
-    _emit(ctx, {"ok": True, **payload}, Panel(f"Detection hypotheses: {len(payload['detections'])}\nNext step: {payload['next_step']}", title="Purple-team handoff"))
+        raise typer.Exit(code=error.exit_code) from error
+    _emit(
+        ctx,
+        {"ok": True, **payload},
+        Panel(
+            f"Detection hypotheses: {len(payload['detections'])}\nNext step: {payload['next_step']}",
+            title="Purple-team handoff",
+        ),
+    )
 
 
 @app.command("gpo-impact-plan")
@@ -651,32 +860,75 @@ def gpo_impact_plan_cmd(ctx: typer.Context, session: Path = typer.Option(..., "-
 
 
 @app.command("coercion-fixtures")
-def coercion_fixtures_cmd(ctx: typer.Context, fixtures: Path = typer.Option(..., "--fixtures"), authorized_fixtures: bool = typer.Option(False, "--authorized-fixtures", help="Confirm fixtures are isolated and authorized.")) -> None:
+def coercion_fixtures_cmd(
+    ctx: typer.Context,
+    fixtures: Path = typer.Option(..., "--fixtures"),
+    authorized_fixtures: bool = typer.Option(
+        False, "--authorized-fixtures", help="Confirm fixtures are isolated and authorized."
+    ),
+) -> None:
     """Validate authorized coercion-detection fixtures; never contacts a target."""
     from adaf_attack.core.workflows import validate_fixtures
+
     if not authorized_fixtures:
-        error = ActionableError("FIXTURE_AUTHORIZATION_REQUIRED", "Fixture validation requires explicit confirmation that fixtures are authorized.", "Re-run with --authorized-fixtures only for isolated, authorized test data.")
+        error = ActionableError(
+            "FIXTURE_AUTHORIZATION_REQUIRED",
+            "Fixture validation requires explicit confirmation that fixtures are authorized.",
+            "Re-run with --authorized-fixtures only for isolated, authorized test data.",
+        )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
     if not fixtures.is_dir():
-        error = ActionableError("FIXTURE_DIRECTORY_NOT_FOUND", "The fixture directory does not exist.", "Pass an existing directory containing JSON fixtures.")
+        error = ActionableError(
+            "FIXTURE_DIRECTORY_NOT_FOUND",
+            "The fixture directory does not exist.",
+            "Pass an existing directory containing JSON fixtures.",
+        )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
     payload = validate_fixtures(fixtures)
-    _emit(ctx, {"ok": payload["valid"], **payload}, Panel(f"Fixtures: {len(payload['fixtures'])}\nValid: {'yes' if payload['valid'] else 'no'}\nNext step: {payload['next_step']}", title="Coercion fixture validation"))
+    _emit(
+        ctx,
+        {"ok": payload["valid"], **payload},
+        Panel(
+            f"Fixtures: {len(payload['fixtures'])}\nValid: {'yes' if payload['valid'] else 'no'}\nNext step: {payload['next_step']}",
+            title="Coercion fixture validation",
+        ),
+    )
 
 
 @app.command("workflow-profiles")
-def workflow_profiles_cmd(ctx: typer.Context, profile: str | None = typer.Argument(None, help="Profile name; omit to list available profiles.")) -> None:
+def workflow_profiles_cmd(
+    ctx: typer.Context,
+    profile: str | None = typer.Argument(
+        None, help="Profile name; omit to list available profiles."
+    ),
+) -> None:
     """Show repeatable, non-executing operator workflow profiles."""
     from adaf_attack.core.workflows import PROFILES
+
     if profile and profile not in PROFILES:
-        error = ActionableError("UNKNOWN_WORKFLOW_PROFILE", f"Unknown workflow profile: {profile}", "Run `adaf-attack workflow-profiles` to list valid profile names.")
+        error = ActionableError(
+            "UNKNOWN_WORKFLOW_PROFILE",
+            f"Unknown workflow profile: {profile}",
+            "Run `adaf-attack workflow-profiles` to list valid profile names.",
+        )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
     selected = {profile: PROFILES[profile]} if profile else PROFILES
-    payload = {"ok": True, "profiles": selected, "next_step": "Select a profile and execute only engagement-authorized steps."}
-    _emit(ctx, payload, Panel("\n".join(f"{name}: {item['description']}" for name, item in selected.items()), title="Operator workflow profiles"))
+    payload = {
+        "ok": True,
+        "profiles": selected,
+        "next_step": "Select a profile and execute only engagement-authorized steps.",
+    }
+    _emit(
+        ctx,
+        payload,
+        Panel(
+            "\n".join(f"{name}: {item['description']}" for name, item in selected.items()),
+            title="Operator workflow profiles",
+        ),
+    )
 
 
 @app.command("start")
@@ -693,7 +945,11 @@ def start(ctx: typer.Context) -> None:
     try:
         from adaf_attack.tui.app import run_tui
     except ImportError as exc:
-        error = ActionableError("TUI_DEPENDENCY_MISSING", "Textual is required for the interactive shell.", "Install TUI support: pip install 'adaf-attack[tui]'.")
+        error = ActionableError(
+            "TUI_DEPENDENCY_MISSING",
+            "Textual is required for the interactive shell.",
+            "Install TUI support: pip install 'adaf-attack[tui]'.",
+        )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code) from exc
 

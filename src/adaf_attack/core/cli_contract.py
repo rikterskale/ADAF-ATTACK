@@ -47,6 +47,8 @@ ERROR_CATALOG: dict[str, tuple[str, str]] = {
 }
 
 
-def error_for(code: str, *, message: str | None = None, details: dict[str, Any] | None = None) -> ActionableError:
+def error_for(
+    code: str, *, message: str | None = None, details: dict[str, Any] | None = None
+) -> ActionableError:
     default_message, remediation = ERROR_CATALOG[code]
     return ActionableError(code, message or default_message, remediation, details=details)
