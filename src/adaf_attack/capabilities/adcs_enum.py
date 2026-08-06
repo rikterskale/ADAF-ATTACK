@@ -163,10 +163,18 @@ class AdcsEnum:
             "esc4_acl_templates": [],
             "esc7_ca_acl": [],
             "esc8_web_enrollment": [],
+            "esc9_candidates": [],
+            "esc10_candidates": [],
+            "esc11_candidates": [],
+            "esc13_candidates": [],
             "esc1_with_enroll_principals": [],
             "notes": {
                 "ESC5": "Check CA server computer object ACL separately (not in this pass)",
                 "ESC6": "EDITF_ATTRIBUTESUBJECTALTNAME2 requires RPC/CA config inspection",
+                "ESC9": "No-security-extension assessment requires template flag and mapping validation.",
+                "ESC10": "Weak certificate mapping assessment requires DC mapping-policy validation.",
+                "ESC11": "RPC encryption policy requires CA interface validation.",
+                "ESC13": "OID group-link assessment requires issuance-policy object validation.",
             },
         }
 
