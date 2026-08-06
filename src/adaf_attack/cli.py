@@ -534,6 +534,135 @@ def rank_paths_cmd(
         _console(ctx).print("No paths found")
 
 
+def _offline_sessions(values: list[Path]) -> list[Path]:
+    missing = [str(path) for path in values if not path.is_dir()]
+    if missing:
+        raise ActionableError("SESSION_NOT_FOUND", "One or more session directories do not exist.", "Pass an existing session directory created by a prior authorized run.", details={"missing": missing})
+    return values
+
+
+@app.command("credential-exposure")
+def credential_exposure_cmd(ctx: typer.Context, session: list[Path] = typer.Option(..., "--session", help="Session directory; repeat to correlate.")) -> None:
+    """Prioritize credential-exposure evidence without disclosing secret values."""
+    from adaf_attack.core.workflows import credential_exposure
+    try:
+        payload = credential_exposure(_offline_sessions(session))
+    except ActionableError as error:
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    _emit(ctx, {"ok": True, **payload}, Panel(f"Exposure artifacts: {payload['count']}\nNext step: {payload['next_step']}", title="Credential exposure correlation"))
+
+
+@app.command("bloodhound-reconcile")
+def bloodhound_reconcile_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session"), bloodhound: Path = typer.Option(..., "--bloodhound")) -> None:
+    """Reconcile a saved session graph with a BloodHound JSON export."""
+    from adaf_attack.core.workflows import bloodhound_reconcile
+    try:
+        _offline_sessions([session])
+        if not bloodhound.is_file():
+            raise ActionableError("BLOODHOUND_FILE_NOT_FOUND", "The BloodHound JSON file does not exist.", "Pass a valid JSON export with --bloodhound.")
+        payload = bloodhound_reconcile(session, bloodhound)
+    except ActionableError as error:
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    _emit(ctx, {"ok": True, **payload}, Panel(f"Only local: {len(payload['only_local'])}\nOnly BloodHound: {len(payload['only_bloodhound'])}\nNext step: {payload['next_step']}", title="BloodHound reconciliation"))
+
+
+@app.command("trust-correlation")
+def trust_correlation_cmd(ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")) -> None:
+    """Correlate trust artifacts and cross-forest graph evidence."""
+    from adaf_attack.core.workflows import correlate_trusts
+    try:
+        payload = correlate_trusts(_offline_sessions(session))
+    except ActionableError as error:
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    _emit(ctx, {"ok": True, **payload}, Panel(f"Sessions correlated: {len(payload['records'])}\nNext step: {payload['next_step']}", title="Trust and identity correlation"))
+
+
+def _surface_command(ctx: typer.Context, session: Path, kind: str, title: str) -> None:
+    from adaf_attack.core.workflows import validate_surface
+    try:
+        _offline_sessions([session])
+        payload = validate_surface(session, kind)
+    except ActionableError as error:
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    _emit(ctx, {"ok": True, **payload}, Panel(f"Validated: {'yes' if payload['validated'] else 'no evidence found'}\nNext step: {payload['next_step']}", title=title))
+
+
+@app.command("delegation-validation")
+def delegation_validation_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
+    """Validate delegation/RBCD evidence from an authorized session."""
+    _surface_command(ctx, session, "delegation", "Delegation path validation")
+
+
+@app.command("adcs-validation")
+def adcs_validation_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
+    """Validate AD CS attack-path evidence without requesting certificates."""
+    _surface_command(ctx, session, "adcs", "AD CS attack-path validation")
+
+
+@app.command("campaign-compose")
+def campaign_compose_cmd(ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")) -> None:
+    """Compose a read-only multi-session attack-path campaign."""
+    from adaf_attack.core.workflows import compose_campaign
+    try:
+        payload = compose_campaign(_offline_sessions(session))
+    except ActionableError as error:
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    _emit(ctx, {"ok": True, **payload}, Panel(f"Campaign phases: {len(payload['phases'])}\nNext step: {payload['next_step']}", title="Multi-session campaign composer"))
+
+
+@app.command("purple-handoff")
+def purple_handoff_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
+    """Build a detection-aware handoff from recorded evidence."""
+    from adaf_attack.core.workflows import purple_handoff
+    try:
+        _offline_sessions([session])
+        payload = purple_handoff(session)
+    except ActionableError as error:
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    _emit(ctx, {"ok": True, **payload}, Panel(f"Detection hypotheses: {len(payload['detections'])}\nNext step: {payload['next_step']}", title="Purple-team handoff"))
+
+
+@app.command("gpo-impact-plan")
+def gpo_impact_plan_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
+    """Plan controlled GPO impact validation from saved evidence."""
+    _surface_command(ctx, session, "gpo", "GPO impact planner")
+
+
+@app.command("coercion-fixtures")
+def coercion_fixtures_cmd(ctx: typer.Context, fixtures: Path = typer.Option(..., "--fixtures"), authorized_fixtures: bool = typer.Option(False, "--authorized-fixtures", help="Confirm fixtures are isolated and authorized.")) -> None:
+    """Validate authorized coercion-detection fixtures; never contacts a target."""
+    from adaf_attack.core.workflows import validate_fixtures
+    if not authorized_fixtures:
+        error = ActionableError("FIXTURE_AUTHORIZATION_REQUIRED", "Fixture validation requires explicit confirmation that fixtures are authorized.", "Re-run with --authorized-fixtures only for isolated, authorized test data.")
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    if not fixtures.is_dir():
+        error = ActionableError("FIXTURE_DIRECTORY_NOT_FOUND", "The fixture directory does not exist.", "Pass an existing directory containing JSON fixtures.")
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    payload = validate_fixtures(fixtures)
+    _emit(ctx, {"ok": payload["valid"], **payload}, Panel(f"Fixtures: {len(payload['fixtures'])}\nValid: {'yes' if payload['valid'] else 'no'}\nNext step: {payload['next_step']}", title="Coercion fixture validation"))
+
+
+@app.command("workflow-profiles")
+def workflow_profiles_cmd(ctx: typer.Context, profile: str | None = typer.Argument(None, help="Profile name; omit to list available profiles.")) -> None:
+    """Show repeatable, non-executing operator workflow profiles."""
+    from adaf_attack.core.workflows import PROFILES
+    if profile and profile not in PROFILES:
+        error = ActionableError("UNKNOWN_WORKFLOW_PROFILE", f"Unknown workflow profile: {profile}", "Run `adaf-attack workflow-profiles` to list valid profile names.")
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    selected = {profile: PROFILES[profile]} if profile else PROFILES
+    payload = {"ok": True, "profiles": selected, "next_step": "Select a profile and execute only engagement-authorized steps."}
+    _emit(ctx, payload, Panel("\n".join(f"{name}: {item['description']}" for name, item in selected.items()), title="Operator workflow profiles"))
+
+
 @app.command("start")
 def start(ctx: typer.Context) -> None:
     """Launch the interactive Textual TUI shell."""

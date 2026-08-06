@@ -81,6 +81,20 @@ adaf-attack --no-color plan shadow-creds -d corp.local --dc-ip 10.0.0.10
 adaf-attack --format json sessions
 ```
 
+## Offline correlation workflows
+
+The following commands operate only on saved session artifacts or authorized
+fixture files: `credential-exposure`, `bloodhound-reconcile`,
+`trust-correlation`, `delegation-validation`, `adcs-validation`,
+`campaign-compose`, `purple-handoff`, `gpo-impact-plan`,
+`coercion-fixtures`, and `workflow-profiles`.
+
+```bash
+adaf-attack credential-exposure --session /evidence/session-a --session /evidence/session-b
+adaf-attack bloodhound-reconcile --session /evidence/session-a --bloodhound ./bloodhound.json
+adaf-attack workflow-profiles purple-team
+```
+
 Default workspaces:
 
 - Linux: `~/.local/share/adaf-attack/workspaces`
