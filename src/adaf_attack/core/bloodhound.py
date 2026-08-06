@@ -195,3 +195,32 @@ def save_bloodhound_zip(
         zf.writestr("meta.json", json.dumps(doc["meta"], indent=2, default=str))
 
     return zip_path
+
+
+def import_bloodhound(path: Path, graph: AttackGraph) -> dict[str, int]:
+    """Import ADAF/BloodHound-compatible JSON into the local graph."""
+    document = json.loads(path.read_text(encoding="utf-8"))
+    data = document.get("graph", document) if isinstance(document, dict) else {}
+    nodes = data.get("nodes", []) if isinstance(data, dict) else []
+    edges = data.get("edges", []) if isinstance(data, dict) else []
+    imported_nodes = imported_edges = 0
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        props = node.get("properties") or {}
+        node_id = str(props.get("objectid") or node.get("id") or props.get("name") or "")
+        if not node_id:
+            continue
+        kind = str((node.get("kinds") or [node.get("label") or "Base"])[0])
+        graph.add_node(node_id, kind, **props)
+        imported_nodes += 1
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        source = edge.get("source") or (edge.get("start") or {}).get("value")
+        target = edge.get("target") or (edge.get("end") or {}).get("value")
+        relation = edge.get("label") or edge.get("kind") or "Related"
+        if source and target:
+            graph.add_edge(str(source), str(target), str(relation), **(edge.get("properties") or {}))
+            imported_edges += 1
+    return {"nodes": imported_nodes, "edges": imported_edges}

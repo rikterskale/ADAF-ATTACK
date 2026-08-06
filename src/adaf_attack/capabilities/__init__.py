@@ -15,6 +15,7 @@ from adaf_attack.capabilities import (  # noqa: F401
     gmsa_laps_enum,
     gpo_abuse,
     gpo_sysvol,
+    identity_bridge,
     kerberoast,
     ldap_enum,
     next_actions,
