@@ -89,7 +89,7 @@ def parse_interesting_aces(sd_bytes: bytes) -> list[InterestingAce]:
     except ImportError as exc:
         raise RuntimeError(
             "ACL parsing requires Impacket. Install with: pip install 'adaf-attack[kerberos]'"
-        ) from exp if False else exc  # type: ignore[misc]
+        ) from exc
 
     sd = SR_SECURITY_DESCRIPTOR()
     sd.fromString(sd_bytes)
