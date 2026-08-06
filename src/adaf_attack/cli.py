@@ -1,7 +1,4 @@
-"""Main CLI entrypoint for ADAF-ATTACK.
-
-Supports both pure CLI commands and an interactive Textual TUI (`start`).
-"""
+"""Main CLI entrypoint for ADAF-ATTACK."""
 
 from __future__ import annotations
 
@@ -14,8 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from adaf_attack import __version__
-from adaf_attack.core.graph import AttackGraph
-from adaf_attack.core.session import Session
+from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.target import Target
 
 app = typer.Typer(
@@ -31,7 +27,6 @@ console = Console()
 def main(
     version: bool = typer.Option(False, "--version", "-V", help="Show version and exit."),
 ) -> None:
-    """ADAF-ATTACK — Aggressive AD offensive toolkit."""
     if version:
         console.print(f"adaf-attack {__version__}")
         raise typer.Exit()
@@ -44,7 +39,7 @@ def doctor() -> None:
     try:
         import ldap3  # noqa: F401
 
-        checks.append(("[green]✓[/green] ldap3"))
+        checks.append("[green]✓[/green] ldap3")
     except ImportError:
         checks.append("[red]✗[/red] ldap3 (required)")
 
@@ -62,9 +57,7 @@ def doctor() -> None:
     except ImportError:
         checks.append("[yellow]![/yellow] textual (optional — pip install 'adaf-attack[tui]')")
 
-    console.print(
-        Panel("\n".join(checks), title="ADAF-ATTACK doctor", subtitle=f"v{__version__}")
-    )
+    console.print(Panel("\n".join(checks), title="ADAF-ATTACK doctor", subtitle=f"v{__version__}"))
 
 
 @app.command("list-capabilities")
@@ -85,9 +78,7 @@ def list_capabilities() -> None:
     table.add_column("Flags")
 
     for cap in caps:
-        flags = []
-        if cap.destructive:
-            flags.append("[red]DESTRUCTIVE[/red]")
+        flags = ["[red]DESTRUCTIVE[/red]"] if cap.destructive else []
         table.add_row(cap.id, cap.category, cap.summary, " ".join(flags) or "-")
 
     console.print(table)
@@ -96,7 +87,7 @@ def list_capabilities() -> None:
 @app.command("run")
 def run_capability(
     capability: str = typer.Argument(..., help="Capability ID (see list-capabilities)"),
-    domain: str = typer.Option(..., "--domain", "-d", help="Target domain (e.g. corp.local)"),
+    domain: str = typer.Option(..., "--domain", "-d", help="Target domain"),
     dc_ip: str = typer.Option(..., "--dc-ip", help="Domain controller IP or hostname"),
     username: Optional[str] = typer.Option(None, "--username", "-u"),
     password: Optional[str] = typer.Option(None, "--password", "-p"),
@@ -106,29 +97,9 @@ def run_capability(
     include_secrets: bool = typer.Option(
         False, "--include-secrets", help="Do not redact tickets/hashes in output"
     ),
-    workspace: Path = typer.Option(Path("workspaces"), "--workspace", help="Session root directory"),
+    workspace: Path = typer.Option(Path("workspaces"), "--workspace"),
 ) -> None:
     """Run a capability against a target."""
-    import adaf_attack.capabilities  # noqa: F401
-    from adaf_attack.core.registry import capability_registry
-
-    cap = capability_registry.get(capability)
-    if cap is None:
-        console.print(f"[red]Unknown capability:[/red] {capability}")
-        console.print("Run [bold]adaf-attack list-capabilities[/bold] to see available IDs.")
-        raise typer.Exit(code=1)
-
-    if cap.destructive and not force:
-        console.print(
-            f"[red]Capability '{capability}' is marked DESTRUCTIVE.[/red]\n"
-            "Re-run with [bold]--force[/bold] if you intend to proceed."
-        )
-        raise typer.Exit(code=2)
-
-    if cap.runner is None:
-        console.print(f"[red]Capability '{capability}' has no runner implemented yet.[/red]")
-        raise typer.Exit(code=1)
-
     target = Target(
         domain=domain,
         dc_ip=dc_ip,
@@ -137,38 +108,34 @@ def run_capability(
         hashes=hashes,
         ldaps=ldaps,
     )
-    session = Session(base_dir=workspace)
-    graph = AttackGraph()
 
     console.print(
         Panel(
-            f"[bold]{cap.id}[/bold]\n{cap.summary}\n\n"
-            f"Target: {domain} @ {dc_ip}\n"
-            f"Session: {session.session_id}",
+            f"[bold]{capability}[/bold]\n\nTarget: {domain} @ {dc_ip}",
             title="Running",
         )
     )
 
-    session.log(
-        "run.start",
-        capability=capability,
-        domain=domain,
-        dc_ip=dc_ip,
-        username=username,
-    )
-
     try:
-        result = cap.runner.run(
+        out = execute_capability(
+            capability,
             target,
-            session,
-            graph,
-            include_secrets=include_secrets,
             force=force,
+            include_secrets=include_secrets,
+            workspace=workspace,
+            log=lambda m: console.print(f"[dim]{m}[/dim]"),
         )
-        session.log("run.complete", capability=capability, ok=True)
-        console.print(f"\n[green]Session directory:[/green] {session.root}")
-    except Exception as exc:
-        session.log("run.error", capability=capability, error=str(exc))
+        interesting = out.get("interesting") or {}
+        top = interesting.get("top_paths") or []
+        if top:
+            console.print("\n[bold]Top ranked paths (sample)[/bold]")
+            for p in top[:5]:
+                console.print(
+                    f"  score={p['score']:>5}  len={p['length']}  "
+                    + " → ".join(x.split("@")[0] for x in p["path"][:6])
+                )
+        console.print(f"\n[green]Session:[/green] {out['session_path']}")
+    except RunError as exc:
         console.print(f"[red]Error:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
