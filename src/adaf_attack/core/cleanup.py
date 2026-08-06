@@ -19,6 +19,9 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
             artifact = Path(str(item["artifact"]))
             value = artifact.read_text(encoding="utf-8").strip()
             ok = conn.modify(item["target"], {"msDS-KeyCredentialLink": [(MODIFY_DELETE, [value])]})
+        elif item.get("kind") == "rbcd":
+            previous = [bytes.fromhex(value) for value in item.get("previous", [])]
+            ok = conn.modify(item["target"], {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_REPLACE, previous)]})
         else:
             continue
         item["status"] = "completed" if ok else "failed"; item["result"] = str(conn.result)

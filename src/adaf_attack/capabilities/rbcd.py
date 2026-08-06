@@ -162,7 +162,7 @@ class Rbcd:
             else:
                 result["set_attempt"] = self._set_rbcd(conn, base_dn, set_on, set_from)
                 if result["set_attempt"].get("ok"):
-                    session.register_cleanup({"kind": "rbcd", "target": result["set_attempt"].get("set_on_dn"), "rollback": "Restore the previous msDS-AllowedToActOnBehalfOfOtherIdentity value from the engagement change record."})
+                    session.register_cleanup({"kind": "rbcd", "target": result["set_attempt"].get("set_on_dn"), "previous": result["set_attempt"].get("previous", []), "rollback": "Restore the recorded msDS-AllowedToActOnBehalfOfOtherIdentity value."})
 
         conn.unbind()
         out_path = session.path("rbcd.json")
@@ -193,7 +193,7 @@ class Rbcd:
                 base_dn,
                 f"(sAMAccountName={sam})",
                 search_scope=SUBTREE,
-                attributes=["distinguishedName", "objectSid"],
+                attributes=["distinguishedName", "objectSid", ATTR],
             )
             if not conn.entries:
                 return None, None
@@ -223,6 +223,8 @@ class Rbcd:
             }
 
         try:
+            conn.search(on_dn, "(objectClass=*)", search_scope=LEVEL, attributes=[ATTR])
+            previous = list(conn.entries[0][ATTR].raw_values) if conn.entries and conn.entries[0][ATTR] else []
             sd_bytes = build_allowed_to_act_sd(from_sid)
             ok = conn.modify(on_dn, {ATTR: [(MODIFY_REPLACE, [sd_bytes])]})
             result = {
@@ -234,6 +236,7 @@ class Rbcd:
                 "set_from": set_from,
                 "set_from_sid": from_sid,
                 "sd_len": len(sd_bytes),
+                "previous": [value.hex() if isinstance(value, bytes) else str(value) for value in previous],
             }
             if ok:
                 console.print(f"  [green]LDAP REPLACE ok[/green]  {ATTR} on {on_dn}")
