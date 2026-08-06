@@ -21,6 +21,7 @@ from adaf_attack.capabilities import (  # noqa: F401
     next_actions,
     pkinit_auth,
     rbcd,
+    rodc_delegation,
     report,
     shadow_creds,
     sysvol_hunt,
