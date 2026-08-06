@@ -90,6 +90,12 @@ class AttackPaths:
             limit=limit,
             per_start=8 if start else 4,
         )
+        exploit_chains = graph.rank_exploit_chains(
+            starts,
+            max_depth=max_depth,
+            limit=limit,
+            per_start=8 if start else 4,
+        )
 
         table = Table(title="Top ranked attack paths", show_header=True, header_style="bold")
         table.add_column("#", style="dim", width=4)
@@ -120,6 +126,8 @@ class AttackPaths:
             "max_depth": max_depth,
             "paths": ranked,
             "count": len(ranked),
+            "exploit_chains": exploit_chains,
+            "exploit_chain_count": len(exploit_chains),
         }
 
         out_path = session.path("ranked-paths.json")

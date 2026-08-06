@@ -60,6 +60,12 @@ adaf-attack paths
 adaf-attack start
 ```
 
+`rank-paths` also emits `exploit_chains`: evidence-backed chains for findings
+that are otherwise represented as self-loops in the graph (such as AD CS,
+credential exposure, delegation, GPO control, and directory replication).
+Each chain includes its observed terminal relation, normalized impact, tactic,
+ATT&CK technique references, and confidence level.
+
 ## CLI output and safety UX
 
 Every non-interactive command supports a stable JSON document with

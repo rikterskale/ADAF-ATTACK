@@ -74,6 +74,50 @@ HIGH_VALUE_GROUPS = {
 }
 
 
+# Evidence-backed terminal conditions used to surface exploit chains that do
+# not naturally lead to a distinct graph node (for example, an ESC finding on
+# a certificate template or a roastable-account marker on a user).  These are
+# deliberately descriptive: the graph reports the security outcome supported
+# by enumeration evidence, not operational exploitation instructions.
+EXPLOIT_PROFILES: dict[str, dict[str, Any]] = {
+    "AdminTo": {"impact": "Administrative control of a system", "tactic": "Privilege Escalation", "techniques": ["T1078"]},
+    "GenericAll": {"impact": "Full control of a directory object", "tactic": "Privilege Escalation", "techniques": ["T1098"]},
+    "GenericWrite": {"impact": "Write control of a directory object", "tactic": "Privilege Escalation", "techniques": ["T1098"]},
+    "WriteDacl": {"impact": "Directory object permission control", "tactic": "Privilege Escalation", "techniques": ["T1222.001"]},
+    "WriteOwner": {"impact": "Directory object ownership control", "tactic": "Privilege Escalation", "techniques": ["T1222.001"]},
+    "AddMember": {"impact": "Privileged group membership control", "tactic": "Privilege Escalation", "techniques": ["T1098"]},
+    "ForceChangePassword": {"impact": "Account credential reset control", "tactic": "Credential Access", "techniques": ["T1098"]},
+    "AllExtendedRights": {"impact": "Extended-rights control of a directory object", "tactic": "Privilege Escalation", "techniques": ["T1098"]},
+    "DCSync": {"impact": "Directory replication credential exposure", "tactic": "Credential Access", "techniques": ["T1003.006"]},
+    "GetChanges": {"impact": "Directory replication access component", "tactic": "Credential Access", "techniques": ["T1003.006"]},
+    "GetChangesAll": {"impact": "Directory replication access component", "tactic": "Credential Access", "techniques": ["T1003.006"]},
+    "CanASREP": {"impact": "AS-REP credential material exposure", "tactic": "Credential Access", "techniques": ["T1558.004"]},
+    "HasSPN": {"impact": "Service-ticket credential material exposure", "tactic": "Credential Access", "techniques": ["T1558.003"]},
+    "ReadGMSAPassword": {"impact": "Managed service-account credential exposure", "tactic": "Credential Access", "techniques": ["T1003"]},
+    "GMSAPasswordReadable": {"impact": "Managed service-account credential exposure", "tactic": "Credential Access", "techniques": ["T1003"]},
+    "ReadLAPSPassword": {"impact": "Local administrator credential exposure", "tactic": "Credential Access", "techniques": ["T1003"]},
+    "LAPSReadable": {"impact": "Local administrator credential exposure", "tactic": "Credential Access", "techniques": ["T1003"]},
+    "ESC1": {"impact": "Certificate-based identity escalation candidate", "tactic": "Privilege Escalation", "techniques": ["T1649"]},
+    "ESC1Enrollable": {"impact": "Enrollable certificate-based identity escalation", "tactic": "Privilege Escalation", "techniques": ["T1649"], "confidence": "high"},
+    "ESC2": {"impact": "Certificate template identity escalation candidate", "tactic": "Privilege Escalation", "techniques": ["T1649"]},
+    "ESC3Agent": {"impact": "Certificate request-agent escalation candidate", "tactic": "Privilege Escalation", "techniques": ["T1649"]},
+    "ESC4": {"impact": "Certificate template control", "tactic": "Privilege Escalation", "techniques": ["T1649"]},
+    "ESC6": {"impact": "Certificate authority subject-alternative-name abuse condition", "tactic": "Privilege Escalation", "techniques": ["T1649"], "confidence": "high"},
+    "ESC7": {"impact": "Certificate authority management control", "tactic": "Privilege Escalation", "techniques": ["T1649"]},
+    "ESC8WebEnrollment": {"impact": "Web enrollment relay exposure", "tactic": "Credential Access", "techniques": ["T1557"]},
+    "WriteKeyCredentialLink": {"impact": "Alternate authentication material control", "tactic": "Persistence", "techniques": ["T1098"]},
+    "HasKeyCredentialLink": {"impact": "Existing alternate authentication material", "tactic": "Persistence", "techniques": ["T1098"]},
+    "AllowedToAct": {"impact": "Resource-based constrained delegation exposure", "tactic": "Lateral Movement", "techniques": ["T1550.003"]},
+    "WriteRBCD": {"impact": "Delegation configuration control", "tactic": "Lateral Movement", "techniques": ["T1550.003"]},
+    "UnconstrainedDelegation": {"impact": "Unconstrained delegation exposure", "tactic": "Credential Access", "techniques": ["T1550.003"]},
+    "AllowedToDelegate": {"impact": "Constrained delegation exposure", "tactic": "Lateral Movement", "techniques": ["T1550.003"]},
+    "WriteGPO": {"impact": "Group Policy deployment control", "tactic": "Privilege Escalation", "techniques": ["T1484.001"]},
+    "WriteSYSVOL": {"impact": "Group Policy content control", "tactic": "Privilege Escalation", "techniques": ["T1484.001"]},
+    "SpoolerOpen": {"impact": "Printer service coercion exposure", "tactic": "Credential Access", "techniques": ["T1187"]},
+    "EfsrpcOpen": {"impact": "EFS RPC coercion exposure", "tactic": "Credential Access", "techniques": ["T1187"]},
+}
+
+
 @dataclass
 class Node:
     id: str
@@ -298,6 +342,77 @@ class AttackGraph:
         merged.sort(key=lambda x: (x["score"], x["length"]))
         return merged[:limit]
 
+    def rank_exploit_chains(
+        self,
+        starts: Iterable[str] | None = None,
+        *,
+        max_depth: int = 6,
+        limit: int = 25,
+        per_start: int = 5,
+    ) -> list[dict[str, Any]]:
+        """Rank evidence-backed exploit chains from reachable graph findings.
+
+        Unlike :meth:`rank_paths`, this treats a high-signal relationship as a
+        terminal condition.  This preserves valuable findings represented as
+        self-loops and makes each returned record suitable for a report: it
+        includes the observed relation, normalized impact, ATT&CK references,
+        and a confidence label.
+        """
+        if starts is None:
+            candidates = [
+                n.id for n in self.nodes.values() if n.kind in {"User", "Computer", "Base"}
+            ][:80]
+        else:
+            candidates = [resolved for value in starts if (resolved := self.find_node(value))]
+
+        chains: list[dict[str, Any]] = []
+        for start in candidates:
+            queue: list[tuple[str, list[str], list[str], float]] = [(start, [start], [], 0.0)]
+            visited_depth: dict[str, int] = {start: 0}
+            produced = 0
+
+            while queue and produced < per_start:
+                current, path, edge_kinds, score = queue.pop(0)
+                if len(path) > max_depth:
+                    continue
+                for edge in self.neighbors(current):
+                    profile = EXPLOIT_PROFILES.get(edge.kind)
+                    chain_nodes = path + ([] if edge.target == current else [edge.target])
+                    chain_edges = edge_kinds + [edge.kind]
+                    chain_score = score + self._edge_weight(edge.kind)
+
+                    if profile:
+                        chains.append(
+                            {
+                                "path": chain_nodes,
+                                "edges": chain_edges,
+                                "score": round(chain_score, 2),
+                                "length": len(chain_edges),
+                                "start": start,
+                                "end": edge.target,
+                                "terminal_relation": edge.kind,
+                                "impact": profile["impact"],
+                                "tactic": profile["tactic"],
+                                "techniques": profile["techniques"],
+                                "confidence": profile.get("confidence", "medium"),
+                            }
+                        )
+                        produced += 1
+                        if produced >= per_start:
+                            break
+
+                    if edge.target in path or len(chain_nodes) >= max_depth:
+                        continue
+                    depth = len(chain_nodes) - 1
+                    if edge.target in visited_depth and visited_depth[edge.target] < depth:
+                        continue
+                    visited_depth[edge.target] = depth
+                    queue.append((edge.target, chain_nodes, chain_edges, chain_score))
+
+        # A deterministic tie-breaker keeps JSON/report output stable.
+        chains.sort(key=lambda x: (x["score"], x["length"], x["terminal_relation"], x["start"]))
+        return chains[:limit]
+
     def interesting_summary(self, limit: int = 15) -> dict[str, Any]:
         """High-signal overview used by CLI and TUI."""
         asrep = [
@@ -315,12 +430,14 @@ class AttackGraph:
         ]
 
         sample_paths = self.rank_from_principals(limit=limit, per_start=3)
+        exploit_chains = self.rank_exploit_chains(limit=limit, per_start=3)
 
         return {
             "asrep_roastable": asrep[:50],
             "kerberoastable": spn_users[:50],
             "admin_groups": admin_groups,
             "top_paths": sample_paths,
+            "exploit_chains": exploit_chains,
             "graph": self.summary(),
         }
 

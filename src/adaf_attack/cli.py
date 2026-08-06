@@ -507,6 +507,7 @@ def rank_paths_cmd(
 
     starts = [start] if start else None
     ranked = g.rank_from_principals(starts, max_depth=max_depth, limit=limit)
+    exploit_chains = g.rank_exploit_chains(starts, max_depth=max_depth, limit=limit)
 
     table = Table(title="Ranked attack paths", show_header=True, header_style="bold")
     table.add_column("#", style="dim", width=4)
@@ -520,14 +521,29 @@ def rank_paths_cmd(
             short += " → …"
         table.add_row(str(i), f"{p['score']:.1f}", str(p["length"]), short)
 
-    payload = {"graph": str(graph), "start": start, "paths": ranked, "count": len(ranked)}
+    payload = {
+        "graph": str(graph),
+        "start": start,
+        "paths": ranked,
+        "count": len(ranked),
+        "exploit_chains": exploit_chains,
+        "exploit_chain_count": len(exploit_chains),
+    }
     if output:
         output.write_text(__import__("json").dumps(payload, indent=2) + "\n", encoding="utf-8")
         payload["output"] = str(output)
     if _json_mode(ctx):
         _emit(ctx, {"ok": True, **payload}, "")
-    elif ranked:
-        _console(ctx).print(table)
+    elif ranked or exploit_chains:
+        if ranked:
+            _console(ctx).print(table)
+        if exploit_chains:
+            _console(ctx).print("\nExploit chains (evidence-backed)")
+            for chain in exploit_chains[:10]:
+                _console(ctx).print(
+                    f"  score={chain['score']:>5}  {chain['terminal_relation']}: "
+                    f"{chain['impact']} ({chain['confidence']} confidence)"
+                )
         if output:
             _console(ctx).print(f"Wrote {output}")
     else:

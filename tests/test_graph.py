@@ -81,3 +81,31 @@ def test_rank_from_principals_merged() -> None:
     merged = g.rank_from_principals(["u1", "u2"], limit=10)
     assert len(merged) >= 2
     assert merged[0]["score"] <= merged[-1]["score"]
+
+
+def test_rank_exploit_chains_includes_self_loop_findings() -> None:
+    g = AttackGraph()
+    g.add_node("u1", "User", sam="alice")
+    g.add_node("template", "CertTemplate", cn="User")
+    g.add_edge("u1", "template", "Enroll")
+    g.add_edge("template", "template", "ESC1Enrollable")
+
+    chains = g.rank_exploit_chains(["u1"], limit=5)
+
+    assert len(chains) == 1
+    assert chains[0]["terminal_relation"] == "ESC1Enrollable"
+    assert chains[0]["impact"] == "Enrollable certificate-based identity escalation"
+    assert chains[0]["techniques"] == ["T1649"]
+    assert chains[0]["confidence"] == "high"
+
+
+def test_exploit_chains_include_direct_credential_findings() -> None:
+    g = AttackGraph()
+    g.add_node("u1", "User", sam="alice")
+    g.add_edge("u1", "u1", "CanASREP")
+
+    chains = g.rank_exploit_chains(["alice"], limit=5)
+
+    assert chains[0]["path"] == ["u1"]
+    assert chains[0]["terminal_relation"] == "CanASREP"
+    assert chains[0]["tactic"] == "Credential Access"
