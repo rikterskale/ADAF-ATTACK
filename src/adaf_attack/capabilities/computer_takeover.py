@@ -10,7 +10,6 @@ from ldap3 import SUBTREE
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_util import ldap_connect
-
 from adaf_attack.core.registry import register_capability
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
