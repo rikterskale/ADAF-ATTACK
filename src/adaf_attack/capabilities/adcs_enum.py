@@ -48,6 +48,7 @@ TEMPLATE_ATTRS = [
     "nTSecurityDescriptor",
     "msPKI-Certificate-Application-Policy",
     "msPKI-Minimal-Key-Size",
+    "msPKI-Enrollment-Flag",
 ]
 CA_ATTRS = [
     "cn",
@@ -119,6 +120,7 @@ def _analyze_template(entry: Any) -> dict[str, Any]:
         "esc3_agent_template": flags["esc3_agent_template"],
         "esc3_requires_ra": flags["esc3_requires_ra"],
         "esc_tags": flags["esc_tags"],
+        "no_security_extension": bool(enroll_flags & 0x00080000),
         "dn": str(entry.entry_dn),
     }
 
