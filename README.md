@@ -7,65 +7,67 @@
 ## Philosophy
 
 - No plan-only mode
-- No lab certification gates
-- No containment checks
-- Lightweight professional controls only:
-  - `--force` required for destructive actions
-  - Secrets redacted by default (`--include-secrets` to keep them)
-  - Full session / workspace logging
+- No lab certification / containment gates
+- Lightweight controls: `--force` for destructive actions, secrets redacted by default, session logging
 
-## Capabilities (v0.3.0)
+## Capabilities (v0.4.0)
 
 | ID | Category | Description |
 |----|----------|-------------|
 | `ldap-enum` | enumeration | Users, computers, groups, trusts, SPNs |
-| `kerberoast` | credential-access | TGS requests → hashcat `$krb5tgs$23$` |
+| `trusts-enum` | enumeration | Deep trusts (direction, SID filtering, forest vs external, risk notes) |
+| `adcs-enum` | enumeration | AD CS CAs, certificate templates, ESC1-style candidates |
+| `kerberoast` | credential-access | TGS → hashcat `$krb5tgs$23$` |
 | `asrep-roast` | credential-access | AS-REP → hashcat `$krb5asrep$23$` |
+| `bloodhound-export` | export | BloodHound CE-friendly graph JSON |
 
-Attack-path graph is built during collection (MemberOf, HasSPN, CanASREP, TrustedBy) with basic path ranking.
+Attack-path graph is built during collection with path ranking (`interesting.json`).
 
 ## Install
 
 ```bash
-pip install -e ".[dev]"                  # LDAP
-pip install -e ".[dev,kerberos]"         # + roasting
-pip install -e ".[dev,tui]"              # + interactive shell
-pip install -e ".[full]"                 # everything
+pip install -e ".[dev]"
+pip install -e ".[dev,kerberos]"   # roasting
+pip install -e ".[dev,tui]"        # interactive shell
+pip install -e ".[full]"
 ```
 
-## CLI
+## CLI examples
 
 ```bash
-adaf-attack doctor
 adaf-attack list-capabilities
 
+# Core enum
 adaf-attack run ldap-enum -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1'
+adaf-attack run trusts-enum -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1'
+adaf-attack run adcs-enum -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1'
+
+# Roasting
 adaf-attack run kerberoast -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1' --include-secrets
 adaf-attack run asrep-roast -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1' --include-secrets
-```
 
-## Interactive TUI
+# BloodHound export (seeds from ldap-enum if graph empty)
+adaf-attack run bloodhound-export -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1'
 
-```bash
+# TUI
 adaf-attack start
 ```
 
-- Fill Domain / DC / credentials
-- Select a capability
-- Toggle **Include secrets** / **Force**
-- Press **Run** (or `r`)
+## Output layout
 
-Live output and ranked paths appear in the log panel.
-
-## Output
-
-Every run writes under `workspaces/<session-id>/`:
-
-- `ldap-enum.json` / `kerberoast.json` / `asrep-roast.json`
-- `*.hashes.txt` (when `--include-secrets`)
-- `graph.json` (full graph + interesting summary)
-- `interesting.json` (AS-REP / Kerberoastable / top paths)
-- `events.jsonl` + `session.json`
+```
+workspaces/<session-id>/
+  session.json
+  events.jsonl
+  ldap-enum.json
+  trusts-enum.json
+  adcs-enum.json
+  kerberoast.json / kerberoast.hashes.txt
+  asrep-roast.json / asrep-roast.hashes.txt
+  graph.json
+  interesting.json
+  bloodhound.json
+```
 
 ## License
 
