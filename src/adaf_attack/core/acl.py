@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 # Access mask bits
 GENERIC_ALL = 0x10000000
@@ -24,7 +24,6 @@ GUID_DS_REPLICATION_GET_CHANGES_ALL = "1131f6ad-9c07-11d1-f79f-00c04fc2dcd2"
 GUID_DS_REPLICATION_GET_CHANGES_IN_FILTERED_SET = "89e95b76-444d-4c62-991a-0facbeda640c"
 GUID_CERTIFICATE_ENROLLMENT = "0e10c968-78fb-11d2-90d4-00c04f79dc55"
 GUID_CERTIFICATE_AUTOENROLLMENT = "a05b8cc2-17bc-4802-a710-e7c15ab866a2"
-GUID_MANAGED_PASSWORD = ""  # attribute-level often via ReadProperty on msDS-ManagedPassword
 
 RIGHT_PRIORITY = [
     "GenericAll",
@@ -69,7 +68,6 @@ def _sid_to_str(sid_bytes: bytes) -> str:
         sid = LDAP_SID(sid_bytes)
         return sid.formatCanonical()
     except Exception:  # noqa: BLE001
-        # Minimal fallback
         if len(sid_bytes) < 8:
             return sid_bytes.hex()
         revision = sid_bytes[0]
@@ -91,7 +89,7 @@ def parse_interesting_aces(sd_bytes: bytes) -> list[InterestingAce]:
     except ImportError as exc:
         raise RuntimeError(
             "ACL parsing requires Impacket. Install with: pip install 'adaf-attack[kerberos]'"
-        ) from exp if False else exc  # noqa: weird keep simple
+        ) from exp if False else exc  # type: ignore[misc]
 
     sd = SR_SECURITY_DESCRIPTOR()
     sd.fromString(sd_bytes)
@@ -101,7 +99,6 @@ def parse_interesting_aces(sd_bytes: bytes) -> list[InterestingAce]:
     results: list[InterestingAce] = []
     for ace in sd["Dacl"]["Data"]:
         ace_type = ace["AceType"]
-        # ACCESS_ALLOWED_ACE = 0, ACCESS_ALLOWED_OBJECT_ACE = 5
         if ace_type not in (0x00, 0x05):
             continue
 
@@ -110,7 +107,6 @@ def parse_interesting_aces(sd_bytes: bytes) -> list[InterestingAce]:
         object_guid = None
 
         if ace_type == 0x05:
-            # Object ACE — may carry ObjectType GUID
             try:
                 flags = int(ace["Ace"]["Flags"])
                 if flags & 0x01:  # ACE_OBJECT_TYPE_PRESENT
@@ -136,7 +132,7 @@ def _mask_to_rights(mask: int, object_guid: str | None) -> list[str]:
     rights: list[str] = []
     if mask & GENERIC_ALL == GENERIC_ALL or mask == 0x0F01FF:
         rights.append("GenericAll")
-        return rights  # GA implies the rest for pathing
+        return rights
 
     if mask & WRITE_DACL:
         rights.append("WriteDacl")
@@ -163,7 +159,6 @@ def _mask_to_rights(mask: int, object_guid: str | None) -> list[str]:
     if mask & WRITE_PROPERTY and not rights:
         rights.append("WriteProperty")
     if mask & READ_PROPERTY:
-        # Attribute-specific read often used for LAPS/gMSA — caller tags context
         rights.append("ReadProperty")
 
     return rights
