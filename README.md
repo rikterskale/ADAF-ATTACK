@@ -174,6 +174,21 @@ RBCD write with a scoped S4U ticket-request handoff; a configured provider and
 controlled-computer credential are still required before a ticket request is
 made. Both workflows log their artifacts and decisions in the session.
 
+`campaign-run` executes an ordered set of independently scoped engagement plans. A Kerberos cache may be handed to a subsequent plan only by an explicit `credential_handoff.allow: true` declaration; it is loaded from the encrypted source-session vault and is never copied into the manifest or output.
+
+```yaml
+campaign_id: ENG-2026-001
+engagements:
+  - plan: domain-a.yaml
+  - plan: domain-b.yaml
+    credential_handoff:
+      allow: true
+      from_session: ./workspaces/domain-a-session
+      item: tgt
+```
+
+Supply a separate approval-token mapping with `campaign-run --approval-tokens` for engagements that include destructive phases. Ticket lifecycle operations include `import-ccache`, `export-ccache`, `import-pfx`, `export-pfx`, `pem-to-pfx`, and `pfx-to-pem`.
+
 Default workspaces:
 
 - Linux: `~/.local/share/adaf-attack/workspaces`

@@ -9,6 +9,7 @@ from typing import Any
 import yaml
 
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.vault import SessionVault, VaultError
 
 
 class CampaignError(ValueError):
@@ -37,6 +38,40 @@ def load_campaign_manifest(path: Path) -> tuple[str, list[Path]]:
     return campaign_id, plans
 
 
+def _campaign_entries(path: Path) -> tuple[str, list[dict[str, Any]]]:
+    """Load manifest entries, retaining explicit credential-handoff requests."""
+    campaign_id, plans = load_campaign_manifest(path)
+    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    entries: list[dict[str, Any]] = []
+    for source, plan in zip(raw["engagements"], plans, strict=True):
+        entry = dict(source) if isinstance(source, dict) else {}
+        entry["_plan"] = plan
+        entries.append(entry)
+    return campaign_id, entries
+
+
+def _handoff_ccache(entry: dict[str, Any], manifest: Path) -> tuple[str | None, dict[str, Any] | None]:
+    """Resolve an opt-in CCache reference without exposing its contents."""
+    handoff = entry.get("credential_handoff")
+    if handoff is None:
+        return None, None
+    if not isinstance(handoff, dict) or handoff.get("allow") is not True:
+        raise CampaignError("credential_handoff requires an explicit allow: true")
+    source = handoff.get("from_session")
+    item = str(handoff.get("item", "tgt"))
+    if not source or item != "tgt":
+        raise CampaignError("credential_handoff supports only the explicit vault item 'tgt'")
+    session_path = (manifest.parent / str(source)).resolve()
+    try:
+        value = SessionVault(session_path).get(item)
+    except VaultError as exc:
+        raise CampaignError(f"Unable to load credential handoff: {exc}") from exc
+    ccache = Path(str(value.get("path") if isinstance(value, dict) else ""))
+    if not ccache.is_file():
+        raise CampaignError("Credential handoff TGT does not reference an available ccache")
+    return str(ccache), {"from_session": str(session_path), "item": item, "kind": "ccache"}
+
+
 def run_campaign(
     manifest: Path,
     *,
@@ -53,19 +88,22 @@ def run_campaign(
     """
     from adaf_attack.core.engagement import load_plan, run_engagement
 
-    campaign_id, plan_paths = load_campaign_manifest(manifest)
+    campaign_id, entries = _campaign_entries(manifest)
     approval_tokens = approval_tokens or {}
     completed: list[dict[str, Any]] = []
     session_paths: list[Path] = []
-    for plan_path in plan_paths:
+    for entry in entries:
+        plan_path = entry["_plan"]
         plan = load_plan(plan_path)
         try:
+            ccache, handoff = _handoff_ccache(entry, manifest)
             result = run_engagement(
                 plan,
                 workspace=workspace / campaign_id,
                 username=username,
                 password=password,
                 approval_token=approval_tokens.get(plan.engagement_id),
+                ccache=ccache,
             )
         except Exception as exc:  # noqa: BLE001
             return {
@@ -81,6 +119,7 @@ def run_campaign(
                 "engagement_id": plan.engagement_id,
                 "domain": plan.domain,
                 "session_path": result["session_path"],
+                "credential_handoff": handoff,
             }
         )
         session_paths.append(Path(result["session_path"]))

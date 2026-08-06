@@ -54,6 +54,26 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
                     item["target"],
                     {"gPLink": [(MODIFY_REPLACE, [item.get("previous", "")])]},
                 )
+            elif item.get("kind") == "gpo-sysvol":
+                relative_path = str(item.get("target", "")).replace("/", "\\")
+                normalized_path = relative_path.lower()
+                if (
+                    not relative_path
+                    or ".." in relative_path.split("\\")
+                    or "\\policies\\" not in normalized_path
+                    or "\\machine\\" not in normalized_path
+                ):
+                    item["status"] = "failed"
+                    item["result"] = "Refusing invalid staged SYSVOL cleanup path"
+                    continue
+                from adaf_attack.capabilities.gpo_sysvol import _smb_connect
+
+                smb = _smb_connect(target, str(item.get("host") or target.dc_ip))
+                try:
+                    smb.deleteFile("SYSVOL", relative_path)
+                    ok = True
+                finally:
+                    smb.logoff()
             else:
                 continue
             item["status"] = "completed" if ok else "failed"

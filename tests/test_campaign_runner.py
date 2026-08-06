@@ -1,8 +1,10 @@
 import json
 
 import yaml
+from cryptography.fernet import Fernet
 
 from adaf_attack.core import forest_campaign
+from adaf_attack.core.session import Session
 
 
 def test_run_campaign_stops_after_failed_engagement(tmp_path, monkeypatch) -> None:
@@ -42,7 +44,12 @@ def test_run_campaign_stops_after_failed_engagement(tmp_path, monkeypatch) -> No
     assert result["stopped"] is True
     assert result["failed_engagement"] == "two"
     assert result["completed"] == [
-        {"engagement_id": "one", "domain": "corp.example", "session_path": str(tmp_path / "session-one")}
+        {
+            "engagement_id": "one",
+            "domain": "corp.example",
+            "session_path": str(tmp_path / "session-one"),
+            "credential_handoff": None,
+        }
     ]
 
 
@@ -55,3 +62,52 @@ def test_campaign_manifest_rejects_missing_plan(tmp_path) -> None:
         assert "not found" in str(exc)
     else:
         raise AssertionError("Expected CampaignError")
+
+
+def test_campaign_handoff_requires_explicit_opt_in(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ADAF_SESSION_VAULT_KEY", Fernet.generate_key().decode())
+    source = Session(base_dir=tmp_path / "source")
+    ccache = source.path("ticket.ccache")
+    ccache.write_bytes(b"ccache")
+    source.vault().put("tgt", "ccache", {"path": str(ccache)}, secret=True)
+    plan_path = tmp_path / "one.yaml"
+    plan_path.write_text("engagement_id: one\n", encoding="utf-8")
+    manifest = tmp_path / "campaign.yaml"
+    manifest.write_text(
+        yaml.safe_dump(
+            {
+                "campaign_id": "campaign-1",
+                "engagements": [
+                    {
+                        "plan": plan_path.name,
+                        "credential_handoff": {
+                            "allow": True,
+                            "from_session": str(source.root),
+                            "item": "tgt",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class Plan:
+        engagement_id = "one"
+        domain = "corp.example"
+
+    monkeypatch.setattr("adaf_attack.core.engagement.load_plan", lambda _path: Plan())
+    captured: dict[str, object] = {}
+
+    def fake_run(_plan, **kwargs):
+        captured.update(kwargs)
+        session = tmp_path / "output-session"
+        session.mkdir()
+        (session / "session.json").write_text(json.dumps({"domain": "corp.example"}), encoding="utf-8")
+        return {"session_path": str(session)}
+
+    monkeypatch.setattr("adaf_attack.core.engagement.run_engagement", fake_run)
+    result = forest_campaign.run_campaign(manifest, workspace=tmp_path / "workspaces")
+
+    assert captured["ccache"] == str(ccache)
+    assert result["completed"][0]["credential_handoff"]["item"] == "tgt"

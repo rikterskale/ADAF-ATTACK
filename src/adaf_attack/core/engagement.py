@@ -91,13 +91,20 @@ def verify_approval(token: str, plan: EngagementPlan, capability: str) -> dict[s
     return cast(dict[str, Any], payload)
 
 
-def run_engagement(plan: EngagementPlan, *, workspace: Path, username: str | None = None, password: str | None = None, approval_token: str | None = None) -> dict[str, Any]:
+def run_engagement(plan: EngagementPlan, *, workspace: Path, username: str | None = None, password: str | None = None, approval_token: str | None = None, ccache: str | None = None) -> dict[str, Any]:
     import adaf_attack.capabilities  # noqa: F401
 
     if plan.dc_ip not in plan.allowed_targets:
         raise EngagementError("The domain controller is not in allowed_targets")
     session = Session(base_dir=workspace)
-    target = Target(domain=plan.domain, dc_ip=plan.dc_ip, username=username, password=password)
+    target = Target(
+        domain=plan.domain,
+        dc_ip=plan.dc_ip,
+        username=username,
+        password=password,
+        ccache=ccache,
+        use_kerberos=bool(ccache),
+    )
     graph = AttackGraph()
     from adaf_attack.core.control_plane import resolve_opsec
 

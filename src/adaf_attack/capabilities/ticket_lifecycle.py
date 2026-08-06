@@ -37,6 +37,21 @@ class TicketLifecycle:
             vault.put("tgt", "ccache", {"path": str(destination)}, secret=True, metadata={"source": source.name})
             session.log("ticket-lifecycle.import", kind="ccache", path=str(destination))
             return {"operation": operation, "ccache": str(destination), "vault_item": "tgt"}
+        if operation == "import-pfx":
+            source = Path(str(artifact or ""))
+            if not source.is_file():
+                raise RuntimeError("artifact must name an existing PFX file")
+            destination = session.path(f"imported-{source.name}")
+            shutil.copy2(source, destination)
+            vault.put(
+                "certificate",
+                "pfx",
+                {"path": str(destination)},
+                secret=True,
+                metadata={"source": source.name},
+            )
+            session.log("ticket-lifecycle.import", kind="pfx", path=str(destination))
+            return {"operation": operation, "pfx": str(destination), "vault_item": "certificate"}
         if operation == "pem-to-pfx":
             if not artifact or "," not in str(artifact):
                 raise RuntimeError("artifact must be '<key.pem>,<cert.pem>'")
@@ -56,11 +71,24 @@ class TicketLifecycle:
             destination = session.path("exported.ccache")
             shutil.copy2(source, destination)
             return {"operation": operation, "ccache": str(destination)}
+        if operation == "export-pfx":
+            value = vault.get("certificate")
+            source = Path(str(value.get("path") or ""))
+            if not source.is_file():
+                raise RuntimeError("Vault certificate does not reference an available PFX")
+            destination = session.path("exported.pfx")
+            shutil.copy2(source, destination)
+            return {"operation": operation, "pfx": str(destination)}
         if operation == "pfx-to-pem":
             source = Path(str(artifact or ""))
             if not source.is_file():
                 raise RuntimeError("artifact must name an existing PFX file")
-            from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, pkcs12
+            from cryptography.hazmat.primitives.serialization import (
+                Encoding,
+                NoEncryption,
+                PrivateFormat,
+                pkcs12,
+            )
             key, cert, _cas = pkcs12.load_key_and_certificates(source.read_bytes(), None)
             if key is None or cert is None:
                 raise RuntimeError("PFX does not contain both a private key and certificate")
