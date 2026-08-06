@@ -17,6 +17,11 @@ ACTION_MAP = {
     "AllowedToAct": ("rbcd-ticket-workflow", "high", True),
     "HasSPN": ("kerberoast", "medium", False),
     "DCSync": ("acl-enum", "high", False),
+    "WriteGPO": ("gpo-impact-plan", "high", True),
+    "SpoolerOpen": ("coercion-map", "high", True),
+    "EfsrpcOpen": ("coercion-map", "high", True),
+    "TrustedBy": ("forest-campaign", "medium", False),
+    "GPPPasswordExposure": ("ticket-lifecycle", "high", False),
 }
 
 
