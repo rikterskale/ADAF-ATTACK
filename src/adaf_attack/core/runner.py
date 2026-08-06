@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.paths import default_workspace_dir, normalize_path

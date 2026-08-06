@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -95,7 +95,7 @@ def export_bloodhound(graph: AttackGraph, domain: str | None = None) -> dict[str
 
     meta = {
         "source": "adaf-attack",
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "domain": domain,
         "node_count": len(nodes),
         "edge_count": len(edges),
@@ -129,13 +129,7 @@ def save_bloodhound_zip(
     zip_path: Path,
     domain: str | None = None,
 ) -> Path:
-    """Write a zip suitable for BloodHound CE file ingest.
-
-    Contains:
-      - bloodhound.json (full CE-oriented document)
-      - nodes.json / edges.json (split arrays)
-      - meta.json
-    """
+    """Write a zip suitable for BloodHound CE file ingest."""
     doc = export_bloodhound(graph, domain=domain)
     zip_path.parent.mkdir(parents=True, exist_ok=True)
 

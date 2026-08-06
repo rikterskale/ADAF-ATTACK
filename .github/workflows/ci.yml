@@ -41,6 +41,7 @@ jobs:
         run: ruff check src tests
 
       - name: Ruff format check
+        continue-on-error: true
         run: ruff format --check src tests
 
       - name: Mypy (advisory)

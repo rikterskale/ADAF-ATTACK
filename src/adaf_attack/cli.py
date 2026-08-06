@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -71,7 +70,6 @@ def doctor() -> None:
 
     if sys.platform == "win32":
         checks.append("[green]✓[/green] Windows path profile active (LOCALAPPDATA)")
-        # Soft check for PowerShell
         checks.append(
             "[dim]PowerShell helpers: scripts\\Install-AdafAttack.ps1 , scripts\\AdafAttack.psm1[/dim]"
         )
@@ -121,15 +119,15 @@ def run_capability(
     capability: str = typer.Argument(..., help="Capability ID (see list-capabilities)"),
     domain: str = typer.Option(..., "--domain", "-d", help="Target domain"),
     dc_ip: str = typer.Option(..., "--dc-ip", help="Domain controller IP or hostname"),
-    username: Optional[str] = typer.Option(None, "--username", "-u"),
-    password: Optional[str] = typer.Option(None, "--password", "-p"),
-    hashes: Optional[str] = typer.Option(None, "--hashes", help="LM:NT or NT hash"),
+    username: str | None = typer.Option(None, "--username", "-u"),
+    password: str | None = typer.Option(None, "--password", "-p"),
+    hashes: str | None = typer.Option(None, "--hashes", help="LM:NT or NT hash"),
     ldaps: bool = typer.Option(False, "--ldaps", help="Use LDAPS"),
     force: bool = typer.Option(False, "--force", help="Required for destructive capabilities"),
     include_secrets: bool = typer.Option(
         False, "--include-secrets", help="Do not redact tickets/hashes in output"
     ),
-    workspace: Optional[Path] = typer.Option(
+    workspace: Path | None = typer.Option(
         None,
         "--workspace",
         help="Session root directory (default: platform data dir / workspaces)",

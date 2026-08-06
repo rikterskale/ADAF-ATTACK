@@ -71,6 +71,12 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = [
+    "B008",    # typer.Option in defaults is the normal pattern
+    "E501",    # line length handled by formatter preference
+    "SIM102",  # nested if readability OK in bind paths
+    "SIM108",  # ternary not always clearer
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

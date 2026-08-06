@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from ldap3 import ALL, Connection, Server
 from ldap3.core.exceptions import LDAPException
 from rich.console import Console
@@ -33,9 +31,8 @@ def ldap_connect(target: Target) -> tuple[Connection, str, str | None]:
         conn = Connection(server, auto_bind=True)
 
     try:
-        if not conn.bound:
-            if not conn.bind():
-                raise RuntimeError(f"LDAP bind failed: {conn.result}")
+        if not conn.bound and not conn.bind():
+            raise RuntimeError(f"LDAP bind failed: {conn.result}")
     except LDAPException as exc:
         raise RuntimeError(f"LDAP connection error: {exc}") from exc
 
