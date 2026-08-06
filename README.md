@@ -19,21 +19,42 @@ ADAF-ATTACK is designed for experienced operators who already have authorization
 
 ## Status
 
-Early scaffold. Capability surface and attack-path engine under active development.
+Early development. Both pure CLI and interactive Textual TUI are available.
+
+Current registered capabilities (stubs):
+
+- `ldap-enum` — Domain enumeration via LDAP
+- `kerberoast` — Kerberoasting
+- `asrep-roast` — AS-REP roasting
 
 ## Quick Start (development)
 
 ```bash
+# Core CLI only
 python -m pip install -e ".[dev]"
+
+# With interactive TUI
+python -m pip install -e ".[dev,tui]"
+
 adaf-attack --help
+adaf-attack list-capabilities
+adaf-attack doctor
+adaf-attack start          # launches Textual TUI
 ```
+
+## Interface
+
+| Mode | Command | Notes |
+|------|---------|-------|
+| Pure CLI | `adaf-attack <command>` | Always available |
+| Interactive TUI | `adaf-attack start` | Requires `textual` (`pip install 'adaf-attack[tui]'`) |
 
 ## Design Goals
 
 - Single CLI covering the major AD attack surface
 - Modular capability system (easy to extend)
 - Native attack-path graph generation
-- High-quality Textual TUI (planned)
+- High-quality Textual TUI
 - Clean result packaging and evidence handling
 - Optional engagement metadata (logging only, never enforced)
 
