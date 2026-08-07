@@ -41,6 +41,7 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade "backports.tarfile==1.2.0"
           python -m pip install --upgrade "importlib_metadata==9.0.0"
+          python -m pip install --upgrade "colorama==0.4.6"
           python -m pip install --requirement requirements-ci.txt
           python -m pip install --no-deps --no-build-isolation -e ".[dev,ci]"
           python -m pip check
@@ -71,6 +72,7 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade "backports.tarfile==1.2.0"
           python -m pip install --upgrade "importlib_metadata==9.0.0"
+          python -m pip install --upgrade "colorama==0.4.6"
           python -m pip install --requirement requirements-ci.txt
           python -m pip install --no-deps --no-build-isolation -e ".[dev]"
           python -m pip check
@@ -106,6 +108,7 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade "backports.tarfile==1.2.0"
           python -m pip install --upgrade "importlib_metadata==9.0.0"
+          python -m pip install --upgrade "colorama==0.4.6"
           python -m pip install --requirement requirements-ci.txt
           python -m pip install --no-deps --no-build-isolation -e ".[dev,kerberos]"
           python -m pip check
@@ -155,6 +158,7 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade "backports.tarfile==1.2.0"
           python -m pip install --upgrade "importlib_metadata==9.0.0"
+          python -m pip install --upgrade "colorama==0.4.6"
           python -m pip install --requirement requirements-ci.txt
           python -m pip install --no-deps --no-build-isolation -e ".[ci]"
           python -m pip check
@@ -226,6 +230,7 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade "backports.tarfile==1.2.0"
           python -m pip install --upgrade "importlib_metadata==9.0.0"
+          python -m pip install --upgrade "colorama==0.4.6"
           python -m pip install --requirement requirements-ci.txt
           python -m pip install --no-deps --no-build-isolation -e ".[ci]"
 
@@ -241,6 +246,7 @@ jobs:
           .smoke-venv/bin/python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade "backports.tarfile==1.2.0"
           python -m pip install --upgrade "importlib_metadata==9.0.0"
+          python -m pip install --upgrade "colorama==0.4.6"
           .smoke-venv/bin/python -m pip install dist/*.whl
           .smoke-venv/bin/python -m pip check
           .smoke-venv/bin/adaf-attack --version
