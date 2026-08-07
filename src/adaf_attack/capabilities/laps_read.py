@@ -109,9 +109,7 @@ class LapsRead:
                     "DPAPI-NG decryption requires domain-wide unwrap key; "
                     "surface the blob and decrypt off-host if authorized."
                 )
-            if sam and any(
-                key in record for key in ("v1_password", "v2_password", "v2_encrypted")
-            ):
+            if sam and any(key in record for key in ("v1_password", "v2_password", "v2_encrypted")):
                 console.print(
                     f"  [cyan]{sam}[/cyan]  "
                     f"v1={'yes' if 'v1_password' in record else '-'}  "
