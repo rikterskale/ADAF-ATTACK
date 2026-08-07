@@ -90,7 +90,7 @@ def _parse_since(text: str) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
-def _delta(seconds: int) -> "timedelta":
+def _delta(seconds: int) -> timedelta:
     return timedelta(seconds=seconds)
 
 
