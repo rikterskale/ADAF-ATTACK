@@ -38,7 +38,7 @@ done
 
 case "$extras" in dev|tui|kerberos|full) ;; *) echo "Unsupported extras: $extras" >&2; exit 2 ;; esac
 
-## shellcheck disable=SC1091
+# shellcheck disable=SC1091
 if [[ "$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" != "kali" ]]; then
   echo "This installer is intended for Kali Linux; use your distribution's Python packages or pipx instead." >&2
   exit 1
