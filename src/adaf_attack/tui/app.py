@@ -59,7 +59,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc]
     def __init__(self) -> None:
         super().__init__()
         self.selected_cap: str | None = None
-        self._running = False
+        self._capability_running = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -118,7 +118,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc]
         target = f"{domain}" + (f" @ {dc}" if dc else "")
         cap = self.selected_cap or "(none)"
         self.query_one("#status", Static).update(
-            f"Target: {target}  |  Cap: {cap}  |  {'RUNNING' if self._running else 'idle'}"
+            f"Target: {target}  |  Cap: {cap}  |  "
+            f"{'RUNNING' if self._capability_running else 'idle'}"
         )
 
     def action_list_caps(self) -> None:
@@ -133,7 +134,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc]
             self._start_run()
 
     def _start_run(self) -> None:
-        if self._running:
+        if self._capability_running:
             self.notify("Already running", severity="warning")
             return
         if not self.selected_cap:
@@ -165,7 +166,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc]
         log.write(f"\n[bold]→ {self.selected_cap}[/] on {domain} @ {dc_ip}")
         if creds_file:
             log.write(f"  creds-file={creds_file} (rotation)")
-        self._running = True
+        self._capability_running = True
         self._update_status()
 
         def worker() -> None:
@@ -205,7 +206,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc]
                 self.call_from_thread(log.write, f"[red]Error:[/] {exc}")
                 self.call_from_thread(self.notify, str(exc), severity="error")
             finally:
-                self._running = False
+                self._capability_running = False
                 self.call_from_thread(self._update_status)
 
         threading.Thread(target=worker, daemon=True).start()
