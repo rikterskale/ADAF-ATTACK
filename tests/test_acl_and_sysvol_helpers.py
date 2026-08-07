@@ -8,12 +8,14 @@ from adaf_attack.core.acl import (
     GENERIC_ALL,
     GENERIC_WRITE,
     GUID_DS_REPLICATION_GET_CHANGES,
+    GUID_DS_REPLICATION_GET_CHANGES_ALL,
     GUID_FORCE_CHANGE_PASSWORD,
     READ_PROPERTY,
     WRITE_DACL,
     WRITE_PROPERTY,
     _guid_bytes_to_str,
     _mask_to_rights,
+    _sid_to_str,
     fetch_sd,
 )
 
@@ -33,6 +35,9 @@ def test_mask_to_rights_covers_extended_write_and_read_variants() -> None:
     assert _mask_to_rights(ADS_RIGHT_DS_CONTROL_ACCESS, GUID_DS_REPLICATION_GET_CHANGES) == [
         "GetChanges"
     ]
+    assert _mask_to_rights(ADS_RIGHT_DS_CONTROL_ACCESS, GUID_DS_REPLICATION_GET_CHANGES_ALL) == [
+        "GetChangesAll"
+    ]
     assert _mask_to_rights(ADS_RIGHT_DS_CONTROL_ACCESS, None) == ["AllExtendedRights"]
     assert _mask_to_rights(WRITE_PROPERTY, None) == ["WriteProperty"]
     assert _mask_to_rights(WRITE_PROPERTY | READ_PROPERTY, None) == [
@@ -47,6 +52,11 @@ def test_guid_conversion_handles_windows_byte_order_and_invalid_lengths() -> Non
         "00299570-246d-1168-a768-00aa006e0529"
     )
     assert _guid_bytes_to_str(b"short") == "73686f7274"
+
+
+def test_sid_fallback_handles_invalid_and_binary_sid_data() -> None:
+    assert _sid_to_str(b"short") == "73686f7274"
+    assert _sid_to_str(bytes([1, 2, 0, 0, 0, 0, 0, 5, 21, 0, 0, 0, 42, 0, 0, 0])) == "S-1-5-21-42"
 
 
 def test_sysvol_unc_parser_accepts_policy_paths_and_rejects_non_unc_values() -> None:
