@@ -40,10 +40,10 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
                     {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_REPLACE, previous)]},
                 )
             elif item.get("kind") == "acl":
-                previous = bytes.fromhex(item["previous_hex"])
+                previous_bytes = bytes.fromhex(item["previous_hex"])
                 ok = conn.modify(
                     item["target"],
-                    {"nTSecurityDescriptor": [(MODIFY_REPLACE, [previous])]},
+                    {"nTSecurityDescriptor": [(MODIFY_REPLACE, [previous_bytes])]},
                 )
             elif item.get("kind") == "gpo-link":
                 ok = conn.modify(
