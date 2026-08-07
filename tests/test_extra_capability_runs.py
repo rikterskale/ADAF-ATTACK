@@ -228,3 +228,24 @@ def test_pkinit_auth_records_certipy_failure_playbook(monkeypatch: Any, tmp_path
     assert result["method"] == "certipy"
     assert result["ok"] is False
     assert Path(result["playbook"]).is_file()
+
+
+def test_rbcd_ticket_workflow_records_failed_rbcd_write(monkeypatch: Any, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        workflow_wrappers.Rbcd,
+        "run",
+        lambda self, *args, **kwargs: {"set_attempt": {"ok": False, "error": "denied"}},
+    )
+    session = Session(tmp_path)
+    result = workflow_wrappers.RbcdTicketWorkflow().run(
+        _target(),
+        session,
+        AttackGraph(),
+        force=True,
+        set_on="APP01$",
+        set_from="CONTROL$",
+        impersonate="administrator",
+    )
+
+    assert result["ticket"] == {"skipped": "rbcd_set_failed"}
+    assert session.path("rbcd-ticket-workflow.json").is_file()
