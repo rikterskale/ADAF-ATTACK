@@ -24,6 +24,7 @@ from textual.widgets import (
 from adaf_attack import __version__
 from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.target import Target
+from adaf_attack.core.user_config import load_user_config
 
 
 class CapabilityItem(ListItem):  # type: ignore[misc]
@@ -54,14 +55,17 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc]
         Binding("q", "quit", "Quit", priority=True),
         Binding("r", "run_selected", "Run"),
         Binding("l", "list_caps", "Refresh"),
+        Binding("p", "toggle_password", "Show/Hide password"),
     ]
 
     def __init__(self) -> None:
         super().__init__()
         self.selected_cap: str | None = None
         self._capability_running = False
+        self._password_visible = False
 
     def compose(self) -> ComposeResult:
+        defaults = load_user_config()
         yield Header(show_clock=True)
         with Horizontal():
             with Vertical(id="sidebar"):
@@ -70,15 +74,41 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc]
             with Vertical(id="main"):
                 with Vertical(id="target-form"):
                     yield Static("[bold]Target[/bold]")
-                    yield Input(placeholder="Domain (corp.local)", id="domain")
-                    yield Input(placeholder="DC IP / hostname", id="dc_ip")
-                    yield Input(placeholder="Username (optional)", id="username")
-                    yield Input(placeholder="Password (optional)", password=True, id="password")
+                    yield Input(
+                        placeholder="Domain (corp.local)",
+                        id="domain",
+                        value=defaults.get("target.domain", ""),
+                    )
+                    yield Input(
+                        placeholder="DC IP / hostname",
+                        id="dc_ip",
+                        value=defaults.get("target.dc_ip", ""),
+                    )
+                    yield Input(
+                        placeholder="Username (optional)",
+                        id="username",
+                        value=defaults.get("target.username", ""),
+                    )
+                    with Horizontal():
+                        yield Input(
+                            placeholder="Password (optional)", password=True, id="password"
+                        )
+                        yield Button("Show", id="toggle-password-btn", variant="default")
+                    yield Input(placeholder="NT / LM:NT hash (optional)", id="hashes")
+                    yield Input(placeholder="AES key hex (optional)", id="aes_key")
+                    yield Input(placeholder="Kerberos ccache path (optional)", id="ccache")
                     yield Input(placeholder="Creds JSON file (optional rotation)", id="creds_file")
                     yield Input(
-                        placeholder="ACL scope: high-value | domain", id="scope", value="high-value"
+                        placeholder="ACL scope: high-value | domain",
+                        id="scope",
+                        value=defaults.get("acl.scope", "high-value"),
                     )
                     yield Input(placeholder="Attack-path start principal (optional)", id="start")
+                    with Horizontal():
+                        yield Label("Kerberos")
+                        yield Switch(id="kerberos", value=bool(defaults.get("target.kerberos")))
+                        yield Label("  LDAPS")
+                        yield Switch(id="ldaps", value=bool(defaults.get("target.ldaps")))
                     with Horizontal():
                         yield Label("Include secrets")
                         yield Switch(id="include_secrets", value=False)
@@ -129,9 +159,24 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc]
     def action_run_selected(self) -> None:
         self._start_run()
 
+    def action_toggle_password(self) -> None:
+        self._toggle_password()
+
+    def _toggle_password(self) -> None:
+        pw = self.query_one("#password", Input)
+        self._password_visible = not self._password_visible
+        pw.password = not self._password_visible
+        try:
+            btn = self.query_one("#toggle-password-btn", Button)
+            btn.label = "Hide" if self._password_visible else "Show"
+        except Exception:  # noqa: BLE001
+            pass
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "run-btn":
             self._start_run()
+        elif event.button.id == "toggle-password-btn":
+            self._toggle_password()
 
     def _start_run(self) -> None:
         if self._capability_running:
@@ -149,17 +194,27 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc]
 
         username = self.query_one("#username", Input).value.strip() or None
         password = self.query_one("#password", Input).value or None
+        hashes = self.query_one("#hashes", Input).value.strip() or None
+        aes_key = self.query_one("#aes_key", Input).value.strip() or None
+        ccache = self.query_one("#ccache", Input).value.strip() or None
         creds_file = self.query_one("#creds_file", Input).value.strip() or None
         scope = self.query_one("#scope", Input).value.strip() or "high-value"
         start = self.query_one("#start", Input).value.strip() or None
         include_secrets = self.query_one("#include_secrets", Switch).value
         force = self.query_one("#force", Switch).value
+        kerberos = self.query_one("#kerberos", Switch).value
+        ldaps = self.query_one("#ldaps", Switch).value
 
         target = Target(
             domain=domain,
             dc_ip=dc_ip,
             username=username,
             password=password,
+            hashes=hashes,
+            aes_key=aes_key,
+            ccache=ccache,
+            use_kerberos=kerberos,
+            ldaps=ldaps,
         )
 
         log = self.query_one("#log-panel", Log)

@@ -54,5 +54,15 @@ python3 -m venv "$repo_root/.venv"
 "$repo_root/.venv/bin/python" -m pip install --upgrade pip setuptools wheel
 "$repo_root/.venv/bin/python" -m pip install --editable "${repo_root}[${extras}]"
 
+# Install shell completion (bash / zsh) for the current user.
+shell_name="$(basename "${SHELL:-bash}")"
+if [[ "$shell_name" == "bash" || "$shell_name" == "zsh" ]]; then
+  if "$repo_root/.venv/bin/adaf-attack" --install-completion "$shell_name" >/dev/null 2>&1; then
+    echo "Installed $shell_name completion for adaf-attack."
+  else
+    echo "Skipped shell completion install (run 'adaf-attack --install-completion' manually)."
+  fi
+fi
+
 echo "Install complete. Activate with: source $repo_root/.venv/bin/activate"
 echo "Then verify with: adaf-attack doctor"

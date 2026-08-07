@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 from adaf_attack import __version__
 from adaf_attack.core.auth import describe_auth
-from adaf_attack.core.cli_contract import ActionableError, error_for
+from adaf_attack.core.capability_help_data import capability_option_spec
+from adaf_attack.core.cli_contract import ERROR_CATALOG, ActionableError, error_for
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.paths import (
     default_workspace_dir,
@@ -24,6 +28,80 @@ from adaf_attack.core.paths import (
 )
 from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.target import Target
+from adaf_attack.core.user_config import load_user_config
+
+
+def _workspace_is_empty(root: Path) -> bool:
+    if not root.is_dir():
+        return True
+    for entry in root.iterdir():
+        if entry.is_dir() and (entry / "session.json").is_file():
+            return False
+    return True
+
+
+def _humanize_bytes(n: int) -> str:
+    step = 1024.0
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < step or unit == "TB":
+            return f"{n:.1f} {unit}" if unit != "B" else f"{int(n)} {unit}"
+        n = int(n / step)
+    return f"{n} B"
+
+
+def _humanize_since(iso_or_ts: Any) -> str:
+    if not iso_or_ts:
+        return "unknown"
+    try:
+        dt = datetime.fromisoformat(str(iso_or_ts).replace("Z", "+00:00"))
+    except ValueError:
+        return str(iso_or_ts)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    delta = datetime.now(timezone.utc) - dt
+    seconds = int(delta.total_seconds())
+    if seconds < 60:
+        return f"{seconds}s ago"
+    if seconds < 3600:
+        return f"{seconds // 60}m ago"
+    if seconds < 86400:
+        return f"{seconds // 3600}h ago"
+    if seconds < 86400 * 30:
+        return f"{seconds // 86400}d ago"
+    return dt.date().isoformat()
+
+
+def _parse_since(text: str) -> datetime:
+    """Parse '2h', '7d', '30m', or ISO date/datetime into a UTC cutoff datetime."""
+    text = text.strip()
+    if not text:
+        raise typer.BadParameter("--since cannot be empty")
+    unit = text[-1].lower()
+    if unit in {"s", "m", "h", "d"} and text[:-1].isdigit():
+        n = int(text[:-1])
+        factor = {"s": 1, "m": 60, "h": 3600, "d": 86400}[unit]
+        return datetime.now(timezone.utc).replace(microsecond=0) - _delta(n * factor)
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise typer.BadParameter(
+            "--since must be N{s,m,h,d} or ISO datetime (e.g. 24h, 2026-08-01)"
+        ) from exc
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _delta(seconds: int) -> Any:
+    from datetime import timedelta
+
+    return timedelta(seconds=seconds)
+
+
+def _path_status(path: Path) -> tuple[bool, bool]:
+    exists = path.exists()
+    if exists:
+        return True, os.access(path, os.W_OK)
+    parent = path.parent
+    return False, parent.exists() and os.access(parent, os.W_OK)
 
 app = typer.Typer(
     name="adaf-attack",
@@ -127,62 +205,41 @@ def doctor(
                 }
             )
     blocking = next((c for c in checks if c["status"] == "error"), None)
+    first_run = _workspace_is_empty(default_workspace_dir())
+    if blocking:
+        next_step = blocking["remediation"]
+    elif first_run:
+        next_step = (
+            "First run detected. Try:\n"
+            "  1. adaf-attack engagement init --output engagement.yaml\n"
+            "  2. adaf-attack engagement validate engagement.yaml\n"
+            "  3. adaf-attack plan ldap-enum --domain corp.example --dc-ip 10.0.0.10"
+        )
+    else:
+        next_step = "Run `adaf-attack capability-help` to choose a capability."
     payload = {
         "ok": blocking is None,
         "version": __version__,
         "checks": checks,
-        "next_step": blocking["remediation"]
-        if blocking
-        else "Run `adaf-attack capability-help` to choose a capability.",
+        "first_run": first_run,
+        "next_step": next_step,
     }
+    glyph = {"ok": "[green]OK[/green]", "warning": "[yellow]WARN[/yellow]", "error": "[red]ERR[/red]"}
     lines = [
-        f"{c['status'].upper():7} {c['id']}: {c['value']}"
-        + (f"\n  Next step: {c['remediation']}" if explain and c["remediation"] else "")
+        f"{glyph.get(c['status'], c['status']):>18} {c['id']}: {c['value']}"
+        + (f"\n    Next step: {c['remediation']}" if explain and c["remediation"] else "")
         for c in checks
     ]
+    if first_run:
+        lines.append("")
+        lines.append("[bold]First run - quickstart:[/bold]")
+        for line in next_step.splitlines()[1:]:
+            lines.append(line)
     _emit(
         ctx,
         payload,
         Panel("\n".join(lines), title="ADAF-ATTACK doctor", subtitle=f"v{__version__}"),
     )
-    return
-
-    checks: list[str] = []  # type: ignore[no-redef]  # Unreachable legacy display block.
-    checks.append(f"Platform: [cyan]{platform_name()}[/cyan]  Python {sys.version.split()[0]}")
-    checks.append(f"Data dir: {user_data_dir()}")
-    checks.append(f"Config dir: {user_config_dir()}")
-    checks.append(f"Default workspace: {default_workspace_dir()}")
-
-    try:
-        import ldap3  # noqa: F401
-
-        checks.append("[green]✓[/green] ldap3")
-    except ImportError:
-        checks.append("[red]✗[/red] ldap3 (required)")
-
-    try:
-        import impacket  # noqa: F401
-
-        checks.append("[green]✓[/green] impacket (kerberoast / ACL / ADCS / ticket auth)")
-    except ImportError:
-        checks.append(
-            "[yellow]![/yellow] impacket (optional — pip install 'adaf-attack[kerberos]')"
-        )
-
-    try:
-        import textual  # noqa: F401
-
-        checks.append("[green]✓[/green] textual (TUI)")
-    except ImportError:
-        checks.append("[yellow]![/yellow] textual (optional — pip install 'adaf-attack[tui]')")
-
-    if sys.platform == "win32":
-        checks.append("[green]✓[/green] Windows path profile active (LOCALAPPDATA)")
-        checks.append(
-            "[dim]PowerShell helpers: scripts\\Install-AdafAttack.ps1 , scripts\\AdafAttack.psm1[/dim]"
-        )
-
-    console.print(Panel("\n".join(checks), title="ADAF-ATTACK doctor", subtitle=f"v{__version__}"))
 
 
 @app.command("list-capabilities")
@@ -220,39 +277,69 @@ def list_capabilities(ctx: typer.Context) -> None:
 
 @app.command("paths")
 def show_paths(ctx: typer.Context) -> None:
-    """Show platform data / workspace paths."""
+    """Show platform data / workspace paths with existence and writability."""
+    entries = [
+        ("data", user_data_dir()),
+        ("config", user_config_dir()),
+        ("workspace", default_workspace_dir()),
+    ]
+    rows = []
+    for name, path in entries:
+        exists, writable = _path_status(path)
+        rows.append(
+            {
+                "name": name,
+                "path": str(path),
+                "exists": exists,
+                "writable": writable,
+            }
+        )
     table = Table(title="ADAF-ATTACK paths", show_header=True)
     table.add_column("Name")
     table.add_column("Path")
-    table.add_row("platform", platform_name())
-    table.add_row("data", str(user_data_dir()))
-    table.add_row("config", str(user_config_dir()))
-    table.add_row("workspace", str(default_workspace_dir()))
-    _emit(
-        ctx,
-        {
-            "ok": True,
-            "platform": platform_name(),
-            "data": str(user_data_dir()),
-            "config": str(user_config_dir()),
-            "workspace": str(default_workspace_dir()),
-        },
-        table,
-    )
+    table.add_column("Exists")
+    table.add_column("Writable")
+    table.add_row("platform", platform_name(), "-", "-")
+    for row in rows:
+        table.add_row(
+            row["name"],
+            row["path"],
+            "[green]yes[/green]" if row["exists"] else "[yellow]no[/yellow]",
+            "[green]yes[/green]" if row["writable"] else "[red]no[/red]",
+        )
+    payload = {
+        "ok": True,
+        "platform": platform_name(),
+        "data": str(user_data_dir()),
+        "config": str(user_config_dir()),
+        "workspace": str(default_workspace_dir()),
+        "entries": rows,
+    }
+    _emit(ctx, payload, table)
 
 
 def _capability_payload(cap: Any) -> dict[str, Any]:
+    spec = capability_option_spec(cap.id, cap.destructive)
+    example = f"adaf-attack run {cap.id}"
+    if "--domain" in spec.required:
+        example += " --domain corp.example --dc-ip 10.0.0.10"
+    if cap.destructive:
+        example += " --force"
     return {
         "id": cap.id,
         "category": cap.category,
         "summary": cap.summary,
         "destructive": cap.destructive,
         "tags": list(cap.tags),
-        "required_options": ["--domain", "--dc-ip"],
-        "optional_options": ["--username", "--password", "--hashes", "--kerberos", "--workspace"],
-        "example": f"adaf-attack run {cap.id} --domain corp.example --dc-ip 10.0.0.10"
-        + (" --force" if cap.destructive else ""),
-        "next_step": f"Run `adaf-attack plan {cap.id} --domain <domain> --dc-ip <host>` before execution.",
+        "required_options": list(spec.required),
+        "optional_options": list(spec.optional),
+        "notes": spec.notes,
+        "example": example,
+        "next_step": (
+            f"Run `adaf-attack plan {cap.id}"
+            + (" --domain <domain> --dc-ip <host>" if "--domain" in spec.required else "")
+            + "` before execution."
+        ),
     }
 
 
@@ -278,17 +365,19 @@ def capability_help(
             raise typer.Exit(code=error.exit_code)
         payload = {"ok": True, "capability": _capability_payload(cap)}
         item = _capability_payload(cap)
-        human = Panel(
-            "\n".join(
-                [
-                    item["summary"],
-                    f"Risk: {'destructive; --force required' if item['destructive'] else 'network enumeration or offline analysis'}",
-                    f"Example: {item['example']}",
-                    f"Next step: {item['next_step']}",
-                ]
-            ),
-            title=f"Capability: {cap.id}",
-        )
+        required = " ".join(item["required_options"]) or "(none)"
+        optional = " ".join(item["optional_options"]) or "(none)"
+        lines = [
+            item["summary"],
+            f"Risk: {'destructive; --force required' if item['destructive'] else 'network enumeration or offline analysis'}",
+            f"Required: {required}",
+            f"Optional: {optional}",
+        ]
+        if item.get("notes"):
+            lines.append(f"Notes: {item['notes']}")
+        lines.append(f"Example: {item['example']}")
+        lines.append(f"Next step: {item['next_step']}")
+        human = Panel("\n".join(lines), title=f"Capability: {cap.id}")
         _emit(ctx, payload, human)
         return
     payload = {
@@ -369,9 +458,18 @@ def sessions(
     session_id: str | None = typer.Option(
         None, "--session", help="Show one session's metadata and event status."
     ),
+    limit: int | None = typer.Option(
+        None, "--limit", help="Show only the N most recent sessions."
+    ),
+    since: str | None = typer.Option(
+        None,
+        "--since",
+        help="Show only sessions created after this cutoff. Accepts 24h, 7d, or an ISO datetime.",
+    ),
 ) -> None:
     """Navigate persisted sessions and report cleanup status (read-only)."""
     root = workspace or default_workspace_dir()
+    cutoff = _parse_since(since) if since else None
     entries: list[dict[str, Any]] = []
     if root.is_dir():
         for path in sorted((p for p in root.iterdir() if p.is_dir()), reverse=True):
@@ -383,9 +481,19 @@ def sessions(
             except json.JSONDecodeError:
                 meta = {"session_id": path.name, "metadata_error": True}
             events = path / "events.jsonl"
+            created_at = meta.get("created_at")
+            if cutoff and created_at:
+                try:
+                    dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    if dt < cutoff:
+                        continue
+                except ValueError:
+                    pass
             entry = {
                 "session_id": meta.get("session_id", path.name),
-                "created_at": meta.get("created_at"),
+                "created_at": created_at,
                 "path": str(path),
                 "events_present": events.is_file(),
                 "bytes": sum(p.stat().st_size for p in path.rglob("*") if p.is_file()),
@@ -393,6 +501,8 @@ def sessions(
             entries.append(entry)
     if session_id:
         entries = [entry for entry in entries if entry["session_id"] == session_id]
+    if limit is not None and limit > 0:
+        entries = entries[:limit]
     total_bytes = sum(entry["bytes"] for entry in entries)
     payload = {
         "ok": True,
@@ -402,20 +512,23 @@ def sessions(
             "action": "read-only status",
             "session_count": len(entries),
             "bytes": total_bytes,
+            "bytes_human": _humanize_bytes(total_bytes),
             "next_step": "Review session paths, then remove only explicitly selected sessions outside this command.",
         },
     }
     table = Table(title="Workspace sessions", show_header=True)
     table.add_column("Session")
     table.add_column("Created")
+    table.add_column("Age")
     table.add_column("Events")
-    table.add_column("Bytes", justify="right")
+    table.add_column("Size", justify="right")
     for entry in entries:
         table.add_row(
             entry["session_id"],
             str(entry["created_at"] or "unknown"),
+            _humanize_since(entry["created_at"]),
             "yes" if entry["events_present"] else "no",
-            str(entry["bytes"]),
+            _humanize_bytes(entry["bytes"]),
         )
     _emit(ctx, payload, table)
 
@@ -465,12 +578,47 @@ def _build_target(
     )
 
 
+def _parse_payload(text: str) -> str:
+    """Resolve --payload text. '@path' reads a file; anything else is literal.
+
+    A missing @path raises typer.BadParameter with a clear message rather than
+    silently degrading to inline text (which used to happen).
+    """
+    if text.startswith("@"):
+        p = Path(text[1:]).expanduser()
+        if not p.is_file():
+            raise typer.BadParameter(
+                f"--payload references a file but path does not exist: {p}. "
+                "Drop the '@' prefix to pass literal text."
+            )
+        return p.read_text(encoding="utf-8")
+    return text
+
+
+def _parse_extra_params(params: list[str] | None) -> dict[str, str]:
+    """Parse repeatable --param key=value into a dict."""
+    result: dict[str, str] = {}
+    if not params:
+        return result
+    for item in params:
+        if "=" not in item:
+            raise typer.BadParameter(
+                f"--param expects key=value (got {item!r})", param_hint="--param"
+            )
+        key, _, value = item.partition("=")
+        key = key.strip()
+        if not key:
+            raise typer.BadParameter("--param key cannot be empty", param_hint="--param")
+        result[key] = value
+    return result
+
+
 @app.command("run")
 def run_capability(
     ctx: typer.Context,
     capability: str = typer.Argument(..., help="Capability ID (see list-capabilities)"),
-    domain: str = typer.Option(..., "--domain", "-d", help="Target domain"),
-    dc_ip: str = typer.Option(..., "--dc-ip", help="Domain controller IP or hostname"),
+    domain: str | None = typer.Option(None, "--domain", "-d", help="Target domain"),
+    dc_ip: str | None = typer.Option(None, "--dc-ip", help="Domain controller IP or hostname"),
     username: str | None = typer.Option(None, "--username", "-u"),
     password: str | None = typer.Option(None, "--password", "-p"),
     hashes: str | None = typer.Option(None, "--hashes", help="LM:NT or NT hash"),
@@ -485,6 +633,12 @@ def run_capability(
     ),
     ldaps: bool = typer.Option(False, "--ldaps", help="Use LDAPS"),
     force: bool = typer.Option(False, "--force", help="Required for destructive capabilities"),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip the interactive destructive-run confirmation."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview the plan and exit without contacting a target."
+    ),
     include_secrets: bool = typer.Option(
         False, "--include-secrets", help="Do not redact tickets/hashes in output"
     ),
@@ -493,81 +647,98 @@ def run_capability(
         "--workspace",
         help="Session root directory (default: platform data dir / workspaces)",
     ),
-    graph: Path | None = typer.Option(
-        None,
-        "--graph",
-        help="Existing graph.json for attack-paths (optional)",
-    ),
-    start: str | None = typer.Option(
-        None,
-        "--start",
-        help="Start principal for attack-paths (SAM or node id)",
-    ),
-    max_depth: int = typer.Option(6, "--max-depth", help="Max path depth for ranking"),
-    limit: int = typer.Option(25, "--limit", help="Max ranked paths to return"),
     creds_file: Path | None = typer.Option(
         None,
         "--creds-file",
         help="JSON file with multiple credentials (rotated until LDAP bind succeeds)",
     ),
-    scope: str = typer.Option(
-        "high-value",
-        "--scope",
-        help="ACL crawl scope: high-value (default) | domain | full",
+    param: list[str] | None = typer.Option(
+        None,
+        "--param",
+        "-P",
+        help="Extra capability parameter as key=value; repeat as needed (e.g. -P template=User).",
     ),
-    max_objects: int = typer.Option(
-        500,
-        "--max-objects",
-        help="Max objects for domain-wide ACL crawl",
-    ),
-    template: str | None = typer.Option(
-        None, "--template", help="Cert template name (cert-request / ESC1)"
-    ),
-    ca: str | None = typer.Option(None, "--ca", help="CA name for cert-request"),
-    alt_name: str | None = typer.Option(
-        None, "--alt-name", help="UPN/DNS alt name for ESC1-style request"
-    ),
-    write_target: str | None = typer.Option(
-        None, "--write-target", help="Approved write target DN/SAM (requires --force)"
-    ),
-    attribute: str | None = typer.Option(
-        None, "--attribute", help="LDAP attribute for an approved identity write"
-    ),
-    value: str | None = typer.Option(
-        None, "--value", help="Approved value for a mutation or lifecycle operation"
-    ),
-    descriptor_hex: str | None = typer.Option(
-        None, "--descriptor-hex", help="Binary security descriptor as hexadecimal"
-    ),
-    set_on: str | None = typer.Option(
-        None, "--set-on", help="Computer SAM for RBCD set target (requires --force)"
-    ),
-    set_from: str | None = typer.Option(
-        None, "--set-from", help="Controlled computer SAM for RBCD set"
-    ),
-    sam: str | None = typer.Option(
-        None, "--sam", help="Account SAM for pkinit-auth / shadow target"
-    ),
-    key: str | None = typer.Option(None, "--key", help="PEM private key for pkinit-auth"),
-    cert: str | None = typer.Option(None, "--cert", help="PEM cert for pkinit-auth"),
-    pfx: str | None = typer.Option(None, "--pfx", help="PFX path for pkinit-auth"),
-    gpo: str | None = typer.Option(None, "--gpo", help="GPO CN/display name for sysvol stage"),
-    payload: str | None = typer.Option(
-        None, "--payload", help="File path or inline XML/script for GPO stage"
-    ),
-    operation: str | None = typer.Option(None, "--operation", help="Lifecycle helper operation"),
-    artifact: str | None = typer.Option(
-        None, "--artifact", help="Lifecycle helper source artifact"
-    ),
-    impersonate: str | None = typer.Option(None, "--impersonate", help="Approved S4U identity"),
-    spn: str | None = typer.Option(
-        None, "--spn", help="Service principal name for a ticket workflow"
-    ),
+    graph: Path | None = typer.Option(None, "--graph", hidden=True),
+    start: str | None = typer.Option(None, "--start", hidden=True),
+    max_depth: int = typer.Option(6, "--max-depth", hidden=True),
+    limit: int = typer.Option(25, "--limit", hidden=True),
+    scope: str = typer.Option("high-value", "--scope", hidden=True),
+    max_objects: int = typer.Option(500, "--max-objects", hidden=True),
+    template: str | None = typer.Option(None, "--template", hidden=True),
+    ca: str | None = typer.Option(None, "--ca", hidden=True),
+    alt_name: str | None = typer.Option(None, "--alt-name", hidden=True),
+    write_target: str | None = typer.Option(None, "--write-target", hidden=True),
+    attribute: str | None = typer.Option(None, "--attribute", hidden=True),
+    value: str | None = typer.Option(None, "--value", hidden=True),
+    descriptor_hex: str | None = typer.Option(None, "--descriptor-hex", hidden=True),
+    set_on: str | None = typer.Option(None, "--set-on", hidden=True),
+    set_from: str | None = typer.Option(None, "--set-from", hidden=True),
+    sam: str | None = typer.Option(None, "--sam", hidden=True),
+    key: str | None = typer.Option(None, "--key", hidden=True),
+    cert: str | None = typer.Option(None, "--cert", hidden=True),
+    pfx: str | None = typer.Option(None, "--pfx", hidden=True),
+    gpo: str | None = typer.Option(None, "--gpo", hidden=True),
+    payload: str | None = typer.Option(None, "--payload", hidden=True),
+    operation: str | None = typer.Option(None, "--operation", hidden=True),
+    artifact: str | None = typer.Option(None, "--artifact", hidden=True),
+    impersonate: str | None = typer.Option(None, "--impersonate", hidden=True),
+    spn: str | None = typer.Option(None, "--spn", hidden=True),
 ) -> None:
-    """Run a capability against a target."""
+    """Run a capability against a target.
+
+    Use `-P key=value` (repeatable) for capability-specific parameters instead
+    of a long list of flags. See `capability-help <id>` for what each capability
+    accepts.
+    """
+    defaults = load_user_config()
+    if domain is None:
+        domain = defaults.get("target.domain")
+    if dc_ip is None:
+        dc_ip = defaults.get("target.dc_ip")
+    if username is None:
+        username = defaults.get("target.username")
+    if not use_kerberos and defaults.get("target.kerberos"):
+        use_kerberos = bool(defaults.get("target.kerberos"))
+    if not ldaps and defaults.get("target.ldaps"):
+        ldaps = bool(defaults.get("target.ldaps"))
+
+    if not domain or not dc_ip:
+        raise typer.BadParameter(
+            "--domain and --dc-ip are required (or set via `adaf-attack config set`)"
+        )
+
+    if dry_run:
+        return plan(ctx, capability=capability, domain=domain, dc_ip=dc_ip, force=force)
+
     target = _build_target(
         domain, dc_ip, username, password, hashes, aes_key, ccache, use_kerberos, ldaps
     )
+
+    # Resolve capability early so we can gate confirmation
+    import adaf_attack.capabilities  # noqa: F401
+    from adaf_attack.core.registry import capability_registry
+
+    cap = capability_registry.get(capability)
+
+    non_interactive = ctx.ensure_object(dict).get("non_interactive")
+    interactive = (not non_interactive) and sys.stdout.isatty() and not _json_mode(ctx)
+
+    if cap is not None and cap.destructive and force and interactive and not yes:
+        _console(ctx).print(
+            Panel(
+                f"[bold red]DESTRUCTIVE[/bold red] {capability} against {domain} @ {dc_ip}\n"
+                "This may modify the target. Re-run with --yes to skip this prompt.",
+                title="Confirm",
+            )
+        )
+        if not typer.confirm("Continue?", default=False):
+            error = ActionableError(
+                "USER_ABORTED",
+                "User declined the destructive-run confirmation prompt.",
+                "Re-run with --yes to skip this prompt when execution is authorized.",
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
 
     if not _json_mode(ctx):
         _console(ctx).print(
@@ -588,62 +759,50 @@ def run_capability(
     extra["limit"] = limit
     extra["scope"] = scope
     extra["max_objects"] = max_objects
-    if template:
-        extra["template"] = template
-    if ca:
-        extra["ca"] = ca
-    if alt_name:
-        extra["alt_name"] = alt_name
-    if write_target:
-        extra["write_target"] = write_target
-    if attribute:
-        extra["attribute"] = attribute
-    if value:
-        extra["value"] = value
-    if descriptor_hex:
-        extra["descriptor_hex"] = descriptor_hex
-    if set_on:
-        extra["set_on"] = set_on
-    if set_from:
-        extra["set_from"] = set_from
-    if sam:
-        extra["sam"] = sam
-    if key:
-        extra["key"] = key
-    if cert:
-        extra["cert"] = cert
-    if pfx:
-        extra["pfx"] = pfx
-    if gpo:
-        extra["gpo"] = gpo
-    if payload:
-        from pathlib import Path as _P
+    for name, val in (
+        ("template", template),
+        ("ca", ca),
+        ("alt_name", alt_name),
+        ("write_target", write_target),
+        ("attribute", attribute),
+        ("value", value),
+        ("descriptor_hex", descriptor_hex),
+        ("set_on", set_on),
+        ("set_from", set_from),
+        ("sam", sam),
+        ("key", key),
+        ("cert", cert),
+        ("pfx", pfx),
+        ("gpo", gpo),
+        ("operation", operation),
+        ("artifact", artifact),
+        ("impersonate", impersonate),
+        ("spn", spn),
+    ):
+        if val:
+            extra[name] = val
+    if payload is not None:
+        extra["payload"] = _parse_payload(payload)
 
-        if payload.startswith("@"):
-            extra["payload"] = _P(payload[1:]).read_text(encoding="utf-8")
-        else:
-            p = _P(payload)
-            extra["payload"] = p.read_text(encoding="utf-8") if p.is_file() else payload
-    if operation:
-        extra["operation"] = operation
-    if artifact:
-        extra["artifact"] = artifact
-    if impersonate:
-        extra["impersonate"] = impersonate
-    if spn:
-        extra["spn"] = spn
+    # -P/--param overrides take precedence over legacy flags.
+    extra.update(_parse_extra_params(param))
 
     try:
-        out = execute_capability(
-            capability,
-            target,
-            force=force,
-            include_secrets=include_secrets,
-            workspace=workspace,
-            creds_file=creds_file,
-            log=None if _json_mode(ctx) else lambda m: _console(ctx).print(m),
-            **extra,
-        )
+        if _json_mode(ctx) or not interactive:
+            out = execute_capability(
+                capability,
+                target,
+                force=force,
+                include_secrets=include_secrets,
+                workspace=workspace,
+                creds_file=creds_file,
+                log=None if _json_mode(ctx) else lambda m: _console(ctx).print(m),
+                **extra,
+            )
+        else:
+            out = _execute_with_spinner(
+                ctx, capability, target, force, include_secrets, workspace, creds_file, extra
+            )
         if _json_mode(ctx):
             _emit(ctx, out, "")
             return
@@ -661,6 +820,11 @@ def run_capability(
         if out.get("username"):
             _console(ctx).print(f"Using principal: {out['username']} ({out.get('auth')})")
         _console(ctx).print(f"\nSession: {out['session_path']}")
+        session_id = out.get("session_id")
+        if session_id:
+            _console(ctx).print(
+                f"Inspect: adaf-attack sessions --session {session_id}"
+            )
     except RunError as exc:
         text = str(exc)
         code = "RUN_FAILED"
@@ -673,6 +837,42 @@ def run_capability(
         error = error_for(code, message=text, details={"capability": capability})
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code) from exc
+
+
+def _execute_with_spinner(
+    ctx: typer.Context,
+    capability: str,
+    target: Target,
+    force: bool,
+    include_secrets: bool,
+    workspace: Path | None,
+    creds_file: Path | None,
+    extra: dict[str, Any],
+) -> dict[str, Any]:
+    """Run a capability inside a Rich spinner, threading log messages into the status."""
+    console_obj = _console(ctx)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console_obj,
+        transient=True,
+    ) as progress:
+        task_id = progress.add_task(f"Running {capability}", total=None)
+
+        def _log(message: str) -> None:
+            progress.update(task_id, description=f"{capability}: {message[:80]}")
+
+        return execute_capability(
+            capability,
+            target,
+            force=force,
+            include_secrets=include_secrets,
+            workspace=workspace,
+            creds_file=creds_file,
+            log=_log,
+            **extra,
+        )
 
 
 @engagement_app.command("init")
@@ -1215,6 +1415,177 @@ def workflow_profiles_cmd(
             "\n".join(f"{name}: {item['description']}" for name, item in selected.items()),
             title="Operator workflow profiles",
         ),
+    )
+
+
+@app.command("errors")
+def show_errors(
+    ctx: typer.Context,
+    code: str | None = typer.Argument(None, help="Optional error code to show in detail."),
+) -> None:
+    """List error codes and their remediation."""
+    if code and code not in ERROR_CATALOG:
+        error = ActionableError(
+            "UNKNOWN_ERROR_CODE",
+            f"Unknown error code: {code}",
+            "Run `adaf-attack errors` to list valid codes.",
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    catalog = (
+        {code: ERROR_CATALOG[code]} if code else dict(sorted(ERROR_CATALOG.items()))
+    )
+    payload = {
+        "ok": True,
+        "count": len(catalog),
+        "errors": [
+            {"code": key, "message": msg, "remediation": rem}
+            for key, (msg, rem) in catalog.items()
+        ],
+    }
+    table = Table(title="ADAF-ATTACK error codes", show_header=True)
+    table.add_column("Code", style="cyan")
+    table.add_column("Message")
+    table.add_column("Remediation")
+    for key, (msg, rem) in catalog.items():
+        table.add_row(key, msg, rem)
+    _emit(ctx, payload, table)
+
+
+config_app = typer.Typer(help="Persistent per-user defaults for CLI and TUI.")
+app.add_typer(config_app, name="config")
+
+
+@config_app.command("show")
+def config_show(ctx: typer.Context) -> None:
+    """Print the persisted configuration."""
+    from adaf_attack.core.user_config import config_path
+
+    data = load_user_config()
+    payload = {"ok": True, "path": str(config_path()), "config": data}
+    if not data:
+        human = Panel(
+            f"No configuration set.\nPath: {config_path()}\n"
+            "Use `adaf-attack config set <key> <value>` to persist defaults.",
+            title="Config (empty)",
+        )
+    else:
+        table = Table(title="Persisted config", show_header=True)
+        table.add_column("Key", style="cyan")
+        table.add_column("Value")
+        for key in sorted(data):
+            table.add_row(key, str(data[key]))
+        human = table
+    _emit(ctx, payload, human)
+
+
+@config_app.command("set")
+def config_set(
+    ctx: typer.Context,
+    key: str = typer.Argument(..., help="Config key (see `adaf-attack config keys`)."),
+    value: str = typer.Argument(..., help="Value to persist."),
+) -> None:
+    """Persist a per-user default."""
+    from adaf_attack.core.user_config import set_key
+
+    try:
+        path, data = set_key(key, value)
+    except ValueError as exc:
+        error = error_for("CONFIG_KEY_INVALID", message=str(exc))
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+    _emit(
+        ctx,
+        {"ok": True, "path": str(path), "config": data},
+        Panel(f"Set {key} = {data[key]}\nPath: {path}", title="Config updated"),
+    )
+
+
+@config_app.command("unset")
+def config_unset(ctx: typer.Context, key: str = typer.Argument(...)) -> None:
+    """Remove a persisted default."""
+    from adaf_attack.core.user_config import unset_key
+
+    path, data = unset_key(key)
+    _emit(
+        ctx,
+        {"ok": True, "path": str(path), "config": data},
+        Panel(f"Removed {key}\nPath: {path}", title="Config updated"),
+    )
+
+
+@config_app.command("keys")
+def config_keys(ctx: typer.Context) -> None:
+    """List allowed configuration keys."""
+    from adaf_attack.core.user_config import allowed_keys
+
+    keys = allowed_keys()
+    _emit(
+        ctx,
+        {"ok": True, "keys": keys},
+        Panel("\n".join(keys), title="Allowed config keys"),
+    )
+
+
+# --- noun-verb subgroups (aliases for existing commands) ---------------------
+capability_app = typer.Typer(help="Capability listing, help, planning, and running.")
+session_app = typer.Typer(help="Workspace session inspection.")
+path_app = typer.Typer(help="Attack-path ranking.")
+app.add_typer(capability_app, name="capability")
+app.add_typer(session_app, name="session")
+app.add_typer(path_app, name="path")
+
+
+@capability_app.command("list")
+def capability_list_alias(ctx: typer.Context) -> None:
+    """Alias for `adaf-attack list-capabilities`."""
+    list_capabilities(ctx)
+
+
+@capability_app.command("show")
+def capability_show_alias(
+    ctx: typer.Context,
+    capability: str | None = typer.Argument(None),
+) -> None:
+    """Alias for `adaf-attack capability-help`."""
+    capability_help(ctx, capability=capability)
+
+
+@session_app.command("list")
+def session_list_alias(
+    ctx: typer.Context,
+    workspace: Path | None = typer.Option(None, "--workspace"),
+    session_id: str | None = typer.Option(None, "--session"),
+    limit: int | None = typer.Option(None, "--limit"),
+    since: str | None = typer.Option(None, "--since"),
+) -> None:
+    """Alias for `adaf-attack sessions`."""
+    sessions(
+        ctx,
+        workspace=workspace,
+        session_id=session_id,
+        limit=limit,
+        since=since,
+    )
+
+
+@path_app.command("rank")
+def path_rank_alias(
+    ctx: typer.Context,
+    graph: Path = typer.Option(..., "--graph", "-g"),
+    start: str | None = typer.Option(None, "--start", "-s"),
+    max_depth: int = typer.Option(6, "--max-depth"),
+    limit: int = typer.Option(25, "--limit"),
+    output: Path | None = typer.Option(None, "--output", "-o"),
+) -> None:
+    """Alias for `adaf-attack rank-paths`."""
+    rank_paths_cmd(
+        ctx,
+        graph=graph,
+        start=start,
+        max_depth=max_depth,
+        limit=limit,
+        output=output,
     )
 
 

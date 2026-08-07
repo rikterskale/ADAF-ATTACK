@@ -115,6 +115,18 @@ New-Item -ItemType Directory -Force -Path $ws | Out-Null
 [Environment]::SetEnvironmentVariable("ADAF_ATTACK_WORKSPACE", $ws, "User")
 Write-Ok "ADAF_ATTACK_WORKSPACE=$ws"
 
+Write-Step "Installing PowerShell tab-completion for adaf-attack"
+try {
+    & $scriptsAdaf --install-completion powershell 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Ok "PowerShell completion installed (reload profile to use)"
+    } else {
+        Write-Warn "Could not auto-install completion. Run 'adaf-attack --install-completion powershell' manually."
+    }
+} catch {
+    Write-Warn "Could not auto-install completion: $($_.Exception.Message)"
+}
+
 Write-Host ""
 Write-Ok "Install complete."
 Write-Host "  Activate:  $venv\Scripts\Activate.ps1"

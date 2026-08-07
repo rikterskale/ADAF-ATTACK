@@ -24,18 +24,69 @@ Command guides: [Windows](docs/WINDOWS_COMMAND_GUIDE.md) · [Linux](docs/LINUX_C
 - No plan-only / lab-cert / containment gates
 - Lightweight controls: `--force`, redaction by default, session logging
 
-## Capabilities (v0.6.0)
+## Capabilities
 
-| ID | Category | Description |
-|----|----------|-------------|
-| `ldap-enum` | enumeration | Users, computers, groups, trusts, SPNs |
-| `trusts-enum` | enumeration | Trust direction, SID filtering, forest vs external |
-| `adcs-enum` | enumeration | CAs, templates, ESC1 + enrollment ACEs |
-| `acl-enum` | enumeration | GenericAll, WriteDacl, WriteOwner, DCSync, … |
-| `gmsa-laps-enum` | enumeration | gMSA / LAPS presence + read ACL signals |
-| `kerberoast` | credential-access | hashcat `$krb5tgs$23$` |
-| `asrep-roast` | credential-access | hashcat `$krb5asrep$23$` |
-| `bloodhound-export` | export | JSON + zip for BloodHound CE |
+Discovery / enumeration:
+
+| ID | Description |
+|----|-------------|
+| `ldap-enum` | Users, computers, groups, trusts, SPNs |
+| `trusts-enum` | Trust direction, SID filtering, forest vs external |
+| `adcs-enum` | CAs, templates, ESC1 + enrollment ACEs |
+| `adcs-policy-probe` | ESC10 / ESC11 / ESC13 policy evaluation |
+| `acl-enum` | GenericAll, WriteDacl, WriteOwner, DCSync, … |
+| `gmsa-laps-enum` | gMSA / LAPS presence + read ACL signals |
+| `sysvol-hunt` | Search SYSVOL for credentials and drop paths |
+| `coercion-map` | Enumerate coercion-relevant RPC endpoints |
+| `gpo-abuse`, `gpo-link`, `gpo-sysvol` | Writable GPOs, links, SYSVOL paths |
+| `asreq-userhunt` | Validate usernames via AS-REQ without lockout impact |
+| `ad-cve-scan` | Non-exploiting Zerologon/noPAC/Certifried/signing posture |
+| `rodc-delegation` | RODC KRBTGT and delegation exposure |
+
+Credential access:
+
+| ID | Description |
+|----|-------------|
+| `kerberoast`, `asrep-roast` | hashcat `$krb5tgs$` / `$krb5asrep$` |
+| `dcsync` | MS-DRSR replication-based NT/LM/AES extraction |
+| `secretsdump-local` | SAM/LSA/DPAPI dump from a compromised host |
+| `password-spray` | Lockout-aware LDAP spray |
+| `laps-read` | LAPS v1 + v2 password retrieval |
+| `gpp-cpassword-hunt` | Locate + decrypt legacy GPP cpassword (MS14-025) |
+| `shadow-creds` | Enumerate + write `msDS-KeyCredentialLink` |
+| `unpac-the-hash` | Recover NT hash from a PKINIT-only cert |
+
+Kerberos operations:
+
+| ID | Description |
+|----|-------------|
+| `pkinit-auth` | Auth via PFX / PEM cert to a TGT |
+| `ticket-forge` | Golden / silver / sapphire ticket forgery |
+| `s4u-abuse` | Full S4U2Self + S4U2Proxy chain (constrained delegation / RBCD) |
+| `ticket-lifecycle` | CCache/PFX import, export, PEM<->PFX conversion |
+
+Privilege escalation / lateral movement:
+
+| ID | Description |
+|----|-------------|
+| `acl-write` | Apply approved raw ACL descriptor with rollback |
+| `cert-request` | Enroll certificate (ESC1-style with alt-name) |
+| `rbcd` | Read / write RBCD `msDS-AllowedToActOnBehalfOfOtherIdentity` |
+| `template-mod` | Flip AD CS template to ESC1-vulnerable with rollback |
+| `esc-chain` | Automated ESC1-ESC8 exploit chain |
+| `computer-takeover` | Full computer-object takeover recipe |
+| `impacket-exec` | wmiexec / smbexec / dcomexec / atexec |
+| `coerce` | PetitPotam / PrinterBug / DFSCoerce / ShadowCoerce triggers |
+| `ntlm-relay` | Managed ntlmrelayx run with fixed target allowlist |
+
+Analysis / reporting:
+
+| ID | Description |
+|----|-------------|
+| `bloodhound-export` | JSON + zip for BloodHound CE |
+| `attack-paths`, `blast-radius` | Ranking and reachable-impact analysis |
+| `next-actions` | Ranked, review-first plans with risk tags |
+| `report` | Canonical findings + evidence bundle |
 
 ## Install
 
