@@ -113,13 +113,13 @@ jobs:
           python -m pip install --no-build-isolation -e ".[dev,kerberos,tui]"
           python -m pip check
 
-      - name: Run tests with 80 percent coverage gate
+      - name: Run tests with 90 percent coverage gate
         run: >-
           python -m pytest
           --cov=adaf_attack
           --cov-report=term-missing
           --cov-report=xml
-          --cov-fail-under=80
+          --cov-fail-under=90
 
       - name: CLI smoke tests
         shell: bash
