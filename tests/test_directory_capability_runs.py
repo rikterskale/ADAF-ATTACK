@@ -171,3 +171,23 @@ def test_rbcd_enum_reports_existing_and_writable_surfaces_without_force(
     assert conn.unbound is True
     assert {edge.kind for edge in graph.edges} == {"AllowedToAct", "WriteRBCD"}
     assert json.loads(session.path("rbcd.json").read_text(encoding="utf-8")) == result
+
+
+def test_rbcd_force_requires_controlled_source_computer(monkeypatch: Any, tmp_path: Path) -> None:
+    conn = _Connection(
+        {
+            f"(&(objectClass=computer)({rbcd.ATTR}=*))": [],
+            "(objectClass=computer)": [],
+        }
+    )
+    monkeypatch.setattr(rbcd, "ldap_connect", lambda target: (conn, "DC=corp,DC=test", None))
+    result = rbcd.Rbcd().run(
+        _target(), Session(tmp_path), AttackGraph(), force=True, set_on="APP01$"
+    )
+
+    assert result["set_attempt"] == {
+        "set_on": "APP01$",
+        "ok": False,
+        "error": "set_from (controlled computer SAM) required",
+    }
+    assert conn.unbound
