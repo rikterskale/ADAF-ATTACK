@@ -221,6 +221,8 @@ def import_bloodhound(path: Path, graph: AttackGraph) -> dict[str, int]:
         target = edge.get("target") or (edge.get("end") or {}).get("value")
         relation = edge.get("label") or edge.get("kind") or "Related"
         if source and target:
-            graph.add_edge(str(source), str(target), str(relation), **(edge.get("properties") or {}))
+            graph.add_edge(
+                str(source), str(target), str(relation), **(edge.get("properties") or {})
+            )
             imported_edges += 1
     return {"nodes": imported_nodes, "edges": imported_edges}

@@ -210,7 +210,14 @@ class GpoSysvol:
         if force and stage_gpo and payload_text:
             stage_result = self._stage_task(target, gpos, stage_gpo, payload_text, session)
             if stage_result.get("ok"):
-                session.register_cleanup({"kind": "gpo-sysvol", "target": stage_result["path"], "host": target.dc_ip, "rollback": "Remove the staged SYSVOL file from the recorded path."})
+                session.register_cleanup(
+                    {
+                        "kind": "gpo-sysvol",
+                        "target": stage_result["path"],
+                        "host": target.dc_ip,
+                        "rollback": "Remove the staged SYSVOL file from the recorded path.",
+                    }
+                )
 
         conn.unbind()
         result = {

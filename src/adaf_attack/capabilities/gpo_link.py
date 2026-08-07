@@ -36,9 +36,7 @@ class GpoLink:
         dn = kwargs.get("write_target")
         link = kwargs.get("value")
         if not force or not dn or not link:
-            raise RuntimeError(
-                "gpo-link requires --force, --write-target, and --value"
-            )
+            raise RuntimeError("gpo-link requires --force, --write-target, and --value")
 
         conn, _base, _cfg = ldap_connect(target)
         try:

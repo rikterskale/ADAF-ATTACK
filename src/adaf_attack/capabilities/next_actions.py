@@ -32,7 +32,9 @@ ACTION_MAP = {
     tags=("recommendations", "paths", "workflow", "opsec"),
 )
 class NextActions:
-    def run(self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any) -> dict[str, Any]:
+    def run(
+        self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any
+    ) -> dict[str, Any]:
         if not graph.nodes:
             source = Path(kwargs.get("graph_path") or session.path("graph.json"))
             if source.is_file():
@@ -61,6 +63,8 @@ class NextActions:
                 }
             )
         result = {"domain": target.domain, "actions": actions, "count": len(actions)}
-        session.path("next-actions.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        session.path("next-actions.json").write_text(
+            json.dumps(result, indent=2) + "\n", encoding="utf-8"
+        )
         session.log("next-actions.complete", count=len(actions))
         return result

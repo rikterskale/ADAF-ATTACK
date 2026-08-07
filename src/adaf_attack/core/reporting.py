@@ -42,7 +42,11 @@ def _style() -> str:
 
 def _finding_html(item: dict[str, Any], technical: bool) -> str:
     evidence = ", ".join(f"{e['artifact']} {e['pointer']}" for e in item["evidence"])
-    technical_text = f"<p><b>Evidence:</b> {html.escape(evidence)}</p><p><b>MITRE:</b> {html.escape(', '.join(item['attack_techniques']))}</p>" if technical else ""
+    technical_text = (
+        f"<p><b>Evidence:</b> {html.escape(evidence)}</p><p><b>MITRE:</b> {html.escape(', '.join(item['attack_techniques']))}</p>"
+        if technical
+        else ""
+    )
     return f"<section class='card {html.escape(item['severity'])}'><h3>{html.escape(item['title'])}</h3><p><b>{html.escape(item['severity'].upper())}</b> - {html.escape(item['impact'])}</p><p><b>Recommended action:</b> {html.escape(item['remediation'])}</p>{technical_text}</section>"
 
 
@@ -79,13 +83,22 @@ def _pdf(pdf_path: Path, title: str, findings: list[dict[str, Any]], kind: str) 
                 )
             )
         if kind == "remediation":
-            parts.append(Paragraph("Suggested owner: Identity / platform owner", styles["BodyText"]))
-        parts.extend([Paragraph(f"Recommended action: {item['remediation']}", styles["BodyText"]), Spacer(1, 10)])
+            parts.append(
+                Paragraph("Suggested owner: Identity / platform owner", styles["BodyText"])
+            )
+        parts.extend(
+            [
+                Paragraph(f"Recommended action: {item['remediation']}", styles["BodyText"]),
+                Spacer(1, 10),
+            ]
+        )
     SimpleDocTemplate(str(pdf_path), pagesize=letter, title=title).build(parts)
     return True
 
 
-def generate_report_bundle(session: Path, *, engagement_id: str = "unassigned") -> dict[str, str | int]:
+def generate_report_bundle(
+    session: Path, *, engagement_id: str = "unassigned"
+) -> dict[str, str | int]:
     findings = findings_from_session(session)
     write_findings(session, findings)
     rich = enrich_findings(findings)
@@ -97,20 +110,41 @@ def generate_report_bundle(session: Path, *, engagement_id: str = "unassigned") 
     except (OSError, json.JSONDecodeError):
         cleanup = []
     cleanup_counts = Counter(item.get("status", "pending") for item in cleanup)
-    summary = "".join(f"<tr><td>{html.escape(severity.title())}</td><td>{count}</td></tr>" for severity, count in sorted(counts.items())) or "<tr><td>None</td><td>0</td></tr>"
+    summary = (
+        "".join(
+            f"<tr><td>{html.escape(severity.title())}</td><td>{count}</td></tr>"
+            for severity, count in sorted(counts.items())
+        )
+        or "<tr><td>None</td><td>0</td></tr>"
+    )
     executive_body = f"<h2>Engagement overview</h2><p>Engagement: <b>{html.escape(engagement_id)}</b>. The assessment identified <b>{len(rich)}</b> evidence-backed findings.</p><h2>Risk posture</h2><table><tr><th>Severity</th><th>Findings</th></tr>{summary}</table><h2>Cleanup status</h2><p>Pending: {cleanup_counts['pending']} | Completed: {cleanup_counts['completed']} | Failed: {cleanup_counts['failed']}</p><h2>Priority decisions</h2>{''.join(_finding_html(item, False) for item in rich[:10])}"
-    technical_body = "<h2>Evidence-backed findings</h2>" + "".join(_finding_html(item, True) for item in rich) + "<h2>Scope limitation</h2><p>Results represent only the authorized target scope and collected evidence.</p>"
-    remediation_rows = "".join(f"<tr><td>{html.escape(item['severity'])}</td><td>{html.escape(item['title'])}</td><td>{html.escape(item['remediation'])}</td><td>Identity / platform owner</td></tr>" for item in rich)
+    technical_body = (
+        "<h2>Evidence-backed findings</h2>"
+        + "".join(_finding_html(item, True) for item in rich)
+        + "<h2>Scope limitation</h2><p>Results represent only the authorized target scope and collected evidence.</p>"
+    )
+    remediation_rows = "".join(
+        f"<tr><td>{html.escape(item['severity'])}</td><td>{html.escape(item['title'])}</td><td>{html.escape(item['remediation'])}</td><td>Identity / platform owner</td></tr>"
+        for item in rich
+    )
     remediation_body = f"<h2>Prioritized remediation backlog</h2><table><tr><th>Priority</th><th>Finding</th><th>Action</th><th>Suggested owner</th></tr>{remediation_rows}</table><h2>Verification</h2><p>Re-run the affected collection capability after the approved remediation change.</p>"
-    documents = {"executive": executive_body, "technical": technical_body, "remediation": remediation_body}
+    documents = {
+        "executive": executive_body,
+        "technical": technical_body,
+        "remediation": remediation_body,
+    }
     paths: dict[str, str | int] = {"finding_count": len(rich)}
     for kind, body in documents.items():
         title = f"ADAF-ATTACK {kind.title()} Report"
         html_path = output / f"{kind}-report.html"
-        html_path.write_text(_document(title, f"Engagement {engagement_id}", body), encoding="utf-8")
+        html_path.write_text(
+            _document(title, f"Engagement {engagement_id}", body), encoding="utf-8"
+        )
         paths[f"{kind}_html"] = str(html_path)
         pdf_path = output / f"{kind}-report.pdf"
         if _pdf(pdf_path, title, rich, kind):
             paths[f"{kind}_pdf"] = str(pdf_path)
-    (output / "report-manifest.json").write_text(json.dumps(paths, indent=2) + "\n", encoding="utf-8")
+    (output / "report-manifest.json").write_text(
+        json.dumps(paths, indent=2) + "\n", encoding="utf-8"
+    )
     return paths

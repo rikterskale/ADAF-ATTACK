@@ -15,7 +15,10 @@ def test_run_campaign_stops_after_failed_engagement(tmp_path, monkeypatch) -> No
     manifest = tmp_path / "campaign.yaml"
     manifest.write_text(
         yaml.safe_dump(
-            {"campaign_id": "campaign-1", "engagements": [{"plan": first.name}, {"plan": second.name}]}
+            {
+                "campaign_id": "campaign-1",
+                "engagements": [{"plan": first.name}, {"plan": second.name}],
+            }
         ),
         encoding="utf-8",
     )
@@ -55,7 +58,10 @@ def test_run_campaign_stops_after_failed_engagement(tmp_path, monkeypatch) -> No
 
 def test_campaign_manifest_rejects_missing_plan(tmp_path) -> None:
     manifest = tmp_path / "campaign.yaml"
-    manifest.write_text(json.dumps({"campaign_id": "c", "engagements": [{"plan": "missing.yaml"}]}), encoding="utf-8")
+    manifest.write_text(
+        json.dumps({"campaign_id": "c", "engagements": [{"plan": "missing.yaml"}]}),
+        encoding="utf-8",
+    )
     try:
         forest_campaign.load_campaign_manifest(manifest)
     except forest_campaign.CampaignError as exc:
@@ -103,7 +109,9 @@ def test_campaign_handoff_requires_explicit_opt_in(tmp_path, monkeypatch) -> Non
         captured.update(kwargs)
         session = tmp_path / "output-session"
         session.mkdir()
-        (session / "session.json").write_text(json.dumps({"domain": "corp.example"}), encoding="utf-8")
+        (session / "session.json").write_text(
+            json.dumps({"domain": "corp.example"}), encoding="utf-8"
+        )
         return {"session_path": str(session)}
 
     monkeypatch.setattr("adaf_attack.core.engagement.run_engagement", fake_run)

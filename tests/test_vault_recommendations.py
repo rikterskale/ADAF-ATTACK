@@ -17,7 +17,9 @@ from adaf_attack.core.target import Target
 def test_vault_encrypts_secret_and_keeps_metadata_redacted(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("ADAF_SESSION_VAULT_KEY", Fernet.generate_key().decode())
     session = Session(base_dir=tmp_path)
-    session.vault().put("tgt", "ccache", {"ticket": "secret"}, secret=True, metadata={"ticket": "secret"})
+    session.vault().put(
+        "tgt", "ccache", {"ticket": "secret"}, secret=True, metadata={"ticket": "secret"}
+    )
     assert session.vault().get("tgt") == {"ticket": "secret"}
     index = json.loads((session.root / "vault" / "index.json").read_text(encoding="utf-8"))
     assert index["items"]["tgt"]["metadata"]["ticket"] == "[REDACTED]"
@@ -42,11 +44,15 @@ def test_next_actions_recommends_shadow_workflow(tmp_path) -> None:
 def test_ticket_lifecycle_inventory(tmp_path) -> None:
     session = Session(base_dir=tmp_path)
     session.path("demo.ccache").write_bytes(b"ticket")
-    result = TicketLifecycle().run(Target(domain="corp.local", dc_ip="10.0.0.1"), session, AttackGraph())
+    result = TicketLifecycle().run(
+        Target(domain="corp.local", dc_ip="10.0.0.1"), session, AttackGraph()
+    )
     assert result["artifacts"] == ["demo.ccache"]
 
 
 @pytest.mark.parametrize("runner", [ShadowPkinitWorkflow(), RbcdTicketWorkflow()])
 def test_workflow_wrappers_require_force(tmp_path, runner) -> None:
     with pytest.raises(RuntimeError):
-        runner.run(Target(domain="corp.local", dc_ip="10.0.0.1"), Session(base_dir=tmp_path), AttackGraph())
+        runner.run(
+            Target(domain="corp.local", dc_ip="10.0.0.1"), Session(base_dir=tmp_path), AttackGraph()
+        )

@@ -64,6 +64,8 @@ class Session:
             entries = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             entries = []
-        entries.append({"registered_at": datetime.now(UTC).isoformat(), "status": "pending", **action})
+        entries.append(
+            {"registered_at": datetime.now(UTC).isoformat(), "status": "pending", **action}
+        )
         path.write_text(json.dumps(entries, indent=2) + "\n", encoding="utf-8")
         self.log("cleanup.registered", kind=action.get("kind"), target=action.get("target"))

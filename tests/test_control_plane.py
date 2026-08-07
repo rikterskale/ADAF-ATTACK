@@ -13,7 +13,9 @@ def test_opsec_profiles() -> None:
 
 def test_package_redacts_and_excludes_vault(tmp_path) -> None:
     session = Session(base_dir=tmp_path)
-    session.path("finding.json").write_text(json.dumps({"password": "secret", "username": "alice"}), encoding="utf-8")
+    session.path("finding.json").write_text(
+        json.dumps({"password": "secret", "username": "alice"}), encoding="utf-8"
+    )
     session.path("vault/secret.vault").write_bytes(b"ciphertext")
     result = package_evidence(session.root, tmp_path / "package.zip")
     assert result["file_count"] >= 1

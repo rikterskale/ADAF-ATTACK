@@ -21,9 +21,16 @@ def _load_graph(session: Session, graph: AttackGraph) -> AttackGraph:
     return AttackGraph.from_file(path)
 
 
-@register_capability(id="blast-radius", summary="Calculate reachable high-value impact from a graph principal", category="analysis", tags=("blast-radius", "impact", "graph"))
+@register_capability(
+    id="blast-radius",
+    summary="Calculate reachable high-value impact from a graph principal",
+    category="analysis",
+    tags=("blast-radius", "impact", "graph"),
+)
 class BlastRadius:
-    def run(self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any) -> dict[str, Any]:
+    def run(
+        self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any
+    ) -> dict[str, Any]:
         graph = _load_graph(session, graph)
         start = kwargs.get("start") or kwargs.get("sam")
         if not start:
@@ -43,19 +50,42 @@ class BlastRadius:
                 if edge.target != current:
                     seen.add(edge.target)
                 target_node = graph.nodes.get(edge.target)
-                if target_node and (target_node.properties.get("admin_count") or "DOMAIN ADMINS" in edge.target):
-                    impacts.append({"target": edge.target, "path": next_path, "via": edge.kind, "confidence": round(confidence, 2)})
+                if target_node and (
+                    target_node.properties.get("admin_count") or "DOMAIN ADMINS" in edge.target
+                ):
+                    impacts.append(
+                        {
+                            "target": edge.target,
+                            "path": next_path,
+                            "via": edge.kind,
+                            "confidence": round(confidence, 2),
+                        }
+                    )
                 if len(next_path) < int(kwargs.get("max_depth") or 6):
                     queue.append((edge.target, next_path, confidence * 0.9))
-        result = {"principal": node, "reachable_nodes": len(seen), "high_value_impacts": impacts, "confidence": "evidence-backed" if impacts else "no high-value path observed"}
-        session.path("blast-radius.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        result = {
+            "principal": node,
+            "reachable_nodes": len(seen),
+            "high_value_impacts": impacts,
+            "confidence": "evidence-backed" if impacts else "no high-value path observed",
+        }
+        session.path("blast-radius.json").write_text(
+            json.dumps(result, indent=2) + "\n", encoding="utf-8"
+        )
         session.log("blast-radius.complete", principal=node, impacts=len(impacts))
         return result
 
 
-@register_capability(id="purple-feedback", summary="Generate updated detection hypotheses from session events", category="export", tags=("purple-team", "detection", "timeline"))
+@register_capability(
+    id="purple-feedback",
+    summary="Generate updated detection hypotheses from session events",
+    category="export",
+    tags=("purple-team", "detection", "timeline"),
+)
 class PurpleFeedback:
-    def run(self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any) -> dict[str, Any]:
+    def run(
+        self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any
+    ) -> dict[str, Any]:
         hypotheses = {
             "shadow-creds.complete": "Monitor KeyCredentialLink attribute modifications and certificate-based Kerberos authentication.",
             "rbcd.complete": "Monitor msDS-AllowedToActOnBehalfOfOtherIdentity changes and S4U ticket requests.",
@@ -71,11 +101,22 @@ class PurpleFeedback:
                 except json.JSONDecodeError:
                     continue
         detections = [
-            {"event": event["type"], "hypothesis": hypotheses[event["type"]], "timestamp": event.get("ts")}
+            {
+                "event": event["type"],
+                "hypothesis": hypotheses[event["type"]],
+                "timestamp": event.get("ts"),
+            }
             for event in events
             if event.get("type") in hypotheses
         ]
-        result = {"session": session.session_id, "detections": detections, "timeline": events, "count": len(detections)}
-        session.path("purple-feedback.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        result = {
+            "session": session.session_id,
+            "detections": detections,
+            "timeline": events,
+            "count": len(detections),
+        }
+        session.path("purple-feedback.json").write_text(
+            json.dumps(result, indent=2) + "\n", encoding="utf-8"
+        )
         session.log("purple-feedback.complete", count=len(detections))
         return result

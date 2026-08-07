@@ -421,12 +421,23 @@ def sessions(
 
 
 @app.command("cleanup")
-def cleanup_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session"), domain: str = typer.Option(..., "--domain", "-d"), dc_ip: str = typer.Option(..., "--dc-ip"), username: str | None = typer.Option(None, "--username", "-u"), password: str | None = typer.Option(None, "--password", "-p"), force: bool = typer.Option(False, "--force")) -> None:
+def cleanup_cmd(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session"),
+    domain: str = typer.Option(..., "--domain", "-d"),
+    dc_ip: str = typer.Option(..., "--dc-ip"),
+    username: str | None = typer.Option(None, "--username", "-u"),
+    password: str | None = typer.Option(None, "--password", "-p"),
+    force: bool = typer.Option(False, "--force"),
+) -> None:
     """Execute recorded session rollbacks; requires explicit force."""
     if not force:
         raise typer.BadParameter("cleanup execution requires --force")
     from adaf_attack.core.cleanup import execute_cleanup
-    result = execute_cleanup(session, Target(domain=domain, dc_ip=dc_ip, username=username, password=password))
+
+    result = execute_cleanup(
+        session, Target(domain=domain, dc_ip=dc_ip, username=username, password=password)
+    )
     _emit(ctx, {"ok": True, **result}, Panel(f"Completed: {result['completed']}", title="Cleanup"))
 
 
@@ -545,9 +556,13 @@ def run_capability(
         None, "--payload", help="File path or inline XML/script for GPO stage"
     ),
     operation: str | None = typer.Option(None, "--operation", help="Lifecycle helper operation"),
-    artifact: str | None = typer.Option(None, "--artifact", help="Lifecycle helper source artifact"),
+    artifact: str | None = typer.Option(
+        None, "--artifact", help="Lifecycle helper source artifact"
+    ),
     impersonate: str | None = typer.Option(None, "--impersonate", help="Approved S4U identity"),
-    spn: str | None = typer.Option(None, "--spn", help="Service principal name for a ticket workflow"),
+    spn: str | None = typer.Option(
+        None, "--spn", help="Service principal name for a ticket workflow"
+    ),
 ) -> None:
     """Run a capability against a target."""
     target = _build_target(
@@ -695,10 +710,25 @@ def engagement_validate(ctx: typer.Context, plan: Path = typer.Argument(...)) ->
     try:
         value = load_plan(plan)
     except EngagementError as exc:
-        error = ActionableError("ENGAGEMENT_PLAN_INVALID", str(exc), "Correct the YAML scope and validate again.")
+        error = ActionableError(
+            "ENGAGEMENT_PLAN_INVALID", str(exc), "Correct the YAML scope and validate again."
+        )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code) from exc
-    _emit(ctx, {"ok": True, "engagement_id": value.engagement_id, "target": value.dc_ip, "allowed_capabilities": list(value.allowed_capabilities), "phase_count": len(value.phases)}, Panel(f"{value.engagement_id}\nTarget: {value.domain} @ {value.dc_ip}\nPhases: {len(value.phases)}", title="Engagement plan valid"))
+    _emit(
+        ctx,
+        {
+            "ok": True,
+            "engagement_id": value.engagement_id,
+            "target": value.dc_ip,
+            "allowed_capabilities": list(value.allowed_capabilities),
+            "phase_count": len(value.phases),
+        },
+        Panel(
+            f"{value.engagement_id}\nTarget: {value.domain} @ {value.dc_ip}\nPhases: {len(value.phases)}",
+            title="Engagement plan valid",
+        ),
+    )
 
 
 @engagement_app.command("run")
@@ -708,31 +738,65 @@ def engagement_run(
     workspace: Path = typer.Option(Path("workspaces"), "--workspace"),
     username: str | None = typer.Option(None, "--username", "-u"),
     password: str | None = typer.Option(None, "--password", "-p"),
-    approval_token: str | None = typer.Option(None, "--approval-token", envvar="ADAF_APPROVAL_TOKEN"),
+    approval_token: str | None = typer.Option(
+        None, "--approval-token", envvar="ADAF_APPROVAL_TOKEN"
+    ),
 ) -> None:
     """Execute only the capabilities authorized by a validated engagement plan."""
     from adaf_attack.core.engagement import EngagementError, load_plan, run_engagement
 
     try:
-        result = run_engagement(load_plan(plan), workspace=workspace, username=username, password=password, approval_token=approval_token)
+        result = run_engagement(
+            load_plan(plan),
+            workspace=workspace,
+            username=username,
+            password=password,
+            approval_token=approval_token,
+        )
     except EngagementError as exc:
-        error = ActionableError("ENGAGEMENT_RUN_BLOCKED", str(exc), "Review target scope, authorization, and phase configuration.")
+        error = ActionableError(
+            "ENGAGEMENT_RUN_BLOCKED",
+            str(exc),
+            "Review target scope, authorization, and phase configuration.",
+        )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code) from exc
-    _emit(ctx, {"ok": True, **result}, Panel(f"Engagement: {result['engagement_id']}\nCapabilities: {len(result['capabilities'])}\nFindings: {result['finding_count']}\nSession: {result['session_path']}", title="Engagement complete"))
+    _emit(
+        ctx,
+        {"ok": True, **result},
+        Panel(
+            f"Engagement: {result['engagement_id']}\nCapabilities: {len(result['capabilities'])}\nFindings: {result['finding_count']}\nSession: {result['session_path']}",
+            title="Engagement complete",
+        ),
+    )
 
 
 @engagement_app.command("report")
-def engagement_report(ctx: typer.Context, session: Path = typer.Option(..., "--session"), engagement_id: str = typer.Option("unassigned", "--engagement-id")) -> None:
+def engagement_report(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session"),
+    engagement_id: str = typer.Option("unassigned", "--engagement-id"),
+) -> None:
     """Generate executive, technical, and remediation HTML/PDF reports from evidence."""
     from adaf_attack.core.reporting import generate_report_bundle
 
     if not session.is_dir():
-        error = ActionableError("SESSION_NOT_FOUND", "The session directory does not exist.", "Pass a completed engagement session with --session.")
+        error = ActionableError(
+            "SESSION_NOT_FOUND",
+            "The session directory does not exist.",
+            "Pass a completed engagement session with --session.",
+        )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
     result = generate_report_bundle(session, engagement_id=engagement_id)
-    _emit(ctx, {"ok": True, **result}, Panel(f"Findings: {result['finding_count']}\nReport directory: {session / 'reports'}", title="Client report bundle"))
+    _emit(
+        ctx,
+        {"ok": True, **result},
+        Panel(
+            f"Findings: {result['finding_count']}\nReport directory: {session / 'reports'}",
+            title="Client report bundle",
+        ),
+    )
 
 
 @engagement_app.command("package")
@@ -748,10 +812,19 @@ def engagement_package(
     try:
         result = package_evidence(session, output, profile=profile)
     except ValueError as exc:
-        error = ActionableError("ENGAGEMENT_PACKAGE_FAILED", str(exc), "Use an existing session and redaction profile.")
+        error = ActionableError(
+            "ENGAGEMENT_PACKAGE_FAILED", str(exc), "Use an existing session and redaction profile."
+        )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code) from exc
-    _emit(ctx, {"ok": True, **result}, Panel(f"Archive: {result['archive']}\nFiles: {result['file_count']}\nProfile: {result['profile']}", title="Engagement evidence package"))
+    _emit(
+        ctx,
+        {"ok": True, **result},
+        Panel(
+            f"Archive: {result['archive']}\nFiles: {result['file_count']}\nProfile: {result['profile']}",
+            title="Engagement evidence package",
+        ),
+    )
 
 
 @app.command("rank-paths")
@@ -966,23 +1039,36 @@ def campaign_compose_cmd(
 
 
 @app.command("forest-campaign")
-def forest_campaign_cmd(ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")) -> None:
+def forest_campaign_cmd(
+    ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")
+) -> None:
     """Compose a forest-aware, read-only campaign from completed sessions."""
     from adaf_attack.core.forest_campaign import compose_forest_campaign
 
     try:
         payload = compose_forest_campaign(_offline_sessions(session))
     except (ActionableError, ValueError) as exc:
-        error = ActionableError("FOREST_CAMPAIGN_FAILED", str(exc), "Pass completed, authorized session directories.")
+        error = ActionableError(
+            "FOREST_CAMPAIGN_FAILED", str(exc), "Pass completed, authorized session directories."
+        )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code) from exc
-    _emit(ctx, {"ok": True, **payload}, Panel(f"Domains: {len(payload['domains'])}\nTrust transitions: {len(payload['trust_transitions'])}", title="Forest-aware campaign"))
+    _emit(
+        ctx,
+        {"ok": True, **payload},
+        Panel(
+            f"Domains: {len(payload['domains'])}\nTrust transitions: {len(payload['trust_transitions'])}",
+            title="Forest-aware campaign",
+        ),
+    )
 
 
 @app.command("campaign-run")
 def campaign_run_cmd(
     ctx: typer.Context,
-    campaign: Path = typer.Option(..., "--campaign", help="Campaign YAML with ordered engagement plans"),
+    campaign: Path = typer.Option(
+        ..., "--campaign", help="Campaign YAML with ordered engagement plans"
+    ),
     workspace: Path = typer.Option(Path("workspaces"), "--workspace"),
     username: str | None = typer.Option(None, "--username", "-u"),
     password: str | None = typer.Option(None, "--password", "-p"),
@@ -1002,10 +1088,11 @@ def campaign_run_cmd(
             else {}
         )
         if not isinstance(token_map, dict) or not all(
-            isinstance(key, str) and isinstance(value, str)
-            for key, value in token_map.items()
+            isinstance(key, str) and isinstance(value, str) for key, value in token_map.items()
         ):
-            raise CampaignError("--approval-tokens must be a JSON object of engagement IDs to tokens")
+            raise CampaignError(
+                "--approval-tokens must be a JSON object of engagement IDs to tokens"
+            )
         payload = run_campaign(
             campaign,
             workspace=workspace,

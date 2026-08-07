@@ -41,9 +41,7 @@ def test_cleanup_deletes_only_recorded_staged_sysvol_file(tmp_path, monkeypatch)
         "adaf_attack.capabilities.gpo_sysvol._smb_connect", lambda _target, _host: Smb()
     )
 
-    result = cleanup.execute_cleanup(
-        session, Target(domain="corp.example", dc_ip="10.0.0.10")
-    )
+    result = cleanup.execute_cleanup(session, Target(domain="corp.example", dc_ip="10.0.0.10"))
 
     assert deleted == [("SYSVOL", "corp.example\\Policies\\{GUID}\\Machine\\adaf_staged.xml")]
     assert result["completed"] == 1

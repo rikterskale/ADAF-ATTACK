@@ -55,10 +55,15 @@ def test_scoped_approval_token_is_verified(monkeypatch: pytest.MonkeyPatch) -> N
         "exp": int((datetime.now(UTC) + timedelta(minutes=5)).timestamp()),
     }
     encoded = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
-    signature = base64.urlsafe_b64encode(
-        hmac.new(key.encode(), encoded.encode(), hashlib.sha256).digest()
-    ).decode().rstrip("=")
-    assert verify_approval(f"{encoded}.{signature}", plan, "ldap-enum")["approved_by"] == "approver@example.test"
+    signature = (
+        base64.urlsafe_b64encode(hmac.new(key.encode(), encoded.encode(), hashlib.sha256).digest())
+        .decode()
+        .rstrip("=")
+    )
+    assert (
+        verify_approval(f"{encoded}.{signature}", plan, "ldap-enum")["approved_by"]
+        == "approver@example.test"
+    )
 
 
 def test_report_bundle_html_and_pdf(tmp_path: Path) -> None:

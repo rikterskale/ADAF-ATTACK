@@ -25,12 +25,21 @@ def _decrypt_cpassword(value: str) -> str | None:
         return None
 
 
-@register_capability(id="sysvol-hunt", summary="Search authorized SYSVOL evidence for GPP cpasswords, scripts, and tasks", category="credential-access", tags=("sysvol", "gpp", "cpassword", "evidence"))
+@register_capability(
+    id="sysvol-hunt",
+    summary="Search authorized SYSVOL evidence for GPP cpasswords, scripts, and tasks",
+    category="credential-access",
+    tags=("sysvol", "gpp", "cpassword", "evidence"),
+)
 class SysvolHunt:
-    def run(self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any) -> dict[str, Any]:
+    def run(
+        self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any
+    ) -> dict[str, Any]:
         root = Path(str(kwargs.get("artifact") or kwargs.get("sysvol_path") or ""))
         if not root.is_dir():
-            raise RuntimeError("sysvol-hunt requires --artifact pointing to an authorized SYSVOL mirror")
+            raise RuntimeError(
+                "sysvol-hunt requires --artifact pointing to an authorized SYSVOL mirror"
+            )
         findings: list[dict[str, Any]] = []
         for path in root.rglob("*.xml"):
             text = path.read_text(encoding="utf-8", errors="ignore")
@@ -38,11 +47,22 @@ class SysvolHunt:
                 continue
             marker = 'cpassword="'
             value = text.split(marker, 1)[1].split('"', 1)[0]
-            item = {"path": str(path), "kind": "gpp-cpassword", "recoverable": bool(_decrypt_cpassword(value))}
+            item = {
+                "path": str(path),
+                "kind": "gpp-cpassword",
+                "recoverable": bool(_decrypt_cpassword(value)),
+            }
             findings.append(item)
         result = {"root": str(root), "findings": findings, "count": len(findings)}
-        session.path("sysvol-hunt.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        session.path("sysvol-hunt.json").write_text(
+            json.dumps(result, indent=2) + "\n", encoding="utf-8"
+        )
         if findings:
-            graph.add_edge(f"DOMAIN@{target.domain.upper()}", f"DOMAIN@{target.domain.upper()}", "GPPPasswordExposure", count=len(findings))
+            graph.add_edge(
+                f"DOMAIN@{target.domain.upper()}",
+                f"DOMAIN@{target.domain.upper()}",
+                "GPPPasswordExposure",
+                count=len(findings),
+            )
         session.log("sysvol-hunt.complete", count=len(findings))
         return result

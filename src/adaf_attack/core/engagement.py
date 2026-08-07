@@ -58,7 +58,15 @@ def load_plan(path: Path) -> EngagementPlan:
 
     profile = str(raw.get("opsec_profile", "balanced"))
     resolve_opsec(profile)
-    return EngagementPlan(str(raw["engagement_id"]), str(target["domain"]), str(target["dc_ip"]), caps, tuple(raw["phases"]), tuple(str(x) for x in raw.get("allowed_targets", [target["dc_ip"]])), profile)
+    return EngagementPlan(
+        str(raw["engagement_id"]),
+        str(target["domain"]),
+        str(target["dc_ip"]),
+        caps,
+        tuple(raw["phases"]),
+        tuple(str(x) for x in raw.get("allowed_targets", [target["dc_ip"]])),
+        profile,
+    )
 
 
 def _b64(value: bytes) -> str:
@@ -82,7 +90,9 @@ def verify_approval(token: str, plan: EngagementPlan, capability: str) -> dict[s
         raise EngagementError("Invalid approval token format") from exc
     if not isinstance(payload, dict) or not hmac.compare_digest(expected, signature):
         raise EngagementError("Approval token signature is invalid")
-    if payload.get("engagement_id") != plan.engagement_id or capability not in payload.get("capabilities", []):
+    if payload.get("engagement_id") != plan.engagement_id or capability not in payload.get(
+        "capabilities", []
+    ):
         raise EngagementError("Approval token scope does not match the requested action")
     if plan.dc_ip not in payload.get("targets", []):
         raise EngagementError("Approval token does not permit this target")
@@ -91,7 +101,15 @@ def verify_approval(token: str, plan: EngagementPlan, capability: str) -> dict[s
     return cast(dict[str, Any], payload)
 
 
-def run_engagement(plan: EngagementPlan, *, workspace: Path, username: str | None = None, password: str | None = None, approval_token: str | None = None, ccache: str | None = None) -> dict[str, Any]:
+def run_engagement(
+    plan: EngagementPlan,
+    *,
+    workspace: Path,
+    username: str | None = None,
+    password: str | None = None,
+    approval_token: str | None = None,
+    ccache: str | None = None,
+) -> dict[str, Any]:
     import adaf_attack.capabilities  # noqa: F401
 
     if plan.dc_ip not in plan.allowed_targets:
@@ -109,7 +127,13 @@ def run_engagement(plan: EngagementPlan, *, workspace: Path, username: str | Non
     from adaf_attack.core.control_plane import resolve_opsec
 
     opsec = resolve_opsec(plan.opsec_profile)
-    session.log("engagement.start", engagement_id=plan.engagement_id, allowed_capabilities=list(plan.allowed_capabilities), target=plan.dc_ip, opsec=opsec)
+    session.log(
+        "engagement.start",
+        engagement_id=plan.engagement_id,
+        allowed_capabilities=list(plan.allowed_capabilities),
+        target=plan.dc_ip,
+        opsec=opsec,
+    )
     complete: list[str] = []
     for phase in plan.phases:
         name = str(phase.get("name", "unnamed"))
@@ -123,17 +147,44 @@ def run_engagement(plan: EngagementPlan, *, workspace: Path, username: str | Non
             force = False
             if cap.destructive:
                 if not approval_token:
-                    raise EngagementError(f"Approval token required for destructive capability: {capability}")
+                    raise EngagementError(
+                        f"Approval token required for destructive capability: {capability}"
+                    )
                 approval = verify_approval(approval_token, plan, capability)
-                session.log("approval.accepted", approval_id=approval.get("approval_id"), capability=capability, approver=approval.get("approved_by"))
+                session.log(
+                    "approval.accepted",
+                    approval_id=approval.get("approval_id"),
+                    capability=capability,
+                    approver=approval.get("approved_by"),
+                )
                 force = True
             session.log("phase.start", phase=name, capability=capability)
-            cap.runner.run(target, session, graph, force=force, include_secrets=False, opsec=opsec, **dict(phase.get("options", {})))
+            cap.runner.run(
+                target,
+                session,
+                graph,
+                force=force,
+                include_secrets=False,
+                opsec=opsec,
+                **dict(phase.get("options", {})),
+            )
             session.log("phase.complete", phase=name, capability=capability)
             complete.append(capability)
     graph.resolve_dn_edges()
     graph.save(session.path("graph.json"))
     findings = findings_from_session(session.root)
     findings_path = write_findings(session.root, findings)
-    session.log("engagement.complete", engagement_id=plan.engagement_id, capabilities=complete, findings=len(findings), findings_path=str(findings_path))
-    return {"engagement_id": plan.engagement_id, "session_path": str(session.root), "capabilities": complete, "finding_count": len(findings), "findings_path": str(findings_path)}
+    session.log(
+        "engagement.complete",
+        engagement_id=plan.engagement_id,
+        capabilities=complete,
+        findings=len(findings),
+        findings_path=str(findings_path),
+    )
+    return {
+        "engagement_id": plan.engagement_id,
+        "session_path": str(session.root),
+        "capabilities": complete,
+        "finding_count": len(findings),
+        "findings_path": str(findings_path),
+    }

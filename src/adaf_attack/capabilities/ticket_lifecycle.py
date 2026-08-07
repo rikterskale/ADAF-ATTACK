@@ -20,21 +20,33 @@ from adaf_attack.core.target import Target
     tags=("ccache", "pfx", "pem", "vault"),
 )
 class TicketLifecycle:
-    def run(self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any) -> dict[str, Any]:
+    def run(
+        self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any
+    ) -> dict[str, Any]:
         operation = str(kwargs.get("operation") or "inventory")
         artifact = kwargs.get("artifact")
         vault = session.vault()
         if operation == "inventory":
             files = [p.name for p in sorted(session.root.glob("*.ccache"))]
             files += [p.name for p in sorted(session.root.glob("*.pfx"))]
-            return {"operation": operation, "artifacts": files, "vault": [item.name for item in vault.list()]}
+            return {
+                "operation": operation,
+                "artifacts": files,
+                "vault": [item.name for item in vault.list()],
+            }
         if operation == "import-ccache":
             source = Path(str(artifact or ""))
             if not source.is_file():
                 raise RuntimeError("artifact must name an existing ccache file")
             destination = session.path(f"imported-{source.name}")
             shutil.copy2(source, destination)
-            vault.put("tgt", "ccache", {"path": str(destination)}, secret=True, metadata={"source": source.name})
+            vault.put(
+                "tgt",
+                "ccache",
+                {"path": str(destination)},
+                secret=True,
+                metadata={"source": source.name},
+            )
             session.log("ticket-lifecycle.import", kind="ccache", path=str(destination))
             return {"operation": operation, "ccache": str(destination), "vault_item": "tgt"}
         if operation == "import-pfx":
@@ -61,7 +73,13 @@ class TicketLifecycle:
                 raise RuntimeError("key or certificate file not found")
             destination = session.path("converted.pfx")
             destination.write_bytes(_pfx_from_pem(key.read_bytes(), cert.read_bytes()))
-            vault.put("certificate", "pfx", {"path": str(destination)}, secret=True, metadata={"converted_from": [key.name, cert.name]})
+            vault.put(
+                "certificate",
+                "pfx",
+                {"path": str(destination)},
+                secret=True,
+                metadata={"converted_from": [key.name, cert.name]},
+            )
             return {"operation": operation, "pfx": str(destination), "vault_item": "certificate"}
         if operation == "export-ccache":
             value = vault.get("tgt")
@@ -89,11 +107,17 @@ class TicketLifecycle:
                 PrivateFormat,
                 pkcs12,
             )
+
             key, cert, _cas = pkcs12.load_key_and_certificates(source.read_bytes(), None)
             if key is None or cert is None:
                 raise RuntimeError("PFX does not contain both a private key and certificate")
-            key_path, cert_path = session.path("converted.key.pem"), session.path("converted.cert.pem")
-            key_path.write_bytes(key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption()))
+            key_path, cert_path = (
+                session.path("converted.key.pem"),
+                session.path("converted.cert.pem"),
+            )
+            key_path.write_bytes(
+                key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
+            )
             cert_path.write_bytes(cert.public_bytes(Encoding.PEM))
             return {"operation": operation, "key": str(key_path), "cert": str(cert_path)}
         raise RuntimeError(f"Unsupported operation: {operation}")

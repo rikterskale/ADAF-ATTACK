@@ -45,7 +45,15 @@ class SessionVault:
     def _save(self, index: dict[str, Any]) -> None:
         self.index_path.write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
 
-    def put(self, name: str, kind: str, value: Any, *, secret: bool, metadata: dict[str, Any] | None = None) -> VaultItem:
+    def put(
+        self,
+        name: str,
+        kind: str,
+        value: Any,
+        *,
+        secret: bool,
+        metadata: dict[str, Any] | None = None,
+    ) -> VaultItem:
         if "/" in name or "\\" in name:
             raise VaultError("Vault item names cannot contain path separators")
         index = self._index()

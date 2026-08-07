@@ -205,7 +205,14 @@ class ShadowCreds:
                 "blob_len": material["blob_len"],
             }
             if ok:
-                session.register_cleanup({"kind": "shadow-credential", "target": dn, "artifact": str(dn_bin_path), "rollback": "Remove the exact KeyCredentialLink DN-Binary value."})
+                session.register_cleanup(
+                    {
+                        "kind": "shadow-credential",
+                        "target": dn,
+                        "artifact": str(dn_bin_path),
+                        "rollback": "Remove the exact KeyCredentialLink DN-Binary value.",
+                    }
+                )
                 console.print(f"  [green]LDAP ADD ok[/green]  {ATTR} on {dn}")
                 console.print(f"  key → {key_path}")
                 console.print(f"  cert → {cert_path}")

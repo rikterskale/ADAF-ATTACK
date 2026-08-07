@@ -37,11 +37,7 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
                 previous = [bytes.fromhex(value) for value in item.get("previous", [])]
                 ok = conn.modify(
                     item["target"],
-                    {
-                        "msDS-AllowedToActOnBehalfOfOtherIdentity": [
-                            (MODIFY_REPLACE, previous)
-                        ]
-                    },
+                    {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_REPLACE, previous)]},
                 )
             elif item.get("kind") == "acl":
                 previous = bytes.fromhex(item["previous_hex"])
