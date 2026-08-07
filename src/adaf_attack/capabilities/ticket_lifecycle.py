@@ -80,7 +80,7 @@ class TicketLifecycle:
                 "pfx",
                 {"path": str(destination)},
                 secret=True,
-                metadata={"converted_from": [key.name, cert.name]},
+                metadata={"converted_from": [pem_key_path.name, pem_cert_path.name]},
             )
             return {"operation": operation, "pfx": str(destination), "vault_item": "certificate"}
         if operation == "export-ccache":
