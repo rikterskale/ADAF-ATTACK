@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -82,10 +83,8 @@ class SecretsdumpLocal:
             lsa.finish()
         except Exception as exc:  # noqa: BLE001
             console.print(f"[yellow]LSA: {exc}[/yellow]")
-        try:
+        with contextlib.suppress(Exception):
             remote.finish()
-        except Exception:  # noqa: BLE001
-            pass
 
         for record in sam_records:
             parts = record.split(":")
@@ -113,7 +112,5 @@ class SecretsdumpLocal:
             lsa=len(lsa_records),
             include_secrets=include_secrets,
         )
-        console.print(
-            f"[green]Done[/green]  sam={len(sam_records)}  lsa={len(lsa_records)}"
-        )
+        console.print(f"[green]Done[/green]  sam={len(sam_records)}  lsa={len(lsa_records)}")
         return dict(redacted) if isinstance(redacted, dict) else result

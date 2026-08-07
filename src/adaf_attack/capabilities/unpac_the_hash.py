@@ -23,14 +23,16 @@ console = Console()
 
 
 def _extract_nt_from_pac(pac_data: bytes) -> str | None:
-    from impacket.krb5.pac import PACTYPE, PAC_INFO_BUFFER, PAC_CREDENTIAL_INFO
+    from impacket.krb5.pac import PAC_CREDENTIAL_INFO, PAC_INFO_BUFFER, PACTYPE
 
     pac = PACTYPE(pac_data)
     for buf in pac["Buffers"]:
         try:
             info = PAC_INFO_BUFFER(buf)
             if info["ulType"] == 2:  # PAC_CREDENTIAL_INFO
-                cred_info = PAC_CREDENTIAL_INFO(pac_data[info["Offset"]:info["Offset"] + info["cbBufferSize"]])
+                PAC_CREDENTIAL_INFO(
+                    pac_data[info["Offset"] : info["Offset"] + info["cbBufferSize"]]
+                )
                 # Decrypt cred_info["SerializedData"] using the AS session key here.
                 return "<credential-info-blob-present>"
         except Exception:  # noqa: BLE001
@@ -99,7 +101,7 @@ class UnpacTheHash:
             from impacket.krb5.types import Principal
 
             cc = CCache.loadFile(str(ccache))
-            principal = cc.credentials[0]["client"].prettyPrint().decode("ascii")
+            cc.credentials[0]["client"].prettyPrint().decode("ascii")
             tgt = cc.credentials[0].toTGT()
             sname = Principal(
                 f"krbtgt/{target.domain.upper()}",

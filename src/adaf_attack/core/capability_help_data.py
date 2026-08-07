@@ -40,9 +40,7 @@ _SPEC: dict[str, OptionSpec] = {
     "trusts-enum": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
     "adcs-enum": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
     "adcs-policy-probe": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
-    "acl-enum": OptionSpec(
-        _UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL + ("--scope", "--max-objects")
-    ),
+    "acl-enum": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL + ("--scope", "--max-objects")),
     "gmsa-laps-enum": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
     "kerberoast": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
     "asrep-roast": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),

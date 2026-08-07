@@ -7,6 +7,7 @@ so `adaf-attack cleanup` can prompt operator review.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shlex
 from typing import Any
@@ -47,16 +48,14 @@ def _run_smbexec(target: Target, host: str, command: str, share: str) -> dict[st
     try:
         executor.run(host)
     finally:
-        try:
+        with contextlib.suppress(Exception):
             executor.finish()
-        except Exception:  # noqa: BLE001
-            pass
     return {"note": "smbexec streams stdout to console; artifact capture is not automatic."}
 
 
 def _run_wmiexec(target: Target, host: str, command: str) -> dict[str, Any]:
-    from impacket.dcerpc.v5.dcomrt import DCOMConnection
     from impacket.dcerpc.v5.dcom import wmi
+    from impacket.dcerpc.v5.dcomrt import DCOMConnection
     from impacket.dcerpc.v5.dtypes import NULL
 
     lm, nt = target.lm_nt_hashes()
@@ -81,10 +80,8 @@ def _run_wmiexec(target: Target, host: str, command: str) -> dict[str, Any]:
         result = win32Process.Create(command, "C:\\", None)
         return {"return_value": int(result.ReturnValue), "pid": int(result.ProcessId)}
     finally:
-        try:
+        with contextlib.suppress(Exception):
             dcom.disconnect()
-        except Exception:  # noqa: BLE001
-            pass
 
 
 @register_capability(
@@ -118,9 +115,7 @@ class ImpacketExec:
             raise RuntimeError("Pass -P command=<cmd> (or --value).")
 
         safe_command = shlex.quote(str(command)) if not isinstance(command, list) else command
-        console.print(
-            f"[bold]{method}[/bold] {host}  cmd={safe_command}"
-        )
+        console.print(f"[bold]{method}[/bold] {host}  cmd={safe_command}")
 
         try:
             if method == "wmiexec":
@@ -133,8 +128,14 @@ class ImpacketExec:
                     "note": (
                         f"{method} is provided only via impacket's script;"
                         " run: impacket-{method} -k --dc-ip {dc} {domain}/{user}@{host} {cmd}"
-                    ).format(method=method, dc=target.dc_ip, domain=target.domain,
-                              user=target.username, host=host, cmd=str(command)),
+                    ).format(
+                        method=method,
+                        dc=target.dc_ip,
+                        domain=target.domain,
+                        user=target.username,
+                        host=host,
+                        cmd=str(command),
+                    ),
                 }
         except Exception as exc:  # noqa: BLE001
             outcome = {"error": str(exc)[:400]}

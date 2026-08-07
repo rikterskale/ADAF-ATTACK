@@ -78,8 +78,6 @@ class GppCpasswordHunt:
             decrypted=result["decrypted"],
             include_secrets=include_secrets,
         )
-        console.print(
-            f"[green]Done[/green]  files={len(entries)}  decrypted={result['decrypted']}"
-        )
+        console.print(f"[green]Done[/green]  files={len(entries)}  decrypted={result['decrypted']}")
         console.print(f"Results → {out}")
         return dict(redacted) if isinstance(redacted, dict) else result

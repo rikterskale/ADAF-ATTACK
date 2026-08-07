@@ -27,6 +27,4 @@ def test_refuses_unknown_method(tmp_path) -> None:
     graph = AttackGraph()
     target = Target(domain="corp", dc_ip="10.0.0.10", username="a", password="b")
     with pytest.raises(RuntimeError, match="unknown method"):
-        ImpacketExec().run(
-            target, session, graph, force=True, method="bogus", command="whoami"
-        )
+        ImpacketExec().run(target, session, graph, force=True, method="bogus", command="whoami")

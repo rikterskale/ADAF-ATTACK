@@ -50,9 +50,7 @@ def allowed_keys() -> list[str]:
 
 def set_key(key: str, value: str) -> tuple[Path, dict[str, Any]]:
     if key not in _ALLOWED_KEYS:
-        raise ValueError(
-            f"Unknown config key: {key}. Allowed: {', '.join(sorted(_ALLOWED_KEYS))}"
-        )
+        raise ValueError(f"Unknown config key: {key}. Allowed: {', '.join(sorted(_ALLOWED_KEYS))}")
     data = load_user_config()
     parsed: Any = value
     if value.lower() in {"true", "false"}:

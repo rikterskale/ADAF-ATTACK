@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ldap3 import SUBTREE
@@ -109,9 +109,8 @@ class LapsRead:
                     "DPAPI-NG decryption requires domain-wide unwrap key; "
                     "surface the blob and decrypt off-host if authorized."
                 )
-            if any(
-                key in record
-                for key in ("v1_password", "v2_password", "v2_encrypted")
+            if sam and any(
+                key in record for key in ("v1_password", "v2_password", "v2_encrypted")
             ):
                 console.print(
                     f"  [cyan]{sam}[/cyan]  "
@@ -129,7 +128,7 @@ class LapsRead:
             "count": len(entries),
             "v1_readable": v1_reads,
             "v2_readable": v2_reads,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "entries": entries,
         }
         redacted = redact(result, include_secrets=include_secrets)

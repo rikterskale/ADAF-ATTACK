@@ -115,7 +115,9 @@ class TemplateMod:
         }
 
         rollback_file = session.path(f"template-mod-{template}.rollback.json")
-        rollback_file.write_text(json.dumps({"dn": dn, "attrs": original}, indent=2), encoding="utf-8")
+        rollback_file.write_text(
+            json.dumps({"dn": dn, "attrs": original}, indent=2), encoding="utf-8"
+        )
 
         if ok:
             session.register_cleanup(

@@ -9,14 +9,11 @@ from __future__ import annotations
 
 import base64
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 # Public AES-256 key disclosed by Microsoft (MS14-025).
-GPP_KEY = bytes.fromhex(
-    "4e9906e8fcb66cc9faf49310620ffee8"
-    "f496e806cc057990209b09a433b66c1b"
-)
+GPP_KEY = bytes.fromhex("4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b")
 GPP_IV = b"\x00" * 16
 
 GPP_FILENAMES = {

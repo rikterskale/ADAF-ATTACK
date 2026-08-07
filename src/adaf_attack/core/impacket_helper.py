@@ -10,8 +10,7 @@ class ImpacketMissing(RuntimeError):
 
     def __init__(self, feature: str) -> None:
         super().__init__(
-            f"{feature} requires Impacket. "
-            "Install with: pip install 'adaf-attack[kerberos]'"
+            f"{feature} requires Impacket. Install with: pip install 'adaf-attack[kerberos]'"
         )
 
 

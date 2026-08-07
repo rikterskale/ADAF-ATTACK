@@ -27,7 +27,7 @@ from adaf_attack.core.target import Target
 from adaf_attack.core.user_config import load_user_config
 
 
-class CapabilityItem(ListItem):  # type: ignore[misc]
+class CapabilityItem(ListItem):  # type: ignore[misc,unused-ignore]
     def __init__(self, cap_id: str, summary: str) -> None:
         super().__init__()
         self.cap_id = cap_id
@@ -37,7 +37,7 @@ class CapabilityItem(ListItem):  # type: ignore[misc]
         yield Label(f"[bold cyan]{self.cap_id}[/]  {self.summary}")
 
 
-class ADAFAttackApp(App[None]):  # type: ignore[misc]
+class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     CSS = """
     Screen { layout: vertical; }
     #sidebar { width: 42; border: solid $accent; padding: 0 1; }
@@ -90,9 +90,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc]
                         value=defaults.get("target.username", ""),
                     )
                     with Horizontal():
-                        yield Input(
-                            placeholder="Password (optional)", password=True, id="password"
-                        )
+                        yield Input(placeholder="Password (optional)", password=True, id="password")
                         yield Button("Show", id="toggle-password-btn", variant="default")
                     yield Input(placeholder="NT / LM:NT hash (optional)", id="hashes")
                     yield Input(placeholder="AES key hex (optional)", id="aes_key")

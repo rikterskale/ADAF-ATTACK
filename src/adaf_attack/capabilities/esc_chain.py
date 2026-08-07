@@ -32,9 +32,11 @@ def _pick_template(adcs_json: dict[str, Any]) -> dict[str, Any] | None:
         signals = set(tpl.get("esc_signals", []) or tpl.get("esc", []))
         if not signals:
             continue
-        rank = min(
-            ESC_PRIORITY.index(sig) for sig in signals if sig in ESC_PRIORITY
-        ) if any(sig in ESC_PRIORITY for sig in signals) else 99
+        rank = (
+            min(ESC_PRIORITY.index(sig) for sig in signals if sig in ESC_PRIORITY)
+            if any(sig in ESC_PRIORITY for sig in signals)
+            else 99
+        )
         scored.append((rank, tpl))
     if not scored:
         return None
@@ -125,5 +127,7 @@ class EscChain:
         out.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
         graph.save(session.path("graph.json"))
         session.log("esc-chain.complete", template=template, ca=ca)
-        console.print(f"[green]Done[/green]  template={template} → cert={bool(pfx)} → tgt={bool(pkinit_result)}")
+        console.print(
+            f"[green]Done[/green]  template={template} → cert={bool(pfx)} → tgt={bool(pkinit_result)}"
+        )
         return result

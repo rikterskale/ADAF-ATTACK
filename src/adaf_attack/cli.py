@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -57,8 +57,8 @@ def _humanize_since(iso_or_ts: Any) -> str:
     except ValueError:
         return str(iso_or_ts)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    delta = datetime.now(timezone.utc) - dt
+        dt = dt.replace(tzinfo=UTC)
+    delta = datetime.now(UTC) - dt
     seconds = int(delta.total_seconds())
     if seconds < 60:
         return f"{seconds}s ago"
@@ -80,19 +80,17 @@ def _parse_since(text: str) -> datetime:
     if unit in {"s", "m", "h", "d"} and text[:-1].isdigit():
         n = int(text[:-1])
         factor = {"s": 1, "m": 60, "h": 3600, "d": 86400}[unit]
-        return datetime.now(timezone.utc).replace(microsecond=0) - _delta(n * factor)
+        return datetime.now(UTC).replace(microsecond=0) - _delta(n * factor)
     try:
         dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError as exc:
         raise typer.BadParameter(
             "--since must be N{s,m,h,d} or ISO datetime (e.g. 24h, 2026-08-01)"
         ) from exc
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
 
-def _delta(seconds: int) -> Any:
-    from datetime import timedelta
-
+def _delta(seconds: int) -> "timedelta":
     return timedelta(seconds=seconds)
 
 
@@ -102,6 +100,7 @@ def _path_status(path: Path) -> tuple[bool, bool]:
         return True, os.access(path, os.W_OK)
     parent = path.parent
     return False, parent.exists() and os.access(parent, os.W_OK)
+
 
 app = typer.Typer(
     name="adaf-attack",
@@ -224,7 +223,11 @@ def doctor(
         "first_run": first_run,
         "next_step": next_step,
     }
-    glyph = {"ok": "[green]OK[/green]", "warning": "[yellow]WARN[/yellow]", "error": "[red]ERR[/red]"}
+    glyph = {
+        "ok": "[green]OK[/green]",
+        "warning": "[yellow]WARN[/yellow]",
+        "error": "[red]ERR[/red]",
+    }
     lines = [
         f"{glyph.get(c['status'], c['status']):>18} {c['id']}: {c['value']}"
         + (f"\n    Next step: {c['remediation']}" if explain and c["remediation"] else "")
@@ -283,7 +286,7 @@ def show_paths(ctx: typer.Context) -> None:
         ("config", user_config_dir()),
         ("workspace", default_workspace_dir()),
     ]
-    rows = []
+    rows: list[dict[str, Any]] = []
     for name, path in entries:
         exists, writable = _path_status(path)
         rows.append(
@@ -302,8 +305,8 @@ def show_paths(ctx: typer.Context) -> None:
     table.add_row("platform", platform_name(), "-", "-")
     for row in rows:
         table.add_row(
-            row["name"],
-            row["path"],
+            str(row["name"]),
+            str(row["path"]),
             "[green]yes[/green]" if row["exists"] else "[yellow]no[/yellow]",
             "[green]yes[/green]" if row["writable"] else "[red]no[/red]",
         )
@@ -458,9 +461,7 @@ def sessions(
     session_id: str | None = typer.Option(
         None, "--session", help="Show one session's metadata and event status."
     ),
-    limit: int | None = typer.Option(
-        None, "--limit", help="Show only the N most recent sessions."
-    ),
+    limit: int | None = typer.Option(None, "--limit", help="Show only the N most recent sessions."),
     since: str | None = typer.Option(
         None,
         "--since",
@@ -486,7 +487,7 @@ def sessions(
                 try:
                     dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
                     if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
+                        dt = dt.replace(tzinfo=UTC)
                     if dt < cutoff:
                         continue
                 except ValueError:
@@ -822,9 +823,7 @@ def run_capability(
         _console(ctx).print(f"\nSession: {out['session_path']}")
         session_id = out.get("session_id")
         if session_id:
-            _console(ctx).print(
-                f"Inspect: adaf-attack sessions --session {session_id}"
-            )
+            _console(ctx).print(f"Inspect: adaf-attack sessions --session {session_id}")
     except RunError as exc:
         text = str(exc)
         code = "RUN_FAILED"
@@ -1432,15 +1431,12 @@ def show_errors(
         )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
-    catalog = (
-        {code: ERROR_CATALOG[code]} if code else dict(sorted(ERROR_CATALOG.items()))
-    )
+    catalog = {code: ERROR_CATALOG[code]} if code else dict(sorted(ERROR_CATALOG.items()))
     payload = {
         "ok": True,
         "count": len(catalog),
         "errors": [
-            {"code": key, "message": msg, "remediation": rem}
-            for key, (msg, rem) in catalog.items()
+            {"code": key, "message": msg, "remediation": rem} for key, (msg, rem) in catalog.items()
         ],
     }
     table = Table(title="ADAF-ATTACK error codes", show_header=True)
@@ -1463,6 +1459,7 @@ def config_show(ctx: typer.Context) -> None:
 
     data = load_user_config()
     payload = {"ok": True, "path": str(config_path()), "config": data}
+    human: Any
     if not data:
         human = Panel(
             f"No configuration set.\nPath: {config_path()}\n"

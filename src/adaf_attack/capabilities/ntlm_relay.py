@@ -25,16 +25,19 @@ from adaf_attack.core.target import Target
 console = Console()
 
 
-def _build_argv(target: Target, relay_targets: list[str], listen_port: int, output_dir: str,
-                extras: list[str]) -> list[str]:
+def _build_argv(
+    target: Target, relay_targets: list[str], listen_port: int, output_dir: str, extras: list[str]
+) -> list[str]:
     argv = [
         "impacket-ntlmrelayx",
         "--no-http-server",  # off by default; add HTTP relay through extras when needed
         "--no-wcf-server",
         "--no-raw-server",
         "--no-smb-server",  # disabled unless caller re-enables via extras
-        "-tf", "-",  # placeholder, replaced by --target list below
-        "-of", output_dir,
+        "-tf",
+        "-",  # placeholder, replaced by --target list below
+        "-of",
+        output_dir,
         "-smb2support",
     ]
     for host in relay_targets:

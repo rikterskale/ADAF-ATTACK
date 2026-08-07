@@ -6,6 +6,7 @@ policy signals. Zerologon/noPAC/Certifried are indicator-only (no exploit).
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -30,10 +31,8 @@ def _check_smb_signing(dc_ip: str) -> dict[str, Any]:
             "server": conn.getServerName(),
             "signing_required": bool(conn.isSigningRequired()),
         }
-        try:
+        with contextlib.suppress(Exception):
             conn.close()
-        except Exception:  # noqa: BLE001
-            pass
         return info
     except Exception as exc:  # noqa: BLE001
         return {"error": str(exc)[:200]}
@@ -65,7 +64,11 @@ def _check_certifried_templates(conn: Any, config_nc: str) -> dict[str, Any]:
         )
         weak: list[str] = []
         for entry in conn.entries:
-            flag = int(entry["msPKI-Certificate-Name-Flag"].value) if entry["msPKI-Certificate-Name-Flag"] else 0
+            flag = (
+                int(entry["msPKI-Certificate-Name-Flag"].value)
+                if entry["msPKI-Certificate-Name-Flag"]
+                else 0
+            )
             if flag & 0x1:  # ENROLLEE_SUPPLIES_SUBJECT
                 weak.append(str(entry.cn))
         return {"weak_templates": weak, "count": len(weak)}
@@ -85,7 +88,10 @@ def _check_noPAC(conn: Any, base_dn: str) -> dict[str, Any]:
             return {"error": "krbtgt not visible"}
         entry = conn.entries[0]
         kvno = int(entry["msDS-KeyVersionNumber"].value) if entry["msDS-KeyVersionNumber"] else 0
-        return {"krbtgt_kvno": kvno, "hint": "kvno of 1 or unpatched build implies possible noPAC exposure"}
+        return {
+            "krbtgt_kvno": kvno,
+            "hint": "kvno of 1 or unpatched build implies possible noPAC exposure",
+        }
     except Exception as exc:  # noqa: BLE001
         return {"error": str(exc)[:200]}
 
@@ -155,6 +161,8 @@ class AdCveScan:
     ) -> dict[str, Any]:
         console.print(f"[bold]AD CVE scan[/bold] → {target.domain} @ {target.dc_ip}")
         conn, base_dn, config_nc = ldap_connect(target)
+        if not config_nc:
+            raise RuntimeError("Could not resolve configuration naming context from RootDSE.")
 
         findings: dict[str, Any] = {
             "smb_signing": _check_smb_signing(target.dc_ip),
