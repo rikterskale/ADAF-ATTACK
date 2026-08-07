@@ -68,11 +68,13 @@ class TicketLifecycle:
             if not artifact or "," not in str(artifact):
                 raise RuntimeError("artifact must be '<key.pem>,<cert.pem>'")
             key_name, cert_name = str(artifact).split(",", 1)
-            key, cert = Path(key_name), Path(cert_name)
-            if not key.is_file() or not cert.is_file():
+            pem_key_path, pem_cert_path = Path(key_name), Path(cert_name)
+            if not pem_key_path.is_file() or not pem_cert_path.is_file():
                 raise RuntimeError("key or certificate file not found")
             destination = session.path("converted.pfx")
-            destination.write_bytes(_pfx_from_pem(key.read_bytes(), cert.read_bytes()))
+            destination.write_bytes(
+                _pfx_from_pem(pem_key_path.read_bytes(), pem_cert_path.read_bytes())
+            )
             vault.put(
                 "certificate",
                 "pfx",
@@ -108,16 +110,18 @@ class TicketLifecycle:
                 pkcs12,
             )
 
-            key, cert, _cas = pkcs12.load_key_and_certificates(source.read_bytes(), None)
-            if key is None or cert is None:
+            private_key, certificate, _cas = pkcs12.load_key_and_certificates(
+                source.read_bytes(), None
+            )
+            if private_key is None or certificate is None:
                 raise RuntimeError("PFX does not contain both a private key and certificate")
             key_path, cert_path = (
                 session.path("converted.key.pem"),
                 session.path("converted.cert.pem"),
             )
             key_path.write_bytes(
-                key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
+                private_key.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
             )
-            cert_path.write_bytes(cert.public_bytes(Encoding.PEM))
+            cert_path.write_bytes(certificate.public_bytes(Encoding.PEM))
             return {"operation": operation, "key": str(key_path), "cert": str(cert_path)}
         raise RuntimeError(f"Unsupported operation: {operation}")
