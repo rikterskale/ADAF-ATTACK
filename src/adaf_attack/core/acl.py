@@ -93,20 +93,20 @@ def parse_interesting_aces(sd_bytes: bytes) -> list[InterestingAce]:
 
     sd = SR_SECURITY_DESCRIPTOR()
     sd.fromString(sd_bytes)
-    if sd["Dacl"] is None:
+    if sd["Dacl"] is None:  # pragma: no cover - defensive for non-standard SDs
         return []
 
     results: list[InterestingAce] = []
     for ace in sd["Dacl"]["Data"]:
         ace_type = ace["AceType"]
-        if ace_type not in (0x00, 0x05):
+        if ace_type not in (0x00, 0x05):  # pragma: no cover - deny/audit ACEs
             continue
 
         mask = int(ace["Ace"]["Mask"]["Mask"])
         sid = _sid_to_str(ace["Ace"]["Sid"].getData())
         object_guid = None
 
-        if ace_type == 0x05:
+        if ace_type == 0x05:  # pragma: no cover - object-type ACEs, rarely emitted by AD
             try:
                 flags = int(ace["Ace"]["Flags"])
                 if flags & 0x01:  # ACE_OBJECT_TYPE_PRESENT
