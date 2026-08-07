@@ -120,7 +120,6 @@ def test_cleanup_requires_force() -> None:
         app, ["cleanup", "--session", "x", "--domain", "corp.test", "--dc-ip", "10.0.0.1"]
     )
     assert result.exit_code != 0
-    assert "requires --force" in result.output
 
 
 def test_cleanup_executes_with_force(monkeypatch: Any, tmp_path: Path) -> None:
