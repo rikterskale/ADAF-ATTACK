@@ -119,6 +119,36 @@ def test_ticket_lifecycle_inventory_import_and_export(monkeypatch: Any, tmp_path
     assert Path(imported["ccache"]).is_file() and Path(exported["ccache"]).is_file()
     assert "imported-ticket.ccache" in inventory["artifacts"]
 
+    pfx_source = tmp_path / "certificate.pfx"
+    pfx_source.write_bytes(b"pfx")
+    pfx_import = capability.run(
+        _target(), session, AttackGraph(), operation="import-pfx", artifact=pfx_source
+    )
+    pfx_export = capability.run(_target(), session, AttackGraph(), operation="export-pfx")
+    assert Path(pfx_import["pfx"]).is_file() and Path(pfx_export["pfx"]).read_bytes() == b"pfx"
+
+
+@pytest.mark.parametrize(
+    ("operation", "message"),
+    [
+        ("import-ccache", "existing ccache"),
+        ("import-pfx", "existing PFX"),
+        ("unsupported", "Unsupported operation"),
+    ],
+)
+def test_ticket_lifecycle_rejects_invalid_artifacts(
+    monkeypatch: Any, tmp_path: Path, operation: str, message: str
+) -> None:
+    monkeypatch.setenv("ADAF_SESSION_VAULT_KEY", Fernet.generate_key().decode())
+    with pytest.raises(RuntimeError, match=message):
+        ticket_lifecycle.TicketLifecycle().run(
+            _target(),
+            Session(tmp_path),
+            AttackGraph(),
+            operation=operation,
+            artifact=tmp_path / "missing",
+        )
+
 
 def test_workflow_wrappers_guard_and_record_success_paths(monkeypatch: Any, tmp_path: Path) -> None:
     session = Session(tmp_path)
