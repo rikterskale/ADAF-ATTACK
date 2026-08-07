@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ldap3 import SUBTREE
+from ldap3 import LEVEL, SUBTREE
 from rich.console import Console
 
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
