@@ -13,6 +13,7 @@ from cryptography.fernet import Fernet
 import adaf_attack.capabilities.acl_write as acl_write
 import adaf_attack.capabilities.bloodhound_export as bloodhound_export
 import adaf_attack.capabilities.identity_bridge as identity_bridge
+import adaf_attack.capabilities.pkinit_auth as pkinit_auth
 import adaf_attack.capabilities.ticket_lifecycle as ticket_lifecycle
 import adaf_attack.capabilities.workflow_wrappers as workflow_wrappers
 from adaf_attack.core.graph import AttackGraph
@@ -139,3 +140,35 @@ def test_workflow_wrappers_guard_and_record_success_paths(monkeypatch: Any, tmp_
 
     assert result["ok"] is True
     assert session.path("shadow-pkinit-workflow.json").is_file()
+
+
+def test_pkinit_auth_validates_force_and_missing_material(tmp_path: Path) -> None:
+    capability = pkinit_auth.PkinitAuth()
+    with pytest.raises(RuntimeError, match="requires --force"):
+        capability.run(_target(), Session(tmp_path), AttackGraph())
+    with pytest.raises(RuntimeError, match="No shadow key/cert"):
+        capability.run(_target(), Session(tmp_path), AttackGraph(), force=True, sam="alice")
+
+
+def test_pkinit_auth_records_certipy_failure_playbook(monkeypatch: Any, tmp_path: Path) -> None:
+    pfx = tmp_path / "shadow.pfx"
+    pfx.write_bytes(b"not-parsed-by-mocked-certipy")
+    monkeypatch.setattr(
+        pkinit_auth.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=1, stdout="", stderr="certipy unavailable"
+        ),
+    )
+    session = Session(tmp_path)
+    result = pkinit_auth.PkinitAuth().run(
+        Target(domain="corp.test", dc_ip="192.0.2.10", username="alice"),
+        session,
+        AttackGraph(),
+        force=True,
+        pfx=str(pfx),
+    )
+
+    assert result["method"] == "certipy"
+    assert result["ok"] is False
+    assert Path(result["playbook"]).is_file()
