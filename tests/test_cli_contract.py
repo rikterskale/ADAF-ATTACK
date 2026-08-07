@@ -66,3 +66,45 @@ def test_sessions_json_is_read_only_cleanup_status(tmp_path: object) -> None:
     payload = json.loads(result.output)
     assert payload["cleanup"]["action"] == "read-only status"
     assert payload["cleanup"]["session_count"] == 0
+
+
+def test_version_json_is_machine_readable() -> None:
+    result = runner.invoke(app, ["--format", "json", "--version"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert isinstance(payload["version"], str)
+
+
+def test_paths_json_has_all_workspace_locations() -> None:
+    result = runner.invoke(app, ["--format", "json", "paths"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert {"platform", "data", "config", "workspace"} <= payload.keys()
+
+
+def test_list_capabilities_json_exposes_safe_metadata() -> None:
+    result = runner.invoke(app, ["--format", "json", "list-capabilities"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["count"] == len(payload["capabilities"])
+    assert {"id", "category", "summary", "destructive"} <= payload["capabilities"][0].keys()
+
+
+def test_known_capability_help_includes_execution_contract() -> None:
+    result = runner.invoke(app, ["--format", "json", "capability-help", "acl-enum"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["capability"]["id"] == "acl-enum"
+    assert payload["capability"]["next_step"].startswith("Run `adaf-attack plan acl-enum --domain")
+
+
+def test_invalid_output_format_is_rejected() -> None:
+    result = runner.invoke(app, ["--format", "yaml", "doctor"])
+
+    assert result.exit_code != 0
+    assert "must be 'human' or 'json'" in result.output
