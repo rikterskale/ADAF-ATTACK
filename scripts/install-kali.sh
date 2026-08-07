@@ -38,6 +38,7 @@ done
 
 case "$extras" in dev|tui|kerberos|full) ;; *) echo "Unsupported extras: $extras" >&2; exit 2 ;; esac
 
+# shellcheck disable=SC1091
 if [[ "$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" != "kali" ]]; then
   echo "This installer is intended for Kali Linux; use your distribution's Python packages or pipx instead." >&2
   exit 1
@@ -51,7 +52,7 @@ fi
 command -v python3 >/dev/null || { echo "python3 is required." >&2; exit 1; }
 python3 -m venv "$repo_root/.venv"
 "$repo_root/.venv/bin/python" -m pip install --upgrade pip setuptools wheel
-"$repo_root/.venv/bin/python" -m pip install --editable "$repo_root[$extras]"
+"$repo_root/.venv/bin/python" -m pip install --editable "${repo_root}[${extras}]"
 
 echo "Install complete. Activate with: source $repo_root/.venv/bin/activate"
 echo "Then verify with: adaf-attack doctor"

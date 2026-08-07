@@ -50,14 +50,15 @@ class RodcDelegation:
                 else []
             )
             if uac & 0x80000 or constrained:
+                account = str(entry.sAMAccountName)
                 item = {
-                    "account": str(entry.sAMAccountName),
+                    "account": account,
                     "unconstrained": bool(uac & 0x80000),
                     "constrained": constrained,
                 }
                 result["delegation"].append(item)
                 graph.add_edge(
-                    f"ACCOUNT@{item['account'].upper()}@{target.domain.upper()}",
+                    f"ACCOUNT@{account.upper()}@{target.domain.upper()}",
                     f"DOMAIN@{target.domain.upper()}",
                     "UnconstrainedDelegation" if item["unconstrained"] else "AllowedToDelegate",
                 )
