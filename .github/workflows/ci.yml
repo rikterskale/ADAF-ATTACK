@@ -197,6 +197,7 @@ jobs:
       - name: Validate dependency SBOM
         run: |
           python - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
 
