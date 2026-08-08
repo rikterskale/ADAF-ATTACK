@@ -397,12 +397,28 @@ jobs:
           python -m build --no-isolation --outdir dist-repro-a
           python -m build --no-isolation --outdir dist-repro-b
           python - <<'PY'
+          import gzip
           import hashlib
+          import tarfile
           from pathlib import Path
+
+          def digest(path: Path) -> str:
+              hasher = hashlib.sha256()
+              if path.name.endswith(".tar.gz"):
+                  with tarfile.open(fileobj=gzip.open(path, "rb"), mode="r:") as archive:
+                      for member in sorted(archive.getmembers(), key=lambda item: item.name):
+                          if not member.isfile():
+                              continue
+                          hasher.update(member.name.encode("utf-8"))
+                          hasher.update(b"\0")
+                          hasher.update(archive.extractfile(member).read())
+                          hasher.update(b"\0")
+                  return hasher.hexdigest()
+              return hashlib.sha256(path.read_bytes()).hexdigest()
 
           def digests(root: str) -> dict[str, str]:
               return {
-                  path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                  path.name: digest(path)
                   for path in sorted(Path(root).iterdir())
                   if path.is_file()
               }
