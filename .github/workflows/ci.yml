@@ -588,6 +588,7 @@ jobs:
           adaf-attack --format json engagement package --session "$session" --output "$RUNNER_TEMP/demo-engagement.zip" --profile client > "$RUNNER_TEMP/package.json"
           adaf-attack --format json coercion-fixtures --fixtures tests/fixtures/demo-session --authorized-fixtures > "$RUNNER_TEMP/fixtures.json"
           python - <<'PY'
+          import hashlib
           import json
           import os
           import zipfile
