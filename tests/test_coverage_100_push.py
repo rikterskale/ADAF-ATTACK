@@ -522,3 +522,112 @@ def test_cli_remaining_time_sessions_and_config_paths(monkeypatch: Any, tmp_path
     monkeypatch.setattr(cli, "user_config_dir", lambda: tmp_path / "config")
     result = CliRunner().invoke(cli.app, ["--format", "json", "doctor"])
     assert result.exit_code == 0, result.stdout
+
+
+def test_cli_run_uses_saved_target_defaults_and_validates_required_options(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    import adaf_attack.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "load_user_config",
+        lambda: {
+            "target.domain": "corp.test",
+            "target.dc_ip": "10.0.0.1",
+            "target.username": "alice",
+            "target.kerberos": True,
+            "target.ldaps": True,
+        },
+    )
+    monkeypatch.setattr(
+        cli,
+        "execute_capability",
+        lambda *args, **kwargs: {"ok": True, "session_path": str(tmp_path)},
+    )
+    result = CliRunner().invoke(cli.app, ["--format", "json", "run", "report"])
+    assert result.exit_code == 0, result.stdout
+    monkeypatch.setattr(cli, "load_user_config", lambda: {})
+    result = CliRunner().invoke(cli.app, ["--format", "json", "run", "report"])
+    assert result.exit_code != 0
+
+
+def test_optional_ad_and_impacket_branches(monkeypatch: Any, tmp_path: Path) -> None:
+    from adaf_attack.capabilities import asreq_userhunt, bloodhound_export, dcsync, esc_chain
+
+    target = _target()
+    session = Session(base_dir=tmp_path)
+    graph = AttackGraph()
+
+    users = tmp_path / "users.txt"
+    users.write_text("alice\nbob\n", encoding="utf-8")
+    monkeypatch.setattr(
+        asreq_userhunt,
+        "_probe_user",
+        lambda user, domain, dc: {
+            "user": user,
+            "state": "asreproastable" if user == "alice" else "valid",
+            "valid": True,
+            "no_preauth": user == "alice",
+        },
+    )
+    monkeypatch.setattr(asreq_userhunt, "require_impacket", lambda feature: None)
+    result = asreq_userhunt.AsreqUserhunt().run(target, session, graph, users=users)
+    assert result["valid"] == 2 and result["asreproastable"] == 1
+
+    hydrated = Session(base_dir=tmp_path / "hydrated")
+    hydrated.path("graph.json").write_text(
+        '{"nodes":[{"id":"USER@ALICE@CORP.TEST","kind":"User"}],"edges":[]}',
+        encoding="utf-8",
+    )
+    graph = AttackGraph()
+    assert bloodhound_export._hydrate_graph_from_session(hydrated, graph)
+    monkeypatch.setattr(bloodhound_export, "_hydrate_graph_from_session", lambda s, g: False)
+
+    class Seed:
+        def run(self, target, session, graph, **kwargs):
+            graph.add_node("DOMAIN@CORP.TEST", "Domain")
+            return {}
+
+    import adaf_attack.capabilities.ldap_enum as ldap_enum
+
+    monkeypatch.setattr(ldap_enum, "LdapEnum", Seed)
+    result = bloodhound_export.BloodhoundExport().run(target, hydrated, AttackGraph())
+    assert Path(result["json_path"]).is_file()
+
+    with pytest.raises(RuntimeError, match="replicating"):
+        dcsync.Dcsync().run(Target(domain="corp.test", dc_ip="10.0.0.1"), session, AttackGraph())
+
+    prior = tmp_path / "adcs"
+    prior.mkdir()
+    (prior / "adcs-enum.json").write_text(
+        '{"templates":[{"name":"UserTemplate","esc_signals":["ESC1"]}]}',
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match=r"template \+ CA"):
+        esc_chain.EscChain().run(target, session, AttackGraph(), adcs_session=prior)
+
+
+def test_additional_core_and_posture_branches(monkeypatch: Any, tmp_path: Path) -> None:
+    from adaf_attack.core import adcs_analyze, control_plane, esc6_probe, gpp, graph, user_config
+
+    monkeypatch.setattr(user_config, "user_config_dir", lambda: tmp_path / "config")
+    result = adcs_analyze.analyze_template_flags(
+        name_flags=adcs_analyze.CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT,
+        ekus=[adcs_analyze.EKU_ANY],
+        enrollment_flags=adcs_analyze.CT_FLAG_PEND_ALL_REQUESTS,
+    )
+    assert "esc_tags" in result
+    assert esc6_probe._parse_editflags("EditFlags: 0x00000010") == 16
+    assert user_config.set_key("run.limit", "389")[1]["run.limit"] == 389
+    unreadable = tmp_path / "directory"
+    unreadable.mkdir()
+    assert gpp.parse_gpp_file(unreadable)[0]["error"]
+    root = tmp_path / "evidence"
+    (root / "vault").mkdir(parents=True)
+    (root / "keep.json").write_text("{}", encoding="utf-8")
+    manifest = control_plane._manifest(root, "operator")
+    assert all("vault" not in item["path"] for item in manifest["files"])
+    g = graph.AttackGraph()
+    g.add_node("USER@ALICE@CORP.TEST", "User", sam="ALICE")
+    assert g.find_node("CORP") == "USER@ALICE@CORP.TEST"
