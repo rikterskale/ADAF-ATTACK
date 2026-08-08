@@ -634,8 +634,14 @@ def test_additional_core_and_posture_branches(monkeypatch: Any, tmp_path: Path) 
 
 
 def test_adapter_helpers_and_safe_fallbacks(monkeypatch: Any, tmp_path: Path) -> None:
-    from adaf_attack.capabilities import gpo_sysvol, gpp_cpassword, next_actions, ntlm_relay
-    from adaf_attack.capabilities import password_spray, workflow_wrappers
+    from adaf_attack.capabilities import (
+        gpo_sysvol,
+        gpp_cpassword,
+        next_actions,
+        ntlm_relay,
+        password_spray,
+        workflow_wrappers,
+    )
 
     assert gpo_sysvol._parse_sysvol_unc(r"\\dc\SYSVOL\corp.test\Policies\{X}") == (
         "dc",
@@ -786,7 +792,13 @@ def test_asreq_impacket_error_classification_and_empty_pac(monkeypatch: Any) -> 
 
 
 def test_remaining_capability_success_and_guard_branches(monkeypatch: Any, tmp_path: Path) -> None:
-    from adaf_attack.capabilities import cert_request, coerce, gpp_cpassword, password_spray, ticket_forge
+    from adaf_attack.capabilities import (
+        cert_request,
+        coerce,
+        gpp_cpassword,
+        password_spray,
+        ticket_forge,
+    )
     from adaf_attack.core import user_config
 
     missing_file = tmp_path / "not-a-directory.txt"
@@ -799,8 +811,13 @@ def test_remaining_capability_success_and_guard_branches(monkeypatch: Any, tmp_p
     monkeypatch.setattr(ticket_forge, "require_impacket", lambda feature: None)
     with pytest.raises(RuntimeError, match="Silver tickets require"):
         ticket_forge.TicketForge().run(
-            _target(), Session(base_dir=tmp_path / "ticket"), AttackGraph(),
-            variant="silver", impersonate="alice", nt="aa", domain_sid="S-1-5-21-x",
+            _target(),
+            Session(base_dir=tmp_path / "ticket"),
+            AttackGraph(),
+            variant="silver",
+            impersonate="alice",
+            nt="aa",
+            domain_sid="S-1-5-21-x",
         )
 
     monkeypatch.setattr(user_config, "user_config_dir", lambda: tmp_path / "config")
@@ -812,15 +829,24 @@ def test_remaining_capability_success_and_guard_branches(monkeypatch: Any, tmp_p
             return None
 
     monkeypatch.setattr(password_spray, "ldap_connect", lambda target: (Conn(), "DC=x", None))
-    monkeypatch.setattr(password_spray, "_read_lockout_policy", lambda *args: {
-        "lockout_threshold": 5, "observation_window_seconds": 30,
-    })
+    monkeypatch.setattr(
+        password_spray,
+        "_read_lockout_policy",
+        lambda *args: {
+            "lockout_threshold": 5,
+            "observation_window_seconds": 30,
+        },
+    )
     monkeypatch.setattr(password_spray, "_load_users", lambda *args: ["alice", "bob"])
     monkeypatch.setattr(password_spray, "_account_lockout_state", lambda *args: (0, None))
     monkeypatch.setattr(password_spray, "_try_bind", lambda *args: (False, "invalid"))
     result = password_spray.PasswordSpray().run(
-        _target(), Session(base_dir=tmp_path / "spray"), AttackGraph(),
-        spray_password="Secret123!", max_attempts=1, delay_seconds=0,
+        _target(),
+        Session(base_dir=tmp_path / "spray"),
+        AttackGraph(),
+        spray_password="Secret123!",
+        max_attempts=1,
+        delay_seconds=0,
     )
     assert len(result["attempts"]) == 1
 
@@ -831,8 +857,13 @@ def test_remaining_capability_success_and_guard_branches(monkeypatch: Any, tmp_p
 
     monkeypatch.setattr(cert_request.subprocess, "run", lambda *args, **kwargs: Proc())
     cert_result = cert_request.CertRequest().run(
-        _target(), Session(base_dir=tmp_path / "cert"), AttackGraph(),
-        template="User", upn="alice@corp.test", ca="CA", force=True,
+        _target(),
+        Session(base_dir=tmp_path / "cert"),
+        AttackGraph(),
+        template="User",
+        upn="alice@corp.test",
+        ca="CA",
+        force=True,
     )
     assert cert_result["ok"] is True and "pfx" not in cert_result
 
@@ -876,7 +907,10 @@ def test_more_evidence_and_recommendation_branches(monkeypatch: Any, tmp_path: P
     mirror.mkdir()
     (mirror / "plain.xml").write_text("<Groups />", encoding="utf-8")
     result = sysvol_hunt.SysvolHunt().run(
-        _target(), Session(base_dir=tmp_path / "sysvol-session"), AttackGraph(), artifact=str(mirror)
+        _target(),
+        Session(base_dir=tmp_path / "sysvol-session"),
+        AttackGraph(),
+        artifact=str(mirror),
     )
     assert result["count"] == 0
 
@@ -901,25 +935,36 @@ def test_more_evidence_and_recommendation_branches(monkeypatch: Any, tmp_path: P
         "time",
         type("T", (), {"sleep": staticmethod(lambda value: sleeps.append(value))}),
     )
+
     class Conn:
         def unbind(self) -> None:
             return None
+
     monkeypatch.setattr(password_spray, "ldap_connect", lambda target: (Conn(), "DC=x", None))
-    monkeypatch.setattr(password_spray, "_read_lockout_policy", lambda *args: {
-        "lockout_threshold": 0, "observation_window_seconds": 0,
-    })
+    monkeypatch.setattr(
+        password_spray,
+        "_read_lockout_policy",
+        lambda *args: {
+            "lockout_threshold": 0,
+            "observation_window_seconds": 0,
+        },
+    )
     monkeypatch.setattr(password_spray, "_load_users", lambda *args: ["alice"])
     monkeypatch.setattr(password_spray, "_account_lockout_state", lambda *args: (0, None))
     monkeypatch.setattr(password_spray, "_try_bind", lambda *args: (False, "invalid"))
     password_spray.PasswordSpray().run(
-        _target(), Session(base_dir=tmp_path / "spray-delay"), AttackGraph(),
-        spray_password="Secret123!", delay_seconds=0.01,
+        _target(),
+        Session(base_dir=tmp_path / "spray-delay"),
+        AttackGraph(),
+        spray_password="Secret123!",
+        delay_seconds=0.01,
     )
     assert sleeps == [0.01]
 
     class Part:
         def getComponentByName(self, name: str) -> Any:
             return {"cipher": "6162", "etype": 17}.get(name)
+
     assert roast_format._extract_cipher_and_etype(type("T", (), {"encPart": Part()})())[0] == b"ab"
 
     finding_session = tmp_path / "findings-session"
