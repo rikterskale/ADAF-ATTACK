@@ -631,3 +631,305 @@ def test_additional_core_and_posture_branches(monkeypatch: Any, tmp_path: Path) 
     g = graph.AttackGraph()
     g.add_node("USER@ALICE@CORP.TEST", "User", sam="ALICE")
     assert g.find_node("CORP") == "USER@ALICE@CORP.TEST"
+
+
+def test_adapter_helpers_and_safe_fallbacks(monkeypatch: Any, tmp_path: Path) -> None:
+    from adaf_attack.capabilities import gpo_sysvol, gpp_cpassword, next_actions, ntlm_relay
+    from adaf_attack.capabilities import password_spray, workflow_wrappers
+
+    assert gpo_sysvol._parse_sysvol_unc(r"\\dc\SYSVOL\corp.test\Policies\{X}") == (
+        "dc",
+        "corp.test/Policies/{X}",
+    )
+    users = tmp_path / "users.txt"
+    users.write_text("alice\n\n bob \n", encoding="utf-8")
+    assert password_spray._load_users(str(users), object(), "DC=x", None) == ["alice", "bob"]
+
+    class GoodConnection:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def unbind(self) -> None:
+            pass
+
+    monkeypatch.setattr(password_spray, "Connection", GoodConnection)
+    assert password_spray._try_bind(_target(), "alice", "secret", False) == (True, "ok")
+    with pytest.raises(RuntimeError, match="directory"):
+        gpp_cpassword.GppCpasswordHunt().run(
+            _target(),
+            Session(base_dir=tmp_path / "gpp"),
+            AttackGraph(),
+            artifact=str(tmp_path / "missing"),
+        )
+
+    class HangingProcess:
+        pid = 123
+        returncode = None
+
+        def wait(self, timeout: int) -> None:
+            raise ntlm_relay.subprocess.TimeoutExpired("x", timeout)
+
+        def terminate(self) -> None:
+            return None
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+    monkeypatch.setattr(ntlm_relay.subprocess, "Popen", lambda *a, **k: HangingProcess())
+    monkeypatch.setattr(ntlm_relay.shutil, "which", lambda name: "relay-bin")
+    result = ntlm_relay.NtlmRelay().run(
+        _target(),
+        Session(base_dir=tmp_path / "relay"),
+        AttackGraph(),
+        force=True,
+        relay_targets="dc",
+    )
+    assert result["return_code"] == -9
+    assert next_actions.NextActions is not None
+
+    monkeypatch.setattr(
+        workflow_wrappers,
+        "ShadowCreds",
+        lambda: type("S", (), {"run": lambda *a, **k: {"ok": False}})(),
+    )
+    result = workflow_wrappers.ShadowPkinitWorkflow().run(
+        _target(), Session(base_dir=tmp_path / "workflow"), AttackGraph(), force=True, sam="alice"
+    )
+    assert result["pkinit"]["skipped"] == "shadow_write_failed"
+
+
+def test_asreq_and_roast_nested_ticket_branches() -> None:
+    from adaf_attack.capabilities.asreq_userhunt import _classify_kdc_error
+    from adaf_attack.core import roast_format
+
+    assert _classify_kdc_error("unrecognized KDC response") == ("error", False, None)
+
+    class Part:
+        def __init__(self, values: dict[str, Any]):
+            self.values = values
+
+        def getComponentByName(self, name: str) -> Any:
+            return self.values.get(name)
+
+    inner = Part({"etype": 18, "cipher": b"0123456789abcdef"})
+    ticket = Part({"enc-part": Part({"enc-part": inner})})
+    cipher, etype = roast_format._extract_cipher_and_etype(ticket)
+    assert cipher == b"0123456789abcdef" and etype == 18
+
+
+def test_cli_spinner_execution_path(monkeypatch: Any, tmp_path: Path) -> None:
+    import adaf_attack.cli as cli
+
+    calls: list[str] = []
+
+    def fake_execute(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        kwargs["log"]("spinner update")
+        calls.append(args[0])
+        return {"ok": True}
+
+    monkeypatch.setattr(cli, "execute_capability", fake_execute)
+    import click
+    from typer.main import get_command
+
+    ctx = click.Context(get_command(cli.app))
+    ctx.ensure_object(dict).update(output_format="human", no_color=True)
+    result = cli._execute_with_spinner(
+        ctx,
+        "report",
+        _target(),
+        False,
+        False,
+        tmp_path,
+        None,
+        {},
+    )
+    assert result == {"ok": True} and calls == ["report"]
+
+
+def test_asreq_impacket_error_classification_and_empty_pac(monkeypatch: Any) -> None:
+    from adaf_attack.capabilities import asreq_userhunt, unpac_the_hash
+
+    krb5 = ModuleType("impacket.krb5")
+    constants = ModuleType("impacket.krb5.constants")
+    kerberosv5 = ModuleType("impacket.krb5.kerberosv5")
+    types = ModuleType("impacket.krb5.types")
+
+    class KerberosError(Exception):
+        pass
+
+    class Principal:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+    constants.PrincipalNameType = type("P", (), {"NT_PRINCIPAL": type("N", (), {"value": 1})})
+    types.Principal = Principal
+    kerberosv5.KerberosError = KerberosError
+    kerberosv5.getKerberosTGT = lambda *args: (_ for _ in ()).throw(
+        KerberosError("KDC_ERR_PREAUTH_REQUIRED")
+    )
+    krb5.constants = constants
+    krb5.kerberosv5 = kerberosv5
+    krb5.types = types
+    monkeypatch.setitem(sys.modules, "impacket.krb5", krb5)
+    monkeypatch.setitem(sys.modules, "impacket.krb5.constants", constants)
+    monkeypatch.setitem(sys.modules, "impacket.krb5.kerberosv5", kerberosv5)
+    monkeypatch.setitem(sys.modules, "impacket.krb5.types", types)
+    assert asreq_userhunt._probe_user("alice", "corp.test", "10.0.0.1")["valid"]
+    kerberosv5.getKerberosTGT = lambda *args: (_ for _ in ()).throw(RuntimeError("unknown"))
+    assert asreq_userhunt._probe_user("alice", "corp.test", "10.0.0.1")["state"] == "error"
+    pac = ModuleType("impacket.krb5.pac")
+    pac.PAC_CREDENTIAL_INFO = object
+    pac.PAC_INFO_BUFFER = object
+    pac.PACTYPE = lambda data: {"Buffers": []}
+    monkeypatch.setitem(sys.modules, "impacket.krb5.pac", pac)
+    assert unpac_the_hash._extract_nt_from_pac(b"no-buffer") is None
+
+
+def test_remaining_capability_success_and_guard_branches(monkeypatch: Any, tmp_path: Path) -> None:
+    from adaf_attack.capabilities import cert_request, coerce, gpp_cpassword, password_spray, ticket_forge
+    from adaf_attack.core import user_config
+
+    missing_file = tmp_path / "not-a-directory.txt"
+    missing_file.write_text("x", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="not a directory"):
+        gpp_cpassword.GppCpasswordHunt().run(
+            _target(), Session(base_dir=tmp_path / "gpp"), AttackGraph(), path=str(missing_file)
+        )
+
+    monkeypatch.setattr(ticket_forge, "require_impacket", lambda feature: None)
+    with pytest.raises(RuntimeError, match="Silver tickets require"):
+        ticket_forge.TicketForge().run(
+            _target(), Session(base_dir=tmp_path / "ticket"), AttackGraph(),
+            variant="silver", impersonate="alice", nt="aa", domain_sid="S-1-5-21-x",
+        )
+
+    monkeypatch.setattr(user_config, "user_config_dir", lambda: tmp_path / "config")
+    _, values = user_config.set_key("target.ldaps", "true")
+    assert values["target.ldaps"] is True
+
+    class Conn:
+        def unbind(self) -> None:
+            return None
+
+    monkeypatch.setattr(password_spray, "ldap_connect", lambda target: (Conn(), "DC=x", None))
+    monkeypatch.setattr(password_spray, "_read_lockout_policy", lambda *args: {
+        "lockout_threshold": 5, "observation_window_seconds": 30,
+    })
+    monkeypatch.setattr(password_spray, "_load_users", lambda *args: ["alice", "bob"])
+    monkeypatch.setattr(password_spray, "_account_lockout_state", lambda *args: (0, None))
+    monkeypatch.setattr(password_spray, "_try_bind", lambda *args: (False, "invalid"))
+    result = password_spray.PasswordSpray().run(
+        _target(), Session(base_dir=tmp_path / "spray"), AttackGraph(),
+        spray_password="Secret123!", max_attempts=1, delay_seconds=0,
+    )
+    assert len(result["attempts"]) == 1
+
+    class Proc:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+
+    monkeypatch.setattr(cert_request.subprocess, "run", lambda *args, **kwargs: Proc())
+    cert_result = cert_request.CertRequest().run(
+        _target(), Session(base_dir=tmp_path / "cert"), AttackGraph(),
+        template="User", upn="alice@corp.test", ca="CA", force=True,
+    )
+    assert cert_result["ok"] is True and "pfx" not in cert_result
+
+    class Dce:
+        def connect(self) -> None:
+            return None
+
+        def bind(self, value: Any) -> None:
+            return None
+
+        def request(self, request: Any) -> None:
+            return None
+
+    class Transport:
+        def set_credentials(self, *args: Any) -> None:
+            return None
+
+        def get_dce_rpc(self) -> Dce:
+            return Dce()
+
+    fake_transport = ModuleType("impacket.dcerpc.v5.transport")
+    fake_transport.DCERPCTransportFactory = lambda binding: Transport()
+    fake_rpcrt = ModuleType("impacket.dcerpc.v5.rpcrt")
+    fake_rpcrt.uuidtup_to_bin = lambda value: value
+    import impacket.dcerpc.v5 as v5
+
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.transport", fake_transport)
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.rpcrt", fake_rpcrt)
+    monkeypatch.setattr(v5, "transport", fake_transport, raising=False)
+    monkeypatch.setattr(v5, "rpcrt", fake_rpcrt, raising=False)
+    monkeypatch.setattr(coerce, "_build_coercion_request", lambda method, listener: object())
+    assert coerce._trigger(_target(), "dc", "listener", "dfscoerce")["ok"] is True
+
+
+def test_more_evidence_and_recommendation_branches(monkeypatch: Any, tmp_path: Path) -> None:
+    from adaf_attack.capabilities import gpo_sysvol, next_actions, password_spray, sysvol_hunt
+    from adaf_attack.core import findings, roast_format
+
+    assert gpo_sysvol._parse_sysvol_unc("") is None
+    mirror = tmp_path / "sysvol"
+    mirror.mkdir()
+    (mirror / "plain.xml").write_text("<Groups />", encoding="utf-8")
+    result = sysvol_hunt.SysvolHunt().run(
+        _target(), Session(base_dir=tmp_path / "sysvol-session"), AttackGraph(), artifact=str(mirror)
+    )
+    assert result["count"] == 0
+
+    class Graph:
+        nodes = {"x": {}}
+
+        def rank_exploit_chains(self, limit: int) -> list[dict[str, Any]]:
+            return [
+                {"terminal_relation": "HasSPN", "impact": "roast", "score": 4},
+                {"terminal_relation": "HasSPN", "impact": "duplicate", "score": 3},
+                {"terminal_relation": "Unknown", "impact": "skip", "score": 1},
+            ]
+
+    actions = next_actions.NextActions().run(
+        _target(), Session(base_dir=tmp_path / "actions"), Graph(), limit=10
+    )
+    assert actions["count"] == 1 and actions["actions"][0]["capability"] == "kerberoast"
+
+    sleeps: list[float] = []
+    monkeypatch.setattr(
+        password_spray,
+        "time",
+        type("T", (), {"sleep": staticmethod(lambda value: sleeps.append(value))}),
+    )
+    class Conn:
+        def unbind(self) -> None:
+            return None
+    monkeypatch.setattr(password_spray, "ldap_connect", lambda target: (Conn(), "DC=x", None))
+    monkeypatch.setattr(password_spray, "_read_lockout_policy", lambda *args: {
+        "lockout_threshold": 0, "observation_window_seconds": 0,
+    })
+    monkeypatch.setattr(password_spray, "_load_users", lambda *args: ["alice"])
+    monkeypatch.setattr(password_spray, "_account_lockout_state", lambda *args: (0, None))
+    monkeypatch.setattr(password_spray, "_try_bind", lambda *args: (False, "invalid"))
+    password_spray.PasswordSpray().run(
+        _target(), Session(base_dir=tmp_path / "spray-delay"), AttackGraph(),
+        spray_password="Secret123!", delay_seconds=0.01,
+    )
+    assert sleeps == [0.01]
+
+    class Part:
+        def getComponentByName(self, name: str) -> Any:
+            return {"cipher": "6162", "etype": 17}.get(name)
+    assert roast_format._extract_cipher_and_etype(type("T", (), {"encPart": Part()})())[0] == b"ab"
+
+    finding_session = tmp_path / "findings-session"
+    finding_session.mkdir()
+    data = {
+        "esc9_candidates": [{"template": "User"}],
+        "esc10_candidates": [{"template": "Machine"}],
+        "esc11_candidates": [{"template": "CA"}],
+        "esc13_candidates": [{"template": "Alt"}],
+    }
+    (finding_session / "adcs-enum.json").write_text(json.dumps(data), encoding="utf-8")
+    generated = findings.findings_from_session(finding_session)
+    assert len(generated) >= 4
