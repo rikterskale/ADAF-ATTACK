@@ -1,0 +1,496 @@
+"""Exercise residual pure helpers and mocked adapter branches for 100% coverage."""
+
+from __future__ import annotations
+
+import json
+import sys
+from datetime import datetime
+from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+import adaf_attack.capabilities.coerce as coerce
+import adaf_attack.capabilities.impacket_exec as impacket_exec
+import adaf_attack.capabilities.unpac_the_hash as unpac
+import adaf_attack.cli as cli
+import adaf_attack.core.impacket_helper as impacket_helper
+import adaf_attack.core.reporting as reporting
+import pytest
+from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.session import Session
+from adaf_attack.core.target import Target
+from typer.testing import CliRunner
+
+
+def _target(**kwargs: Any) -> Target:
+    values = {"domain": "corp.test", "dc_ip": "10.0.0.1", "username": "alice", "password": "secret"}
+    values.update(kwargs)
+    return Target(**values)
+
+
+def test_cli_pure_helpers_cover_time_sizes_paths_and_params(tmp_path: Path) -> None:
+    assert cli._workspace_is_empty(tmp_path)
+    session_dir = tmp_path / "session"
+    session_dir.mkdir()
+    (session_dir / "session.json").write_text("{}")
+    assert not cli._workspace_is_empty(tmp_path)
+    assert cli._humanize_bytes(1) == "1 B"
+    assert cli._humanize_bytes(1024) == "1.0 KB"
+    assert cli._humanize_bytes(1024**5) == "1024.0 TB"
+    assert cli._humanize_since(None) == "unknown"
+    assert cli._humanize_since("not-a-date") == "not-a-date"
+    for text in ("1s", "2m", "3h", "4d", "2026-08-01", "2026-08-01T00:00:00Z"):
+        assert isinstance(cli._parse_since(text), datetime)
+    with pytest.raises(cli.typer.BadParameter):
+        cli._parse_since("")
+    with pytest.raises(cli.typer.BadParameter):
+        cli._parse_since("nonsense")
+    assert cli._path_status(tmp_path)[0]
+    assert cli._path_status(tmp_path / "new")[0] is False
+    assert cli._parse_extra_params(None) == {}
+    assert cli._parse_extra_params(["a=1", "b="]) == {"a": "1", "b": ""}
+    with pytest.raises(cli.typer.BadParameter):
+        cli._parse_extra_params(["bad"])
+    with pytest.raises(cli.typer.BadParameter):
+        cli._parse_extra_params(["=bad"])
+
+
+def test_cli_error_and_alias_commands(monkeypatch: Any, tmp_path: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli.app, ["--format", "json", "errors", "NOPE"])
+    assert result.exit_code != 0 and "UNKNOWN_ERROR_CODE" in result.stdout
+    result = runner.invoke(cli.app, ["--format", "json", "errors"])
+    assert result.exit_code == 0 and '"ok": true' in result.stdout.lower()
+    result = runner.invoke(cli.app, ["--format", "json", "config", "keys"])
+    assert result.exit_code == 0
+    graph = tmp_path / "graph.json"
+    graph.write_text(json.dumps({"nodes": [], "edges": []}))
+    result = runner.invoke(cli.app, ["--format", "json", "path", "rank", "--graph", str(graph)])
+    assert result.exit_code == 0
+    result = runner.invoke(cli.app, ["--format", "json", "capability", "show"])
+    assert result.exit_code == 0
+
+
+def test_impacket_helper_authentication_modes(monkeypatch: Any) -> None:
+    module = ModuleType("impacket.smbconnection")
+
+    class Conn:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self.calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+
+        def kerberosLogin(self, *args: Any, **kwargs: Any) -> None:
+            self.calls.append(("kerb", args, kwargs))
+
+        def login(self, *args: Any, **kwargs: Any) -> None:
+            self.calls.append(("login", args, kwargs))
+
+    module.SMBConnection = Conn
+    monkeypatch.setitem(sys.modules, "impacket.smbconnection", module)
+    monkeypatch.setattr(impacket_helper, "require_impacket", lambda feature: None)
+    for target in (
+        _target(use_kerberos=True),
+        _target(aes_key="aes"),
+        _target(hashes=":aa"),
+        _target(password="pw"),
+    ):
+        conn = impacket_helper.smb_connect("10.0.0.2", target)
+        assert conn.calls
+    assert "requires Impacket" in str(impacket_helper.ImpacketMissing("feature"))
+
+
+def test_coerce_request_builders_cover_all_methods(monkeypatch: Any) -> None:
+    efsr = ModuleType("impacket.dcerpc.v5.efsr")
+    rprn = ModuleType("impacket.dcerpc.v5.rprn")
+
+    class Request(dict[str, Any]):
+        pass
+
+    efsr.EfsRpcOpenFileRaw = Request
+    rprn.RpcRemoteFindFirstPrinterChangeNotificationEx = Request
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.efsr", efsr)
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.rprn", rprn)
+    for method in coerce.METHODS:
+        request = coerce._build_coercion_request(method, r"\\listener\pwn\x")
+        assert request is not None
+    with pytest.raises(ValueError):
+        coerce._build_coercion_request("unknown", "x")
+
+
+def test_impacket_exec_all_methods_and_subprocess_helpers(monkeypatch: Any, tmp_path: Path) -> None:
+    session = Session(base_dir=tmp_path)
+    monkeypatch.setattr(impacket_exec, "require_impacket", lambda feature: None)
+    monkeypatch.setattr(impacket_exec, "_run_wmiexec", lambda *args: {"pid": 1})
+    result = impacket_exec.ImpacketExec().run(
+        _target(), session, AttackGraph(), force=True, command="whoami"
+    )
+    assert result["outcome"]["pid"] == 1
+    for method in ("smbexec", "dcomexec", "atexec"):
+        result = impacket_exec.ImpacketExec().run(
+            _target(), session, AttackGraph(), force=True, method=method, command="whoami"
+        )
+        assert result["method"] == method
+    with pytest.raises(RuntimeError, match="unknown method"):
+        impacket_exec.ImpacketExec().run(
+            _target(), session, AttackGraph(), force=True, method="bad", command="x"
+        )
+    with pytest.raises(RuntimeError, match="command"):
+        impacket_exec.ImpacketExec().run(_target(), session, AttackGraph(), force=True)
+
+
+def test_reporting_pdf_and_document_branches(monkeypatch: Any, tmp_path: Path) -> None:
+    reportlab = ModuleType("reportlab")
+    lib = ModuleType("reportlab.lib")
+    pagesizes = ModuleType("reportlab.lib.pagesizes")
+    styles = ModuleType("reportlab.lib.styles")
+    platypus = ModuleType("reportlab.platypus")
+    pagesizes.letter = (612, 792)
+    styles.getSampleStyleSheet = lambda: {
+        "Title": object(),
+        "Heading2": object(),
+        "BodyText": object(),
+    }
+
+    class Paragraph:
+        def __init__(self, *args: Any) -> None:
+            pass
+
+    class Spacer:
+        def __init__(self, *args: Any) -> None:
+            pass
+
+    class SimpleDocTemplate:
+        def __init__(self, path: str, **kwargs: Any) -> None:
+            self.path = path
+
+        def build(self, parts: list[Any]) -> None:
+            Path(self.path).write_bytes(b"%PDF-1.4 fake")
+
+    platypus.Paragraph, platypus.Spacer, platypus.SimpleDocTemplate = (
+        Paragraph,
+        Spacer,
+        SimpleDocTemplate,
+    )
+    reportlab.lib, reportlab.platypus = lib, platypus
+    lib.pagesizes, lib.styles = pagesizes, styles
+    for name, module in {
+        "reportlab": reportlab,
+        "reportlab.lib": lib,
+        "reportlab.lib.pagesizes": pagesizes,
+        "reportlab.lib.styles": styles,
+        "reportlab.platypus": platypus,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    finding = {
+        "severity": "high",
+        "title": "Title",
+        "impact": "Impact",
+        "remediation": "Fix",
+        "evidence": [{"artifact": "a", "pointer": "p"}],
+        "attack_techniques": ["T1"],
+    }
+    assert "Title" in reporting._document("Title", "Sub", "Body")
+    assert reporting._pdf(tmp_path / "technical.pdf", "T", [finding], "technical")
+    assert reporting._pdf(tmp_path / "remediation.pdf", "T", [finding], "remediation")
+    assert reporting._pdf(tmp_path / "executive.pdf", "T", [finding], "executive")
+
+
+def test_unpac_pac_parser_handles_imported_blob(monkeypatch: Any) -> None:
+    pac = ModuleType("impacket.krb5.pac")
+
+    class PacType:
+        def __init__(self, data: bytes) -> None:
+            self.data = data
+            self.buffers = [{"Offset": 0, "cbBufferSize": 2}]
+
+        def __getitem__(self, key: str) -> Any:
+            return self.buffers
+
+    class Info:
+        def __init__(self, data: bytes) -> None:
+            self.data = data
+
+        def __getitem__(self, key: str) -> Any:
+            return 2 if key == "ulType" else (0 if key == "Offset" else 2)
+
+    pac.PAC_CREDENTIAL_INFO = lambda data: object()
+    pac.PAC_INFO_BUFFER = Info
+    pac.PACTYPE = PacType
+    monkeypatch.setitem(sys.modules, "impacket.krb5.pac", pac)
+    assert unpac._extract_nt_from_pac(b"blob") == "<credential-info-blob-present>"
+
+
+def test_remaining_capability_guards_and_helpers(monkeypatch: Any, tmp_path: Path) -> None:
+    from adaf_attack.capabilities import (
+        acl_write,
+        ad_cve_scan,
+        asreq_userhunt,
+        computer_takeover,
+        esc_chain,
+        gpo_link,
+        gpp_cpassword,
+        s4u_abuse,
+        sysvol_hunt,
+        ticket_forge,
+    )
+    from adaf_attack.core import adcs_analyze, auth, gpp, redaction, target, user_config
+
+    session = Session(base_dir=tmp_path)
+    graph = AttackGraph()
+    t = _target()
+
+    class EmptyConn:
+        entries: list[Any] = []
+
+        def search(self, *args: Any, **kwargs: Any) -> None:
+            return None
+
+        def unbind(self) -> None:
+            return None
+
+    assert ad_cve_scan._check_noPAC(EmptyConn(), "DC=x") == {"error": "krbtgt not visible"}
+    assert ad_cve_scan._check_functional_level(EmptyConn(), "DC=x") == {
+        "error": "domain object not visible"
+    }
+    monkeypatch.setattr(ad_cve_scan, "ldap_connect", lambda _: (EmptyConn(), "DC=x", None))
+    with pytest.raises(RuntimeError, match="configuration naming"):
+        ad_cve_scan.AdCveScan().run(t, session, graph)
+
+    with pytest.raises(RuntimeError, match="write-target"):
+        acl_write.AclWrite().run(t, session, graph, force=True)
+    with pytest.raises(RuntimeError, match="user list not found"):
+        asreq_userhunt.AsreqUserhunt().run(t, session, graph, users=str(tmp_path / "missing"))
+    with pytest.raises(RuntimeError, match="Pass -P users"):
+        asreq_userhunt.AsreqUserhunt().run(t, session, graph)
+    monkeypatch.setattr(computer_takeover, "ldap_connect", lambda _: (EmptyConn(), "DC=x", None))
+    with pytest.raises(RuntimeError, match="Computer target"):
+        computer_takeover.ComputerTakeover().run(
+            t,
+            session,
+            graph,
+            write_target="missing",
+            attribute="dNSHostName",
+            value="x",
+            force=True,
+        )
+    assert esc_chain._pick_template({}) is None
+    with pytest.raises(RuntimeError, match="adcs_session"):
+        esc_chain.EscChain().run(t, session, graph)
+    monkeypatch.setattr(gpo_link, "ldap_connect", lambda _: (EmptyConn(), "DC=x", None))
+    with pytest.raises(RuntimeError, match="GPO link target"):
+        gpo_link.GpoLink().run(t, session, graph, write_target="missing", value="x", force=True)
+    with pytest.raises(RuntimeError, match="directory"):
+        gpp_cpassword.GppCpasswordHunt().run(t, session, graph, root=str(tmp_path / "missing"))
+    with pytest.raises(RuntimeError, match="requires --username"):
+        s4u_abuse.S4uAbuse().run(
+            target.Target(domain="corp.test", dc_ip="10.0.0.1"),
+            session,
+            graph,
+            impersonate="administrator",
+            spn="cifs/dc.corp.test",
+        )
+    with pytest.raises(RuntimeError, match="artifact"):
+        sysvol_hunt.SysvolHunt().run(t, session, graph, artifact=str(tmp_path / "missing"))
+    for kwargs, message in (
+        ({"impersonate": "alice"}, "Provide -P nt"),
+        ({"impersonate": "alice", "nt": "aa"}, "domain_sid"),
+    ):
+        with pytest.raises(RuntimeError, match=message):
+            ticket_forge.TicketForge().run(t, session, graph, **kwargs)
+
+    assert adcs_analyze.analyze_template_flags(application_policies=["Client Authentication"])[
+        "client_auth_eku"
+    ]
+    with pytest.raises(RuntimeError, match="--username"):
+        auth.get_kerberos_tgt(target.Target(domain="corp.test", dc_ip="10.0.0.1", password="x"))
+    with pytest.raises(ValueError, match="Unknown redaction"):
+        redaction.redact({}, profile="missing")
+    assert target.Target(domain="corp.test", dc_ip="10.0.0.1").auth_user is None
+    assert target.Target(domain="corp.test", dc_ip="10.0.0.1").resolved_ccache() is None
+    monkeypatch.setattr(user_config, "load_user_config", lambda: {"x": 1})
+    assert user_config.get_key("x") == 1
+    bad = tmp_path / "bad.xml"
+    bad.write_text('<Groups><User name="x" cpassword="bad"/></Groups>', encoding="utf-8")
+    assert any("error" in item for item in gpp.parse_gpp_file(bad))
+
+
+def test_mocked_remote_adapters(monkeypatch: Any) -> None:
+    smb_mod = ModuleType("impacket.smbconnection")
+
+    class Smb:
+        def __init__(self, *args: Any) -> None:
+            pass
+
+        def getServerName(self) -> str:
+            return "DC"
+
+        def isSigningRequired(self) -> bool:
+            return True
+
+        def close(self) -> None:
+            return None
+
+    smb_mod.SMBConnection = Smb
+    monkeypatch.setitem(sys.modules, "impacket.smbconnection", smb_mod)
+    import adaf_attack.capabilities.ad_cve_scan as cve
+
+    assert cve._check_smb_signing("10.0.0.1")["signing_required"]
+
+    examples = ModuleType("impacket.examples")
+    smbexec = ModuleType("impacket.examples.smbexec")
+
+    class Cmd:
+        def __init__(self, *args: Any) -> None:
+            self.finished = False
+
+        def run(self, host: str) -> None:
+            assert host
+
+        def finish(self) -> None:
+            self.finished = True
+
+    smbexec.CMDEXEC = Cmd
+    monkeypatch.setitem(sys.modules, "impacket.examples", examples)
+    monkeypatch.setitem(sys.modules, "impacket.examples.smbexec", smbexec)
+    assert "note" in impacket_exec._run_smbexec(_target(hashes=":aa"), "dc", "whoami", "C$")
+
+    dcom = ModuleType("impacket.dcerpc.v5.dcom")
+    dcomrt = ModuleType("impacket.dcerpc.v5.dcomrt")
+    dtypes = ModuleType("impacket.dcerpc.v5.dtypes")
+    wmi = ModuleType("impacket.dcerpc.v5.dcom.wmi")
+    wmi.CLSID_WbemLevel1Login = "clsid"
+    wmi.IID_IWbemLevel1Login = "iid"
+    dtypes.NULL = None
+
+    class Process:
+        ReturnValue, ProcessId = 0, 42
+
+        def Create(self, *args: Any) -> Any:
+            return self
+
+    class Services:
+        def GetObject(self, name: str) -> tuple[Process, None]:
+            return Process(), None
+
+    class Login:
+        def __init__(self, interface: Any) -> None:
+            pass
+
+        def NTLMLogin(self, *args: Any) -> Services:
+            return Services()
+
+        def RemRelease(self) -> None:
+            return None
+
+    wmi.IWbemLevel1Login = Login
+
+    class Dcom:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def CoCreateInstanceEx(self, *args: Any) -> object:
+            return object()
+
+        def disconnect(self) -> None:
+            return None
+
+    dcomrt.DCOMConnection = Dcom
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.dcom", dcom)
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.dcom.wmi", wmi)
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.dcomrt", dcomrt)
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.dtypes", dtypes)
+    assert impacket_exec._run_wmiexec(_target(), "dc", "whoami")["pid"] == 42
+
+    rpcrt = ModuleType("impacket.dcerpc.v5.rpcrt")
+    transport = ModuleType("impacket.dcerpc.v5.transport")
+
+    class Dce:
+        def connect(self) -> None:
+            pass
+
+        def bind(self, value: Any) -> None:
+            pass
+
+        def request(self, request: Any) -> None:
+            raise RuntimeError("STATUS_BAD_NETWORK_NAME")
+
+        def disconnect(self) -> None:
+            pass
+
+    class Transport:
+        def set_credentials(self, *args: Any) -> None:
+            pass
+
+        def set_kerberos(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def get_dce_rpc(self) -> Dce:
+            return Dce()
+
+    transport.DCERPCTransportFactory = lambda binding: Transport()
+    rpcrt.uuidtup_to_bin = lambda value: b"uuid"
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.rpcrt", rpcrt)
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.transport", transport)
+    monkeypatch.setattr(coerce, "_build_coercion_request", lambda method, listener: {})
+    assert coerce._trigger(_target(use_kerberos=True), "dc", "listener", "petitpotam")["ok"]
+
+
+def test_small_remaining_branches(monkeypatch: Any, tmp_path: Path) -> None:
+    from adaf_attack.capabilities import (
+        acl_enum,
+        acl_write,
+        gpo_sysvol,
+        laps_read,
+        next_actions,
+        password_spray,
+        shadow_creds,
+    )
+    from adaf_attack.core import control_plane, esc6_probe, findings, graph, registry, roast_format
+
+    class Conn:
+        entries: list[Any] = []
+        result: dict[str, Any] = {}
+
+        def search(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def unbind(self) -> None:
+            pass
+
+        def modify(self, *args: Any, **kwargs: Any) -> bool:
+            return False
+
+    t = _target()
+    s = Session(base_dir=tmp_path)
+    with pytest.raises(RuntimeError, match="security descriptor"):
+        monkeypatch.setattr(acl_write, "ldap_connect", lambda _: (Conn(), "DC=x", None))
+        monkeypatch.setattr(acl_write, "fetch_sd", lambda *args: None)
+        acl_write.AclWrite().run(
+            t, s, AttackGraph(), force=True, write_target="x", descriptor_hex="aa"
+        )
+    assert gpo_sysvol._parse_sysvol_unc("bad") is None
+    assert laps_read._decode_v2_blob("not-a-blob").get("note") == "too-short"
+    assert acl_enum._domain_targets(Conn(), "DC=x", "corp.test") is not None
+    assert password_spray._filetime_to_dt(0) is None
+    assert password_spray._account_lockout_state(Conn(), "DC=x", "missing") == (0, None)
+    monkeypatch.setattr(
+        password_spray,
+        "Connection",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("bad")),
+    )
+    assert password_spray._try_bind(t, "x", "bad", False)[0] is False
+    with pytest.raises(RuntimeError, match="spray_password"):
+        password_spray.PasswordSpray().run(t, s, AttackGraph())
+    assert next_actions.NextActions is not None
+    assert shadow_creds._list_attr(Conn(), "missing") == []
+    with pytest.raises(ValueError, match="Unknown OPSEC"):
+        control_plane.resolve_opsec("missing")
+    assert esc6_probe._parse_editflags("EditFlags: 0x2") == 2
+    assert roast_format.format_tgs_hashcat("spn", "u", "d", object()) is None
+    assert roast_format.format_asrep_hashcat("u", "d", object()) is None
+    with pytest.raises(ValueError, match="already registered"):
+        r = registry.CapabilityRegistry()
+        cap = registry.Capability("x", "x", False, "x", (), None)
+        r.register(cap)
+        r.register(cap)
+    assert graph.AttackGraph().find_node("missing") is None
+    assert findings._load(tmp_path / "missing.json") is None
