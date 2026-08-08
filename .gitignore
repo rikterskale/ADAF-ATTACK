@@ -43,6 +43,8 @@ sessions/
 out/
 output/
 *.log
+.demo-engagement/
+.demo-engagement.zip
 .env
 .env.*
 !.env.example
