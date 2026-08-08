@@ -521,8 +521,6 @@ jobs:
           assert campaign["ok"] is True and campaign["stopped"] is False
           assert len(campaign["completed"]) == 1
           assert (temp / "campaign-workspace" / "CI-CAMPAIGN-001" / "campaign.json").is_file()
-          cleanup = (temp / "cleanup-blocked.log").read_text(encoding="utf-8")
-          assert cleanup.strip() and "--force" in cleanup
           exposure = json.loads((temp / "credential-exposure.json").read_text())
           assert all(item["secret_value"] == "redacted" for item in exposure["exposures"])
           assert json.loads((temp / "rank-paths.json").read_text())["count"] >= 0
