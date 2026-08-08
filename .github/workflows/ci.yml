@@ -404,6 +404,39 @@ jobs:
           assert "report" in payload["allowed_capabilities"]
           PY
 
+          run_plan="$RUNNER_TEMP/report-only-engagement.yaml"
+          cat > "$run_plan" <<'YAML'
+          engagement_id: CI-ENGAGEMENT-001
+          target:
+            domain: corp.example
+            dc_ip: 10.0.0.10
+          allowed_targets: [10.0.0.10]
+          allowed_capabilities: [report]
+          phases:
+            - name: reporting
+              capabilities: [report]
+          YAML
+          adaf-attack --format json engagement run "$run_plan" \
+            --workspace "$RUNNER_TEMP/engagement-workspace" > "$RUNNER_TEMP/engagement-run.log"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          text = (temp / "engagement-run.log").read_text(encoding="utf-8")
+          start = text.find("{")
+          assert start >= 0
+          payload, _ = json.JSONDecoder().raw_decode(text[start:])
+          assert payload["ok"] is True
+          assert payload["capabilities"] == ["report"]
+          session = Path(payload["session_path"])
+          assert (session / "session.json").is_file()
+          assert (session / "events.jsonl").is_file()
+          assert (session / "findings.json").is_file()
+          assert (session / "reports" / "report-manifest.json").is_file()
+          PY
+
       - name: Exercise offline evidence, reporting, and packaging workflow
         shell: bash
         run: |
