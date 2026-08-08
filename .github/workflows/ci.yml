@@ -9,7 +9,7 @@ on:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -79,6 +79,9 @@ jobs:
 
       - name: Mypy
         run: python -m mypy src/adaf_attack
+
+      - name: Compile Python sources
+        run: python -m compileall --quiet src tests
 
   tests:
     name: Tests (${{ matrix.os }} / Python ${{ matrix.python-version }})
@@ -173,6 +176,68 @@ jobs:
           --severity-level medium
           --confidence-level medium
 
+      - name: Scan tracked files for high-confidence secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep --cached --full-name -nI -E \
+            '-----BEGIN (RSA|OPENSSH|EC|DSA|PGP|PRIVATE) KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}' \
+            -- . ':!tests' ':!docs'; then
+            echo "High-confidence secret material detected in tracked production files." >&2
+            exit 1
+          fi
+
+      - name: Generate dependency SBOM
+        run: >-
+          python -m pip_audit
+          --requirement requirements-ci.txt
+          --format cyclonedx-json
+          --output sbom.json
+
+      - name: Validate dependency SBOM
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          sbom = json.loads(Path("sbom.json").read_text(encoding="utf-8"))
+          assert sbom.get("bomFormat") == "CycloneDX"
+          assert sbom.get("components"), "SBOM has no dependency components"
+          PY
+
+      - name: Upload dependency SBOM
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependency-sbom
+          path: sbom.json
+          if-no-files-found: error
+          retention-days: 14
+
+  codeql:
+    name: CodeQL local SAST
+    needs: [lint]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3.37.6
+        with:
+          languages: python
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3.37.6
+
+      - name: Analyze without SARIF upload
+        uses: github/codeql-action/analyze@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3.37.6
+        with:
+          category: /language:python
+          # Code Security is disabled for this private repository.
+          upload: false
+
   scripts:
     name: Validate installer scripts
     runs-on: ubuntu-24.04
@@ -248,7 +313,7 @@ jobs:
           assert isinstance(workflow, dict)
           jobs = workflow["jobs"]
           required_jobs = {
-              "lint", "typecheck", "tests", "security", "scripts",
+              "lint", "typecheck", "tests", "security", "codeql", "scripts",
               "workflow-contract", "package", "operator-workflow", "windows-installer",
               "ci-gate",
           }
@@ -256,6 +321,18 @@ jobs:
           assert jobs["ci-gate"]["if"] == "always()"
           gate_needs = set(jobs["ci-gate"]["needs"])
           assert gate_needs == required_jobs - {"ci-gate"}
+          assert workflow["concurrency"]["cancel-in-progress"] is True
+          import re
+          for job in jobs.values():
+              for step in job.get("steps", []):
+                  if "uses" in step:
+                      assert re.fullmatch(r"[0-9a-f]{40}", step["uses"].split("@", 1)[1]), step["uses"]
+          codeql = yaml.safe_load(Path(".github/workflows/codeql.yml").read_text(encoding="utf-8"))
+          analyze = next(
+              step for step in codeql["jobs"]["analyze"]["steps"]
+              if "codeql-action/analyze@" in step.get("uses", "")
+          )
+          assert analyze["with"]["upload"] is False
           assert set(jobs["tests"]["strategy"]["matrix"]["os"]) == {
               "ubuntu-24.04", "windows-2022"
           }
@@ -301,7 +378,44 @@ jobs:
           python -m pip install --no-deps --no-build-isolation -e ".[ci]"
 
       - name: Build source distribution and wheel
-        run: python -m build --no-isolation
+        run: |
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export PYTHONHASHSEED=0
+          export TZ=UTC
+          export LC_ALL=C
+          python -m build --no-isolation
+
+      - name: Verify reproducible distributions and checksums
+        run: |
+          set -euo pipefail
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export PYTHONHASHSEED=0
+          export TZ=UTC
+          export LC_ALL=C
+          python -m build --no-isolation --outdir dist
+          rm -rf dist-repro-a dist-repro-b
+          python -m build --no-isolation --outdir dist-repro-a
+          python -m build --no-isolation --outdir dist-repro-b
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+
+          def digests(root: str) -> dict[str, str]:
+              return {
+                  path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in sorted(Path(root).iterdir())
+                  if path.is_file()
+              }
+
+          first = digests("dist-repro-a")
+          second = digests("dist-repro-b")
+          assert first and first == second, (first, second)
+          PY
+          (
+            cd dist
+            sha256sum * > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
 
       - name: Validate package metadata
         run: python -m twine check dist/*
@@ -315,6 +429,7 @@ jobs:
           python -m pip install --upgrade "colorama==0.4.6"
           .smoke-venv/bin/python -m pip install dist/*.whl
           .smoke-venv/bin/python -m pip check
+          .smoke-venv/bin/python -c "import adaf_attack; from adaf_attack.cli import app; assert adaf_attack.__version__ == '0.10.0' and app is not None"
           .smoke-venv/bin/adaf-attack --version
           .smoke-venv/bin/adaf-attack list-capabilities
 
@@ -325,6 +440,7 @@ jobs:
           .sdist-smoke-venv/bin/python -m pip install --requirement requirements-ci.txt
           .sdist-smoke-venv/bin/python -m pip install --no-index --no-deps --no-build-isolation dist/*.tar.gz
           .sdist-smoke-venv/bin/python -m pip check
+          .sdist-smoke-venv/bin/python -c "import adaf_attack; from adaf_attack.cli import app; assert adaf_attack.__version__ == '0.10.0' and app is not None"
           .sdist-smoke-venv/bin/adaf-attack --version
           .sdist-smoke-venv/bin/adaf-attack doctor
 
@@ -357,6 +473,12 @@ jobs:
           name: python-distributions
           path: dist
 
+      - name: Verify downloaded distribution checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum -c SHA256SUMS)
+
       - name: Install full operator runtime
         run: |
           python -m pip install --upgrade pip setuptools wheel
@@ -376,6 +498,7 @@ jobs:
           adaf-attack --format json paths > "$RUNNER_TEMP/paths.json"
           python - <<'PY'
           import json
+          import hashlib
           import os
           from pathlib import Path
 
@@ -460,13 +583,43 @@ jobs:
           assert report["ok"] is True and report["finding_count"] >= 1
           assert package["ok"] is True and package["profile"] == "client"
           assert fixtures["ok"] is True
+          findings = json.loads(
+              (Path("output/demo-engagement") / "findings.json").read_text(encoding="utf-8")
+          )
+          assert isinstance(findings, list) and findings
+          required_finding_keys = {
+              "id", "title", "severity", "confidence", "impact", "remediation", "evidence"
+          }
+          for finding in findings:
+              assert required_finding_keys <= finding.keys()
+              assert finding["severity"] in {"critical", "high", "medium", "low", "info"}
+              assert finding["evidence"]
+              for evidence in finding["evidence"]:
+                  assert {"artifact", "pointer", "sha256"} <= evidence.keys()
+                  assert len(evidence["sha256"]) == 64
           with zipfile.ZipFile(temp / "demo-engagement.zip") as archive:
               names = archive.namelist()
           assert names and all("vault" not in name.lower() for name in names)
+          evidence_manifest = Path(package["manifest"])
+          manifest = json.loads(evidence_manifest.read_text(encoding="utf-8"))
+          assert manifest["redaction_profile"] == "client"
+          for entry in manifest["files"]:
+              path = evidence_manifest.parent / entry["path"]
+              assert path.is_file()
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == entry["sha256"]
           manifest = json.loads(
               (Path("output/demo-engagement/reports") / "report-manifest.json").read_text()
           )
           assert manifest["finding_count"] == report["finding_count"]
+          for finding in findings:
+              title = finding["title"]
+              assert title in (Path("output/demo-engagement/reports") / "technical-report.html").read_text()
+          from pypdf import PdfReader
+          technical_pdf = "\n".join(
+              page.extract_text() or ""
+              for page in PdfReader("output/demo-engagement/reports/technical-report.pdf").pages
+          )
+          assert all(finding["title"] in technical_pdf for finding in findings)
           for report_name in ("executive", "technical", "remediation"):
               assert (Path("output/demo-engagement/reports") / f"{report_name}-report.html").is_file()
               assert (Path("output/demo-engagement/reports") / f"{report_name}-report.pdf").is_file()
@@ -633,7 +786,7 @@ jobs:
   ci-gate:
     name: Production readiness gate
     if: always()
-    needs: [lint, typecheck, tests, security, scripts, workflow-contract, package, operator-workflow, windows-installer]
+    needs: [lint, typecheck, tests, security, codeql, scripts, workflow-contract, package, operator-workflow, windows-installer]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every CI lane to pass
@@ -642,6 +795,7 @@ jobs:
           test "${{ needs.typecheck.result }}" = success
           test "${{ needs.tests.result }}" = success
           test "${{ needs.security.result }}" = success
+          test "${{ needs.codeql.result }}" = success
           test "${{ needs.scripts.result }}" = success
           test "${{ needs.workflow-contract.result }}" = success
           test "${{ needs.package.result }}" = success
