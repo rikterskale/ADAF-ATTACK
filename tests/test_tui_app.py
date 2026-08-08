@@ -69,3 +69,24 @@ def test_tui_selects_capabilities_and_validates_run_requirements() -> None:
             assert notifications.call_args.args[0] == "Already running"
 
     asyncio.run(exercise())
+
+
+def test_tui_search_review_and_dry_run_are_available() -> None:
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            all_count = len(app.query_one("#cap-list", ListView))
+            app.query_one("#search", Input).value = "ldap-enum"
+            await pilot.pause()
+            assert len(app.query_one("#cap-list", ListView)) < all_count
+            item = app.query_one("#cap-list", ListView).children[0]
+            app.on_list_view_selected(SimpleNamespace(item=item))  # type: ignore[arg-type]
+            app.query_one("#domain", Input).value = "corp.test"
+            app.query_one("#dc_ip", Input).value = "192.0.2.10"
+            app._review_run()
+            assert "Execution review" in str(app.query_one("#review-panel", Static).render())
+            app._dry_run()
+            assert any("DRY RUN" in line for line in app._log_lines)
+
+    asyncio.run(exercise())
