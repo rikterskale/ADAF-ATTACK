@@ -420,6 +420,10 @@ jobs:
           with zipfile.ZipFile(temp / "demo-engagement.zip") as archive:
               names = archive.namelist()
           assert names and all("vault" not in name.lower() for name in names)
+          manifest = json.loads(
+              (Path("output/demo-engagement/reports") / "report-manifest.json").read_text()
+          )
+          assert manifest["finding_count"] == report["finding_count"]
           for report_name in ("executive", "technical", "remediation"):
               assert (Path("output/demo-engagement/reports") / f"{report_name}-report.html").is_file()
               assert (Path("output/demo-engagement/reports") / f"{report_name}-report.pdf").is_file()
@@ -449,7 +453,34 @@ jobs:
           Path(os.environ["RUNNER_TEMP"]).joinpath("bloodhound.json").write_text(
               json.dumps({"nodes": [], "edges": []}) + "\n", encoding="utf-8"
           )
+          Path(os.environ["RUNNER_TEMP"]).joinpath("report-plan.yaml").write_text(
+              "engagement_id: CI-REPORT-001\n"
+              "target:\n"
+              "  domain: corp.example\n"
+              "  dc_ip: 10.0.0.10\n"
+              "allowed_targets: [10.0.0.10]\n"
+              "allowed_capabilities: [report]\n"
+              "phases:\n"
+              "  - name: reporting\n"
+              "    capabilities: [report]\n",
+              encoding="utf-8",
+          )
+          Path(os.environ["RUNNER_TEMP"]).joinpath("campaign.yaml").write_text(
+              "campaign_id: CI-CAMPAIGN-001\n"
+              "engagements:\n"
+              "  - plan: report-plan.yaml\n",
+              encoding="utf-8",
+          )
           PY
+          campaign_output="$RUNNER_TEMP/campaign-workspace"
+          adaf-attack --format json campaign-run \
+            --campaign "$RUNNER_TEMP/campaign.yaml" \
+            --workspace "$campaign_output" > "$RUNNER_TEMP/campaign-run.log"
+          if adaf-attack --format json cleanup --session "$session" \
+            --domain corp.example --dc-ip 10.0.0.10 > "$RUNNER_TEMP/cleanup-blocked.log" 2>&1; then
+            echo "cleanup unexpectedly ran without --force" >&2
+            exit 1
+          fi
           declare -A commands=(
             [sessions]="adaf-attack --format json sessions --workspace output"
             [rank-paths]="adaf-attack --format json rank-paths --graph $session/graph.json"
@@ -483,6 +514,15 @@ jobs:
           for name in names:
               payload = json.loads((temp / f"{name}.json").read_text(encoding="utf-8"))
               assert isinstance(payload, dict) and payload.get("ok") is True, name
+          campaign_text = (temp / "campaign-run.log").read_text(encoding="utf-8")
+          campaign_start = campaign_text.find("{")
+          assert campaign_start >= 0
+          campaign, _ = json.JSONDecoder().raw_decode(campaign_text[campaign_start:])
+          assert campaign["ok"] is True and campaign["stopped"] is False
+          assert len(campaign["completed"]) == 1
+          assert (temp / "campaign-workspace" / "CI-CAMPAIGN-001" / "campaign.json").is_file()
+          cleanup = (temp / "cleanup-blocked.log").read_text(encoding="utf-8")
+          assert "cleanup execution requires --force" in cleanup
           exposure = json.loads((temp / "credential-exposure.json").read_text())
           assert all(item["secret_value"] == "redacted" for item in exposure["exposures"])
           assert json.loads((temp / "rank-paths.json").read_text())["count"] >= 0
