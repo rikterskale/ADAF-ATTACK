@@ -10,7 +10,18 @@ from typing import Any
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, Footer, Header, Input, Label, ListItem, ListView, Log, Static, Switch
+from textual.widgets import (
+    Button,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ListItem,
+    ListView,
+    Log,
+    Static,
+    Switch,
+)
 
 from adaf_attack import __version__
 from adaf_attack.core.capability_help_data import capability_option_spec
@@ -78,7 +89,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         defaults = load_user_config()
         yield Header(show_clock=True)
         with Horizontal(id="toolbar"):
-            yield Input(placeholder="Search capabilities by name, category, or keyword", id="search")
+            yield Input(
+                placeholder="Search capabilities by name, category, or keyword", id="search"
+            )
             yield Button("Quickstart", id="quickstart-btn")
             yield Button("Sessions", id="sessions-btn")
             yield Button("Findings", id="findings-btn")
@@ -91,9 +104,21 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             with Vertical(id="main"):
                 with Vertical(id="target-form"):
                     yield Static("[bold]Target & credentials[/bold]", classes="section-label")
-                    yield Input(placeholder="Domain (corp.local)", id="domain", value=defaults.get("target.domain", ""))
-                    yield Input(placeholder="DC IP / hostname", id="dc_ip", value=defaults.get("target.dc_ip", ""))
-                    yield Input(placeholder="Username (optional)", id="username", value=defaults.get("target.username", ""))
+                    yield Input(
+                        placeholder="Domain (corp.local)",
+                        id="domain",
+                        value=defaults.get("target.domain", ""),
+                    )
+                    yield Input(
+                        placeholder="DC IP / hostname",
+                        id="dc_ip",
+                        value=defaults.get("target.dc_ip", ""),
+                    )
+                    yield Input(
+                        placeholder="Username (optional)",
+                        id="username",
+                        value=defaults.get("target.username", ""),
+                    )
                     with Horizontal():
                         yield Input(placeholder="Password (optional)", password=True, id="password")
                         yield Button("Show", id="toggle-password-btn")
@@ -102,7 +127,11 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     yield Input(placeholder="Kerberos ccache path (optional)", id="ccache")
                     yield Input(placeholder="Creds JSON file (optional rotation)", id="creds_file")
                     yield Static("[bold]Scope & safety[/bold]", classes="section-label")
-                    yield Input(placeholder="ACL scope: high-value | domain", id="scope", value=defaults.get("acl.scope", "high-value"))
+                    yield Input(
+                        placeholder="ACL scope: high-value | domain",
+                        id="scope",
+                        value=defaults.get("acl.scope", "high-value"),
+                    )
                     yield Input(placeholder="Attack-path start principal (optional)", id="start")
                     with Horizontal():
                         yield Label("Kerberos")
@@ -118,7 +147,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                         yield Button("Dry run", id="dry-run-btn")
                         yield Button("Run selected", id="run-btn", variant="success")
                         yield Button("Cancel", id="cancel-btn", variant="error", disabled=True)
-                yield Static("Select a capability and choose Review before execution.", id="review-panel")
+                yield Static(
+                    "Select a capability and choose Review before execution.", id="review-panel"
+                )
                 yield Static("No session loaded.", id="session-panel")
                 with Horizontal():
                     yield Input(placeholder="Filter logs by text or severity", id="log-filter")
@@ -130,7 +161,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._populate_capabilities()
         self._show_log("[bold green]ADAF-ATTACK[/] ready. Use Quickstart or search capabilities.")
         if not self.query_one("#domain", Input).value:
-            self.notify("First run: Quickstart will focus the required target fields.", severity="information")
+            self.notify(
+                "First run: Quickstart will focus the required target fields.",
+                severity="information",
+            )
             self.query_one("#domain", Input).focus()
 
     def _show_log(self, message: str) -> None:
@@ -154,14 +188,18 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._capabilities = capability_registry.list()
         needle = query.strip().lower()
         visible = [
-            cap for cap in self._capabilities
-            if not needle or needle in f"{cap.id} {cap.category} {cap.summary} {' '.join(cap.tags)}".lower()
+            cap
+            for cap in self._capabilities
+            if not needle
+            or needle in f"{cap.id} {cap.category} {cap.summary} {' '.join(cap.tags)}".lower()
         ]
         list_view = self.query_one("#cap-list", ListView)
         list_view.clear()
         for cap in visible:
             list_view.append(CapabilityItem(cap))
-        self.query_one("#sidebar-title", Static).update(f"[bold]Capabilities[/bold] ({len(visible)}/{len(self._capabilities)})")
+        self.query_one("#sidebar-title", Static).update(
+            f"[bold]Capabilities[/bold] ({len(visible)}/{len(self._capabilities)})"
+        )
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "search":
@@ -224,7 +262,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         pw = self.query_one("#password", Input)
         self._password_visible = not self._password_visible
         pw.password = not self._password_visible
-        self.query_one("#toggle-password-btn", Button).label = "Hide" if self._password_visible else "Show"
+        self.query_one("#toggle-password-btn", Button).label = (
+            "Hide" if self._password_visible else "Show"
+        )
 
     def _validate_target(self) -> tuple[str, str] | None:
         domain = self.query_one("#domain", Input).value.strip()
@@ -242,7 +282,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return None
         hashes = self.query_one("#hashes", Input).value.strip()
         if hashes and ":" not in hashes and len(hashes) not in {32, 64}:
-            self.notify("Hashes must be LM:NT, an NT hash, or a 64-character AES value.", severity="error")
+            self.notify(
+                "Hashes must be LM:NT, an NT hash, or a 64-character AES value.", severity="error"
+            )
             self.query_one("#hashes", Input).focus()
             return None
         creds_file = self.query_one("#creds_file", Input).value.strip()
@@ -262,7 +304,13 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
         spec = capability_option_spec(cap.id, cap.destructive)
         force = self.query_one("#force", Switch).value
-        risk = "DESTRUCTIVE — Force is enabled." if cap.destructive and force else "DESTRUCTIVE — Force is required." if cap.destructive else "Read-only / non-destructive"
+        risk = (
+            "DESTRUCTIVE — Force is enabled."
+            if cap.destructive and force
+            else "DESTRUCTIVE — Force is required."
+            if cap.destructive
+            else "Read-only / non-destructive"
+        )
         self.query_one("#review-panel", Static).update(
             f"[bold]Execution review[/bold]  {cap.id}\n"
             f"Target: {target[0]} @ {target[1]}\nCategory: {cap.category}  |  Risk: {risk}\n"
@@ -270,7 +318,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "Confirm the scope above, then press Run selected."
         )
         if cap.destructive and not force:
-            self.notify("Review shows a destructive capability; enable Force only when authorized.", severity="warning")
+            self.notify(
+                "Review shows a destructive capability; enable Force only when authorized.",
+                severity="warning",
+            )
 
     def _dry_run(self) -> None:
         cap = self._selected()
@@ -300,6 +351,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if not self.selected_cap:
             self.notify("Select a capability first", severity="warning")
             return
+        capability_id = self.selected_cap
         target_values = self._validate_target()
         if target_values is None:
             return
@@ -316,8 +368,18 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         force = self.query_one("#force", Switch).value
         kerberos = self.query_one("#kerberos", Switch).value
         ldaps = self.query_one("#ldaps", Switch).value
-        target = Target(domain=domain, dc_ip=dc_ip, username=username, password=password, hashes=hashes, aes_key=aes_key, ccache=ccache, use_kerberos=kerberos, ldaps=ldaps)
-        self._show_log(f"\n[bold]→ {self.selected_cap}[/] on {domain} @ {dc_ip}")
+        target = Target(
+            domain=domain,
+            dc_ip=dc_ip,
+            username=username,
+            password=password,
+            hashes=hashes,
+            aes_key=aes_key,
+            ccache=ccache,
+            use_kerberos=kerberos,
+            ldaps=ldaps,
+        )
+        self._show_log(f"\n[bold]→ {capability_id}[/] on {domain} @ {dc_ip}")
         self._cancel_requested.clear()
         self._capability_running = True
         self.query_one("#cancel-btn", Button).disabled = False
@@ -327,24 +389,45 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             def log_fn(msg: str) -> None:
                 self._write_run_log(f"  {msg}")
                 if self._cancel_requested.is_set():
-                    self._write_run_log("[yellow]Cancellation requested; stopping at the next safe boundary.[/]")
+                    self._write_run_log(
+                        "[yellow]Cancellation requested; stopping at the next safe boundary.[/]"
+                    )
 
             extra: dict[str, Any] = {"scope": scope}
             if start:
                 extra["start"] = start
             try:
-                out = execute_capability(self.selected_cap, target, force=force, include_secrets=include_secrets, creds_file=creds_file, log=log_fn, workspace=default_workspace_dir(), **extra)  # type: ignore[arg-type]
+                out = execute_capability(
+                    capability_id,
+                    target,
+                    force=force,
+                    include_secrets=include_secrets,
+                    creds_file=creds_file,
+                    log=log_fn,
+                    workspace=default_workspace_dir(),
+                    **extra,
+                )
                 self._last_session = Path(out["session_path"])
                 summary = out.get("graph_summary") or {}
-                self._write_run_log(f"[green]Done[/] session={out['session_id']}  nodes={summary.get('nodes', 0)} edges={summary.get('edges', 0)}")
+                self._write_run_log(
+                    f"[green]Done[/] session={out['session_id']}  nodes={summary.get('nodes', 0)} edges={summary.get('edges', 0)}"
+                )
                 self.call_from_thread(self._load_findings, Path(out["session_path"]))
-                self.call_from_thread(self.notify, f"Completed {self.selected_cap}; session ready", severity="information")
+                self.call_from_thread(
+                    self.notify,
+                    f"Completed {capability_id}; session ready",
+                    severity="information",
+                )
             except RunError as exc:
-                self._write_run_log(f"[red]Error:[/] {exc}\n[dim]Check the review panel and capability prerequisites.[/]")
+                self._write_run_log(
+                    f"[red]Error:[/] {exc}\n[dim]Check the review panel and capability prerequisites.[/]"
+                )
                 self.call_from_thread(self.notify, str(exc), severity="error")
             finally:
                 self._capability_running = False
-                self.call_from_thread(self.query_one("#cancel-btn", Button).__setattr__, "disabled", True)
+                self.call_from_thread(
+                    self.query_one("#cancel-btn", Button).__setattr__, "disabled", True
+                )
                 self.call_from_thread(self._update_status)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -352,7 +435,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     def _cancel(self) -> None:
         if self._capability_running:
             self._cancel_requested.set()
-            self.notify("Cancellation requested; the active runner will finish its safe boundary.", severity="warning")
+            self.notify(
+                "Cancellation requested; the active runner will finish its safe boundary.",
+                severity="warning",
+            )
 
     def _show_sessions(self) -> None:
         workspace = default_workspace_dir()
@@ -362,14 +448,20 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 if not session.is_dir() or not (session / "session.json").exists():
                     continue
                 meta = self._read_json(session / "session.json")
-                rows.append(f"{meta.get('session_id', session.name)}  {meta.get('created_at', '')[:19]}  {session}")
-        self.query_one("#session-panel", Static).update("[bold]Recent sessions[/bold]\n" + ("\n".join(rows[:8]) or "No sessions found."))
+                rows.append(
+                    f"{meta.get('session_id', session.name)}  {meta.get('created_at', '')[:19]}  {session}"
+                )
+        self.query_one("#session-panel", Static).update(
+            "[bold]Recent sessions[/bold]\n" + ("\n".join(rows[:8]) or "No sessions found.")
+        )
 
     def _show_findings(self) -> None:
         if self._last_session:
             self._load_findings(self._last_session)
         else:
-            self.query_one("#session-panel", Static).update("[bold]Findings dashboard[/bold]\nRun a capability or select a session first.")
+            self.query_one("#session-panel", Static).update(
+                "[bold]Findings dashboard[/bold]\nRun a capability or select a session first."
+            )
 
     def _copy_findings(self) -> None:
         text = str(self.query_one("#session-panel", Static).render())
@@ -385,11 +477,21 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         findings = self._read_json(session / "findings.json")
         top_paths = interesting.get("top_paths") or []
         severity_counts: dict[str, int] = {}
-        for item in findings.get("findings", []) if isinstance(findings.get("findings"), list) else []:
-            severity = str(item.get("severity", "unknown")).lower() if isinstance(item, dict) else "unknown"
+        for item in (
+            findings.get("findings", []) if isinstance(findings.get("findings"), list) else []
+        ):
+            severity = (
+                str(item.get("severity", "unknown")).lower()
+                if isinstance(item, dict)
+                else "unknown"
+            )
             severity_counts[severity] = severity_counts.get(severity, 0) + 1
         summary = graph.get("summary", graph) if isinstance(graph, dict) else {}
-        path_lines = ["  " + " → ".join(str(x).split("@")[0] for x in path.get("path", [])[:5]) for path in top_paths[:3] if isinstance(path, dict)]
+        path_lines = [
+            "  " + " → ".join(str(x).split("@")[0] for x in path.get("path", [])[:5])
+            for path in top_paths[:3]
+            if isinstance(path, dict)
+        ]
         self.query_one("#session-panel", Static).update(
             f"[bold]Findings dashboard[/bold]  {session.name}\n"
             f"Nodes: {summary.get('nodes', 0)}  Edges: {summary.get('edges', 0)}  "
