@@ -122,7 +122,7 @@ jobs:
           --cov=adaf_attack
           --cov-report=term-missing
           --cov-report=xml
-          --cov-fail-under=90
+          --cov-fail-under=95
 
       - name: CLI smoke tests
         shell: bash
@@ -180,7 +180,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep --cached --full-name -nI -E \
+          if git grep --cached --full-name -nI -E -e \
             '-----BEGIN (RSA|OPENSSH|EC|DSA|PGP|PRIVATE) KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}' \
             -- . ':!tests' ':!docs'; then
             echo "High-confidence secret material detected in tracked production files." >&2
