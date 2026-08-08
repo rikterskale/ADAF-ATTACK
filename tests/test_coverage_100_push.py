@@ -495,3 +495,30 @@ def test_small_remaining_branches(monkeypatch: Any, tmp_path: Path) -> None:
         r.register(cap)
     assert graph.AttackGraph().find_node("missing") is None
     assert findings._load(tmp_path / "missing.json") is None
+
+
+def test_cli_remaining_time_sessions_and_config_paths(monkeypatch: Any, tmp_path: Path) -> None:
+    import adaf_attack.cli as cli
+
+    for seconds, suffix in ((1, "s ago"), (120, "m ago"), (7200, "h ago"), (172800, "d ago")):
+        stamp = datetime.now(cli.UTC).timestamp() - seconds
+        assert cli._humanize_since(datetime.fromtimestamp(stamp, cli.UTC).isoformat()).endswith(
+            suffix
+        )
+    old = tmp_path / "old"
+    old.mkdir()
+    (old / "session.json").write_text('{"session_id":"old","created_at":"bad"}')
+    current = tmp_path / "current"
+    current.mkdir()
+    (current / "session.json").write_text(
+        '{"session_id":"current","created_at":"2026-08-08T00:00:00"}'
+    )
+    result = CliRunner().invoke(
+        cli.app, ["--format", "json", "sessions", "--workspace", str(tmp_path), "--since", "1d"]
+    )
+    assert result.exit_code == 0, result.stdout
+    monkeypatch.setattr(cli, "default_workspace_dir", lambda: tmp_path / "empty")
+    monkeypatch.setattr(cli, "user_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(cli, "user_config_dir", lambda: tmp_path / "config")
+    result = CliRunner().invoke(cli.app, ["--format", "json", "doctor"])
+    assert result.exit_code == 0, result.stdout
