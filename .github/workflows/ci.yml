@@ -425,6 +425,69 @@ jobs:
               assert (Path("output/demo-engagement/reports") / f"{report_name}-report.pdf").is_file()
           PY
 
+      - name: Sweep offline operator review workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          session="output/demo-engagement"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          session = Path("output/demo-engagement")
+          (session / "graph.json").write_text(
+              json.dumps(
+                  {
+                      "nodes": [{"id": "USER@alice@CORP.LOCAL"}],
+                      "edges": [],
+                  }
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          Path(os.environ["RUNNER_TEMP"]).joinpath("bloodhound.json").write_text(
+              json.dumps({"nodes": [], "edges": []}) + "\n", encoding="utf-8"
+          )
+          PY
+          declare -A commands=(
+            [sessions]="adaf-attack --format json sessions --workspace output"
+            [rank-paths]="adaf-attack --format json rank-paths --graph $session/graph.json"
+            [credential-exposure]="adaf-attack --format json credential-exposure --session $session"
+            [bloodhound-reconcile]="adaf-attack --format json bloodhound-reconcile --session $session --bloodhound $RUNNER_TEMP/bloodhound.json"
+            [trust-correlation]="adaf-attack --format json trust-correlation --session $session"
+            [delegation-validation]="adaf-attack --format json delegation-validation --session $session"
+            [adcs-validation]="adaf-attack --format json adcs-validation --session $session"
+            [campaign-compose]="adaf-attack --format json campaign-compose --session $session"
+            [forest-campaign]="adaf-attack --format json forest-campaign --session $session"
+            [purple-handoff]="adaf-attack --format json purple-handoff --session $session"
+            [gpo-impact-plan]="adaf-attack --format json gpo-impact-plan --session $session"
+            [coercion-fixtures]="adaf-attack --format json coercion-fixtures --fixtures tests/fixtures/demo-session --authorized-fixtures"
+            [workflow-profiles]="adaf-attack --format json workflow-profiles purple-team"
+          )
+          for name in "${!commands[@]}"; do
+            eval "${commands[$name]}" > "$RUNNER_TEMP/$name.json"
+          done
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          names = (
+              "sessions", "rank-paths", "credential-exposure", "bloodhound-reconcile",
+              "trust-correlation", "delegation-validation", "adcs-validation",
+              "campaign-compose", "forest-campaign", "purple-handoff", "gpo-impact-plan",
+              "coercion-fixtures", "workflow-profiles",
+          )
+          for name in names:
+              payload = json.loads((temp / f"{name}.json").read_text(encoding="utf-8"))
+              assert isinstance(payload, dict) and payload.get("ok") is True, name
+          exposure = json.loads((temp / "credential-exposure.json").read_text())
+          assert all(item["secret_value"] == "redacted" for item in exposure["exposures"])
+          assert json.loads((temp / "rank-paths.json").read_text())["count"] >= 0
+          PY
+
       - name: Upload operator evidence artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
