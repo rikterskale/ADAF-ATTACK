@@ -41,3 +41,6 @@ jobs:
         uses: github/codeql-action/analyze@c4dd10e44af883a891fe31ced449bcb4a6728b9b # v3.37.6
         with:
           category: "/language:${{ matrix.language }}"
+          # This private repository does not have GitHub code scanning enabled;
+          # retain local SAST evaluation without requiring SARIF upload access.
+          upload: false

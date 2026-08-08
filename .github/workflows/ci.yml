@@ -322,7 +322,7 @@ jobs:
         run: |
           python -m venv .sdist-smoke-venv
           .sdist-smoke-venv/bin/python -m pip install --upgrade pip setuptools wheel
-          .sdist-smoke-venv/bin/python -m pip install --no-index --no-deps dist/*.tar.gz
+          .sdist-smoke-venv/bin/python -m pip install --no-index --no-deps --no-build-isolation dist/*.tar.gz
           .sdist-smoke-venv/bin/python -m pip check
           .sdist-smoke-venv/bin/adaf-attack --version
           .sdist-smoke-venv/bin/adaf-attack doctor
