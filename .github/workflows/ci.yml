@@ -209,6 +209,72 @@ jobs:
             exit 1
           }
 
+      - name: Exercise Kali installer guard and help
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/install-kali.sh --help
+          if bash scripts/install-kali.sh --skip-system-deps; then
+            echo "Kali installer unexpectedly succeeded on a non-Kali runner" >&2
+            exit 1
+          fi
+
+  workflow-contract:
+    name: Validate CI and operator contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Install contract checker
+        run: python -m pip install --requirement requirements-ci.txt
+
+      - name: Validate workflow YAML and referenced operator assets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          workflow_path = Path(".github/workflows/ci.yml")
+          workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+          assert isinstance(workflow, dict)
+          jobs = workflow["jobs"]
+          required_jobs = {
+              "lint", "typecheck", "tests", "security", "scripts",
+              "workflow-contract", "package", "operator-workflow", "windows-installer",
+              "ci-gate",
+          }
+          assert required_jobs <= jobs.keys()
+          assert jobs["ci-gate"]["if"] == "always()"
+          gate_needs = set(jobs["ci-gate"]["needs"])
+          assert gate_needs == required_jobs - {"ci-gate"}
+          assert set(jobs["tests"]["strategy"]["matrix"]["os"]) == {
+              "ubuntu-24.04", "windows-2022"
+          }
+          assert set(jobs["tests"]["strategy"]["matrix"]["python-version"]) == {
+              "3.11", "3.12", "3.13"
+          }
+          for path in (
+              "README.md",
+              "RELEASE.md",
+              "docs/KALI.md",
+              "docs/WINDOWS.md",
+              "docs/LINUX_NOVICE_USABILITY_GUIDE.md",
+              "scripts/install-kali.sh",
+              "scripts/Install-AdafAttack.ps1",
+              "scripts/AdafAttack.psm1",
+          ):
+              assert Path(path).is_file(), path
+          PY
+
   package:
     name: Build and install package
     needs: [tests, security, scripts]
@@ -258,3 +324,162 @@ jobs:
           name: python-distributions
           path: dist/
           retention-days: 14
+
+  operator-workflow:
+    name: Offline operator workflow
+    needs: [tests, package]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Download built distribution
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: python-distributions
+          path: dist
+
+      - name: Install full operator runtime
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --requirement requirements-ci.txt
+          wheel=(dist/*.whl)
+          python -m pip install "${wheel[0]}[full]"
+          python -m pip check
+
+      - name: Validate operator-facing CLI contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          adaf-attack --format json doctor --explain > "$RUNNER_TEMP/doctor.json"
+          adaf-attack --format json list-capabilities > "$RUNNER_TEMP/capabilities.json"
+          adaf-attack --format json capability-help > "$RUNNER_TEMP/capability-help.json"
+          adaf-attack --format json workflow-profiles > "$RUNNER_TEMP/workflow-profiles.json"
+          adaf-attack --format json paths > "$RUNNER_TEMP/paths.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          for name in ("doctor", "capabilities", "capability-help", "workflow-profiles", "paths"):
+              payload = json.loads((temp / f"{name}.json").read_text(encoding="utf-8"))
+              assert isinstance(payload, dict) and payload.get("ok") is True, name
+          assert json.loads((temp / "capabilities.json").read_text())["count"] > 0
+          assert json.loads((temp / "workflow-profiles.json").read_text())["profiles"]
+          PY
+
+      - name: Validate scoped engagement lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan="$RUNNER_TEMP/engagement.yaml"
+          adaf-attack engagement init --output "$plan"
+          adaf-attack --format json engagement validate "$plan" > "$RUNNER_TEMP/engagement.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads((Path(os.environ["RUNNER_TEMP"]) / "engagement.json").read_text())
+          assert payload["ok"] is True
+          assert payload["phase_count"] >= 1
+          assert "report" in payload["allowed_capabilities"]
+          PY
+
+      - name: Exercise offline evidence, reporting, and packaging workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/render_demo_engagement.py
+          session="output/demo-engagement"
+          adaf-attack --format json engagement report --session "$session" --engagement-id DEMO-2026-001 > "$RUNNER_TEMP/report.json"
+          adaf-attack --format json engagement package --session "$session" --output "$RUNNER_TEMP/demo-engagement.zip" --profile client > "$RUNNER_TEMP/package.json"
+          adaf-attack --format json coercion-fixtures --fixtures tests/fixtures/demo-session --authorized-fixtures > "$RUNNER_TEMP/fixtures.json"
+          python - <<'PY'
+          import json
+          import os
+          import zipfile
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          report = json.loads((temp / "report.json").read_text())
+          package = json.loads((temp / "package.json").read_text())
+          fixtures = json.loads((temp / "fixtures.json").read_text())
+          assert report["ok"] is True and report["finding_count"] >= 1
+          assert package["ok"] is True and package["profile"] == "client"
+          assert fixtures["ok"] is True
+          with zipfile.ZipFile(temp / "demo-engagement.zip") as archive:
+              names = archive.namelist()
+          assert names and all("vault" not in name.lower() for name in names)
+          for report_name in ("executive", "technical", "remediation"):
+              assert (Path("output/demo-engagement/reports") / f"{report_name}-report.html").is_file()
+              assert (Path("output/demo-engagement/reports") / f"{report_name}-report.pdf").is_file()
+          PY
+
+      - name: Upload operator evidence artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: operator-workflow-evidence
+          path: |
+            output/demo-engagement/reports/
+            ${{ runner.temp }}/demo-engagement.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  windows-installer:
+    name: Windows installer smoke test
+    needs: [package, scripts]
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Run Windows installer and verify operator entry points
+        shell: pwsh
+        run: |
+          & .\scripts\Install-AdafAttack.ps1 -RepoRoot $PWD -Extras full -Python python
+          $venvPython = Join-Path $PWD ".venv\Scripts\python.exe"
+          $venvCli = Join-Path $PWD ".venv\Scripts\adaf-attack.exe"
+          if (-not (Test-Path $venvCli)) { throw "Installed console script missing: $venvCli" }
+          & $venvPython -m pip check
+          & $venvCli --version
+          & $venvCli --format json doctor --explain | ConvertFrom-Json | ForEach-Object {
+            if (-not $_.ok) { throw "doctor reported failure" }
+          }
+          & $venvCli list-capabilities
+          Import-Module .\scripts\AdafAttack.psm1 -Force
+
+  ci-gate:
+    name: Production readiness gate
+    if: always()
+    needs: [lint, typecheck, tests, security, scripts, workflow-contract, package, operator-workflow, windows-installer]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require every CI lane to pass
+        run: |
+          test "${{ needs.lint.result }}" = success
+          test "${{ needs.typecheck.result }}" = success
+          test "${{ needs.tests.result }}" = success
+          test "${{ needs.security.result }}" = success
+          test "${{ needs.scripts.result }}" = success
+          test "${{ needs.workflow-contract.result }}" = success
+          test "${{ needs.package.result }}" = success
+          test "${{ needs.operator-workflow.result }}" = success
+          test "${{ needs.windows-installer.result }}" = success
