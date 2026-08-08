@@ -318,6 +318,15 @@ jobs:
           .smoke-venv/bin/adaf-attack --version
           .smoke-venv/bin/adaf-attack list-capabilities
 
+      - name: Install source distribution in a separate clean environment
+        run: |
+          python -m venv .sdist-smoke-venv
+          .sdist-smoke-venv/bin/python -m pip install --upgrade pip setuptools wheel
+          .sdist-smoke-venv/bin/python -m pip install --no-index --no-deps dist/*.tar.gz
+          .sdist-smoke-venv/bin/python -m pip check
+          .sdist-smoke-venv/bin/adaf-attack --version
+          .sdist-smoke-venv/bin/adaf-attack doctor
+
       - name: Upload distribution artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -566,6 +575,26 @@ jobs:
           }
           & $venvCli list-capabilities
           Import-Module .\scripts\AdafAttack.psm1 -Force
+
+          & $venvPython scripts\render_demo_engagement.py
+          $session = Join-Path $PWD "output\demo-engagement"
+          & $venvCli engagement report --session $session --engagement-id WIN-2026-001
+          $package = Join-Path $env:RUNNER_TEMP "windows-demo-engagement.zip"
+          & $venvCli --format json engagement package --session $session --output $package --profile client | ConvertFrom-Json | ForEach-Object {
+            if (-not $_.ok) { throw "engagement package reported failure" }
+          }
+          if (-not (Test-Path (Join-Path $session "reports\report-manifest.json"))) {
+            throw "report manifest missing"
+          }
+          if (-not (Test-Path $package)) { throw "engagement package missing" }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($package)
+          try {
+            if ($archive.Entries.Count -eq 0) { throw "engagement package is empty" }
+            if ($archive.Entries.FullName -match "vault") { throw "engagement package contains vault material" }
+          } finally {
+            $archive.Dispose()
+          }
 
   ci-gate:
     name: Production readiness gate
