@@ -53,3 +53,4 @@ output/
 **/secrets/
 **/*-with-secrets.*
 **/validation-result*.json
+.claude/
