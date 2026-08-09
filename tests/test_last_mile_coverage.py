@@ -6,10 +6,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 import adaf_attack.core.engagement as eng
 import adaf_attack.core.runner as runner_mod
+import pytest
 from adaf_attack.capabilities.ldap_enum import _list_attr as le_list_attr
 from adaf_attack.capabilities.ldap_enum import _uac_has
 from adaf_attack.capabilities.report import _md_escape

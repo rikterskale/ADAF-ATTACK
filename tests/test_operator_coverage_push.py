@@ -11,8 +11,6 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
-import pytest
-
 import adaf_attack.capabilities.ad_cve_scan as ad_cve_scan
 import adaf_attack.capabilities.asreq_userhunt as asreq_userhunt
 import adaf_attack.capabilities.coerce as coerce
@@ -20,6 +18,7 @@ import adaf_attack.capabilities.dcsync as dcsync
 import adaf_attack.capabilities.gpp_cpassword as gpp_cpassword
 import adaf_attack.capabilities.impacket_exec as impacket_exec
 import adaf_attack.capabilities.password_spray as password_spray
+import pytest
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.reporting import _finding_html, _pdf
 from adaf_attack.core.session import Session

@@ -10,13 +10,12 @@ import types
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 import adaf_attack.core.cleanup as cleanup_mod
 import adaf_attack.core.control_plane as cp
 import adaf_attack.core.forest_campaign as fc
 import adaf_attack.core.ldap_util as ldap_util
 import adaf_attack.core.workflows as workflows
+import pytest
 from adaf_attack.capabilities.attack_paths import AttackPaths
 from adaf_attack.capabilities.identity_bridge import HybridSignals
 from adaf_attack.capabilities.next_actions import NextActions

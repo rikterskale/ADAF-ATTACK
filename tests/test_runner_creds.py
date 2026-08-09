@@ -3,7 +3,6 @@
 from unittest.mock import patch
 
 import pytest
-
 from adaf_attack.core.creds import Credential, CredentialSet
 from adaf_attack.core.runner import RunError, _resolve_target
 from adaf_attack.core.target import Target

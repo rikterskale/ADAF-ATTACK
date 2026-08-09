@@ -6,8 +6,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 import adaf_attack.capabilities.asrep_roast as asrep_roast
 import adaf_attack.capabilities.computer_takeover as computer_takeover
 import adaf_attack.capabilities.gpo_abuse as gpo_abuse
@@ -15,6 +13,7 @@ import adaf_attack.capabilities.gpo_link as gpo_link
 import adaf_attack.capabilities.kerberoast as kerberoast
 import adaf_attack.capabilities.rodc_delegation as rodc_delegation
 import adaf_attack.capabilities.trusts_enum as trusts_enum
+import pytest
 from adaf_attack.core.acl import InterestingAce
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session

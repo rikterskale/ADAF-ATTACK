@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from typer.testing import CliRunner
-
 import adaf_attack.capabilities  # noqa: F401
 from adaf_attack.cli import app
 from adaf_attack.core.profiles import delete_profile, get_profile, list_profiles, set_profile
@@ -16,13 +14,14 @@ from adaf_attack.core.ux import (
     build_ready_command,
     capability_phase,
     diff_sessions,
-    guided_tour_payload,
     group_capabilities_by_phase,
+    guided_tour_payload,
     risk_checklist,
     session_findings_summary,
     stages_for_capability,
     unified_search,
 )
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -117,7 +116,11 @@ def test_guided_tour_payload() -> None:
 def test_cli_list_capabilities_by_phase() -> None:
     result = runner.invoke(app, ["list-capabilities", "--by-phase"])
     assert result.exit_code == 0
-    assert "Discovery" in result.stdout or "ldap-enum" in result.stdout or "Enumeration" in result.stdout
+    assert (
+        "Discovery" in result.stdout
+        or "ldap-enum" in result.stdout
+        or "Enumeration" in result.stdout
+    )
 
 
 def test_cli_capability_help_checklist() -> None:
@@ -149,7 +152,9 @@ def test_cli_session_diff(tmp_path: Path) -> None:
         path.mkdir()
         (path / "session.json").write_text(json.dumps({"session_id": path.name}), encoding="utf-8")
         (path / "findings.json").write_text(
-            json.dumps({"findings": [{"title": f"F{i}", "severity": "high"} for i in range(count)]}),
+            json.dumps(
+                {"findings": [{"title": f"F{i}", "severity": "high"} for i in range(count)]}
+            ),
             encoding="utf-8",
         )
         (path / "graph.json").write_text(

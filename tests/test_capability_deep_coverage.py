@@ -12,12 +12,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
-
 import adaf_attack.capabilities.cert_request as cert_request
 import adaf_attack.capabilities.gmsa_laps_enum as gmsa
 import adaf_attack.capabilities.pkinit_auth as pkinit
 import adaf_attack.capabilities.shadow_creds as shadow
+import pytest
 from adaf_attack.capabilities.report import Report
 from adaf_attack.capabilities.ticket_lifecycle import TicketLifecycle
 from adaf_attack.core.acl import (

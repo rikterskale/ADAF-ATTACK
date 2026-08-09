@@ -8,10 +8,9 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 import adaf_attack.capabilities.gpo_abuse as gpo_abuse
 import adaf_attack.core.esc6_probe as esc6
+import pytest
 from adaf_attack.core.acl import InterestingAce
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session
@@ -475,9 +474,8 @@ def test_pkinit_auth_playbook_write_exception(monkeypatch: Any, tmp_path: Path) 
 
 
 def test_ticket_lifecycle_export_missing_source(monkeypatch: Any, tmp_path: Path) -> None:
-    from cryptography.fernet import Fernet
-
     from adaf_attack.capabilities.ticket_lifecycle import TicketLifecycle
+    from cryptography.fernet import Fernet
 
     monkeypatch.setenv("ADAF_SESSION_VAULT_KEY", Fernet.generate_key().decode())
     session = Session(base_dir=tmp_path / "t")
@@ -525,9 +523,8 @@ def test_ticket_lifecycle_pfx_to_pem_incomplete(monkeypatch: Any, tmp_path: Path
 
 
 def test_forest_campaign_handoff_success(monkeypatch: Any, tmp_path: Path) -> None:
-    from cryptography.fernet import Fernet
-
     import adaf_attack.core.forest_campaign as fc
+    from cryptography.fernet import Fernet
 
     monkeypatch.setenv("ADAF_SESSION_VAULT_KEY", Fernet.generate_key().decode())
     session_dir = tmp_path / "prev"
@@ -550,9 +547,8 @@ def test_forest_campaign_handoff_success(monkeypatch: Any, tmp_path: Path) -> No
 
 
 def test_forest_campaign_handoff_missing_ccache(monkeypatch: Any, tmp_path: Path) -> None:
-    from cryptography.fernet import Fernet
-
     import adaf_attack.core.forest_campaign as fc
+    from cryptography.fernet import Fernet
 
     monkeypatch.setenv("ADAF_SESSION_VAULT_KEY", Fernet.generate_key().decode())
     session_dir = tmp_path / "prev2"

@@ -8,8 +8,6 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-import pytest
-
 import adaf_attack.capabilities.esc_chain as esc_chain
 import adaf_attack.capabilities.laps_read as laps_read
 import adaf_attack.capabilities.ntlm_relay as ntlm_relay
@@ -18,6 +16,7 @@ import adaf_attack.capabilities.secretsdump_local as secretsdump_local
 import adaf_attack.capabilities.template_mod as template_mod
 import adaf_attack.capabilities.ticket_forge as ticket_forge
 import adaf_attack.capabilities.unpac_the_hash as unpac_the_hash
+import pytest
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target

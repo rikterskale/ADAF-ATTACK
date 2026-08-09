@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from adaf_attack.core.registry import Capability, capability_registry
 
@@ -68,6 +68,7 @@ def group_capabilities_by_phase() -> dict[str, list[Capability]]:
 # 2 / 12. Risk checklist + opsec indicators
 # ---------------------------------------------------------------------------
 
+
 def risk_checklist(cap: Capability) -> dict[str, Any]:
     """Return a structured risk / pre-flight checklist for a capability."""
     phase = capability_phase(cap)
@@ -83,9 +84,21 @@ def risk_checklist(cap: Capability) -> dict[str, Any]:
 
     items = [
         {"id": "scope", "label": "Engagement scope confirmed", "required": True},
-        {"id": "auth", "label": "Valid credentials / ticket available", "required": requires_domain_user},
-        {"id": "force", "label": "--force supplied for destructive action", "required": requires_force},
-        {"id": "opsec", "label": "Opsec profile reviewed (stealth/balanced/loud)", "required": True},
+        {
+            "id": "auth",
+            "label": "Valid credentials / ticket available",
+            "required": requires_domain_user,
+        },
+        {
+            "id": "force",
+            "label": "--force supplied for destructive action",
+            "required": requires_force,
+        },
+        {
+            "id": "opsec",
+            "label": "Opsec profile reviewed (stealth/balanced/loud)",
+            "required": True,
+        },
         {"id": "rollback", "label": "Cleanup / rollback path identified", "required": may_modify},
     ]
     return {
@@ -109,6 +122,7 @@ def risk_checklist(cap: Capability) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # 13. Copy-ready command generation
 # ---------------------------------------------------------------------------
+
 
 def build_ready_command(
     capability_id: str,
@@ -139,6 +153,7 @@ def build_ready_command(
 # 3. Structured progress stages
 # ---------------------------------------------------------------------------
 
+
 def stages_for_capability(cap: Capability) -> list[str]:
     """Return ordered progress stage names for a capability run."""
     base = ["prepare", "connect", "execute"]
@@ -155,9 +170,10 @@ def stages_for_capability(cap: Capability) -> list[str]:
 # 4 / 8. Session findings preview + summary
 # ---------------------------------------------------------------------------
 
+
 def _load_json(path: Path) -> dict[str, Any]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -201,13 +217,22 @@ def session_findings_summary(session_dir: Path) -> dict[str, Any]:
 # 14. Session diff
 # ---------------------------------------------------------------------------
 
+
 def diff_sessions(a: Path, b: Path) -> dict[str, Any]:
     """Compare two sessions (findings count + graph size)."""
     sa = session_findings_summary(a)
     sb = session_findings_summary(b)
     return {
-        "a": {"session_id": sa["session_id"], "findings": sa["finding_count"], "nodes": sa["graph"]["nodes"]},
-        "b": {"session_id": sb["session_id"], "findings": sb["finding_count"], "nodes": sb["graph"]["nodes"]},
+        "a": {
+            "session_id": sa["session_id"],
+            "findings": sa["finding_count"],
+            "nodes": sa["graph"]["nodes"],
+        },
+        "b": {
+            "session_id": sb["session_id"],
+            "findings": sb["finding_count"],
+            "nodes": sb["graph"]["nodes"],
+        },
         "finding_delta": sb["finding_count"] - sa["finding_count"],
         "node_delta": sb["graph"]["nodes"] - sa["graph"]["nodes"],
         "edge_delta": sb["graph"]["edges"] - sa["graph"]["edges"],
@@ -217,6 +242,7 @@ def diff_sessions(a: Path, b: Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # 9. Unified search
 # ---------------------------------------------------------------------------
+
 
 def unified_search(query: str, *, limit: int = 25) -> dict[str, Any]:
     """Search capabilities (and later sessions/findings) by free-text query."""
@@ -293,6 +319,7 @@ def suggested_next_actions(cap: Capability, *, limit: int = 5) -> list[str]:
 # 15. Guided tour
 # ---------------------------------------------------------------------------
 
+
 def guided_tour_payload() -> dict[str, Any]:
     """Return the interactive guided-tour steps for new operators."""
     steps = [
@@ -355,6 +382,7 @@ def guided_tour_payload() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Convenience: human phase label lookup
 # ---------------------------------------------------------------------------
+
 
 def phase_label(phase_key: str) -> str:
     return PHASE_LABELS.get(phase_key, phase_key)

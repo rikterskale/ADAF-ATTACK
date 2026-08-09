@@ -11,7 +11,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-
 from adaf_attack.capabilities.bloodhound_export import BloodhoundExport, _hydrate_graph_from_session
 from adaf_attack.capabilities.identity_bridge import BloodhoundImport
 from adaf_attack.core.acl import _mask_to_rights, _sid_to_str

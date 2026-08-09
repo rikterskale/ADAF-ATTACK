@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 
 import pytest
-from cryptography.fernet import Fernet
-
 from adaf_attack.capabilities.next_actions import NextActions
 from adaf_attack.capabilities.ticket_lifecycle import TicketLifecycle
 from adaf_attack.capabilities.workflow_wrappers import RbcdTicketWorkflow, ShadowPkinitWorkflow
@@ -12,6 +10,7 @@ from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.redaction import redact
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
+from cryptography.fernet import Fernet
 
 
 def test_vault_encrypts_secret_and_keeps_metadata_redacted(tmp_path, monkeypatch) -> None:

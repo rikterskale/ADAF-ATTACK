@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from adaf_attack.capabilities.impacket_exec import METHODS, ImpacketExec
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session

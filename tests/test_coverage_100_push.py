@@ -9,18 +9,17 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-import pytest
-from typer.testing import CliRunner
-
 import adaf_attack.capabilities.coerce as coerce
 import adaf_attack.capabilities.impacket_exec as impacket_exec
 import adaf_attack.capabilities.unpac_the_hash as unpac
 import adaf_attack.cli as cli
 import adaf_attack.core.impacket_helper as impacket_helper
 import adaf_attack.core.reporting as reporting
+import pytest
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
+from typer.testing import CliRunner
 
 
 def _target(**kwargs: Any) -> Target:

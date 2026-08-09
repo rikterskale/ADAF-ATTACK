@@ -8,7 +8,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-
 from adaf_attack.capabilities.attack_paths import AttackPaths
 from adaf_attack.capabilities.ldap_enum import _list_attr as le_list_attr
 from adaf_attack.capabilities.shadow_creds import _list_attr as sc_list_attr

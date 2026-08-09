@@ -6,9 +6,8 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from textual.widgets import Input, ListView, Static
-
 from adaf_attack.tui.app import ADAFAttackApp
+from textual.widgets import Input, ListView, Static
 
 
 def test_tui_starts_populates_capabilities_and_updates_status() -> None:

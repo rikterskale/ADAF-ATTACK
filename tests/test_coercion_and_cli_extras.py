@@ -7,11 +7,10 @@ import types
 from pathlib import Path
 from typing import Any
 
-from typer.testing import CliRunner
-
 import adaf_attack.capabilities.coercion_map as coercion_map
 from adaf_attack.cli import app
 from adaf_attack.core.target import Target
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
