@@ -19,6 +19,8 @@ _ALLOWED_KEYS = {
     "run.max_depth",
     "run.limit",
     "workspace",
+    "opsec.profile",
+    "profile.default",
 }
 
 
