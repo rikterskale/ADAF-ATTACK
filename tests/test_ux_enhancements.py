@@ -1,0 +1,155 @@
+"""Tests for the 15 UX enhancement helpers and CLI wiring."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from typer.testing import CliRunner
+
+import adaf_attack.capabilities  # noqa: F401
+from adaf_attack.cli import app
+from adaf_attack.core.profiles import delete_profile, get_profile, list_profiles, set_profile
+from adaf_attack.core.registry import capability_registry
+from adaf_attack.core.ux import (
+    PHASE_LABELS,
+    build_ready_command,
+    capability_phase,
+    diff_sessions,
+    guided_tour_payload,
+    group_capabilities_by_phase,
+    risk_checklist,
+    session_findings_summary,
+    stages_for_capability,
+    unified_search,
+)
+
+runner = CliRunner()
+
+
+def test_group_capabilities_by_phase() -> None:
+    grouped = group_capabilities_by_phase()
+    assert grouped
+    for phase, caps in grouped.items():
+        assert phase in PHASE_LABELS or phase
+        for cap in caps:
+            assert capability_phase(cap) == phase
+
+
+def test_risk_checklist_and_ready_command() -> None:
+    cap = capability_registry.get("ldap-enum")
+    assert cap is not None
+    checklist = risk_checklist(cap)
+    assert checklist["id"] == "ldap-enum"
+    assert checklist["requires_domain_user"] is True
+    cmd = build_ready_command("ldap-enum", domain="corp.lab", dc_ip="10.0.0.1")
+    assert "adaf-attack run ldap-enum" in cmd
+
+
+def test_stages_for_capability() -> None:
+    cap = capability_registry.get("kerberoast")
+    assert cap is not None
+    stages = stages_for_capability(cap)
+    assert "prepare" in stages
+
+
+def test_session_findings_summary_and_diff(tmp_path: Path) -> None:
+    a = tmp_path / "sess-a"
+    b = tmp_path / "sess-b"
+    for path, titles in ((a, ["Finding A"]), (b, ["Finding A", "Finding B"])):
+        path.mkdir()
+        (path / "session.json").write_text(
+            json.dumps({"session_id": path.name, "created_at": "2026-08-01T00:00:00Z"}),
+            encoding="utf-8",
+        )
+        (path / "findings.json").write_text(
+            json.dumps(
+                {
+                    "findings": [
+                        {"title": t, "severity": "high", "techniques": ["T1558.003"]}
+                        for t in titles
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        (path / "graph.json").write_text(
+            json.dumps(
+                {
+                    "summary": {
+                        "nodes": 10 if path == a else 12,
+                        "edges": 5 if path == a else 8,
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+    summary = session_findings_summary(b)
+    assert summary["finding_count"] == 2
+    diff = diff_sessions(a, b)
+    assert "Finding B" in diff["new_titles"]
+    assert diff["node_delta"] == 2
+
+
+def test_unified_search_capabilities() -> None:
+    payload = unified_search("kerberoast")
+    assert any(c["id"] == "kerberoast" for c in payload["capabilities"])
+
+
+def test_profiles_roundtrip(tmp_path: Path, monkeypatch) -> None:
+    from adaf_attack.core import paths as paths_mod
+    from adaf_attack.core import profiles as profiles_mod
+
+    monkeypatch.setattr(paths_mod, "user_config_dir", lambda: tmp_path / "cfg")
+    monkeypatch.setattr(profiles_mod, "profiles_path", lambda: tmp_path / "cfg" / "profiles.json")
+    set_profile("lab", {"domain": "corp.lab", "dc_ip": "10.0.0.5", "opsec_profile": "stealth"})
+    assert get_profile("lab")["domain"] == "corp.lab"
+    assert any(p["name"] == "lab" for p in list_profiles())
+    assert delete_profile("lab") is True
+
+
+def test_guided_tour_payload() -> None:
+    payload = guided_tour_payload()
+    assert len(payload["steps"]) >= 5
+
+
+def test_cli_list_capabilities_by_phase() -> None:
+    result = runner.invoke(app, ["list-capabilities"])
+    assert result.exit_code == 0
+    assert "Discovery" in result.stdout or "ldap-enum" in result.stdout
+
+
+def test_cli_capability_help_checklist() -> None:
+    result = runner.invoke(app, ["capability-help", "ldap-enum"])
+    assert result.exit_code == 0
+    assert "Checklist" in result.stdout
+    assert "Copy-ready" in result.stdout
+
+
+def test_cli_tour_and_search() -> None:
+    result = runner.invoke(app, ["tour"])
+    assert result.exit_code == 0
+    result = runner.invoke(app, ["search", "ldap-enum"])
+    assert result.exit_code == 0
+    assert "ldap-enum" in result.stdout
+
+
+def test_cli_plan_shows_opsec_and_copy() -> None:
+    result = runner.invoke(app, ["plan", "ldap-enum", "-d", "corp.lab", "--dc-ip", "10.0.0.1"])
+    assert result.exit_code == 0
+    assert "Copy-ready" in result.stdout
+    assert "Opsec" in result.stdout
+
+
+def test_cli_session_diff(tmp_path: Path) -> None:
+    a = tmp_path / "a"
+    b = tmp_path / "b"
+    for path, count in ((a, 1), (b, 2)):
+        path.mkdir()
+        (path / "session.json").write_text(json.dumps({"session_id": path.name}), encoding="utf-8")
+        (path / "findings.json").write_text(
+            json.dumps({"findings": [{"title": f"F{i}", "severity": "high"} for i in range(count)]}),
+            encoding="utf-8",
+        )
+    result = runner.invoke(app, ["session", "diff", str(a), str(b)])
+    assert result.exit_code == 0
