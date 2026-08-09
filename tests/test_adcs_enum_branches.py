@@ -6,8 +6,9 @@ from pathlib import Path as _Path
 from types import SimpleNamespace
 from typing import Any
 
-import adaf_attack.capabilities.adcs_enum as adcs_enum
 import pytest
+
+import adaf_attack.capabilities.adcs_enum as adcs_enum
 from adaf_attack.capabilities.adcs_enum import _list_attr
 from adaf_attack.core.acl import InterestingAce
 from adaf_attack.core.graph import AttackGraph

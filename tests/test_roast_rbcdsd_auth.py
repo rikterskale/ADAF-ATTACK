@@ -5,8 +5,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import Any
 
-import adaf_attack.core.auth as auth
 import pytest
+
+import adaf_attack.core.auth as auth
 from adaf_attack.core.auth import describe_auth, get_kerberos_tgt, ldap3_bind_kwargs
 from adaf_attack.core.rbcd_sd import (
     _sid_to_bytes,

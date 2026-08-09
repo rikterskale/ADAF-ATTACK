@@ -6,9 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 import adaf_attack.capabilities.campaign_analysis as camp_an
 import adaf_attack.capabilities.computer_takeover as ct
-import pytest
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target

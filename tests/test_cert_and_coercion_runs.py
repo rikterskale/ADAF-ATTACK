@@ -7,9 +7,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 import adaf_attack.capabilities.cert_request as cert_request
 import adaf_attack.capabilities.coercion_map as coercion_map
-import pytest
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import adaf_attack.capabilities  # noqa: F401 — triggers registration
 import pytest
+
+import adaf_attack.capabilities  # noqa: F401 — triggers registration
 from adaf_attack.core.capability_help_data import capability_option_spec
 from adaf_attack.core.registry import capability_registry
 

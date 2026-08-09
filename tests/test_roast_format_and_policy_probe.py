@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from adaf_attack.capabilities.adcs_policy_probe import AdcsPolicyProbe
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.roast_format import format_asrep_hashcat, format_tgs_hashcat

@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import adaf_attack.capabilities.acl_enum as acl_enum
 import pytest
+
+import adaf_attack.capabilities.acl_enum as acl_enum
 from adaf_attack.core.acl import InterestingAce
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session

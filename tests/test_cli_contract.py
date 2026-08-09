@@ -6,10 +6,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+from typer.testing import CliRunner
+
 import adaf_attack.cli as cli
 from adaf_attack.cli import app
 from adaf_attack.core.runner import RunError
-from typer.testing import CliRunner
 
 runner = CliRunner()
 

@@ -6,10 +6,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 import adaf_attack.core.esc6_probe as esc6
 import adaf_attack.core.forest_campaign as fc
 import adaf_attack.core.runner as runner_mod
-import pytest
 from adaf_attack.core.creds import (
     Credential,
     CredentialSet,

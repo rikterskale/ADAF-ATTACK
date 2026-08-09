@@ -7,17 +7,18 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+from cryptography.fernet import Fernet
+
 import adaf_attack.capabilities.acl_write as acl_write
 import adaf_attack.capabilities.bloodhound_export as bloodhound_export
 import adaf_attack.capabilities.identity_bridge as identity_bridge
 import adaf_attack.capabilities.pkinit_auth as pkinit_auth
 import adaf_attack.capabilities.ticket_lifecycle as ticket_lifecycle
 import adaf_attack.capabilities.workflow_wrappers as workflow_wrappers
-import pytest
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
-from cryptography.fernet import Fernet
 
 
 class _Conn:

@@ -6,6 +6,7 @@ import base64
 from pathlib import Path
 
 import pytest
+
 from adaf_attack.core.gpp import (
     GPP_IV,
     GPP_KEY,

@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import Capability, capability_registry
 from adaf_attack.core.runner import RunError, execute_capability

@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from typer.testing import CliRunner
+
 import adaf_attack.capabilities  # noqa: F401
 from adaf_attack.cli import app
 from adaf_attack.core.profiles import delete_profile, get_profile, list_profiles, set_profile
@@ -21,7 +23,6 @@ from adaf_attack.core.ux import (
     stages_for_capability,
     unified_search,
 )
-from typer.testing import CliRunner
 
 runner = CliRunner()
 

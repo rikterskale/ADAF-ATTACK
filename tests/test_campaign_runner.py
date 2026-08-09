@@ -1,9 +1,10 @@
 import json
 
 import yaml
+from cryptography.fernet import Fernet
+
 from adaf_attack.core import forest_campaign
 from adaf_attack.core.session import Session
-from cryptography.fernet import Fernet
 
 
 def test_run_campaign_stops_after_failed_engagement(tmp_path, monkeypatch) -> None:

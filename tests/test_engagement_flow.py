@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from adaf_attack.core.engagement import (
     EngagementError,
     EngagementPlan,

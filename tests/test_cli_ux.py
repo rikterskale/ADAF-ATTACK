@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from typer.testing import CliRunner
+
 from adaf_attack.cli import app
 from adaf_attack.core import user_config
-from typer.testing import CliRunner
 
 runner = CliRunner()
 
