@@ -330,6 +330,12 @@ def guided_tour_payload() -> dict[str, Any]:
             "why": "Verify Python, optional deps (impacket, textual), and workspace paths.",
         },
         {
+            "id": "demo",
+            "title": "Offline first success (no network)",
+            "command": "adaf-attack demo",
+            "why": "Materialize the packaged demo session and open a findings dashboard without contacting a target.",
+        },
+        {
             "id": "list",
             "title": "Browse capabilities by kill-chain phase",
             "command": "adaf-attack list-capabilities --by-phase",
@@ -350,7 +356,7 @@ def guided_tour_payload() -> dict[str, Any]:
         {
             "id": "profile",
             "title": "Save a named target profile",
-            "command": "adaf-attack profile set lab --domain corp.lab --dc-ip 10.0.0.10 --opsec stealth",
+            "command": "adaf-attack profile set lab --domain corp.lab --dc-ip 10.0.0.10 --opsec stealth --default",
             "why": "Profiles keep domain, DC, and opsec settings so you type less on subsequent runs.",
         },
         {
@@ -386,3 +392,32 @@ def guided_tour_payload() -> dict[str, Any]:
 
 def phase_label(phase_key: str) -> str:
     return PHASE_LABELS.get(phase_key, phase_key)
+
+# Re-export extended helpers (kept in ux_extra to ease incremental deploys)
+from adaf_attack.core.ux_extra import (  # noqa: E402
+    capability_prerequisites,
+    export_plan_markdown,
+    format_next_actions_block,
+    format_stages_progress,
+    session_findings_dashboard,
+)
+
+__all__ = [
+    "PHASE_LABELS",
+    "capability_phase",
+    "group_capabilities_by_phase",
+    "risk_checklist",
+    "build_ready_command",
+    "stages_for_capability",
+    "session_findings_summary",
+    "diff_sessions",
+    "unified_search",
+    "suggested_next_actions",
+    "guided_tour_payload",
+    "phase_label",
+    "capability_prerequisites",
+    "format_next_actions_block",
+    "format_stages_progress",
+    "session_findings_dashboard",
+    "export_plan_markdown",
+]
