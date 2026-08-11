@@ -267,10 +267,7 @@ def register_ux_commands(
         """Offline first-success path using packaged demo fixtures (no network)."""
         from adaf_attack.core.ux import session_findings_dashboard
 
-        root = Path(__file__).resolve().parents[1]
-        source = root.parent / "tests" / "fixtures" / "demo-session"
-        if not source.is_dir():
-            source = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "demo-session"
+        source = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "demo-session"
         if not source.is_dir():
             error = ActionableError(
                 "DEMO_FIXTURES_MISSING",

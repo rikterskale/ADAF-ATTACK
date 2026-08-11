@@ -26,9 +26,6 @@ def _parse_editflags(text: str) -> int | None:
     """Extract EditFlags value from certutil or reg query style output."""
     m = re.search(r"EditFlags\s*(?:REG_DWORD\s*)?[:=]?\s*(0x[0-9a-fA-F]+|\d+)", text)
     if not m:
-        m = re.search(r"EditFlags\s+0x([0-9a-fA-F]+)", text)
-        if m:
-            return int(m.group(1), 16)
         return None
     raw = m.group(1)
     return int(raw, 16) if raw.lower().startswith("0x") else int(raw)

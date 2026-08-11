@@ -43,11 +43,11 @@ def _workspace_is_empty(root: Path) -> bool:
 
 def _humanize_bytes(n: int) -> str:
     step = 1024.0
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if n < step or unit == "TB":
-            return f"{n:.1f} {unit}" if unit != "B" else f"{int(n)} {unit}"
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < step:
+            return f"{int(n)} {unit}" if unit == "B" else f"{n:.1f} {unit}"
         n = int(n / step)
-    raise AssertionError("byte unit selection exhausted")
+    return f"{n:.1f} TB"
 
 
 def _humanize_since(iso_or_ts: Any) -> str:
@@ -1736,5 +1736,5 @@ def start(ctx: typer.Context) -> None:
     run_tui()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover - module CLI entry point
     app()
