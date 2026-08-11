@@ -150,3 +150,86 @@ def test_adcs_enum_esc6_unresolved(monkeypatch: Any, tmp_path: _Path) -> None:
         Target(domain="corp.test", dc_ip="10.0.0.1"), session, AttackGraph()
     )
     assert result["esc6"]["resolved"] is False
+
+
+def test_adcs_enum_contains_mocked_acl_parse_failures(monkeypatch: Any, tmp_path: _Path) -> None:
+    """Malformed CA, PKI-container, and template descriptors remain non-fatal."""
+    ca = SimpleNamespace(
+        entry_dn="CN=CA,DC=corp,DC=test",
+        cn="CorpCA",
+        dNSHostName="ca.corp.test",
+        cACertificateDN="CN=CA",
+    )
+    conn = _Conn(
+        {
+            "(objectClass=pKIEnrollmentService)": [ca],
+            "(objectClass=pKICertificateTemplate)": [SimpleNamespace()],
+        }
+    )
+    monkeypatch.setattr(
+        adcs_enum,
+        "ldap_connect",
+        lambda t: (conn, "DC=corp,DC=test", "CN=Configuration,DC=corp,DC=test"),
+    )
+    monkeypatch.setattr(adcs_enum, "fetch_sd", lambda c, dn: b"malformed")
+    monkeypatch.setattr(
+        adcs_enum,
+        "parse_interesting_aces",
+        lambda sd: (_ for _ in ()).throw(ValueError("mocked descriptor")),
+    )
+    monkeypatch.setattr(
+        adcs_enum,
+        "_analyze_template",
+        lambda entry: {
+            "cn": "User",
+            "dn": "CN=User",
+            "esc1_candidate": False,
+            "esc2_candidate": False,
+            "esc3_agent_template": False,
+            "esc3_requires_ra": False,
+            "no_security_extension": False,
+            "client_auth_eku": False,
+            "enrollee_supplies_subject": False,
+            "esc_tags": [],
+        },
+    )
+    monkeypatch.setattr(adcs_enum, "probe_esc6", lambda t, ca_hostnames: {"resolved": False})
+    result = adcs_enum.AdcsEnum().run(
+        Target(domain="corp.test", dc_ip="192.0.2.10"), Session(tmp_path), AttackGraph()
+    )
+    assert result["cas"] and result["templates"]
+
+
+@pytest.mark.parametrize("stage", ["ca", "esc5", "templates"])
+def test_adcs_enum_contains_mocked_enumeration_failures(
+    monkeypatch: Any, tmp_path: _Path, stage: str
+) -> None:
+    """Each LDAP enumeration phase independently reports a mocked outage."""
+
+    class _FailingConn(_Conn):
+        def search(self, base_dn: str, search_filter: str, **kwargs: Any) -> None:
+            if stage == "ca" and search_filter == "(objectClass=pKIEnrollmentService)":
+                raise OSError("mocked CA search")
+            if stage == "templates" and search_filter == "(objectClass=pKICertificateTemplate)":
+                raise OSError("mocked template search")
+            super().search(base_dn, search_filter, **kwargs)
+
+    conn = _FailingConn({})
+    monkeypatch.setattr(
+        adcs_enum,
+        "ldap_connect",
+        lambda t: (conn, "DC=corp,DC=test", "CN=Configuration,DC=corp,DC=test"),
+    )
+    if stage == "esc5":
+        monkeypatch.setattr(
+            adcs_enum,
+            "fetch_sd",
+            lambda c, dn: (_ for _ in ()).throw(OSError("mocked PKI read")),
+        )
+    else:
+        monkeypatch.setattr(adcs_enum, "fetch_sd", lambda c, dn: None)
+    monkeypatch.setattr(adcs_enum, "probe_esc6", lambda t, ca_hostnames: {"resolved": False})
+    result = adcs_enum.AdcsEnum().run(
+        Target(domain="corp.test", dc_ip="192.0.2.10"), Session(tmp_path), AttackGraph()
+    )
+    assert result["domain"] == "corp.test"

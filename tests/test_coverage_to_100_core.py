@@ -169,6 +169,35 @@ def test_ux_helpers_cover_empty_and_malformed_offline_inputs(tmp_path: Path) -> 
     assert format_next_actions_block(cap)["count"] == 0
 
 
+def test_ux_handles_custom_phases_and_malformed_dashboard_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Operator views retain predictable output for extension and malformed-data cases."""
+    from adaf_attack.core import ux, ux_extra
+    from adaf_attack.core.registry import Capability
+
+    cap = Capability(id="custom", summary="custom", category="extension", tags=("graph",))
+    monkeypatch.setattr(ux, "capability_phase", lambda _: "extension")
+    monkeypatch.setattr(
+        ux, "capability_registry", type("Registry", (), {"list": lambda _: [cap]})()
+    )
+    assert list(ux.group_capabilities_by_phase()) == ["extension"]
+    assert ux.stages_for_capability(cap)[-2] == "analyze"
+    assert ux.suggested_next_actions(cap) == []
+
+    session = tmp_path / "malformed"
+    session.mkdir()
+    (session / "findings.json").write_text('{"findings":["bad", {"id":"x"}]}', encoding="utf-8")
+    (session / "interesting.json").write_text('{"top_paths":"bad"}', encoding="utf-8")
+    (session / "session.json").write_text("{}", encoding="utf-8")
+    (session / "graph.json").write_text("{}", encoding="utf-8")
+    dashboard = ux_extra.session_findings_dashboard(session, limit=1)
+    assert dashboard["findings"] == [
+        {"id": "x", "title": "untitled", "severity": "unknown", "category": None}
+    ]
+    assert dashboard["top_paths"] == []
+
+
 def test_dcsync_principal_file_and_kerberos_error_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -265,6 +294,106 @@ def test_unpac_pac_parser_skips_a_mocked_malformed_buffer(monkeypatch: pytest.Mo
     pac.PAC_CREDENTIAL_INFO = lambda _: object()
     monkeypatch.setitem(sys.modules, "impacket.krb5.pac", pac)
     assert unpac_the_hash._extract_nt_from_pac(b"malformed") is None
+
+
+def test_unpac_uses_mocked_ccache_and_tgs_without_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A complete UnPAC parse path can be exercised with only local stand-ins."""
+    from adaf_attack.capabilities import unpac_the_hash
+    from adaf_attack.core.graph import AttackGraph
+    from adaf_attack.core.session import Session
+    from adaf_attack.core.target import Target
+
+    class _Pkinit:
+        def run(self, *args: object, **kwargs: object) -> dict[str, str]:
+            return {"ccache": str(tmp_path / "ticket.ccache")}
+
+    class _Client:
+        def prettyPrint(self) -> bytes:  # noqa: N802
+            return b"alice@CORP.TEST"
+
+    class _Credential:
+        def __getitem__(self, key: str) -> _Client:
+            assert key == "client"
+            return _Client()
+
+        def toTGT(self) -> dict[str, object]:  # noqa: N802
+            return {"KDC_REP": b"rep", "cipher": object(), "sessionKey": object()}
+
+    class _CCache:
+        credentials = [_Credential()]
+
+        @classmethod
+        def loadFile(cls, path: str) -> _CCache:  # noqa: N802
+            return cls()
+
+    pkinit_module = ModuleType("adaf_attack.capabilities.pkinit_auth")
+    pkinit_module.PkinitAuth = _Pkinit
+    constants = ModuleType("impacket.krb5.constants")
+    constants.PrincipalNameType = type(
+        "Types", (), {"NT_SRV_INST": type("Value", (), {"value": 2})}
+    )
+    ccache = ModuleType("impacket.krb5.ccache")
+    ccache.CCache = _CCache
+    kerberos = ModuleType("impacket.krb5.kerberosv5")
+    kerberos.getKerberosTGS = lambda *args: (b"mocked-tgs", object(), object(), object())
+    types_module = ModuleType("impacket.krb5.types")
+    types_module.Principal = lambda name, type: (name, type)
+    krb5 = ModuleType("impacket.krb5")
+    krb5.constants = constants
+
+    monkeypatch.setattr(unpac_the_hash, "require_impacket", lambda _: None)
+    monkeypatch.setattr(unpac_the_hash, "_extract_nt_from_pac", lambda data: "mocked-pac")
+    monkeypatch.setitem(sys.modules, "adaf_attack.capabilities.pkinit_auth", pkinit_module)
+    monkeypatch.setitem(sys.modules, "impacket.krb5", krb5)
+    monkeypatch.setitem(sys.modules, "impacket.krb5.constants", constants)
+    monkeypatch.setitem(sys.modules, "impacket.krb5.ccache", ccache)
+    monkeypatch.setitem(sys.modules, "impacket.krb5.kerberosv5", kerberos)
+    monkeypatch.setitem(sys.modules, "impacket.krb5.types", types_module)
+    result = unpac_the_hash.UnpacTheHash().run(
+        Target(domain="corp.test", dc_ip="192.0.2.10"),
+        Session(tmp_path / "session"),
+        AttackGraph(),
+        sam="alice",
+        pfx="cert.pfx",
+    )
+    assert result["pac_credential_info"] == "mocked-pac"
+
+
+def test_core_configuration_and_dependency_errors_are_safe_offline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Unreadable config and absent optional crypto dependencies return useful errors."""
+    from adaf_attack.core import gpp, impacket_helper, user_config
+
+    broken = tmp_path / "config.json"
+    broken.write_text("{not-json", encoding="utf-8")
+    monkeypatch.setattr(user_config, "config_path", lambda: broken)
+    assert user_config.load_user_config() == {}
+
+    real_import = builtins.__import__
+
+    def missing_impacket(name: str, *args: object, **kwargs: object) -> object:
+        if name == "impacket":
+            raise ImportError("mocked missing impacket")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", missing_impacket)
+    with pytest.raises(impacket_helper.ImpacketMissing):
+        impacket_helper.require_impacket("offline-test")
+
+    def missing_crypto(name: str, *args: object, **kwargs: object) -> object:
+        if name.startswith("cryptography"):
+            raise ImportError("mocked missing crypto")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", missing_crypto)
+    with pytest.raises(RuntimeError, match="requires cryptography"):
+        gpp.decrypt_cpassword("AA")
+    monkeypatch.setattr(builtins, "__import__", real_import)
+    with pytest.raises(ValueError, match="invalid base64"):
+        gpp.decrypt_cpassword("£")
 
 
 def test_adapter_helper_error_paths_are_offline(monkeypatch: pytest.MonkeyPatch) -> None:

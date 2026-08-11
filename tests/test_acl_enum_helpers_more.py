@@ -171,3 +171,46 @@ def test_domain_targets_respects_limit_and_dedupes() -> None:
     out = acl_enum._domain_targets(conn, "DC=corp,DC=test", "corp.test", limit=50)
     labels = {t[2] for t in out}
     assert {"Computer", "User", "Group"} <= labels
+
+
+def test_sid_index_and_domain_targets_contain_malformed_offline_entries() -> None:
+    """Malformed LDAP attributes and a reached crawl limit never abort enumeration."""
+
+    class _BrokenSid:
+        def formatCanonical(self) -> str:  # noqa: N802
+            raise ValueError("mocked SID decode failure")
+
+    conn = _Conn()
+    conn.route(
+        "objectClass=user",
+        [
+            _Entry(
+                objectSid=_BrokenSid(),
+                objectClass={"values": ["user"]},
+                distinguishedName="CN=Broken,DC=corp,DC=test",
+            )
+        ],
+    )
+    assert acl_enum._sid_index(conn, "DC=corp,DC=test") == {}
+
+    conn = _Conn()
+    conn.route(
+        "adminCount=1",
+        [
+            _Entry(
+                sAMAccountName="Admins",
+                distinguishedName="CN=Admins",
+                objectClass={"values": ["group"]},
+            )
+        ],
+    )
+    conn.route(
+        "|(objectClass=user)",
+        [
+            _Entry(
+                sAMAccountName="late", distinguishedName="CN=Late", objectClass={"values": ["user"]}
+            )
+        ],
+    )
+    # High-value objects already fill this limit; broader entries are not read.
+    assert len(acl_enum._domain_targets(conn, "DC=corp,DC=test", "corp.test", limit=3)) == 3

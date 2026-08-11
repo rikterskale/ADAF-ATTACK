@@ -98,3 +98,29 @@ def test_acl_enum_unbinds_before_propagating_security_descriptor_parse_errors(
         acl_enum.AclEnum().run(_target(), Session(tmp_path), AttackGraph())
 
     assert conn.unbound is True
+
+
+def test_acl_enum_keeps_scanning_when_a_mocked_descriptor_is_unparseable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    conn = _Connection()
+    monkeypatch.setattr(acl_enum, "ldap_connect", lambda target: (conn, "DC=corp,DC=test", None))
+    monkeypatch.setattr(acl_enum, "_sid_index", lambda connection, base_dn: {})
+    monkeypatch.setattr(
+        acl_enum,
+        "_high_value_targets",
+        lambda connection, base_dn, domain: [("DOMAIN@CORP.TEST", "DC=corp,DC=test", "Domain")],
+    )
+    monkeypatch.setattr(acl_enum, "fetch_sd", lambda connection, dn: b"malformed")
+    monkeypatch.setattr(
+        acl_enum,
+        "parse_interesting_aces",
+        lambda sd: (_ for _ in ()).throw(ValueError("mocked acl")),
+    )
+    assert (
+        acl_enum.AclEnum().run(_target(), Session(tmp_path), AttackGraph())[
+            "interesting_edge_count"
+        ]
+        == 0
+    )
+    assert conn.unbound is True
