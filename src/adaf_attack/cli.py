@@ -47,6 +47,7 @@ def _humanize_bytes(n: int) -> str:
         if n < step or unit == "TB":
             return f"{n:.1f} {unit}" if unit != "B" else f"{int(n)} {unit}"
         n = int(n / step)
+    raise AssertionError("byte unit selection exhausted")
 
 
 def _humanize_since(iso_or_ts: Any) -> str:

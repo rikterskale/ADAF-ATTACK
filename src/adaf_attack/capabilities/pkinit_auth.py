@@ -54,20 +54,26 @@ def _pfx_from_pem(key_pem: bytes, cert_pem: bytes, password: bytes = b"") -> byt
     NoEncryption() if not password else None
     # cryptography >= 42 uses serialize_key_and_certificates differently
     try:
-        return pkcs12.serialize_key_and_certificates(
-            name=b"shadow",
-            key=cast(Any, key),
-            cert=cert,
-            cas=None,
-            encryption_algorithm=NoEncryption(),
+        return cast(
+            bytes,
+            pkcs12.serialize_key_and_certificates(
+                name=b"shadow",
+                key=cast(Any, key),
+                cert=cert,
+                cas=None,
+                encryption_algorithm=NoEncryption(),
+            ),
         )
     except TypeError:
-        return pkcs12.serialize_key_and_certificates(
-            name=b"shadow",
-            key=cast(Any, key),
-            cert=cert,
-            cas=None,
-            encryption_algorithm=NoEncryption(),
+        return cast(
+            bytes,
+            pkcs12.serialize_key_and_certificates(
+                name=b"shadow",
+                key=cast(Any, key),
+                cert=cert,
+                cas=None,
+                encryption_algorithm=NoEncryption(),
+            ),
         )
 
 

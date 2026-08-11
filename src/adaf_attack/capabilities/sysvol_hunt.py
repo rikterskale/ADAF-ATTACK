@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import register_capability
@@ -20,7 +20,7 @@ def _decrypt_cpassword(value: str) -> str | None:
         key = bytes.fromhex("4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b")
         raw = base64.b64decode(value + "=" * (-len(value) % 4))
         decryptor = Cipher(algorithms.AES(key), modes.CBC(b"\x00" * 16)).decryptor()
-        return decryptor.update(raw).decode("utf-16-le").rstrip("\x00")
+        return cast(str, decryptor.update(raw).decode("utf-16-le").rstrip("\x00"))
     except Exception:  # noqa: BLE001
         return None
 

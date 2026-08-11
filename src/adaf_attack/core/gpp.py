@@ -11,6 +11,7 @@ import base64
 import re
 from collections.abc import Iterator
 from pathlib import Path
+from typing import cast
 
 # Public AES-256 key disclosed by Microsoft (MS14-025).
 GPP_KEY = bytes.fromhex("4e9906e8fcb66cc9faf49310620ffee8f496e806cc057990209b09a433b66c1b")
@@ -53,7 +54,7 @@ def decrypt_cpassword(cpassword: str) -> str:
     plaintext_padded = decryptor.update(raw) + decryptor.finalize()
     unpadder = padding.PKCS7(128).unpadder()
     plaintext = unpadder.update(plaintext_padded) + unpadder.finalize()
-    return plaintext.decode("utf-16-le")
+    return cast(str, plaintext.decode("utf-16-le"))
 
 
 def iter_gpp_files(root: Path) -> Iterator[Path]:
