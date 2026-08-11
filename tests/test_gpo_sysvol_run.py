@@ -60,7 +60,9 @@ def test_gpo_sysvol_records_ldap_writers_without_network_or_write_probe(
     assert json.loads(session.path("gpo-sysvol.json").read_text(encoding="utf-8")) == result
 
 
-def test_gpo_sysvol_records_offline_acl_and_smb_probe_errors(monkeypatch: Any, tmp_path: Path) -> None:
+def test_gpo_sysvol_records_offline_acl_and_smb_probe_errors(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     """Malformed ACLs and inaccessible SYSVOL are reported without aborting enumeration."""
     conn = _Connection()
     monkeypatch.setattr(gpo_sysvol, "ldap_connect", lambda target: (conn, "DC=corp,DC=test", None))

@@ -97,10 +97,23 @@ def test_profile_and_session_human_output_paths(
     monkeypatch.setattr(user_config, "config_path", lambda: tmp_path / "config.json")
     runner = CliRunner()
     assert runner.invoke(app, ["profile", "list"]).exit_code == 0
-    assert runner.invoke(
-        app,
-        ["profile", "set", "lab", "--domain", "corp.test", "--dc-ip", "192.0.2.10", "--notes", "x"],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [
+                "profile",
+                "set",
+                "lab",
+                "--domain",
+                "corp.test",
+                "--dc-ip",
+                "192.0.2.10",
+                "--notes",
+                "x",
+            ],
+        ).exit_code
+        == 0
+    )
     assert runner.invoke(app, ["profile", "list"]).exit_code == 0
     assert runner.invoke(app, ["profile", "show", "lab"]).exit_code == 0
     assert runner.invoke(app, ["profile", "default", "lab"]).exit_code == 0
@@ -108,7 +121,10 @@ def test_profile_and_session_human_output_paths(
     assert runner.invoke(app, ["profile", "default", "missing"]).exit_code == 1
     assert runner.invoke(app, ["profile", "set", "bad name"]).exit_code == 1
     assert runner.invoke(app, ["completions", "fish"]).exit_code == 0
-    assert runner.invoke(app, ["session", "show", "--session", str(tmp_path / "missing")]).exit_code == 1
+    assert (
+        runner.invoke(app, ["session", "show", "--session", str(tmp_path / "missing")]).exit_code
+        == 1
+    )
 
     session = tmp_path / "session"
     session.mkdir()

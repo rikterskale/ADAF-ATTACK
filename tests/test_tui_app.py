@@ -95,8 +95,11 @@ def test_tui_search_review_and_dry_run_are_available() -> None:
     asyncio.run(exercise())
 
 
-def test_tui_controls_validation_sessions_and_findings(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tui_controls_validation_sessions_and_findings(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Exercise local TUI controls without contacting a target."""
+
     async def exercise() -> None:
         app = ADAFAttackApp()
         async with app.run_test() as pilot:
@@ -125,7 +128,9 @@ def test_tui_controls_validation_sessions_and_findings(tmp_path, monkeypatch: py
             app._toggle_password()
             assert app.query_one("#password", Input).password is False
             app.on_input_changed(SimpleNamespace(input=domain, value="corp.test"))
-            app.on_input_changed(SimpleNamespace(input=app.query_one("#log-filter", Input), value="beta"))
+            app.on_input_changed(
+                SimpleNamespace(input=app.query_one("#log-filter", Input), value="beta")
+            )
             assert app._selected() is None
             app._update_help()
             app.action_list_caps()
@@ -139,7 +144,9 @@ def test_tui_controls_validation_sessions_and_findings(tmp_path, monkeypatch: py
             app._quickstart()
             assert "Quickstart" in str(app.query_one("#review-panel", Static).render())
             app._show_findings()
-            assert "select a session" in str(app.query_one("#session-panel", Static).render()).lower()
+            assert (
+                "select a session" in str(app.query_one("#session-panel", Static).render()).lower()
+            )
             app._cancel()
             app._show_log("alpha\nbeta")
             app.query_one("#log-filter", Input).value = "beta"
