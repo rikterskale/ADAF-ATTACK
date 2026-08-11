@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
 from textual.widgets import Input, ListView, Static
 
+from adaf_attack.tui import app as tui_app
 from adaf_attack.tui.app import ADAFAttackApp
 
 
@@ -90,3 +93,134 @@ def test_tui_search_review_and_dry_run_are_available() -> None:
             assert any("DRY RUN" in line for line in app._log_lines)
 
     asyncio.run(exercise())
+
+
+def test_tui_controls_validation_sessions_and_findings(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Exercise local TUI controls without contacting a target."""
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            notices = Mock()
+            app.notify = notices  # type: ignore[method-assign]
+            domain = app.query_one("#domain", Input)
+            dc_ip = app.query_one("#dc_ip", Input)
+            hashes = app.query_one("#hashes", Input)
+            creds_file = app.query_one("#creds_file", Input)
+
+            assert app._validate_target() is None
+            domain.value = "corp.test"
+            assert app._validate_target() is None
+            dc_ip.value = "bad host"
+            assert app._validate_target() is None
+            dc_ip.value = "192.0.2.10"
+            hashes.value = "not-a-hash"
+            assert app._validate_target() is None
+            hashes.value = ""
+            creds_file.value = str(tmp_path / "missing.json")
+            assert app._validate_target() is None
+            creds_file.value = ""
+            assert app._validate_target() == ("corp.test", "192.0.2.10")
+
+            app._toggle_password()
+            assert app.query_one("#password", Input).password is False
+            app.on_input_changed(SimpleNamespace(input=domain, value="corp.test"))
+            app.on_input_changed(SimpleNamespace(input=app.query_one("#log-filter", Input), value="beta"))
+            assert app._selected() is None
+            app._update_help()
+            app.action_list_caps()
+            app.action_run_selected()
+            app.action_review_run()
+            app.action_dry_run()
+            app.action_show_sessions()
+            app.action_toggle_password()
+            app._review_run()
+            app._dry_run()
+            app._quickstart()
+            assert "Quickstart" in str(app.query_one("#review-panel", Static).render())
+            app._show_findings()
+            assert "select a session" in str(app.query_one("#session-panel", Static).render()).lower()
+            app._cancel()
+            app._show_log("alpha\nbeta")
+            app.query_one("#log-filter", Input).value = "beta"
+            app._refresh_log()
+
+            workspace = tmp_path / "workspace"
+            session = workspace / "one"
+            session.mkdir(parents=True)
+            (workspace / "not-a-session").mkdir()
+            (session / "session.json").write_text(
+                json.dumps({"session_id": "one", "created_at": "2026-01-01T00:00:00Z"}),
+                encoding="utf-8",
+            )
+            monkeypatch.setattr(tui_app, "default_workspace_dir", lambda: workspace)
+            app._show_sessions()
+            assert "one" in str(app.query_one("#session-panel", Static).render())
+
+            (session / "interesting.json").write_text(
+                json.dumps({"top_paths": [{"path": ["a@corp", "b@corp"]}]}), encoding="utf-8"
+            )
+            (session / "graph.json").write_text(
+                json.dumps({"summary": {"nodes": 2, "edges": 1}}), encoding="utf-8"
+            )
+            (session / "findings.json").write_text(
+                json.dumps({"findings": [{"severity": "high"}, "bad"]}), encoding="utf-8"
+            )
+            app._last_session = session
+            app._show_findings()
+            assert "Findings dashboard" in str(app.query_one("#session-panel", Static).render())
+            assert app._read_json(tmp_path / "missing.json") == {}
+            (tmp_path / "array.json").write_text("[]", encoding="utf-8")
+            assert app._read_json(tmp_path / "array.json") == {}
+            app.on_button_pressed(SimpleNamespace(button=SimpleNamespace(id="quickstart-btn")))
+            app.on_button_pressed(SimpleNamespace(button=SimpleNamespace(id="unknown")))
+
+            app.selected_cap = "ldap-enum"
+            app._review_run()
+            app._dry_run()
+            domain.value = ""
+            app._review_run()
+            domain.value = "corp.test"
+            app.selected_cap = "shadow-creds"
+            app.query_one("#force", tui_app.Switch).value = False
+            app._review_run()
+            app.selected_cap = "ldap-enum"
+            app.query_one("#start", Input).value = "user@corp.test"
+
+            def successful_run(*args, **kwargs):
+                app._cancel_requested.set()
+                kwargs["log"]("runner message")
+                return {
+                    "session_path": str(session),
+                    "session_id": "one",
+                    "graph_summary": {"nodes": 2, "edges": 1},
+                }
+
+            monkeypatch.setattr(tui_app, "execute_capability", successful_run)
+            app._start_run()
+            await asyncio.sleep(0.1)
+            await pilot.pause()
+            assert app._capability_running is False
+            monkeypatch.setattr(
+                tui_app,
+                "execute_capability",
+                lambda *args, **kwargs: (_ for _ in ()).throw(tui_app.RunError("offline failure")),
+            )
+            app._start_run()
+            await asyncio.sleep(0.1)
+            await pilot.pause()
+            app._capability_running = True
+            app._cancel()
+            monkeypatch.setattr(app, "copy_to_clipboard", lambda text: None)
+            app._copy_findings()
+            monkeypatch.setattr(
+                app,
+                "copy_to_clipboard",
+                lambda text: (_ for _ in ()).throw(RuntimeError("clipboard")),
+            )
+            app._copy_findings()
+
+    asyncio.run(exercise())
+
+    monkeypatch.setattr(ADAFAttackApp, "run", lambda self: None)
+    tui_app.run_tui()

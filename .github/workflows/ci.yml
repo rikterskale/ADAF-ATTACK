@@ -122,7 +122,7 @@ jobs:
           --cov=adaf_attack
           --cov-report=term-missing
           --cov-report=xml
-          --cov-fail-under=75
+          --cov-fail-under=100
 
       - name: CLI smoke tests
         shell: bash

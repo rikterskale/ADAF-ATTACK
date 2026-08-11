@@ -60,6 +60,30 @@ def test_gpo_sysvol_records_ldap_writers_without_network_or_write_probe(
     assert json.loads(session.path("gpo-sysvol.json").read_text(encoding="utf-8")) == result
 
 
+def test_gpo_sysvol_records_offline_acl_and_smb_probe_errors(monkeypatch: Any, tmp_path: Path) -> None:
+    """Malformed ACLs and inaccessible SYSVOL are reported without aborting enumeration."""
+    conn = _Connection()
+    monkeypatch.setattr(gpo_sysvol, "ldap_connect", lambda target: (conn, "DC=corp,DC=test", None))
+    monkeypatch.setattr(gpo_sysvol, "fetch_sd", lambda connection, dn: b"descriptor")
+    monkeypatch.setattr(
+        gpo_sysvol,
+        "parse_interesting_aces",
+        lambda sd: (_ for _ in ()).throw(ValueError("bad descriptor")),
+    )
+    monkeypatch.setattr(
+        gpo_sysvol,
+        "_smb_connect",
+        lambda target, host: (_ for _ in ()).throw(OSError("offline SMB")),
+    )
+    result = gpo_sysvol.GpoSysvol().run(
+        Target(domain="corp.test", dc_ip="192.0.2.10", username="alice", password="pw"),
+        Session(tmp_path),
+        AttackGraph(),
+    )
+    assert result["gpos"][0]["ldap_writers"] == []
+    assert "offline SMB" in result["gpos"][0]["sysvol_error"]
+
+
 def test_gpo_sysvol_stages_payload_and_falls_back_to_marker_path(
     monkeypatch: Any, tmp_path: Path
 ) -> None:
