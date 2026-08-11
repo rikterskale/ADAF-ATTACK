@@ -86,6 +86,36 @@ def test_gpo_sysvol_records_offline_acl_and_smb_probe_errors(
     assert "offline SMB" in result["gpos"][0]["sysvol_error"]
 
 
+def test_gpo_sysvol_records_mocked_sysvol_list_failure(monkeypatch: Any, tmp_path: Path) -> None:
+    """A connected but unreadable SYSVOL share is retained as a per-GPO result."""
+
+    class _ListFailingSmb:
+        def connectTree(self, share: str) -> int:
+            assert share == "SYSVOL"
+            return 1
+
+        def listPath(self, share: str, path: str) -> None:
+            raise OSError("mocked access denied")
+
+        def disconnectTree(self, tid: int) -> None:
+            assert tid == 1
+
+        def logoff(self) -> None:
+            pass
+
+    conn = _Connection()
+    monkeypatch.setattr(gpo_sysvol, "ldap_connect", lambda target: (conn, "DC=corp,DC=test", None))
+    monkeypatch.setattr(gpo_sysvol, "fetch_sd", lambda connection, dn: None)
+    monkeypatch.setattr(gpo_sysvol, "_smb_connect", lambda target, host: _ListFailingSmb())
+    result = gpo_sysvol.GpoSysvol().run(
+        Target(domain="corp.test", dc_ip="192.0.2.10", username="alice", password="pw"),
+        Session(tmp_path),
+        AttackGraph(),
+    )
+    assert result["gpos"][0]["sysvol_reachable"] is False
+    assert "mocked access denied" in result["gpos"][0]["sysvol_error"]
+
+
 def test_gpo_sysvol_stages_payload_and_falls_back_to_marker_path(
     monkeypatch: Any, tmp_path: Path
 ) -> None:
@@ -136,6 +166,32 @@ def test_gpo_sysvol_stages_payload_and_falls_back_to_marker_path(
     }
     assert calls[0] == ("tree", "SYSVOL")
     assert calls[-1] == ("logoff", None)
+
+
+def test_gpo_sysvol_stage_task_returns_structured_smb_connection_failure(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    """Connection errors during a forced staging attempt remain an offline result."""
+
+    class BrokenSmb:
+        def connectTree(self, share: str) -> int:  # noqa: N802
+            raise OSError("offline SMB")
+
+    monkeypatch.setattr(gpo_sysvol, "_smb_connect", lambda target, host: BrokenSmb())
+    result = gpo_sysvol.GpoSysvol()._stage_task(
+        Target(domain="corp.test", dc_ip="192.0.2.10"),
+        [
+            {
+                "cn": "{GPO}",
+                "display_name": "Baseline",
+                "sysvol": r"\\dc\SYSVOL\corp\Policies\{GPO}",
+            }
+        ],
+        "{GPO}",
+        "<Tasks />",
+        Session(tmp_path),
+    )
+    assert result == {"ok": False, "error": "offline SMB", "gpo": "{GPO}"}
 
 
 def test_sysvol_unc_parser_and_smb_auth_paths(monkeypatch: Any) -> None:

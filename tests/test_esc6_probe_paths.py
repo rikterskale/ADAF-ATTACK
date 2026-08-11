@@ -69,6 +69,9 @@ def _install_fake_impacket(monkeypatch: Any, *, edit_flags: int = 0x40000) -> No
         def login(self, *a: Any, **k: Any) -> None:
             pass
 
+        def getCredentials(self) -> tuple[str, str, str, str, str, str, None, None]:
+            return ("a", "p", "corp.test", "", "", "", None, None)
+
     class _DCE:
         def connect(self) -> None:
             pass
@@ -112,6 +115,10 @@ def _install_fake_impacket(monkeypatch: Any, *, edit_flags: int = 0x40000) -> No
     smb_mod = types.ModuleType("impacket.smbconnection")
     smb_mod.SMBConnection = _SMBConnection
 
+    v5 = types.ModuleType("impacket.dcerpc.v5")
+    v5.rrp = rrp
+    v5.transport = transport
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5", v5)
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.rrp", rrp)
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.transport", transport)
     monkeypatch.setitem(sys.modules, "impacket.smbconnection", smb_mod)

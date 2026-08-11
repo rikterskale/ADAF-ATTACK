@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import builtins
 import json
+import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 from typer.testing import CliRunner
@@ -209,3 +212,233 @@ def test_unpac_validates_credential_material_offline(
         unpac_the_hash.UnpacTheHash().run(
             target, Session(tmp_path / "session"), AttackGraph(), sam="alice", key="key.pem"
         )
+
+
+def test_unpac_passes_pem_material_and_stops_without_a_mocked_ccache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The PKINIT adapter receives both PEM paths without contacting a KDC."""
+    from adaf_attack.capabilities import unpac_the_hash
+    from adaf_attack.core.graph import AttackGraph
+    from adaf_attack.core.session import Session
+    from adaf_attack.core.target import Target
+
+    received: dict[str, object] = {}
+
+    class _Pkinit:
+        def run(self, *args: object, **kwargs: object) -> dict[str, str]:
+            received.update(kwargs)
+            return {}
+
+    module = ModuleType("adaf_attack.capabilities.pkinit_auth")
+    module.PkinitAuth = _Pkinit
+    monkeypatch.setattr(unpac_the_hash, "require_impacket", lambda _: None)
+    monkeypatch.setitem(sys.modules, "adaf_attack.capabilities.pkinit_auth", module)
+    with pytest.raises(RuntimeError, match="did not produce a ccache"):
+        unpac_the_hash.UnpacTheHash().run(
+            Target(domain="corp.test", dc_ip="192.0.2.10"),
+            Session(tmp_path / "session"),
+            AttackGraph(),
+            sam="alice",
+            key="cert.key",
+            cert="cert.pem",
+        )
+    assert received["key"] == "cert.key"
+    assert received["cert"] == "cert.pem"
+
+
+def test_unpac_pac_parser_skips_a_mocked_malformed_buffer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Malformed PAC buffers are ignored rather than aborting offline analysis."""
+    from adaf_attack.capabilities import unpac_the_hash
+
+    pac = ModuleType("impacket.krb5.pac")
+
+    class _PacType:
+        def __init__(self, data: bytes) -> None:
+            self.buffers = [object()]
+
+        def __getitem__(self, key: str) -> list[object]:
+            return self.buffers
+
+    pac.PACTYPE = _PacType
+    pac.PAC_INFO_BUFFER = lambda _: (_ for _ in ()).throw(ValueError("mocked PAC"))
+    pac.PAC_CREDENTIAL_INFO = lambda _: object()
+    monkeypatch.setitem(sys.modules, "impacket.krb5.pac", pac)
+    assert unpac_the_hash._extract_nt_from_pac(b"malformed") is None
+
+
+def test_adapter_helper_error_paths_are_offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Adapter helper failures return safe, structured values without network use."""
+    from adaf_attack.capabilities import ad_cve_scan, gmsa_laps_enum, rbcd, sysvol_hunt
+
+    class BrokenSMB:
+        def __init__(self, *args, **kwargs) -> None:
+            raise OSError("offline")
+
+    monkeypatch.setattr("impacket.smbconnection.SMBConnection", BrokenSMB)
+    assert ad_cve_scan._check_smb_signing("192.0.2.10")["error"] == "offline"
+    assert sysvol_hunt._decrypt_cpassword("not-base64") is None
+    assert gmsa_laps_enum._parse_managed_password_blob(b"invalid") is None
+
+    class BrokenText:
+        def __str__(self) -> str:
+            raise ValueError("bad descriptor")
+
+    assert rbcd._parse_security_descriptor_sids(BrokenText()) == []
+
+
+def test_cert_request_ignores_malformed_prior_adcs_artifact(tmp_path: Path) -> None:
+    """A corrupt prior AD CS artifact cannot supply a template and fails safely."""
+    from adaf_attack.capabilities.cert_request import CertRequest
+    from adaf_attack.core.graph import AttackGraph
+    from adaf_attack.core.session import Session
+    from adaf_attack.core.target import Target
+
+    session = Session(tmp_path)
+    session.path("adcs-enum.json").write_text("not-json", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="No --template"):
+        CertRequest().run(
+            Target(domain="corp.test", dc_ip="192.0.2.10", username="alice"),
+            session,
+            AttackGraph(),
+            force=True,
+        )
+
+
+def test_asrep_roast_reports_missing_optional_dependency(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Missing Kerberos dependencies are reported before LDAP or KDC activity."""
+    from adaf_attack.capabilities.asrep_roast import AsrepRoast
+    from adaf_attack.core.graph import AttackGraph
+    from adaf_attack.core.session import Session
+    from adaf_attack.core.target import Target
+
+    original_import = builtins.__import__
+
+    def no_impacket(name: str, *args: object, **kwargs: object) -> object:
+        if name == "impacket.krb5":
+            raise ImportError("test missing dependency")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_impacket)
+    with pytest.raises(RuntimeError, match="requires Impacket"):
+        AsrepRoast().run(
+            Target(domain="corp.test", dc_ip="192.0.2.10"), Session(tmp_path), AttackGraph()
+        )
+
+
+def test_secretsdump_adapter_handles_offline_registry_sam_and_lsa_failures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Remote-registry adapter degrades safely when individual extraction stages fail."""
+    from adaf_attack.capabilities import secretsdump_local
+    from adaf_attack.core.graph import AttackGraph
+    from adaf_attack.core.session import Session
+    from adaf_attack.core.target import Target
+
+    monkeypatch.setattr(secretsdump_local, "require_impacket", lambda _: None)
+    monkeypatch.setattr(secretsdump_local, "smb_connect", lambda host, target: object())
+
+    class RegistryFailure:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def setExecMethod(self, method: str) -> None:  # noqa: N802
+            pass
+
+        def enableRegistry(self) -> None:  # noqa: N802
+            raise OSError("registry offline")
+
+    monkeypatch.setattr("impacket.examples.secretsdump.RemoteOperations", RegistryFailure)
+    target = Target(domain="corp.test", dc_ip="192.0.2.10", username="alice", password="pw")
+    with pytest.raises(RuntimeError, match="registry enable"):
+        secretsdump_local.SecretsdumpLocal().run(
+            target, Session(tmp_path / "registry"), AttackGraph()
+        )
+
+    class Remote:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def setExecMethod(self, method: str) -> None:  # noqa: N802
+            pass
+
+        def enableRegistry(self) -> None:  # noqa: N802
+            pass
+
+        def getBootKey(self) -> bytes:  # noqa: N802
+            return b"boot"
+
+        def finish(self) -> None:
+            pass
+
+    class BrokenDump:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def dump(self) -> None:
+            raise OSError("offline dump")
+
+        def dumpCachedHashes(self) -> None:  # noqa: N802
+            raise OSError("offline lsa")
+
+        def dumpSecrets(self) -> None:  # noqa: N802
+            raise OSError("offline lsa")
+
+        def finish(self) -> None:
+            pass
+
+    monkeypatch.setattr("impacket.examples.secretsdump.RemoteOperations", Remote)
+    monkeypatch.setattr("impacket.examples.secretsdump.SAMHashes", BrokenDump)
+    monkeypatch.setattr("impacket.examples.secretsdump.LSASecrets", BrokenDump)
+    result = secretsdump_local.SecretsdumpLocal().run(
+        target, Session(tmp_path / "dump"), AttackGraph()
+    )
+    assert result["sam_count"] == 0 and result["lsa_count"] == 0
+
+
+def test_shadow_creds_and_rbcd_ignore_malformed_acl_descriptors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ACL parse failures are contained while enumeration artifacts are still produced."""
+    from types import SimpleNamespace
+
+    from adaf_attack.capabilities import rbcd, shadow_creds
+    from adaf_attack.core.graph import AttackGraph
+    from adaf_attack.core.session import Session
+    from adaf_attack.core.target import Target
+
+    class Conn:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.entries: list[object] = []
+
+        def search(self, *args, **kwargs) -> None:
+            self.calls += 1
+            if self.calls == 2:
+                self.entries = [
+                    SimpleNamespace(sAMAccountName="admin", distinguishedName="CN=admin")
+                ]
+            else:
+                self.entries = []
+
+        def unbind(self) -> None:
+            pass
+
+    target = Target(domain="corp.test", dc_ip="192.0.2.10")
+    for module, adapter in ((shadow_creds, shadow_creds.ShadowCreds), (rbcd, rbcd.Rbcd)):
+        conn = Conn()
+        monkeypatch.setattr(
+            module, "ldap_connect", lambda target, c=conn: (c, "DC=corp,DC=test", None)
+        )
+        monkeypatch.setattr(module, "fetch_sd", lambda connection, dn: b"broken")
+        monkeypatch.setattr(
+            module,
+            "parse_interesting_aces",
+            lambda sd: (_ for _ in ()).throw(ValueError("bad acl")),
+        )
+        result = adapter().run(
+            target, Session(tmp_path / module.__name__.split(".")[-1]), AttackGraph()
+        )
+        assert result

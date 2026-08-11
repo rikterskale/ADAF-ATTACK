@@ -179,6 +179,9 @@ def test_esc6_probe_rrp_open_key_failure(monkeypatch: Any) -> None:
         def login(self, *a: Any, **k: Any) -> None:
             pass
 
+        def getCredentials(self) -> tuple[str, str, str, str, str, str, None, None]:
+            return ("a", "p", "c", "", "", "", None, None)
+
     class _DCE:
         def connect(self) -> None:
             pass
@@ -208,6 +211,10 @@ def test_esc6_probe_rrp_open_key_failure(monkeypatch: Any) -> None:
     transport.DCERPCTransportFactory = lambda b: _T()
     smb_mod = types.ModuleType("impacket.smbconnection")
     smb_mod.SMBConnection = _SMB
+    v5 = types.ModuleType("impacket.dcerpc.v5")
+    v5.rrp = rrp
+    v5.transport = transport
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5", v5)
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.rrp", rrp)
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.transport", transport)
     monkeypatch.setitem(sys.modules, "impacket.smbconnection", smb_mod)
@@ -227,6 +234,9 @@ def test_esc6_probe_rrp_ca_key_read_failure(monkeypatch: Any) -> None:
 
         def login(self, *a: Any, **k: Any) -> None:
             pass
+
+        def getCredentials(self) -> tuple[str, str, str, str, str, str, None, None]:
+            return ("a", "p", "c", "", "", "", None, None)
 
     class _DCE:
         def connect(self) -> None:
@@ -270,6 +280,10 @@ def test_esc6_probe_rrp_ca_key_read_failure(monkeypatch: Any) -> None:
     transport.DCERPCTransportFactory = lambda b: _T()
     smb_mod = types.ModuleType("impacket.smbconnection")
     smb_mod.SMBConnection = _SMB
+    v5 = types.ModuleType("impacket.dcerpc.v5")
+    v5.rrp = rrp
+    v5.transport = transport
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5", v5)
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.rrp", rrp)
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.transport", transport)
     monkeypatch.setitem(sys.modules, "impacket.smbconnection", smb_mod)
@@ -290,6 +304,9 @@ def test_esc6_probe_rrp_query_returns_int_and_str(monkeypatch: Any) -> None:
 
         def login(self, *a: Any, **k: Any) -> None:
             pass
+
+        def getCredentials(self) -> tuple[str, str, str, str, str, str, None, None]:
+            return ("a", "p", "c", "", "", "", None, None)
 
     class _DCE:
         def connect(self) -> None:
@@ -331,6 +348,10 @@ def test_esc6_probe_rrp_query_returns_int_and_str(monkeypatch: Any) -> None:
     transport.DCERPCTransportFactory = lambda b: _T()
     smb_mod = types.ModuleType("impacket.smbconnection")
     smb_mod.SMBConnection = _SMB
+    v5 = types.ModuleType("impacket.dcerpc.v5")
+    v5.rrp = rrp
+    v5.transport = transport
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5", v5)
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.rrp", rrp)
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.transport", transport)
     monkeypatch.setitem(sys.modules, "impacket.smbconnection", smb_mod)

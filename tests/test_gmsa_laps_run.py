@@ -85,3 +85,33 @@ def test_gmsa_laps_enum_records_inventory_acl_signals_and_graph_nodes(
     assert result["laps_computers"][0]["legacy_laps"] is True
     assert conn.unbound is True
     assert {edge.kind for edge in graph.edges} == {"LAPSReadable"}
+
+
+def test_gmsa_laps_keeps_inventory_when_mocked_acl_parsing_fails(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    """Unreadable security descriptors must not hide gMSA or LAPS inventory."""
+    conn = _Connection()
+    monkeypatch.setattr(gmsa, "ldap_connect", lambda target: (conn, "DC=corp,DC=test", None))
+    monkeypatch.setattr(gmsa, "fetch_sd", lambda connection, dn: b"malformed")
+    monkeypatch.setattr(
+        gmsa,
+        "parse_interesting_aces",
+        lambda sd: (_ for _ in ()).throw(ValueError("mocked descriptor failure")),
+    )
+    result = gmsa.GmsaLapsEnum().run(
+        Target(domain="corp.test", dc_ip="192.0.2.10"), Session(tmp_path), AttackGraph()
+    )
+    assert result["gmsas"][0]["acl_read_signals"] == []
+    assert result["laps_computers"][0]["acl_read_signals"] == []
+
+
+def test_gmsa_blob_parser_handles_hostile_bytes_subclass() -> None:
+    """The parser soft-fails when a malformed blob raises during string extraction."""
+
+    class _HostileBytes(bytes):
+        def __getitem__(self, index: Any) -> Any:
+            raise ValueError("mocked malformed blob")
+
+    blob = _HostileBytes(b"\x01\x00\x00\x00\x12\x00\x00\x00\x10\x00\x00\x00\x00\x00\x00\x00xx")
+    assert gmsa._parse_managed_password_blob(blob) is None
