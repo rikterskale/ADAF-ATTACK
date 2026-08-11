@@ -198,6 +198,101 @@ def test_ux_handles_custom_phases_and_malformed_dashboard_records(
     assert dashboard["top_paths"] == []
 
 
+def test_remaining_pure_parser_edge_cases(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Truncated binary data and alternate ADCS flags are handled locally."""
+    from adaf_attack.core import acl, adcs_analyze, esc6_probe
+
+    # Declared SID sub-authority is incomplete, so the fallback stops safely.
+    assert acl._sid_to_str(b"\x01\x02\x00\x00\x00\x00\x00\x05\x01") == "S-1-5-"
+    assert esc6_probe._parse_editflags("EditFlags 0x40000") == 0x40000
+    monkeypatch.setattr(adcs_analyze, "client_auth_eku", lambda ekus: False)
+    result = adcs_analyze.analyze_template_flags(
+        name_flags=1, ekus=[adcs_analyze.EKU_ANY], application_policies=[]
+    )
+    assert "ESC2" in result["esc_tags"] and "ESC1" not in result["esc_tags"]
+
+
+def test_remaining_identity_and_kerberos_dependency_guards(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Malformed SID objects and absent Kerberos modules fail safely offline."""
+    from adaf_attack.core import auth, rbcd_sd
+
+    class _BrokenSid:
+        def formatCanonical(self) -> str:  # noqa: N802
+            raise ValueError("mocked canonical SID failure")
+
+        def __str__(self) -> str:
+            return "S-1-5-21-1"
+
+    assert rbcd_sd.sid_from_ldap_value(_BrokenSid()) == "S-1-5-21-1"
+    real_import = builtins.__import__
+
+    def missing_kerberos(name: str, *args: object, **kwargs: object) -> object:
+        if name.startswith("impacket.krb5"):
+            raise ImportError("mocked missing Kerberos")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", missing_kerberos)
+    from adaf_attack.core.target import Target
+
+    with pytest.raises(RuntimeError, match="requires Impacket"):
+        auth.get_kerberos_tgt(Target(domain="corp.test", dc_ip="192.0.2.10", username="alice"))
+
+
+def test_bloodhound_hydration_rejects_malformed_local_graph(tmp_path: Path) -> None:
+    """A corrupt saved graph cannot contaminate a fresh export graph."""
+    from adaf_attack.capabilities.bloodhound_export import _hydrate_graph_from_session
+    from adaf_attack.core.graph import AttackGraph
+    from adaf_attack.core.session import Session
+
+    session = Session(tmp_path / "session")
+    session.path("graph.json").write_text("{not-json", encoding="utf-8")
+    assert _hydrate_graph_from_session(session, AttackGraph()) is False
+
+
+def test_asreq_probe_contains_unexpected_mocked_kerberos_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unexpected KDC transport errors become structured offline probe results."""
+    from adaf_attack.capabilities import asreq_userhunt
+
+    constants = ModuleType("impacket.krb5.constants")
+    constants.PrincipalNameType = type(
+        "Types", (), {"NT_PRINCIPAL": type("Value", (), {"value": 1})}
+    )
+    kerberos = ModuleType("impacket.krb5.kerberosv5")
+    kerberos.KerberosError = type("KerberosError", (Exception,), {})
+    kerberos.getKerberosTGT = lambda *args: (_ for _ in ()).throw(OSError("mocked timeout"))
+    types_module = ModuleType("impacket.krb5.types")
+    types_module.Principal = lambda name, type: (name, type)
+    krb5 = ModuleType("impacket.krb5")
+    krb5.constants = constants
+    monkeypatch.setitem(sys.modules, "impacket.krb5", krb5)
+    monkeypatch.setitem(sys.modules, "impacket.krb5.constants", constants)
+    monkeypatch.setitem(sys.modules, "impacket.krb5.kerberosv5", kerberos)
+    monkeypatch.setitem(sys.modules, "impacket.krb5.types", types_module)
+    result = asreq_userhunt._probe_user("alice", "corp.test", "192.0.2.10")
+    assert result["state"] == "error" and result["kdc_error"] == "mocked timeout"
+
+
+def test_doctor_reports_mocked_missing_dependencies(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Doctor reports absent required and optional packages without network access."""
+    import adaf_attack.cli as cli
+
+    real_import = builtins.__import__
+
+    def missing_packages(name: str, *args: object, **kwargs: object) -> object:
+        if name in {"ldap3", "impacket", "textual"}:
+            raise ImportError("mocked package missing")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", missing_packages)
+    result = CliRunner().invoke(cli.app, ["--format", "json", "doctor"])
+    payload = json.loads(result.output)
+    assert result.exit_code == 0
+    assert payload["ok"] is False
+    assert payload["next_step"].startswith("Install the base")
+
+
 def test_dcsync_principal_file_and_kerberos_error_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
