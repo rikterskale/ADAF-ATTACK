@@ -26,7 +26,7 @@ class ActionableError(Exception):
         return {"error": payload}
 
 
-ERROR_CATALOG: dict[str, tuple[str, str]] = {
+ERROR_CATALOG: dict[str, tuple[str, ...]] = {
     "UNKNOWN_CAPABILITY": (
         "The requested capability is not registered.",
         "Run `adaf-attack capability-help` to see supported capability IDs.",

@@ -346,6 +346,8 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
         example += " --domain corp.example --dc-ip 10.0.0.10"
     if cap.destructive:
         example += " --force"
+    from adaf_attack.core.ux import capability_prerequisites, format_next_actions_block
+
     return {
         "id": cap.id,
         "category": cap.category,
@@ -361,6 +363,8 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
             + (" --domain <domain> --dc-ip <host>" if "--domain" in spec.required else "")
             + "` before execution."
         ),
+        "prerequisites": capability_prerequisites(cap.id),
+        "suggested_next": format_next_actions_block(cap)["suggestions"],
     }
 
 
@@ -437,6 +441,7 @@ def plan(
     force: bool = typer.Option(
         False, "--force", help="Indicate that execution would be authorized."
     ),
+    export: Path | None = typer.Option(None, "--export", help="Write the plan as Markdown."),
 ) -> None:
     """Preview the target, effects, and risk of a proposed capability run."""
     import adaf_attack.capabilities  # noqa: F401
@@ -473,6 +478,25 @@ def plan(
         },
         "next_step": next_step,
     }
+    if export is not None:
+        from adaf_attack.core.ux import capability_prerequisites, export_plan_markdown
+
+        export.parent.mkdir(parents=True, exist_ok=True)
+        export.write_text(
+            export_plan_markdown(
+                capability_id=cap.id,
+                domain=domain,
+                dc_ip=dc_ip,
+                risk=payload["risk"],
+                checklist=checklist,
+                ready_command=build_ready_command(
+                    cap.id, domain=domain, dc_ip=dc_ip, force=requires_force
+                ),
+                prerequisites=capability_prerequisites(cap.id),
+            ),
+            encoding="utf-8",
+        )
+        payload["export"] = str(export)
     human = Panel(
         "\n".join(
             [
@@ -767,7 +791,7 @@ def run_capability(
         )
 
     if dry_run:
-        return plan(ctx, capability=capability, domain=domain, dc_ip=dc_ip, force=force)
+        return plan(ctx, capability=capability, domain=domain, dc_ip=dc_ip, force=force, export=None)
 
     target = _build_target(
         domain, dc_ip, username, password, hashes, aes_key, ccache, use_kerberos, ldaps
@@ -1494,15 +1518,21 @@ def show_errors(
         "ok": True,
         "count": len(catalog),
         "errors": [
-            {"code": key, "message": msg, "remediation": rem} for key, (msg, rem) in catalog.items()
+            {
+                "code": key,
+                "message": entry[0],
+                "remediation": entry[1],
+                "suggested_command": entry[2] if len(entry) > 2 else None,
+            }
+            for key, entry in catalog.items()
         ],
     }
     table = Table(title="ADAF-ATTACK error codes", show_header=True)
     table.add_column("Code", style="cyan")
     table.add_column("Message")
     table.add_column("Remediation")
-    for key, (msg, rem) in catalog.items():
-        table.add_row(key, msg, rem)
+    for key, entry in catalog.items():
+        table.add_row(key, entry[0], entry[1])
     _emit(ctx, payload, table)
 
 
@@ -1588,6 +1618,19 @@ path_app = typer.Typer(help="Attack-path ranking.")
 app.add_typer(capability_app, name="capability")
 app.add_typer(session_app, name="session")
 app.add_typer(path_app, name="path")
+
+# Register the optional operator-experience command group after the shared
+# output helpers and noun-verb subgroups are available.
+from adaf_attack.cli_ux_commands import register_ux_commands
+
+register_ux_commands(
+    app,
+    session_app,
+    emit=_emit,
+    emit_error=_emit_error,
+    json_mode=_json_mode,
+    console=_console,
+)
 
 
 @capability_app.command("list")

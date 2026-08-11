@@ -80,8 +80,8 @@ def _zsh(commands: str, caps: str) -> str:
 # ADAF-ATTACK zsh completion
 _adaf_attack() {{
   local -a commands capabilities
-  commands=({' '.join(f\"'{c}'\" for c in commands.split())})
-  capabilities=({' '.join(f\"'{c}'\" for c in caps.split()) if caps else \"\"})
+  commands=({' '.join(f"'{c}'" for c in commands.split())})
+  capabilities=({' '.join(f"'{c}'" for c in caps.split()) if caps else ""})
   _arguments \\
     '1:command:->cmds' \\
     '*::arg:->args'

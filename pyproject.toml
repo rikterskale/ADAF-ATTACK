@@ -104,28 +104,3 @@ warn_unused_configs = true
 
 [tool.coverage.run]
 source = ["adaf_attack"]
-# Interactive Textual UI code cannot be meaningfully unit-tested outside
-# a real terminal; behaviour is exercised via smoke tests.
-omit = ["*/tui/app.py"]
-
-[tool.coverage.report]
-exclude_also = [
-    "if TYPE_CHECKING:",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "^\\s*\\.\\.\\.\\s*$",
-    "pragma: no cover",
-    # Defensive last-resort handlers on live network / subprocess calls.
-    "except ImportError",
-    "except Exception:  # noqa: BLE001",
-    "except Exception as exc:  # noqa: BLE001",
-    "except LDAPException",
-    "except VaultError",
-    "except InvalidToken",
-    "except FileNotFoundError",
-    "except \\(OSError",
-    "except \\(TypeError, ValueError\\)",
-    "except \\(InvalidToken",
-    "except \\(ActionableError, ValueError\\)",
-    "except \\(CampaignError, OSError, json.JSONDecodeError\\)",
-]
