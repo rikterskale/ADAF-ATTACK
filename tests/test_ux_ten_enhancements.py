@@ -10,14 +10,13 @@ from typer.testing import CliRunner
 from adaf_attack.cli import app
 from adaf_attack.core import profiles as profiles_mod
 from adaf_attack.core import user_config
-from adaf_attack.core.cli_contract import ERROR_CATALOG, error_for
+from adaf_attack.core.cli_contract import error_for
 from adaf_attack.core.completions import generate_completion
 from adaf_attack.core.ux import (
     capability_prerequisites,
     export_plan_markdown,
     format_next_actions_block,
     format_stages_progress,
-    session_findings_dashboard,
 )
 
 runner = CliRunner()

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import typer
 from rich.panel import Panel
@@ -46,10 +47,7 @@ def register_ux_commands(
         payload = {
             "ok": True,
             "default": default_name,
-            "profiles": [
-                {**p, "is_default": p.get("name") == default_name}
-                for p in profiles
-            ],
+            "profiles": [{**p, "is_default": p.get("name") == default_name} for p in profiles],
             "count": len(profiles),
         }
         if not profiles:
@@ -216,7 +214,9 @@ def register_ux_commands(
             data = load_user_config()
             data.pop("profile.default", None)
             save_user_config(data)
-        _emit(ctx, {"ok": True, "deleted": name}, Panel(f"Deleted profile '{name}'", title="Profile"))
+        _emit(
+            ctx, {"ok": True, "deleted": name}, Panel(f"Deleted profile '{name}'", title="Profile")
+        )
 
     @profile_app.command("default")
     def profile_default(
@@ -225,13 +225,21 @@ def register_ux_commands(
     ) -> None:
         """Set or clear the default profile."""
         from adaf_attack.core.profiles import get_profile
-        from adaf_attack.core.user_config import get_key, load_user_config, save_user_config, set_key
+        from adaf_attack.core.user_config import (
+            load_user_config,
+            save_user_config,
+            set_key,
+        )
 
         if name is None:
             data = load_user_config()
             data.pop("profile.default", None)
             save_user_config(data)
-            _emit(ctx, {"ok": True, "default": None}, Panel("Default profile cleared", title="Profile"))
+            _emit(
+                ctx,
+                {"ok": True, "default": None},
+                Panel("Default profile cleared", title="Profile"),
+            )
             return
         if get_profile(name) is None:
             error = ActionableError(
@@ -252,7 +260,9 @@ def register_ux_commands(
     @app.command("demo")
     def demo_cmd(
         ctx: typer.Context,
-        workspace: Path | None = typer.Option(None, "--workspace", help="Where to materialize the demo session."),
+        workspace: Path | None = typer.Option(
+            None, "--workspace", help="Where to materialize the demo session."
+        ),
     ) -> None:
         """Offline first-success path using packaged demo fixtures (no network)."""
         from adaf_attack.core.ux import session_findings_dashboard
@@ -320,7 +330,11 @@ def register_ux_commands(
         shell: str = typer.Argument(..., help="bash | zsh | fish | powershell"),
     ) -> None:
         """Print a shell completion script for adaf-attack."""
-        from adaf_attack.core.completions import SUPPORTED_SHELLS, completion_install_hint, generate_completion
+        from adaf_attack.core.completions import (
+            SUPPORTED_SHELLS,
+            completion_install_hint,
+            generate_completion,
+        )
 
         try:
             script = generate_completion(shell)
@@ -353,7 +367,9 @@ def register_ux_commands(
     def session_show(
         ctx: typer.Context,
         session: Path = typer.Option(..., "--session", help="Session directory to inspect."),
-        severity: str | None = typer.Option(None, "--severity", help="Filter findings by severity."),
+        severity: str | None = typer.Option(
+            None, "--severity", help="Filter findings by severity."
+        ),
         limit: int = typer.Option(50, "--limit"),
     ) -> None:
         """Show a richer findings dashboard for one session."""

@@ -393,6 +393,7 @@ def guided_tour_payload() -> dict[str, Any]:
 def phase_label(phase_key: str) -> str:
     return PHASE_LABELS.get(phase_key, phase_key)
 
+
 # Re-export extended helpers (kept in ux_extra to ease incremental deploys)
 from adaf_attack.core.ux_extra import (  # noqa: E402
     capability_prerequisites,

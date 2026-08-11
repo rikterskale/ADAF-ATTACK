@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-
 SUPPORTED_SHELLS = ("bash", "zsh", "fish", "powershell")
 
 
@@ -80,8 +77,8 @@ def _zsh(commands: str, caps: str) -> str:
 # ADAF-ATTACK zsh completion
 _adaf_attack() {{
   local -a commands capabilities
-  commands=({' '.join(f"'{c}'" for c in commands.split())})
-  capabilities=({' '.join(f"'{c}'" for c in caps.split()) if caps else ""})
+  commands=({" ".join(f"'{c}'" for c in commands.split())})
+  capabilities=({" ".join(f"'{c}'" for c in caps.split()) if caps else ""})
   _arguments \\
     '1:command:->cmds' \\
     '*::arg:->args'
@@ -146,7 +143,9 @@ def completion_install_hint(shell: str) -> str:
     if shell == "bash":
         return "Save to ~/.local/share/bash-completion/completions/adaf-attack or source the script in ~/.bashrc"
     if shell == "zsh":
-        return "Save as a file on your fpath (e.g. ~/.zsh/completions/_adaf-attack) and run compinit"
+        return (
+            "Save as a file on your fpath (e.g. ~/.zsh/completions/_adaf-attack) and run compinit"
+        )
     if shell == "fish":
         return "Save to ~/.config/fish/completions/adaf-attack.fish"
     return "Dot-source the script in your PowerShell profile"

@@ -16,6 +16,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 from adaf_attack import __version__
+from adaf_attack.cli_ux_commands import register_ux_commands
 from adaf_attack.core.auth import describe_auth
 from adaf_attack.core.capability_help_data import capability_option_spec
 from adaf_attack.core.cli_contract import ERROR_CATALOG, ActionableError, error_for
@@ -464,18 +465,19 @@ def plan(
     next_step = f"adaf-attack run {cap.id} --domain {domain} --dc-ip {dc_ip}" + (
         " --force" if requires_force else ""
     )
+    risk_payload: dict[str, Any] = {
+        "level": risk,
+        "network_contact": True,
+        "may_modify_target": cap.destructive,
+        "force_provided": force,
+        "requires_force": requires_force,
+    }
     payload = {
         "ok": True,
         "mode": "preview",
         "capability": _capability_payload(cap),
         "target": {"domain": domain, "dc_ip": dc_ip},
-        "risk": {
-            "level": risk,
-            "network_contact": True,
-            "may_modify_target": cap.destructive,
-            "force_provided": force,
-            "requires_force": requires_force,
-        },
+        "risk": risk_payload,
         "next_step": next_step,
     }
     if export is not None:
@@ -487,7 +489,7 @@ def plan(
                 capability_id=cap.id,
                 domain=domain,
                 dc_ip=dc_ip,
-                risk=payload["risk"],
+                risk=risk_payload,
                 checklist=checklist,
                 ready_command=build_ready_command(
                     cap.id, domain=domain, dc_ip=dc_ip, force=requires_force
@@ -791,7 +793,9 @@ def run_capability(
         )
 
     if dry_run:
-        return plan(ctx, capability=capability, domain=domain, dc_ip=dc_ip, force=force, export=None)
+        return plan(
+            ctx, capability=capability, domain=domain, dc_ip=dc_ip, force=force, export=None
+        )
 
     target = _build_target(
         domain, dc_ip, username, password, hashes, aes_key, ccache, use_kerberos, ldaps
@@ -1621,8 +1625,6 @@ app.add_typer(path_app, name="path")
 
 # Register the optional operator-experience command group after the shared
 # output helpers and noun-verb subgroups are available.
-from adaf_attack.cli_ux_commands import register_ux_commands
-
 register_ux_commands(
     app,
     session_app,
