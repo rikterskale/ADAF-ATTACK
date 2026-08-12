@@ -411,7 +411,9 @@ def test_engagement_init_and_refuse_overwrite(tmp_path: Path) -> None:
     assert out.is_file()
     again = runner.invoke(app, ["engagement", "init", "--output", str(out)])
     assert again.exit_code != 0
-    invalid = runner.invoke(app, ["engagement", "init", "--output", str(tmp_path / "bad.yaml"), "--template", "bad"])
+    invalid = runner.invoke(
+        app, ["engagement", "init", "--output", str(tmp_path / "bad.yaml"), "--template", "bad"]
+    )
     assert invalid.exit_code != 0
 
 
