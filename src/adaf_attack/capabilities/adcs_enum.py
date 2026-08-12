@@ -47,6 +47,27 @@ CA_ATTRS = [
 ]
 
 
+EKU_CLIENT_AUTH = "1.3.6.1.5.5.7.3.2"
+EKU_SMART_CARD = "1.3.6.1.4.1.311.20.2.2"
+EKU_ANY = "2.5.29.37.0"
+EKU_PKINIT_CLIENT = "1.3.6.1.5.2.3.4"
+EKU_SMARTCARD_LOGON = "1.3.6.1.4.1.311.20.2.2"
+
+
+def _client_auth_eku(ekus: list[str]) -> bool:
+    """True when template EKUs allow client authentication (empty = any purpose)."""
+    if not ekus:
+        return True
+    interesting = {
+        EKU_CLIENT_AUTH,
+        EKU_ANY,
+        EKU_SMART_CARD,
+        EKU_PKINIT_CLIENT,
+        EKU_SMARTCARD_LOGON,
+    }
+    return bool(set(ekus) & interesting)
+
+
 def _int_attr(entry: Any, name: str) -> int:
     val = getattr(entry, name, None)
     if val is None or val.value is None:
