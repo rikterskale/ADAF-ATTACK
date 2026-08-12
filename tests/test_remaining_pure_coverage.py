@@ -204,3 +204,14 @@ def test_s4u_precondition_evidence_includes_matching_and_global_edges() -> None:
     assert result["evidence_count"] == 2
     assert result["has_constrained_signal"] is True
     assert result["has_rbcd_signal"] is True
+
+
+def test_vault_removes_encrypted_blob(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setenv("ADAF_SESSION_VAULT_KEY", Fernet.generate_key().decode())
+    session = Session(tmp_path / "vault")
+    vault = session.vault()
+    vault.put("secret", "password", "value", secret=True)
+    assert vault.delete("secret") is True
+    assert vault.delete("missing") is False
