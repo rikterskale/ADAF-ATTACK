@@ -89,7 +89,9 @@ class Rbcd:
         set_on = kwargs.get("set_on") or kwargs.get("computer")
         set_from = kwargs.get("set_from")
 
-        console.print(f"[bold]RBCD / constrained delegation[/bold] → {target.domain} @ {target.dc_ip}")
+        console.print(
+            f"[bold]RBCD / constrained delegation[/bold] → {target.domain} @ {target.dc_ip}"
+        )
         conn, base_dn, _cfg = ldap_connect(target)
 
         result: dict[str, Any] = {
@@ -149,28 +151,28 @@ class Rbcd:
                 uac = int(entry.userAccountControl.value) if entry.userAccountControl else 0
             except (TypeError, ValueError):
                 uac = 0
-            item = {
+            constrained_item: dict[str, Any] = {
                 "sam": sam,
                 "dn": str(entry.distinguishedName),
                 "spns": spns,
                 "protocol_transition": bool(uac & UAC_TRUSTED_TO_AUTH),
                 "unconstrained": bool(uac & UAC_TRUSTED_FOR_DELEG),
             }
-            result["constrained_delegation"].append(item)
+            result["constrained_delegation"].append(constrained_item)
             account_id = f"ACCOUNT@{sam.upper()}@{target.domain.upper()}"
-            graph.add_node(account_id, "User", sam=sam, dn=item["dn"])
+            graph.add_node(account_id, "User", sam=sam, dn=constrained_item["dn"])
             graph.add_edge(
                 account_id,
                 f"DOMAIN@{target.domain.upper()}",
                 "AllowedToDelegate",
                 spns=spns[:20],
-                protocol_transition=item["protocol_transition"],
+                protocol_transition=constrained_item["protocol_transition"],
             )
             for spn in spns[:15]:
                 graph.add_edge(account_id, f"SPN@{spn.upper()}", "CanDelegateTo")
             console.print(
                 f"  Constrained [cyan]{sam}[/cyan]  spns={len(spns)}  "
-                f"protocol_transition={item['protocol_transition']}"
+                f"protocol_transition={constrained_item['protocol_transition']}"
             )
 
         # Computers where we may write AllowedToAct
