@@ -162,7 +162,7 @@ def _analyze_trust(entry: Any, local_domain: str) -> dict[str, Any]:
     if forest_trust and direction in (1, 3):
         risk_notes.append("Forest trust with inbound path — review selective authentication")
 
-    trust = {
+    trust: dict[str, Any] = {
         "name": str(entry.name) if entry.name else None,
         "flat_name": str(entry.flatName) if entry.flatName else None,
         "partner": partner,
