@@ -1,0 +1,37 @@
+# Pre-commit hooks pinned to the exact tool versions CI enforces, so local
+# checks match `.github/workflows/ci.yml` and never disagree on formatting.
+# Install once with:  pre-commit install
+# Run on demand with: pre-commit run --all-files
+minimum_pre_commit_version: "3.5.0"
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Keep this rev == the `ruff==` pin in requirements-ci.txt. Different ruff
+    # versions sort imports and format differently, which is what breaks CI.
+    rev: v0.16.1
+    hooks:
+      - id: ruff
+        name: ruff lint (src, tests)
+        args: [--fix]
+      - id: ruff-format
+        name: ruff format (src, tests)
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      # Runs in your project venv (needs `pip install -e ".[dev]"`), mirroring
+      # the CI typecheck lane: `python -m mypy src/adaf_attack`.
+      - id: mypy
+        name: mypy (strict, src/adaf_attack)
+        entry: python -m mypy src/adaf_attack
+        language: system
+        pass_filenames: false
+        types: [python]
