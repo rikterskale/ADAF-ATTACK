@@ -163,9 +163,7 @@ class CampaignRun:
         approval_token = str(kwargs.get("approval_token") or "")
         expected_token = str(kwargs.get("required_approval_token") or "ENGAGE")
 
-        console.print(
-            f"[bold]Campaign run[/bold]  phases={len(phases)}  domain={target.domain}"
-        )
+        console.print(f"[bold]Campaign run[/bold]  phases={len(phases)}  domain={target.domain}")
 
         phase_results: list[dict[str, Any]] = []
         for phase in phases:

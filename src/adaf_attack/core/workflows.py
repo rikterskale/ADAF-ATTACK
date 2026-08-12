@@ -55,6 +55,7 @@ def ad_recon_plan_data() -> dict[str, Any]:
         "phases": [dict(phase) for phase in AD_RECON_PHASES],
     }
 
+
 PROFILES: dict[str, dict[str, Any]] = {
     "ad-recon": {
         "description": (

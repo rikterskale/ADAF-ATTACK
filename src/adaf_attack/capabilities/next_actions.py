@@ -130,7 +130,7 @@ ACTION_MAP: dict[str, tuple[str, str, bool, frozenset[str]]] = {
 
 
 def _graph_relations(graph: AttackGraph) -> set[str]:
-    return {e.kind for e in graph.edges}
+    return {e.kind for e in getattr(graph, "edges", [])}
 
 
 @register_capability(
@@ -152,6 +152,8 @@ class NextActions:
 
         observed = _graph_relations(graph)
         chains = graph.rank_exploit_chains(limit=int(kwargs.get("limit") or 30))
+        if not hasattr(graph, "edges"):
+            observed.update(str(chain["terminal_relation"]) for chain in chains)
 
         actions: list[dict[str, Any]] = []
         seen: set[str] = set()
@@ -189,8 +191,7 @@ class NextActions:
                     "confidence": conf["confidence"],
                     "confidence_rank": conf["confidence_rank"],
                     "command": (
-                        f"adaf-attack plan {capability} -d {target.domain} "
-                        f"--dc-ip {target.dc_ip}"
+                        f"adaf-attack plan {capability} -d {target.domain} --dc-ip {target.dc_ip}"
                     ),
                 }
             )

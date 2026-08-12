@@ -175,7 +175,9 @@ class S4uAbuse:
             ccaches=len(ccaches),
             multi_hop=bool(additional_ticket),
         )
-        console.print(f"[green]Done[/green]  ccaches={len(ccaches)}  multi_hop={bool(additional_ticket)}")
+        console.print(
+            f"[green]Done[/green]  ccaches={len(ccaches)}  multi_hop={bool(additional_ticket)}"
+        )
         return result
 
 

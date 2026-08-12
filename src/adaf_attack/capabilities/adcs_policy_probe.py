@@ -30,17 +30,14 @@ class AdcsPolicyProbe:
 
         classified = classify_modern_esc(policy=data)
         result: dict[str, Any] = {
-            "domain": target.domain,
-            "source": str(source),
             "esc10_candidates": ["dc-policy"] if data.get("weak_certificate_mapping") else [],
             "esc11_candidates": ["ca-rpc"] if data.get("rpc_encryption_not_enforced") else [],
             "esc13_candidates": [str(x) for x in data.get("issuance_policy_group_links") or []],
-            "esc14_candidates": ["shell-path"] if data.get("shell_access_via_certificate") else [],
-            "esc15_candidates": (
-                ["enrollment-agent"] if data.get("privileged_enrollment_agent") else []
-            ),
-            "classified": classified,
         }
+        if data.get("shell_access_via_certificate"):
+            result["esc14_candidates"] = ["shell-path"]
+        if data.get("privileged_enrollment_agent"):
+            result["esc15_candidates"] = ["enrollment-agent"]
 
         domain = f"DOMAIN@{target.domain.upper()}"
         for esc, meta in classified.get("candidates", {}).items():

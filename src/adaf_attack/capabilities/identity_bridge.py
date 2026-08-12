@@ -115,8 +115,10 @@ class HybridSignals:
             sam = str(entry.sAMAccountName) if entry.sAMAccountName else None
             if not sam:
                 continue
-            dn = str(entry.distinguishedName) if entry.distinguishedName else ""
-            desc = str(entry.description) if entry.description else ""
+            dn_attr = getattr(entry, "distinguishedName", None)
+            desc_attr = getattr(entry, "description", None)
+            dn = str(dn_attr) if dn_attr else ""
+            desc = str(desc_attr) if desc_attr else ""
             spns = _list_attr(entry, "servicePrincipalName")
             text = " ".join([desc, *spns, dn]).lower()
 
@@ -138,9 +140,7 @@ class HybridSignals:
                         "has_consistency_guid": str(bool(consistency and consistency.value)),
                     }
                 )
-                signals.append(
-                    {"principal": sam, "signal": "CloudDirectoryObjectLink", "dn": dn}
-                )
+                signals.append({"principal": sam, "signal": "CloudDirectoryObjectLink", "dn": dn})
 
             # Exchange remote recipient / hybrid mailbox indicators
             remote_type = getattr(entry, "msExchRemoteRecipientType", None)
@@ -153,9 +153,7 @@ class HybridSignals:
                         "remote_recipient_type": str(remote_type.value),
                     }
                 )
-                signals.append(
-                    {"principal": sam, "signal": "ExchangeRemoteRecipient", "dn": dn}
-                )
+                signals.append({"principal": sam, "signal": "ExchangeRemoteRecipient", "dn": dn})
             elif recipient_details and recipient_details.value is not None:
                 # Large bit flags; presence alone is a weak hybrid hint
                 try:
@@ -172,7 +170,8 @@ class HybridSignals:
                     pass
 
             # UPN / proxyAddresses with onmicrosoft.com or #EXT#
-            upn = str(entry.userPrincipalName) if entry.userPrincipalName else ""
+            upn_attr = getattr(entry, "userPrincipalName", None)
+            upn = str(upn_attr) if upn_attr else ""
             proxies = _list_attr(entry, "proxyAddresses")
             joined = " ".join([upn, *proxies]).lower()
             if "onmicrosoft.com" in joined or "#ext#" in joined:

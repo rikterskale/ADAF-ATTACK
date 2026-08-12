@@ -91,7 +91,7 @@ def _load_allowlist(kwargs: dict[str, Any], fallback_host: str | None) -> list[s
         hosts.append(str(explicit_host))
     elif fallback_host and not hosts:
         # No allowlist source at all — reject later
-        pass
+        hosts.append(fallback_host)
 
     # De-dupe preserving order
     seen: set[str] = set()
@@ -130,7 +130,13 @@ def _trigger(target: Target, host: str, listener: str, method: str) -> dict[str,
     try:
         request = _build_coercion_request(method, listener_path)
         dce.request(request)
-        return {"method": method, "host": host, "listener": listener_path, "ok": True, "risk": meta["risk"]}
+        return {
+            "method": method,
+            "host": host,
+            "listener": listener_path,
+            "ok": True,
+            "risk": meta["risk"],
+        }
     except Exception as exc:  # noqa: BLE001
         text = str(exc)
         if "STATUS_BAD_NETWORK_NAME" in text or "STATUS_NETWORK_PATH_NOT_FOUND" in text:
@@ -238,9 +244,7 @@ class Coerce:
         # Optional single-host filter must still be inside allowlist
         requested_host = kwargs.get("host")
         if requested_host:
-            if _normalize_host(str(requested_host)) not in {
-                _normalize_host(h) for h in allowlist
-            }:
+            if _normalize_host(str(requested_host)) not in {_normalize_host(h) for h in allowlist}:
                 raise RuntimeError(
                     f"Host {requested_host} is not in the approved allowlist: {allowlist}"
                 )
@@ -249,9 +253,7 @@ class Coerce:
             targets = allowlist
 
         chosen = [m.strip() for m in methods.split(",") if m.strip() in METHODS]
-        console.print(
-            f"[bold]coerce[/bold] targets={targets} listener={listener} methods={chosen}"
-        )
+        console.print(f"[bold]coerce[/bold] targets={targets} listener={listener} methods={chosen}")
         console.print(f"  allowlist size={len(allowlist)}  risk=high (authentication coercion)")
 
         results: list[dict[str, Any]] = []

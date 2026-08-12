@@ -27,6 +27,8 @@ from adaf_attack.core.target import Target
 console = Console()
 
 ATTR_RBCD = "msDS-AllowedToActOnBehalfOfOtherIdentity"
+# Backwards-compatible public alias used by callers and integrations.
+ATTR = ATTR_RBCD
 ATTR_CONSTRAINED = "msDS-AllowedToDelegateTo"
 UAC_TRUSTED_TO_AUTH = 0x01000000
 UAC_TRUSTED_FOR_DELEG = 0x00080000
@@ -148,7 +150,8 @@ class Rbcd:
                 continue
             spns = _list_attr(entry, ATTR_CONSTRAINED)
             try:
-                uac = int(entry.userAccountControl.value) if entry.userAccountControl else 0
+                uac_attr = getattr(entry, "userAccountControl", None)
+                uac = int(uac_attr.value) if uac_attr else 0
             except (TypeError, ValueError):
                 uac = 0
             constrained_item: dict[str, Any] = {

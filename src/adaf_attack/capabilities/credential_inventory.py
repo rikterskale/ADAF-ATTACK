@@ -284,7 +284,9 @@ class CredentialInventory:
         else:
             names = [n.strip() for n in str(names_raw).split(",") if n.strip()]
 
-        console.print(f"[bold]Credential inventory[/bold]  op={operation}  session={session.session_id}")
+        console.print(
+            f"[bold]Credential inventory[/bold]  op={operation}  session={session.session_id}"
+        )
 
         if operation == "inventory":
             result = _inventory(session, include_secrets=include_secrets)

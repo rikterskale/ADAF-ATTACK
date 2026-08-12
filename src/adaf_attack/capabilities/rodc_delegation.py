@@ -188,7 +188,6 @@ class RodcDelegation:
             result["rodc_krbtgt"].append(item)
             node = f"KRBTGT@{sam.upper()}@{target.domain.upper()}"
             graph.add_node(node, "User", sam=sam, dn=item["dn"], rodc_krbtgt=True)
-            graph.add_edge(node, f"DOMAIN@{target.domain.upper()}", "RODCKrbtgt")
             console.print(f"  KRBTGT [cyan]{sam}[/cyan]  number={item['secondary_krbtgt_number']}")
 
         # --- Delegation exposure (unconstrained / constrained / RBCD signals) -
@@ -205,7 +204,10 @@ class RodcDelegation:
                 continue
             uac = _uac(entry)
             constrained = _list_attr(entry, "msDS-AllowedToDelegateTo")
-            has_rbcd_raw = bool(entry.get("msDS-AllowedToActOnBehalfOfOtherIdentity", False))
+            has_rbcd_raw = bool(
+                getattr(entry, "msDS_AllowedToActOnBehalfOfOtherIdentity", None)
+                or getattr(entry, "msDS-AllowedToActOnBehalfOfOtherIdentity", None)
+            )
             unconstrained = bool(uac & UAC_TRUSTED_FOR_DELEG)
             protocol_transition = bool(uac & UAC_TRUSTED_TO_AUTH)
 

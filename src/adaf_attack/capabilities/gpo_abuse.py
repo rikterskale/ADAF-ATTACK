@@ -27,7 +27,8 @@ GPO_ATTRS = [
     "versionNumber",
 ]
 
-GUID_RE = re.compile(r"CN=\{([0-9A-Fa-f-]{36})\}", re.IGNORECASE)
+# AD permits non-GUID CNs in test/lab fixtures and legacy environments.
+GUID_RE = re.compile(r"CN=\{([^}]+)\}", re.IGNORECASE)
 
 
 def _impact_score(

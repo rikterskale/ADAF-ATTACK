@@ -208,7 +208,7 @@ class ShadowCreds:
             if ok:
                 record_pre_state(
                     session,
-                    kind="shadow-credential",
+                    kind="shadow-creds",
                     target=dn,
                     artifact=dn_bin_path,
                     extra={

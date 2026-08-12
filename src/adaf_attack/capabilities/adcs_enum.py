@@ -389,7 +389,9 @@ class AdcsEnum:
                     graph.add_edge(tmpl_id, tmpl_id, "ESC2")
                     console.print(f"  [red]ESC2[/red]: {tmpl['cn']}")
 
-                if tmpl.get("esc9_candidate"):
+                if tmpl.get("esc9_candidate") or (
+                    tmpl.get("no_security_extension") and tmpl.get("client_auth_eku")
+                ):
                     result["esc9_candidates"].append(tmpl["cn"])
                     graph.add_edge(tmpl_id, tmpl_id, "ESC9")
                     console.print(f"  [yellow]ESC9 candidate[/yellow]: {tmpl['cn']}")
