@@ -281,16 +281,20 @@ def test_doctor_reports_mocked_missing_dependencies(monkeypatch: pytest.MonkeyPa
     real_import = builtins.__import__
 
     def missing_packages(name: str, *args: object, **kwargs: object) -> object:
-        if name in {"ldap3", "impacket", "textual"}:
+        if name in {"ldap3", "impacket", "textual", "reportlab", "pypdf"}:
             raise ImportError("mocked package missing")
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", missing_packages)
+    monkeypatch.setattr(cli, "_resolve_binary", lambda candidates: None)
     result = CliRunner().invoke(cli.app, ["--format", "json", "doctor"])
     payload = json.loads(result.output)
     assert result.exit_code == 0
     assert payload["ok"] is False
     assert payload["next_step"].startswith("Install the base")
+    statuses = {check["id"]: check["status"] for check in payload["checks"]}
+    assert statuses["reportlab"] == "warning"
+    assert statuses["ntlmrelayx (cli)"] == "warning"
 
 
 def test_dcsync_principal_file_and_kerberos_error_path(

@@ -113,6 +113,22 @@ adaf-attack doctor
 Import-Module .\scripts\AdafAttack.psm1
 ```
 
+`adaf-attack doctor` verifies interpreter, packages, and the external CLI tools
+capabilities shell out to (`ntlmrelayx`, `certipy`), printing the exact
+remediation for anything missing. Run `adaf-attack doctor --explain` when
+troubleshooting.
+
+**Optional add-on: AD CS enrollment.** `cert-request` and `esc-chain` drive the
+`certipy` binary. It is intentionally *not* part of `[full]` because
+`certipy-ad` pins an older `cryptography`; install it in its own step (or a
+dedicated venv) when you need live enrollment:
+
+```bash
+pip install "adaf-attack[certipy]"
+```
+
+Without it, those capabilities still run and emit a ready-to-paste playbook.
+
 ## Examples
 
 ```bash

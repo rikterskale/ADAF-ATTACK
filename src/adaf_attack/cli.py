@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any
 
 import typer
 from rich.console import Console, ConsoleRenderable
+from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
@@ -169,15 +171,63 @@ def main(
         raise typer.Exit()
 
 
+_MIN_PYTHON = (3, 11)
+
+# Importable packages doctor probes. `optional` packages degrade a subset of
+# capabilities when missing (warning); required packages block everything.
+_MODULE_CHECKS: tuple[tuple[str, bool, str], ...] = (
+    ("ldap3", False, "Install the base package dependencies: pip install -e ."),
+    ("impacket", True, "Install Kerberos support: pip install 'adaf-attack[kerberos]'."),
+    ("textual", True, "Install TUI support: pip install 'adaf-attack[tui]'."),
+    ("reportlab", True, "Install PDF reporting support: pip install 'adaf-attack[reports]'."),
+    ("pypdf", True, "Install PDF reporting support: pip install 'adaf-attack[reports]'."),
+)
+
+# External CLI tools capabilities shell out to. Each entry lists the candidate
+# executable names to resolve on PATH, matching the capability's own lookup.
+_BINARY_CHECKS: tuple[tuple[str, tuple[str, ...], str], ...] = (
+    (
+        "ntlmrelayx",
+        ("impacket-ntlmrelayx", "ntlmrelayx.py"),
+        "Install Kerberos support so ntlmrelayx is on PATH: pip install 'adaf-attack[kerberos]'.",
+    ),
+    (
+        "certipy",
+        ("certipy",),
+        "Install AD CS tooling so certipy is on PATH: pip install 'adaf-attack[certipy]'.",
+    ),
+)
+
+
+def _python_supported() -> bool:
+    return sys.version_info >= _MIN_PYTHON
+
+
+def _resolve_binary(candidates: tuple[str, ...]) -> str | None:
+    for candidate in candidates:
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+    return None
+
+
 @app.command("doctor")
 def doctor(
     ctx: typer.Context,
     explain: bool = typer.Option(False, "--explain", help="Include remediation for every check."),
 ) -> None:
     """Check local prerequisites (no network)."""
+    python_ok = _python_supported()
     checks: list[dict[str, Any]] = [
         {"id": "platform", "status": "ok", "value": platform_name(), "remediation": None},
-        {"id": "python", "status": "ok", "value": sys.version.split()[0], "remediation": None},
+        {
+            "id": "python",
+            "status": "ok" if python_ok else "error",
+            "value": sys.version.split()[0],
+            "remediation": None
+            if python_ok
+            else f"Use Python {_MIN_PYTHON[0]}.{_MIN_PYTHON[1]}+ (see docs/ install guides).",
+        },
         {"id": "data_dir", "status": "ok", "value": str(user_data_dir()), "remediation": None},
         {"id": "config_dir", "status": "ok", "value": str(user_config_dir()), "remediation": None},
         {
@@ -187,11 +237,7 @@ def doctor(
             "remediation": None,
         },
     ]
-    for package, optional, remediation in (
-        ("ldap3", False, "Install the base package dependencies: pip install -e ."),
-        ("impacket", True, "Install Kerberos support: pip install 'adaf-attack[kerberos]'."),
-        ("textual", True, "Install TUI support: pip install 'adaf-attack[tui]'."),
-    ):
+    for package, optional, remediation in _MODULE_CHECKS:
         try:
             __import__(package)
             checks.append(
@@ -206,6 +252,16 @@ def doctor(
                     "remediation": remediation,
                 }
             )
+    for check_id, candidates, remediation in _BINARY_CHECKS:
+        resolved = _resolve_binary(candidates)
+        checks.append(
+            {
+                "id": f"{check_id} (cli)",
+                "status": "ok" if resolved else "warning",
+                "value": resolved or "not found",
+                "remediation": None if resolved else remediation,
+            }
+        )
     blocking = next((c for c in checks if c["status"] == "error"), None)
     first_run = _workspace_is_empty(default_workspace_dir())
     if blocking:
@@ -232,8 +288,8 @@ def doctor(
         "error": "[red]ERR[/red]",
     }
     lines = [
-        f"{glyph.get(c['status'], c['status']):>18} {c['id']}: {c['value']}"
-        + (f"\n    Next step: {c['remediation']}" if explain and c["remediation"] else "")
+        f"{glyph.get(c['status'], c['status']):>18} {c['id']}: {escape(str(c['value']))}"
+        + (f"\n    Next step: {escape(c['remediation'])}" if explain and c["remediation"] else "")
         for c in checks
     ]
     if first_run:
