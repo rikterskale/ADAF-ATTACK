@@ -14,7 +14,57 @@ from typing import Any
 
 SENSITIVE_WORDS = ("password", "hash", "ticket", "ccache", "pfx", "secret", "key")
 
+# The baseline is deliberately read-only.  It is shared by the dedicated
+# ``ad-recon`` CLI surface and the engagement-plan template so operators get
+# one consistent collection story and one session graph.
+AD_RECON_CAPABILITIES = (
+    "ldap-enum",
+    "trusts-enum",
+    "acl-enum",
+    "adcs-enum",
+    "gpo-abuse",
+    "rodc-delegation",
+    "gmsa-laps-enum",
+    "ad-cve-scan",
+)
+
+AD_RECON_PHASES = (
+    {
+        "name": "identity-and-topology",
+        "capabilities": ["ldap-enum", "trusts-enum"],
+    },
+    {
+        "name": "control-paths",
+        "capabilities": ["acl-enum", "adcs-enum", "gpo-abuse", "rodc-delegation"],
+    },
+    {
+        "name": "credential-and-hardening-exposure",
+        "capabilities": ["gmsa-laps-enum", "ad-cve-scan"],
+    },
+)
+
+
+def ad_recon_plan_data() -> dict[str, Any]:
+    """Return an editable, scoped starter plan for credentialed AD recon."""
+    return {
+        "engagement_id": "ENG-YYYY-AD-RECON",
+        "target": {"domain": "corp.example", "dc_ip": "10.0.0.10"},
+        "allowed_targets": ["10.0.0.10"],
+        "opsec_profile": "balanced",
+        "allowed_capabilities": list(AD_RECON_CAPABILITIES),
+        "phases": [dict(phase) for phase in AD_RECON_PHASES],
+    }
+
 PROFILES: dict[str, dict[str, Any]] = {
+    "ad-recon": {
+        "description": (
+            "Credentialed, read-only Active Directory reconnaissance: identity, trust, "
+            "control-path, credential-exposure, and hardening evidence."
+        ),
+        "steps": list(AD_RECON_CAPABILITIES),
+        "network_effect": "LDAP/SMB posture queries against the in-scope domain controller.",
+        "execution": "adaf-attack ad-recon init --output ad-recon.yaml, then validate and run it.",
+    },
     "discovery": {
         "description": "Inventory LDAP, trust, and AD CS evidence.",
         "steps": ["ldap-enum", "trusts-enum", "adcs-enum"],

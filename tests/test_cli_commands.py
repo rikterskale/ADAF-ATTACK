@@ -74,6 +74,21 @@ def test_plan_unknown_capability_human() -> None:
     assert "UNKNOWN_CAPABILITY" in result.output
 
 
+def test_ad_recon_profile_and_template(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["--format", "json", "ad-recon", "profile"])
+    _ok(result)
+    payload = json.loads(result.output)
+    assert payload["read_only"] is True
+    assert "ldap-enum" in payload["plan"]["allowed_capabilities"]
+
+    output = tmp_path / "ad-recon.yaml"
+    result = runner.invoke(app, ["ad-recon", "init", "--output", str(output)])
+    _ok(result)
+    text = output.read_text(encoding="utf-8")
+    assert "identity-and-topology" in text
+    assert "gmsa-laps-enum" in text
+
+
 # --------------------------- sessions + cleanup ---------------------------
 
 

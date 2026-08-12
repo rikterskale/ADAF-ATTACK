@@ -6,11 +6,23 @@ import json
 from pathlib import Path
 
 from adaf_attack.core.workflows import (
+    AD_RECON_CAPABILITIES,
+    AD_RECON_PHASES,
+    ad_recon_plan_data,
     bloodhound_reconcile,
     credential_exposure,
     validate_fixtures,
     validate_surface,
 )
+
+
+def test_ad_recon_baseline_is_read_only_and_consistent() -> None:
+    plan = ad_recon_plan_data()
+
+    assert plan["allowed_capabilities"] == list(AD_RECON_CAPABILITIES)
+    assert [cap for phase in AD_RECON_PHASES for cap in phase["capabilities"]] == list(
+        AD_RECON_CAPABILITIES
+    )
 
 
 def _session(root: Path) -> Path:

@@ -123,6 +123,21 @@ adaf-attack paths
 adaf-attack start
 ```
 
+## First-class AD reconnaissance
+
+Use the dedicated baseline to generate a reviewed, target-scoped plan for a
+single shared evidence session. It inventories identity and trusts, ACL/AD CS/
+GPO/RODC control paths, gMSA/LAPS exposure (without reading secrets), and AD
+hardening posture. The baseline is read-only; review the generated allowlist
+before running it.
+
+```bash
+adaf-attack ad-recon profile
+adaf-attack ad-recon init --output ad-recon.yaml
+adaf-attack engagement validate ad-recon.yaml
+adaf-attack engagement run ad-recon.yaml --workspace ./workspaces -u alice -p 'Password1'
+```
+
 `rank-paths` also emits `exploit_chains`: evidence-backed chains for findings
 that are otherwise represented as self-loops in the graph (such as AD CS,
 credential exposure, delegation, GPO control, and directory replication).

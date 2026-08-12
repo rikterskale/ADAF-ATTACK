@@ -112,6 +112,8 @@ app = typer.Typer(
 )
 engagement_app = typer.Typer(help="Scoped engagement plans, execution, and report bundles.")
 app.add_typer(engagement_app, name="engagement")
+ad_recon_app = typer.Typer(help="First-class, read-only Active Directory reconnaissance.")
+app.add_typer(ad_recon_app, name="ad-recon")
 
 
 def _console(ctx: typer.Context) -> Console:
@@ -988,12 +990,25 @@ def _execute_with_spinner(
 @engagement_app.command("init")
 def engagement_init(
     output: Path = typer.Option(Path("engagement.yaml"), "--output", "-o"),
+    template: str = typer.Option("standard", "--template", help="standard or ad-recon"),
 ) -> None:
     """Write a conservative engagement-plan template."""
     if output.exists():
         raise typer.BadParameter(f"Refusing to overwrite existing file: {output}")
-    output.write_text(
-        """# Complete and review this scope before running.
+    if template not in {"standard", "ad-recon"}:
+        raise typer.BadParameter("--template must be 'standard' or 'ad-recon'")
+    if template == "ad-recon":
+        from adaf_attack.core.workflows import ad_recon_plan_data
+
+        plan = ad_recon_plan_data()
+        output.write_text(
+            "# Read-only AD reconnaissance. Complete and review this scope before running.\n"
+            + __import__("yaml").safe_dump(plan, sort_keys=False),
+            encoding="utf-8",
+        )
+    else:
+        output.write_text(
+            """# Complete and review this scope before running.
 engagement_id: ENG-YYYY-001
 target:
   domain: corp.example
@@ -1007,9 +1022,36 @@ phases:
   - name: reporting
     capabilities: [report]
 """,
-        encoding="utf-8",
-    )
+            encoding="utf-8",
+        )
     typer.echo(f"Wrote {output}")
+
+
+@ad_recon_app.command("init")
+def ad_recon_init(
+    output: Path = typer.Option(Path("ad-recon.yaml"), "--output", "-o"),
+) -> None:
+    """Write the reviewed, read-only AD reconnaissance engagement template."""
+    engagement_init(output=output, template="ad-recon")
+
+
+@ad_recon_app.command("profile")
+def ad_recon_profile(ctx: typer.Context) -> None:
+    """Show the ordered AD reconnaissance collection baseline (no network)."""
+    from adaf_attack.core.workflows import AD_RECON_PHASES, ad_recon_plan_data
+
+    plan = ad_recon_plan_data()
+    _emit(
+        ctx,
+        {"ok": True, "read_only": True, "plan": plan},
+        Panel(
+            "\n".join(
+                f"{phase['name']}: {', '.join(phase['capabilities'])}" for phase in AD_RECON_PHASES
+            )
+            + "\n\nCreates one shared session graph; no secrets are requested.",
+            title="AD reconnaissance baseline (read-only)",
+        ),
+    )
 
 
 @engagement_app.command("validate")
