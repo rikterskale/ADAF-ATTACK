@@ -35,6 +35,7 @@ from adaf_attack.capabilities import (  # noqa: F401
     pkinit_auth,
     rbcd,
     report,
+    rollback,
     rodc_delegation,
     s4u_abuse,
     secretsdump_local,
