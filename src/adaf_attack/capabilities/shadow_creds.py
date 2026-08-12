@@ -1,8 +1,8 @@
 """Shadow Credentials — enumerate and (optionally) write msDS-KeyCredentialLink.
 
 Enum is safe. Write path requires --force and produces a device-key material
-blob suitable for PKINIT auth (operator must complete cert/auth outside or via
-optional Impacket helpers when available).
+blob suitable for PKINIT auth. Successful writes are recorded through the
+central rollback registry so `adaf-attack run rollback --force` can reverse them.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_util import ldap_connect
 from adaf_attack.core.registry import register_capability
+from adaf_attack.core.rollback import record_pre_state
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -41,7 +42,7 @@ def _list_attr(entry: Any, name: str) -> list[Any]:
     id="shadow-creds",
     summary="Enumerate msDS-KeyCredentialLink; optional write requires --force",
     category="credential-access",
-    tags=("shadow-credentials", "keycredentiallink", "pkinit", "adcs"),
+    tags=("shadow-credentials", "keycredentiallink", "pkinit", "adcs", "rollback"),
     destructive=True,  # write path is destructive; enum still runs without force
 )
 class ShadowCreds:
@@ -205,17 +206,20 @@ class ShadowCreds:
                 "blob_len": material["blob_len"],
             }
             if ok:
-                session.register_cleanup(
-                    {
-                        "kind": "shadow-credential",
-                        "target": dn,
-                        "artifact": str(dn_bin_path),
+                record_pre_state(
+                    session,
+                    kind="shadow-credential",
+                    target=dn,
+                    artifact=dn_bin_path,
+                    extra={
                         "rollback": "Remove the exact KeyCredentialLink DN-Binary value.",
-                    }
+                        "sam": sam,
+                    },
                 )
                 console.print(f"  [green]LDAP ADD ok[/green]  {ATTR} on {dn}")
                 console.print(f"  key → {key_path}")
                 console.print(f"  cert → {cert_path}")
+                console.print("  rollback registered — use: adaf-attack run rollback --force")
             else:
                 console.print(f"  [red]LDAP modify failed[/red]: {conn.result}")
             return result
