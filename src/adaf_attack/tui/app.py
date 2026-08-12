@@ -184,7 +184,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     yield Input(placeholder="Filter logs by text or severity", id="log-filter")
                 yield Log(id="log-panel", highlight=True, max_lines=2000)
         yield Static("Session: (none)  |  Target: (none)  |  Cap: (none)  |  idle", id="status")
-        yield Static("Stages: prepare → connect → execute → harvest/analyze → next-actions", id="progress")
+        yield Static(
+            "Stages: prepare → connect → execute → harvest/analyze → next-actions", id="progress"
+        )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -234,7 +236,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             if not phase_caps:
                 continue
             for index, cap in enumerate(phase_caps):
-                header = f"{phase.replace('-', ' ').title()} ({len(phase_caps)})" if index == 0 else None
+                header = (
+                    f"{phase.replace('-', ' ').title()} ({len(phase_caps)})" if index == 0 else None
+                )
                 list_view.append(CapabilityItem(cap, header))
         self.query_one("#sidebar-title", Static).update(
             f"[bold]Capabilities[/bold] ({len(visible)}/{len(self._capabilities)})"
@@ -303,11 +307,18 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
 
     def _update_credential_strip(self) -> None:
         labels = []
-        for widget_id, label in (("password", "password"), ("hashes", "NT hash"), ("aes_key", "AES key"), ("ccache", "ccache")):
+        for widget_id, label in (
+            ("password", "password"),
+            ("hashes", "NT hash"),
+            ("aes_key", "AES key"),
+            ("ccache", "ccache"),
+        ):
             if self.query_one(f"#{widget_id}", Input).value.strip():
                 labels.append(label)
         self.query_one("#credential-strip", Static).update(
-            "Credential material: " + (", ".join(labels) if labels else "none") + "  [dim](values hidden)[/]"
+            "Credential material: "
+            + (", ".join(labels) if labels else "none")
+            + "  [dim](values hidden)[/]"
         )
 
     def _refresh_profile_hint(self) -> None:
@@ -320,7 +331,12 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if not profile:
             self.notify("Profile not found.", severity="warning")
             return
-        for key, widget_id in (("domain", "domain"), ("dc_ip", "dc_ip"), ("username", "username"), ("scope", "scope")):
+        for key, widget_id in (
+            ("domain", "domain"),
+            ("dc_ip", "dc_ip"),
+            ("username", "username"),
+            ("scope", "scope"),
+        ):
             if profile.get(key) is not None:
                 self.query_one(f"#{widget_id}", Input).value = str(profile[key])
         for key, widget_id in (("kerberos", "kerberos"), ("ldaps", "ldaps")):
@@ -363,7 +379,12 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 not item["required"] or self.query_one(f"#check-{item['id']}", Checkbox).value
                 for item in required
             )
-            enabled = enabled and self.query_one("#force", Switch).value and complete and self._reviewed_cap == cap.id
+            enabled = (
+                enabled
+                and self.query_one("#force", Switch).value
+                and complete
+                and self._reviewed_cap == cap.id
+            )
         self.query_one("#run-btn", Button).disabled = not enabled
 
     def action_list_caps(self) -> None:
@@ -483,7 +504,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             if item["required"] and not self.query_one(f"#check-{item['id']}", Checkbox).value
         ]
         if incomplete:
-            self.notify("Complete required checklist items before acknowledging.", severity="warning")
+            self.notify(
+                "Complete required checklist items before acknowledging.", severity="warning"
+            )
             return
         self._reviewed_cap = cap.id
         self._update_run_gate()
@@ -539,7 +562,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
         cap = self._selected()
         if cap and cap.destructive and self._reviewed_cap != cap.id:
-            self.notify("Review and acknowledge required checklist items before running.", severity="warning")
+            self.notify(
+                "Review and acknowledge required checklist items before running.",
+                severity="warning",
+            )
             return
         capability_id = self.selected_cap
         target_values = self._validate_target()
@@ -673,11 +699,14 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
         suggestions = suggested_next_actions(cap)
         if suggestions:
+            suggestion_lines = []
+            for capability_id in suggestions:
+                follow_on = capability_registry.get(capability_id)
+                if follow_on:
+                    suggestion_lines.append(f"• {capability_id} — {follow_on.summary}")
             self.query_one("#review-panel", Static).update(
                 "[bold]Suggested next[/bold]\n"
-                + "\n".join(
-                    f"• {cid} — {capability_registry.get(cid).summary}" for cid in suggestions
-                )
+                + "\n".join(suggestion_lines)
                 + "\nSelect a suggested capability in the sidebar, then review it."
             )
 
