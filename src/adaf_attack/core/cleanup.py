@@ -27,7 +27,7 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
                     item["target"],
                     {item["attribute"]: [(MODIFY_REPLACE, item.get("previous", []))]},
                 )
-            elif kind in {"shadow-credential", "keycred-write"}:
+            elif kind in {"shadow-credential", "keycred-write", "shadow-creds"}:
                 artifact = Path(str(item["artifact"]))
                 value = artifact.read_text(encoding="utf-8").strip()
                 ok = conn.modify(

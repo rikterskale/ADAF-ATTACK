@@ -134,11 +134,12 @@ state they can't undo.
       (`register_cleanup` / `record_pre_state`) or is exempted with a stated
       reason. **[CI: tests →
       test_release_contracts::test_destructive_capabilities_declare_rollback_or_are_exempt]**
-- [ ] **Rollback restores state**, proven offline per destructive capability
-      (RBCD, ACL, template-mod, GPO, computer-takeover, keycred, …).
-      **[CI: cleanup/rollback tests; GAP: one-per-capability *revert-behavior*
-      matrix — the wiring is enforced above; proving each revert restores state
-      is the remaining gap]**
+- [ ] **Rollback restores state**, proven offline per destructive capability:
+      each revertable kind (RBCD, ACL, template-mod, gpo-link, gpo-sysvol,
+      shadow-creds) round-trips through `execute_cleanup` to `completed`, and
+      advisory kinds are proven *not* auto-reverted. **[CI: tests →
+      test_rollback_matrix]** (This matrix caught `shadow-creds` recording a
+      rollback the engine could not execute.)
 - [ ] **Destructive actions refuse without `--force`.** **[CI: operator-workflow
       → cleanup blocked without --force; capability tests]**
 - [ ] **Interrupted / partial runs are recoverable**: sessions are resumable and
@@ -162,7 +163,9 @@ Everything above is discoverable and current without reading source.
 
 - [ ] **Per-platform install guide** exists and its commands are current
       (README, `docs/KALI.md`, `docs/WINDOWS.md`, novice guides). **[CI:
-      workflow-contract asserts the files exist; GAP: verifying the *commands* run]**
+      workflow-contract asserts the files exist; tests → test_docs_commands
+      asserts every documented `adaf-attack` command/capability is real and runs
+      a safe offline subset]**
 - [ ] **Troubleshooting is documented** and points at `doctor --explain`.
       **[CI: README covers it]**
 - [ ] **Per-capability help** is available (`capability-help`) and every
@@ -211,13 +214,13 @@ Priority order to reduce human sign-off cost over time:
 
 1. ~~**Capability reachability test**~~ — **DONE.** `tests/test_release_contracts.py`
    asserts every registered capability is listed and has working help. (§3)
-2. **Destructive-rollback matrix test** — **PARTIALLY DONE.** The structural
-   guarantee (every destructive capability wires a rollback primitive or is
-   exempted with a reason) is enforced in `test_release_contracts.py`. The
-   remaining gap is a per-capability *revert-behavior* test proving each rollback
-   actually restores state. (§4)
-3. **Docs-command test** — extract fenced install/usage commands from README/docs
-   and dry-run the offline ones. (§2, §5)
+2. ~~**Destructive-rollback matrix test**~~ — **DONE.** `test_release_contracts.py`
+   enforces the wiring; `test_rollback_matrix.py` proves each revertable kind
+   round-trips through `execute_cleanup` and advisory kinds are not
+   auto-reverted. (§4)
+3. ~~**Docs-command test**~~ — **DONE.** `test_docs_commands.py` asserts every
+   `adaf-attack` command/capability referenced in fenced doc blocks is real and
+   runs a safe offline subset. (§2, §5)
 4. **Published-artifact install job** — a scheduled workflow that installs the
    last release from PyPI/release assets on clean OS images. (§1)
 5. **Lab harness** — an opt-in, credential-gated workflow against a disposable
