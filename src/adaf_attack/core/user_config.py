@@ -6,62 +6,82 @@ import json
 from pathlib import Path
 from typing import Any
 
-from adaf_attack.core.paths import default_config_path, ensure_dir
+from adaf_attack.core.paths import user_config_dir
+
+_ALLOWED_KEYS = {
+    "target.domain",
+    "target.dc_ip",
+    "target.username",
+    "target.ldaps",
+    "target.kerberos",
+    "acl.scope",
+    "acl.max_objects",
+    "run.max_depth",
+    "run.limit",
+    "workspace",
+    "opsec.profile",
+    "profile.default",
+    "novice.safe_mode",
+    "ui.recent_capabilities",
+    "ui.command_complete",
+}
 
 
-def _config_path() -> Path:
-    return default_config_path()
+def config_path() -> Path:
+    return user_config_dir() / "config.json"
 
 
 def load_user_config() -> dict[str, Any]:
-    path = _config_path()
+    path = config_path()
     if not path.is_file():
         return {}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
-    return data if isinstance(data, dict) else {}
 
 
 def save_user_config(data: dict[str, Any]) -> Path:
-    path = _config_path()
-    ensure_dir(path.parent)
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
 
 
-def get_config_value(key: str, default: Any = None) -> Any:
-    return load_user_config().get(key, default)
+def allowed_keys() -> list[str]:
+    return sorted(_ALLOWED_KEYS)
 
 
-def set_config_value(key: str, value: Any) -> dict[str, Any]:
+def set_key(key: str, value: str) -> tuple[Path, dict[str, Any]]:
+    if key not in _ALLOWED_KEYS:
+        raise ValueError(f"Unknown config key: {key}. Allowed: {', '.join(sorted(_ALLOWED_KEYS))}")
     data = load_user_config()
-    data[key] = value
-    save_user_config(data)
-    return data
+    parsed: Any = value
+    if value.lower() in {"true", "false"}:
+        parsed = value.lower() == "true"
+    else:
+        try:
+            parsed = int(value)
+        except ValueError:
+            parsed = value
+    data[key] = parsed
+    path = save_user_config(data)
+    return path, data
 
 
-def unset_config_value(key: str) -> dict[str, Any]:
+def unset_key(key: str) -> tuple[Path, dict[str, Any]]:
     data = load_user_config()
-    if key in data:
-        del data[key]
-        save_user_config(data)
-    return data
+    data.pop(key, None)
+    path = save_user_config(data)
+    return path, data
 
 
-def known_config_keys() -> list[str]:
-    return [
-        "ui.theme",
-        "ui.recent_capabilities",
-        "ui.default_workspace",
-        "operator.default_domain",
-        "operator.default_dc_ip",
-        "safety.require_force_confirm",
-    ]
+def get_key(key: str) -> Any:
+    return load_user_config().get(key)
 
 
-def remember_capability(capability_id: str, *, limit: int = 10) -> list[str]:
+def record_recent_capability(capability_id: str, *, limit: int = 5) -> list[str]:
     """Record a capability selection without storing target or credential data."""
     data = load_user_config()
     existing = data.get("ui.recent_capabilities", [])
