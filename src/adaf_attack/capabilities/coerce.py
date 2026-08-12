@@ -87,7 +87,7 @@ def _load_allowlist(kwargs: dict[str, Any], fallback_host: str | None) -> list[s
 
     # Single-host shorthand still allowed, but must appear in allowlist construction
     explicit_host = kwargs.get("host")
-    if explicit_host:
+    if explicit_host and not hosts:
         hosts.append(str(explicit_host))
     elif fallback_host and not hosts:
         # No allowlist source at all — reject later
