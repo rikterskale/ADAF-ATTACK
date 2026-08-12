@@ -343,14 +343,42 @@ jobs:
           for path in (
               "README.md",
               "RELEASE.md",
+              "CONTRIBUTING.md",
               "docs/KALI.md",
               "docs/WINDOWS.md",
               "docs/LINUX_NOVICE_USABILITY_GUIDE.md",
+              "docs/RELEASE_READINESS.md",
               "scripts/install-kali.sh",
               "scripts/Install-AdafAttack.ps1",
               "scripts/AdafAttack.psm1",
+              ".pre-commit-config.yaml",
           ):
               assert Path(path).is_file(), path
+          # Release-readiness gates that must stay enforced (see
+          # docs/RELEASE_READINESS.md). These tests run in the `tests` matrix job;
+          # asserting they exist keeps the gate from being silently deleted.
+          contract_test = Path("tests/test_release_contracts.py")
+          assert contract_test.is_file(), contract_test
+          contract_src = contract_test.read_text(encoding="utf-8")
+          for required in (
+              "test_every_capability_is_reachable",
+              "test_destructive_capabilities_declare_rollback_or_are_exempt",
+          ):
+              assert required in contract_src, f"missing release contract: {required}"
+          # The pinned pre-commit ruff must match the ruff CI actually runs.
+          import re as _re
+
+          precommit = yaml.safe_load(Path(".pre-commit-config.yaml").read_text(encoding="utf-8"))
+          ruff_rev = next(
+              repo["rev"]
+              for repo in precommit["repos"]
+              if "ruff-pre-commit" in repo["repo"]
+          )
+          lock = Path("requirements-ci.txt").read_text(encoding="utf-8")
+          lock_ruff = _re.search(r"^ruff==([0-9.]+)", lock, _re.MULTILINE).group(1)
+          assert ruff_rev == f"v{lock_ruff}", (
+              f"pre-commit ruff {ruff_rev} != pinned ruff v{lock_ruff}"
+          )
           PY
 
   package:
