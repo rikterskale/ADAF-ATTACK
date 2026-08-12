@@ -1,4 +1,4 @@
-"""AD CS enumeration — CAs, templates, ESC1–ESC8 candidates + enrollment rights."""
+"""AD CS enumeration — CAs, templates, ESC1–ESC9 candidates + enrollment rights."""
 
 from __future__ import annotations
 
@@ -9,7 +9,11 @@ from ldap3 import LEVEL
 from rich.console import Console
 
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
-from adaf_attack.core.adcs_analyze import analyze_template_flags, is_web_enrollment_endpoint
+from adaf_attack.core.adcs_analyze import (
+    analyze_template_flags,
+    classify_modern_esc,
+    is_web_enrollment_endpoint,
+)
 from adaf_attack.core.esc6_probe import probe_esc6
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_util import ldap_connect
@@ -18,24 +22,6 @@ from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 console = Console()
-
-CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT = 0x00000001
-CT_FLAG_PEND_ALL_REQUESTS = 0x00000002
-CT_FLAG_PUBLISH_TO_DS = 0x00000008
-CT_FLAG_AUTO_ENROLLMENT = 0x00000020
-CT_FLAG_PREVIOUS_APPROVAL_VALIDATE_REENROLLMENT = 0x00000040
-CT_FLAG_USER_INTERACTION_REQUIRED = 0x00000100
-CT_FLAG_REMOVE_INVALID_CERTIFICATE_FROM_PERSONAL_STORE = 0x00000400
-CT_FLAG_ALLOW_ENROLL_ON_BEHALF_OF = 0x00000800
-CT_FLAG_INCLUDE_SYMMETRIC_ALGORITHMS = 0x00000001  # name-flag neighbour; kept for clarity
-
-EKU_CLIENT_AUTH = "1.3.6.1.5.5.7.3.2"
-EKU_SMART_CARD = "1.3.6.1.4.1.311.20.2.2"
-EKU_ANY = "2.5.29.37.0"
-EKU_PKINIT_CLIENT = "1.3.6.1.5.2.3.4"
-EKU_SMARTCARD_LOGON = "1.3.6.1.4.1.311.20.2.2"
-EKU_CERTIFICATE_REQUEST_AGENT = "1.3.6.1.4.1.311.20.2.1"  # enrollment agent
-EKU_PRIVATE_KEY_ARCHIVAL = None  # signalled via schema flags more than EKU
 
 TEMPLATE_ATTRS = [
     "cn",
@@ -48,7 +34,6 @@ TEMPLATE_ATTRS = [
     "nTSecurityDescriptor",
     "msPKI-Certificate-Application-Policy",
     "msPKI-Minimal-Key-Size",
-    "msPKI-Enrollment-Flag",
 ]
 CA_ATTRS = [
     "cn",
@@ -84,13 +69,6 @@ def _list_attr(entry: Any, name: str) -> list[str]:
     return [str(raw)]
 
 
-def _client_auth_eku(ekus: list[str]) -> bool:
-    if not ekus:
-        return True  # empty EKU → any purpose
-    interesting = {EKU_CLIENT_AUTH, EKU_ANY, EKU_SMART_CARD, EKU_PKINIT_CLIENT, EKU_SMARTCARD_LOGON}
-    return bool(set(ekus) & interesting)
-
-
 def _analyze_template(entry: Any) -> dict[str, Any]:
     """Thin LDAP-entry adapter over pure analyze_template_flags."""
     name_flags = _int_attr(entry, "msPKI-Certificate-Name-Flag")
@@ -117,21 +95,33 @@ def _analyze_template(entry: Any) -> dict[str, Any]:
         "enrollee_supplies_subject": flags["enrollee_supplies_subject"],
         "requires_manager_approval": flags["requires_manager_approval"],
         "client_auth_eku": flags["client_auth_eku"],
+        "no_security_extension": flags["no_security_extension"],
         "esc1_candidate": flags["esc1_candidate"],
         "esc2_candidate": flags["esc2_candidate"],
         "esc3_agent_template": flags["esc3_agent_template"],
         "esc3_requires_ra": flags["esc3_requires_ra"],
+        "esc9_candidate": flags["esc9_candidate"],
         "esc_tags": flags["esc_tags"],
-        "no_security_extension": bool(enroll_flags & 0x00080000),
         "dn": str(entry.entry_dn),
     }
 
 
 @register_capability(
     id="adcs-enum",
-    summary="Enumerate AD CS CAs/templates, ESC1–ESC8 signals, and enrollment rights",
+    summary="Enumerate AD CS CAs/templates, ESC1–ESC9 signals, and enrollment rights",
     category="enumeration",
-    tags=("adcs", "pki", "esc1", "esc2", "esc3", "esc4", "esc8", "templates", "enroll"),
+    tags=(
+        "adcs",
+        "pki",
+        "esc1",
+        "esc2",
+        "esc3",
+        "esc4",
+        "esc8",
+        "esc9",
+        "templates",
+        "enroll",
+    ),
 )
 class AdcsEnum:
     def run(
@@ -175,10 +165,10 @@ class AdcsEnum:
             "notes": {
                 "ESC5": "Check CA server computer object ACL separately (not in this pass)",
                 "ESC6": "EDITF_ATTRIBUTESUBJECTALTNAME2 requires RPC/CA config inspection",
-                "ESC9": "No-security-extension assessment requires template flag and mapping validation.",
-                "ESC10": "Weak certificate mapping assessment requires DC mapping-policy validation.",
-                "ESC11": "RPC encryption policy requires CA interface validation.",
-                "ESC13": "OID group-link assessment requires issuance-policy object validation.",
+                "ESC9": "No-security-extension + client-auth template flag assessment",
+                "ESC10": "Weak certificate mapping requires DC policy validation (adcs-policy-probe)",
+                "ESC11": "RPC encryption policy requires CA interface validation (adcs-policy-probe)",
+                "ESC13": "OID group-link assessment requires issuance-policy validation",
             },
         }
 
@@ -208,14 +198,12 @@ class AdcsEnum:
                     **{k: v for k, v in ca.items() if v is not None and k != "manage_principals"},
                 )
 
-                # ESC8: HTTP enrollment endpoints
                 for srv in ca["enrollment_servers"]:
                     if is_web_enrollment_endpoint(srv):
                         result["esc8_web_enrollment"].append({"ca": ca["cn"], "endpoint": srv})
                         graph.add_edge(ca_id, ca_id, "ESC8WebEnrollment", endpoint=srv)
                         console.print(f"  [red]ESC8 web enrollment[/red]: {ca['cn']} → {srv}")
 
-                # ESC7: ManageCA / ManageCertificates rights on CA object
                 sd = fetch_sd(conn, str(entry.entry_dn))
                 if sd:
                     try:
@@ -251,7 +239,6 @@ class AdcsEnum:
         except Exception as exc:  # noqa: BLE001
             console.print(f"[yellow]CA enumeration limited: {exc}[/yellow]")
 
-        # ESC5-ish: dangerous ACLs on other PKI container objects (AIA, CDP, NTAuth, KRA)
         result.setdefault("esc5_pki_acl", [])
         try:
             pki_objects = [
@@ -287,14 +274,7 @@ class AdcsEnum:
         except Exception as exc:  # noqa: BLE001
             console.print(f"[yellow]ESC5 PKI ACL scan limited: {exc}[/yellow]")
 
-        # ESC6 note — full detection needs RPC (certutil / CA config)
-        result["notes"]["ESC6"] = (
-            "EDITF_ATTRIBUTESUBJECTALTNAME2 is a CA policy flag; detect via "
-            "certutil -config CA -getreg policy\\EditFlags or Impacket RPC. "
-            "Not readable from LDAP alone."
-        )
-
-        # Templates + enrollment rights + ESC1-4
+        # Templates + enrollment rights + ESC1-4 / ESC9
         try:
             conn.search(
                 templates_base,
@@ -340,6 +320,19 @@ class AdcsEnum:
                 tmpl["enroll_principals"] = enroll_principals
                 tmpl["enroll_principal_count"] = len(enroll_principals)
                 tmpl["dangerous_acl"] = acl_dangerous
+
+                modern = classify_modern_esc(
+                    template_flags=tmpl,
+                    enroll_principal_count=len(enroll_principals),
+                    dangerous_acl=bool(acl_dangerous),
+                )
+                tmpl["modern_esc"] = modern
+                tmpl["highest_confidence"] = modern.get("highest_confidence")
+                # Merge modern tags with flag-derived tags
+                tmpl["esc_tags"] = sorted(
+                    set(list(tmpl.get("esc_tags") or []) + list(modern.get("esc_tags") or []))
+                )
+
                 result["templates"].append(tmpl)
 
                 tmpl_id = f"TEMPLATE@{(tmpl['cn'] or 'UNKNOWN').upper()}"
@@ -349,8 +342,10 @@ class AdcsEnum:
                     cn=tmpl["cn"],
                     esc1_candidate=tmpl["esc1_candidate"],
                     esc2_candidate=tmpl["esc2_candidate"],
+                    esc9_candidate=tmpl.get("esc9_candidate"),
                     enrollee_supplies_subject=tmpl["enrollee_supplies_subject"],
                     esc_tags=tmpl["esc_tags"],
+                    highest_confidence=tmpl.get("highest_confidence"),
                 )
 
                 if tmpl["esc1_candidate"]:
@@ -373,7 +368,7 @@ class AdcsEnum:
                     graph.add_edge(tmpl_id, tmpl_id, "ESC2")
                     console.print(f"  [red]ESC2[/red]: {tmpl['cn']}")
 
-                if tmpl["no_security_extension"] and tmpl["client_auth_eku"]:
+                if tmpl.get("esc9_candidate"):
                     result["esc9_candidates"].append(tmpl["cn"])
                     graph.add_edge(tmpl_id, tmpl_id, "ESC9")
                     console.print(f"  [yellow]ESC9 candidate[/yellow]: {tmpl['cn']}")
@@ -399,7 +394,6 @@ class AdcsEnum:
         except Exception as exc:  # noqa: BLE001
             console.print(f"[yellow]Template enumeration limited: {exc}[/yellow]")
 
-        # ESC6 probe (certutil local and/or Impacket remote registry)
         ca_hosts = [c.get("dns") for c in result["cas"] if c.get("dns")]
         ca_hosts = [h for h in ca_hosts if h]
         if not ca_hosts:
@@ -421,7 +415,6 @@ class AdcsEnum:
         conn.unbind()
 
         out_path = session.path("adcs-enum.json")
-
         out_path.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
         graph.save(session.path("graph.json"))
         session.log(
@@ -434,6 +427,7 @@ class AdcsEnum:
             esc4=len(result["esc4_acl_templates"]),
             esc7=len(result["esc7_ca_acl"]),
             esc8=len(result["esc8_web_enrollment"]),
+            esc9=len(result["esc9_candidates"]),
             esc6=result.get("esc6", {}).get("esc6"),
         )
 
@@ -445,7 +439,8 @@ class AdcsEnum:
             f"ESC3={len(result['esc3_agent_templates'])}  "
             f"ESC4={len(result['esc4_acl_templates'])}  "
             f"ESC7={len(result['esc7_ca_acl'])}  "
-            f"ESC8={len(result['esc8_web_enrollment'])}"
+            f"ESC8={len(result['esc8_web_enrollment'])}  "
+            f"ESC9={len(result['esc9_candidates'])}"
         )
         console.print(f"Results → {out_path}")
         return result

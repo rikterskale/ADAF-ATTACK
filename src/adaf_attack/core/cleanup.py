@@ -21,36 +21,50 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
         for item in entries:
             if item.get("status") != "pending":
                 continue
-            if item.get("kind") == "computer-identity":
+            kind = item.get("kind")
+            if kind == "computer-identity":
                 ok = conn.modify(
                     item["target"],
                     {item["attribute"]: [(MODIFY_REPLACE, item.get("previous", []))]},
                 )
-            elif item.get("kind") == "shadow-credential":
+            elif kind in {"shadow-credential", "keycred-write"}:
                 artifact = Path(str(item["artifact"]))
                 value = artifact.read_text(encoding="utf-8").strip()
                 ok = conn.modify(
                     item["target"],
                     {"msDS-KeyCredentialLink": [(MODIFY_DELETE, [value])]},
                 )
-            elif item.get("kind") == "rbcd":
+            elif kind == "rbcd":
                 previous = [bytes.fromhex(value) for value in item.get("previous", [])]
                 ok = conn.modify(
                     item["target"],
                     {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_REPLACE, previous)]},
                 )
-            elif item.get("kind") == "acl":
+            elif kind == "acl":
                 previous_bytes = bytes.fromhex(item["previous_hex"])
                 ok = conn.modify(
                     item["target"],
                     {"nTSecurityDescriptor": [(MODIFY_REPLACE, [previous_bytes])]},
                 )
-            elif item.get("kind") == "gpo-link":
+            elif kind == "gpo-link":
                 ok = conn.modify(
                     item["target"],
                     {"gPLink": [(MODIFY_REPLACE, [item.get("previous", "")])]},
                 )
-            elif item.get("kind") == "gpo-sysvol":
+            elif kind == "template-mod":
+                artifact = Path(str(item.get("artifact") or ""))
+                if not artifact.is_file():
+                    item["status"] = "failed"
+                    item["result"] = "Missing template-mod rollback artifact"
+                    continue
+                payload = json.loads(artifact.read_text(encoding="utf-8"))
+                attrs = payload.get("attrs") or {}
+                changes = {
+                    key: [(MODIFY_REPLACE, value if isinstance(value, list) else [value])]
+                    for key, value in attrs.items()
+                }
+                ok = conn.modify(item["target"], changes) if changes else False
+            elif kind == "gpo-sysvol":
                 relative_path = str(item.get("target", "")).replace("/", "\\")
                 normalized_path = relative_path.lower()
                 if (
