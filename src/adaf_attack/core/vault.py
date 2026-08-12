@@ -94,3 +94,36 @@ class SessionVault:
             VaultItem(name, item["kind"], bool(item["secret"]), item.get("metadata") or {})
             for name, item in sorted(self._index().get("items", {}).items())
         ]
+
+    def delete(self, name: str) -> bool:
+        """Remove a single vault item and its encrypted blob if present."""
+        index = self._index()
+        items = index.get("items", {})
+        record = items.pop(name, None)
+        if record is None:
+            return False
+        file_name = record.get("file")
+        if file_name:
+            blob = self.root / str(file_name)
+            if blob.is_file():
+                blob.unlink()
+        self._save(index)
+        return True
+
+    def purge_all(self) -> int:
+        """Delete every vault item and encrypted blob. Returns count removed."""
+        index = self._index()
+        items = index.get("items", {})
+        count = len(items)
+        for name, record in list(items.items()):
+            file_name = record.get("file")
+            if file_name:
+                blob = self.root / str(file_name)
+                if blob.is_file():
+                    blob.unlink()
+        index["items"] = {}
+        self._save(index)
+        return count
+
+    def exists(self, name: str) -> bool:
+        return name in self._index().get("items", {})

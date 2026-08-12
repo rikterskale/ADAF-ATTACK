@@ -1,4 +1,9 @@
-"""Offline ticket and certificate artifact lifecycle helpers."""
+"""Offline ticket and certificate artifact lifecycle helpers.
+
+For full session credential inventory / purge / rotation markers, prefer the
+`credential-inventory` capability. This module remains focused on
+ccache/PFX/PEM conversion and vault import-export of ticket material.
+"""
 
 from __future__ import annotations
 
@@ -29,10 +34,20 @@ class TicketLifecycle:
         if operation == "inventory":
             files = [p.name for p in sorted(session.root.glob("*.ccache"))]
             files += [p.name for p in sorted(session.root.glob("*.pfx"))]
+            files += [p.name for p in sorted(session.root.glob("shadow-*.pem"))]
             return {
                 "operation": operation,
                 "artifacts": files,
-                "vault": [item.name for item in vault.list()],
+                "vault": [
+                    {
+                        "name": item.name,
+                        "kind": item.kind,
+                        "secret": item.secret,
+                        "metadata": item.metadata,
+                    }
+                    for item in vault.list()
+                ],
+                "hint": "Use credential-inventory for full catalog, export, purge, rotation markers",
             }
         if operation == "import-ccache":
             source = Path(str(artifact or ""))
