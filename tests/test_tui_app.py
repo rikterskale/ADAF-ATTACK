@@ -197,6 +197,8 @@ def test_tui_controls_validation_sessions_and_findings(
             def successful_run(*args, **kwargs):
                 app._cancel_requested.set()
                 kwargs["log"]("runner message")
+                kwargs["log"]("connect to target")
+                kwargs["log"]("resolved graph edges")
                 return {
                     "session_path": str(session),
                     "session_id": "one",
@@ -231,3 +233,126 @@ def test_tui_controls_validation_sessions_and_findings(
 
     monkeypatch.setattr(ADAFAttackApp, "run", lambda self: None)
     tui_app.run_tui()
+
+
+def test_tui_operator_safety_and_profile_controls(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cover the review gate, profiles, status affordances, and follow-on UI paths."""
+
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            notices = Mock()
+            app.notify = notices  # type: ignore[method-assign]
+            monkeypatch.setattr(tui_app, "default_workspace_dir", lambda: tmp_path / "workspace")
+            monkeypatch.setattr(tui_app, "active_opsec", lambda: "stealth")
+            monkeypatch.setattr(tui_app, "list_profiles", lambda: [{"name": "lab"}])
+            monkeypatch.setattr(tui_app, "load_user_config", lambda: {})
+            saved_config: list[dict[str, object]] = []
+            monkeypatch.setattr(
+                tui_app, "save_user_config", lambda value: saved_config.append(value)
+            )
+
+            app._acknowledge_review()
+            workspace = tmp_path / "workspace"
+            session = workspace / "session-a"
+            session.mkdir(parents=True)
+            (session / "session.json").write_text('{"session_id": "session-a"}', encoding="utf-8")
+            (session / "findings.json").write_text(
+                '{"findings": [{"severity": "high"}]}', encoding="utf-8"
+            )
+            app._show_sessions()
+            assert "H:1" in str(app.query_one("#session-panel", Static).render())
+
+            profile_name = app.query_one("#profile-name", Input)
+            profile_name.value = "missing"
+            monkeypatch.setattr(tui_app, "get_profile", lambda name: None)
+            app._refresh_profile_hint()
+            app._apply_profile()
+
+            profile = {
+                "domain": "corp.test",
+                "dc_ip": "192.0.2.10",
+                "username": "operator",
+                "scope": "domain",
+                "kerberos": True,
+                "ldaps": True,
+            }
+            profile_name.value = "lab"
+            monkeypatch.setattr(tui_app, "get_profile", lambda name: profile)
+            app._apply_profile()
+            assert app.query_one("#domain", Input).value == "corp.test"
+            assert app.query_one("#kerberos", tui_app.Switch).value is True
+
+            profile_name.value = ""
+            app._save_profile()
+            profile_name.value = "lab"
+            stored: list[tuple[str, dict[str, object]]] = []
+            monkeypatch.setattr(
+                tui_app, "set_profile", lambda name, value: stored.append((name, value))
+            )
+            app._save_profile(make_default=True)
+            assert stored and saved_config == [{"profile.default": "lab"}]
+            monkeypatch.setattr(
+                tui_app,
+                "set_profile",
+                lambda name, value: (_ for _ in ()).throw(ValueError("bad profile")),
+            )
+            app._save_profile()
+
+            for widget_id, value in (
+                ("password", "secret"),
+                ("hashes", "0" * 32),
+                ("aes_key", "a" * 64),
+                ("ccache", "ticket.ccache"),
+            ):
+                widget = app.query_one(f"#{widget_id}", Input)
+                widget.value = value
+                app.on_input_changed(SimpleNamespace(input=widget, value=value))
+            assert "values hidden" in str(app.query_one("#credential-strip", Static).render())
+
+            app.selected_cap = "shadow-creds"
+            app._review_run()
+            force = app.query_one("#force", tui_app.Switch)
+            force.value = True
+            app.on_switch_changed(SimpleNamespace(switch=force))
+            app._review_run()
+            app.on_checkbox_changed(SimpleNamespace())
+            app._acknowledge_review()
+            for item in ("scope", "auth", "force", "opsec", "rollback"):
+                app.query_one(f"#check-{item}", tui_app.Checkbox).value = True
+            app._acknowledge_review()
+            assert app.query_one("#run-btn", tui_app.Button).disabled is False
+            app._reviewed_cap = None
+            app._start_run()
+
+            app.action_focus_search()
+            app._log_lines = []
+            app.action_jump_to_error()
+            app._log_lines = ["info", "ERROR: broken"]
+            app.action_jump_to_error()
+            app.selected_cap = None
+            app._copy_ready_command()
+            app.selected_cap = "ldap-enum"
+            monkeypatch.setattr(app, "copy_to_clipboard", lambda text: None)
+            app._copy_ready_command()
+            monkeypatch.setattr(
+                app,
+                "copy_to_clipboard",
+                lambda text: (_ for _ in ()).throw(RuntimeError("clipboard")),
+            )
+            app._copy_ready_command()
+
+            app.selected_cap = None
+            app._update_progress()
+            app.selected_cap = "kerberoast"
+            app._active_stage = "harvest"
+            app._update_progress()
+            assert "harvest" in str(app.query_one("#progress", Static).render())
+            app._show_next_actions("missing")
+            app._show_next_actions("ldap-enum")
+            assert "Suggested next" in str(app.query_one("#review-panel", Static).render())
+
+    asyncio.run(exercise())
