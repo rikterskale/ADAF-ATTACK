@@ -165,7 +165,10 @@ def test_campaign_approval_and_credential_value_shapes(
     assert {item["name"] for item in catalog if item.get("value_len") == 6} == {"text"}
     assert next(item for item in catalog if item["name"] == "mapping")["value_keys"] == ["a"]
     plan = tmp_path / "approval.json"
-    plan.write_text(json.dumps([{"id": "danger", "capability": "anything", "destructive": True}]), encoding="utf-8")
+    plan.write_text(
+        json.dumps([{"id": "danger", "capability": "anything", "destructive": True}]),
+        encoding="utf-8",
+    )
     result = campaign_run.CampaignRun().run(
         _target(), session, AttackGraph(), force=True, plan=plan, approval_token="wrong"
     )

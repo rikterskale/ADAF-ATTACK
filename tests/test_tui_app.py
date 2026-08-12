@@ -125,7 +125,9 @@ def test_tui_command_findings_and_standard_recommendations(tmp_path) -> None:
             app._show_command_only()
             assert "Command only" in str(app.query_one("#review-panel", Static).render())
             app.action_undo_form_reset()
-            app.on_switch_changed(SimpleNamespace(switch=SimpleNamespace(id="beginner-mode"), value=True))
+            app.on_switch_changed(
+                SimpleNamespace(switch=SimpleNamespace(id="beginner-mode"), value=True)
+            )
             app._last_session = None
             app._explain_findings()
             app._last_session = tmp_path
