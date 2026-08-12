@@ -14,6 +14,7 @@ from adaf_attack.capabilities import (  # noqa: F401
     attack_paths,
     bloodhound_export,
     campaign_analysis,
+    campaign_run,
     cert_request,
     coerce,
     coercion_map,

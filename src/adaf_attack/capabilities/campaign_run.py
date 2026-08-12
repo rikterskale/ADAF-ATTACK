@@ -15,7 +15,7 @@ from typing import Any
 from rich.console import Console
 
 from adaf_attack.core.graph import AttackGraph
-from adaf_attack.core.registry import REGISTRY, register_capability
+from adaf_attack.core.registry import capability_registry, register_capability
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 from adaf_attack.core.vault import VaultError
@@ -146,7 +146,7 @@ def _purple_package(
     summary="Run ordered engagement phases with vault hand-off and purple package",
     category="analysis",
     tags=("campaign", "phases", "vault", "purple", "engagement"),
-    destructive=True,  # may include destructive phases when approved
+    destructive=True,
 )
 class CampaignRun:
     def run(
@@ -201,7 +201,8 @@ class CampaignRun:
                 )
                 continue
 
-            if capability_id not in REGISTRY:
+            cap = capability_registry.get(capability_id)
+            if not cap or not cap.runner:
                 phase_results.append(
                     {
                         "id": phase_id,
@@ -221,21 +222,19 @@ class CampaignRun:
                         "capability": capability_id,
                         "ok": False,
                         "skipped": "vault_refs_missing",
-                        "hand_off": hand_off,
+                        "hand_off": {"used": hand_off["used"]},
                     }
                 )
                 console.print("  [yellow]skipped — required vault refs missing[/yellow]")
                 continue
 
             params = dict(phase.get("params") or {})
-            # Never inject secret values into logs; only pass non-secret params through
-            runner = REGISTRY[capability_id]
             try:
-                outcome = runner.run(
+                outcome = cap.runner.run(
                     target,
                     session,
                     graph,
-                    force=force and destructive,
+                    force=bool(force and destructive),
                     include_secrets=include_secrets,
                     **params,
                 )
