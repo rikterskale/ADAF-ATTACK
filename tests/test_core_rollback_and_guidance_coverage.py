@@ -115,6 +115,8 @@ def test_guidance_configuration_and_rollback_capability(
     assert user_config.unset_key("run.limit")[1].get("run.limit") is None
     with pytest.raises(ValueError, match="Unknown"):
         user_config.set_key("bad", "x")
+    config.write_text("[]", encoding="utf-8")
+    assert user_config.load_user_config() == {}
 
     session = Session(tmp_path / "rollback")
     result = rollback_capability.Rollback().run(_target(), session, AttackGraph())

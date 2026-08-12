@@ -138,3 +138,35 @@ def test_credential_inventory_export_rotation_and_purge(
         credential_inventory.CredentialInventory().run(
             _target(), session, AttackGraph(), operation="unknown"
         )
+
+
+def test_campaign_purple_and_vault_error_branches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = _session(tmp_path / "session", monkeypatch)
+
+    class BrokenGraph:
+        def rank_exploit_chains(self, limit: int) -> list[dict[str, Any]]:
+            raise RuntimeError("broken")
+
+    assert campaign_run._purple_package(session, [], BrokenGraph())["top_exploit_chains"] == []
+    session.vault().put("secret", "password", "value", secret=True)
+    monkeypatch.delenv("ADAF_SESSION_VAULT_KEY")
+    assert "value_error" in credential_inventory._vault_catalog(session, include_secrets=True)[0]
+
+
+def test_campaign_approval_and_credential_value_shapes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = _session(tmp_path / "session", monkeypatch)
+    session.vault().put("text", "password", "secret", secret=True)
+    session.vault().put("mapping", "token", {"a": 1}, secret=True)
+    catalog = credential_inventory._vault_catalog(session, include_secrets=True)
+    assert {item["name"] for item in catalog if item.get("value_len") == 6} == {"text"}
+    assert next(item for item in catalog if item["name"] == "mapping")["value_keys"] == ["a"]
+    plan = tmp_path / "approval.json"
+    plan.write_text(json.dumps([{"id": "danger", "capability": "anything", "destructive": True}]), encoding="utf-8")
+    result = campaign_run.CampaignRun().run(
+        _target(), session, AttackGraph(), force=True, plan=plan, approval_token="wrong"
+    )
+    assert result["phases"][0]["skipped"] == "approval_token_required"

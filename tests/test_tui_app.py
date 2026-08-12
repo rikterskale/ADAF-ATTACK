@@ -113,6 +113,34 @@ def test_tui_beginner_mode_and_form_reset_are_reversible() -> None:
     asyncio.run(exercise())
 
 
+def test_tui_command_findings_and_standard_recommendations(tmp_path) -> None:
+    """Cover operator-facing guidance paths using the in-process Textual pilot."""
+
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.notify = Mock()  # type: ignore[method-assign]
+            app.selected_cap = "ldap-enum"
+            app._show_command_only()
+            assert "Command only" in str(app.query_one("#review-panel", Static).render())
+            app.action_undo_form_reset()
+            app.on_switch_changed(SimpleNamespace(switch=SimpleNamespace(id="beginner-mode"), value=True))
+            app._last_session = None
+            app._explain_findings()
+            app._last_session = tmp_path
+            (tmp_path / "findings.json").write_text(
+                '{"findings": [{"type": "ldap"}]}', encoding="utf-8"
+            )
+            app._explain_findings()
+            assert "Finding explanations" in str(app.query_one("#session-panel", Static).render())
+            app._safe_mode = False
+            app._show_next_actions("ldap-enum")
+            assert "Suggested next" in str(app.query_one("#review-panel", Static).render())
+
+    asyncio.run(exercise())
+
+
 def test_tui_controls_validation_sessions_and_findings(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -86,6 +86,15 @@ def test_gmsa_laps_enum_records_inventory_acl_signals_and_graph_nodes(
     assert conn.unbound is True
     assert {edge.kind for edge in graph.edges} == {"LAPSReadable"}
 
+    secret_graph = AttackGraph()
+    gmsa.GmsaLapsEnum().run(
+        Target(domain="corp.test", dc_ip="192.0.2.10"),
+        Session(tmp_path / "secrets"),
+        secret_graph,
+        include_secrets=True,
+    )
+    assert {edge.kind for edge in secret_graph.edges} >= {"ReadGMSAPassword", "ReadLAPSPassword"}
+
 
 def test_gmsa_laps_keeps_inventory_when_mocked_acl_parsing_fails(
     monkeypatch: Any, tmp_path: Path
