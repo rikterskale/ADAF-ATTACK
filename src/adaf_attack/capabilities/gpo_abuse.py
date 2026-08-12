@@ -112,9 +112,7 @@ class GpoAbuse:
                 "linked_to_root_ou": False,
             }
             gpo_id = f"GPO@{cn.upper()}@{target.domain.upper()}"
-            graph.add_node(
-                gpo_id, "GPO", cn=cn, display_name=display, dn=dn, sysvol=gpo["sysvol"]
-            )
+            graph.add_node(gpo_id, "GPO", cn=cn, display_name=display, dn=dn, sysvol=gpo["sysvol"])
 
             sd = fetch_sd(conn, dn)
             if sd:
@@ -152,8 +150,7 @@ class GpoAbuse:
                     continue
                 container_dn = str(entry.distinguishedName)
                 classes = [
-                    str(c).lower()
-                    for c in (entry.objectClass.values if entry.objectClass else [])
+                    str(c).lower() for c in (entry.objectClass.values if entry.objectClass else [])
                 ]
                 is_domain = "domaindns" in classes
                 is_rootish = container_dn.upper().count("OU=") <= 1
@@ -170,9 +167,10 @@ class GpoAbuse:
                     guid = match.group(1).upper()
                     # GPO cn is typically {GUID}
                     key = f"{{{guid}}}"
-                    gpo = gpo_by_cn.get(key) or gpo_by_cn.get(guid)
-                    if not gpo:
+                    maybe_gpo = gpo_by_cn.get(key) or gpo_by_cn.get(guid)
+                    if maybe_gpo is None:
                         continue
+                    gpo = maybe_gpo
                     gpo["link_count"] += 1
                     gpo["linked_containers"].append(container_dn)
                     if is_domain:
