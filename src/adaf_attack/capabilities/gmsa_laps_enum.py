@@ -130,9 +130,7 @@ class GmsaLapsEnum:
                             "GenericWrite",
                             "AllExtendedRights",
                         ):
-                            readable_by.append(
-                                {"sid": ace.principal_sid, "right": ace.right}
-                            )
+                            readable_by.append({"sid": ace.principal_sid, "right": ace.right})
                 except Exception:  # noqa: BLE001
                     pass
             item["acl_read_signals"] = readable_by[:20]
@@ -172,10 +170,10 @@ class GmsaLapsEnum:
             graph.add_node(node_id, "User", sam=sam, dn=dn, gmsa=True)
             if item.get("managed_password_present"):
                 graph.add_edge(node_id, node_id, "GMSAPasswordReadable")
-            for ace in readable_by:
-                src = f"SID@{ace['sid']}"
-                graph.add_node(src, "Base", sid=ace["sid"])
-                graph.add_edge(src, node_id, "ReadGMSAPassword", right=ace["right"])
+            for signal in readable_by:
+                src = f"SID@{signal['sid']}"
+                graph.add_node(src, "Base", sid=signal["sid"])
+                graph.add_edge(src, node_id, "ReadGMSAPassword", right=signal["right"])
 
             gmsas.append(item)
             console.print(
@@ -242,10 +240,10 @@ class GmsaLapsEnum:
             )
             if legacy or win_laps:
                 graph.add_edge(node_id, node_id, "LAPSReadable")
-            for ace in readable_by:
-                src = f"SID@{ace['sid']}"
-                graph.add_node(src, "Base", sid=ace["sid"])
-                graph.add_edge(src, node_id, "ReadLAPSPassword", right=ace["right"])
+            for signal in readable_by:
+                src = f"SID@{signal['sid']}"
+                graph.add_node(src, "Base", sid=signal["sid"])
+                graph.add_edge(src, node_id, "ReadLAPSPassword", right=signal["right"])
 
             laps_computers.append(item)
             console.print(
