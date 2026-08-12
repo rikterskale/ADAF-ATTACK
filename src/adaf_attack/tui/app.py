@@ -28,6 +28,12 @@ from textual.widgets import (
 
 from adaf_attack import __version__
 from adaf_attack.core.capability_help_data import capability_option_spec
+from adaf_attack.core.novice import (
+    beginner_next_actions,
+    explain_finding,
+    plain_description,
+    safety_summary,
+)
 from adaf_attack.core.paths import default_workspace_dir
 from adaf_attack.core.profiles import active_opsec, get_profile, list_profiles, set_profile
 from adaf_attack.core.registry import Capability, capability_registry
@@ -53,9 +59,15 @@ class CapabilityItem(ListItem):  # type: ignore[misc,unused-ignore]
 
     def compose(self) -> ComposeResult:
         risk = " [red]DESTRUCTIVE[/]" if self.destructive else ""
+        safety = safety_summary(
+            Capability(self.cap_id, self.summary, self.destructive, self.category)
+        )
         if self.phase_header:
             yield Label(f"[bold yellow]{self.phase_header}[/]")
-        yield Label(f"[bold cyan]{self.cap_id}[/]  [dim]{self.category}[/]{risk}\n  {self.summary}")
+        yield Label(
+            f"[bold cyan]{self.cap_id}[/]  [dim]{self.category}[/] [{safety['level']}]{risk}\n"
+            f"  {self.summary}"
+        )
 
 
 class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
@@ -101,6 +113,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._log_lines: list[str] = []
         self._reviewed_cap: str | None = None
         self._active_stage: str | None = None
+        self._safe_mode = bool(load_user_config().get("novice.safe_mode", True))
+        self._advanced_credentials_visible = False
 
     def compose(self) -> ComposeResult:
         defaults = load_user_config()
@@ -114,6 +128,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             yield Button("Findings", id="findings-btn")
             yield Button("Copy findings", id="copy-btn")
             yield Button("Copy ready command", id="copy-command-btn")
+            yield Button("Command only", id="command-only-btn")
         with Horizontal():
             with Vertical(id="sidebar"):
                 yield Static("[bold]Capabilities[/bold]", id="sidebar-title")
@@ -127,6 +142,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                         yield Button("Load profile", id="load-profile-btn")
                         yield Button("Save profile", id="save-profile-btn")
                         yield Button("Set default", id="default-profile-btn")
+                    yield Static(
+                        "Safe Mode: nothing changes until Force is enabled.", id="novice-panel"
+                    )
                     yield Input(
                         placeholder="Domain (corp.local)",
                         id="domain",
@@ -149,6 +167,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     yield Input(placeholder="AES key hex (optional)", id="aes_key")
                     yield Input(placeholder="Kerberos ccache path (optional)", id="ccache")
                     yield Input(placeholder="Creds JSON file (optional rotation)", id="creds_file")
+                    yield Button("Advanced credentials", id="advanced-creds-btn")
                     yield Static("[bold]Scope & safety[/bold]", classes="section-label")
                     yield Input(
                         placeholder="ACL scope: high-value | domain",
@@ -193,6 +212,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._populate_capabilities()
         self._refresh_profile_hint()
         self._update_credential_strip()
+        self._set_advanced_credentials_visible(False)
         self._show_log("[bold green]ADAF-ATTACK[/] ready. Use Quickstart or search capabilities.")
         if not self.query_one("#domain", Input).value:
             self.notify(
@@ -284,6 +304,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         notes = f"\n[italic]{spec.notes}[/]" if spec.notes else ""
         self.query_one("#help-panel", Static).update(
             f"[bold]{cap.id}[/]\n{cap.summary}\nCategory: {cap.category}\n"
+            f"Safety: {safety_summary(cap)['level']} — {plain_description(cap)}\n"
             f"Required: {required}\nOptional: {optional}{notes}"
         )
 
@@ -408,6 +429,32 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
 
     def action_focus_search(self) -> None:
         self.query_one("#search", Input).focus()
+
+    def _set_advanced_credentials_visible(self, visible: bool) -> None:
+        self._advanced_credentials_visible = visible
+        for widget_id in ("hashes", "aes_key", "ccache", "creds_file"):
+            self.query_one(f"#{widget_id}", Input).display = visible
+        self.query_one("#advanced-creds-btn", Button).label = (
+            "Hide advanced credentials" if visible else "Advanced credentials"
+        )
+
+    def _show_command_only(self) -> None:
+        cap = self._selected()
+        level = safety_summary(cap)["level"] if cap else "SELECT A CAPABILITY"
+        self.query_one("#review-panel", Static).update(
+            f"[bold]Command only[/bold]\nSafety: {level}\n{self._ready_command()}"
+        )
+
+    def _explain_findings(self) -> None:
+        if not self._last_session:
+            self.notify("Load a session first.", severity="information")
+            return
+        findings = self._read_json(self._last_session / "findings.json").get("findings") or []
+        explanations = [explain_finding(item) for item in findings if isinstance(item, dict)]
+        self.query_one("#session-panel", Static).update(
+            "[bold]Finding explanations[/bold]\n"
+            + ("\n".join(explanations) or "No findings to explain.")
+        )
 
     def action_jump_to_error(self) -> None:
         for line in reversed(self._log_lines):
@@ -697,13 +744,16 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         cap = capability_registry.get(capability_id)
         if not cap:
             return
-        suggestions = suggested_next_actions(cap)
-        if suggestions:
-            suggestion_lines = []
-            for capability_id in suggestions:
-                follow_on = capability_registry.get(capability_id)
+        if self._safe_mode:
+            suggestions = beginner_next_actions(cap)
+        else:
+            suggestions = []
+            for item in suggested_next_actions(cap):
+                follow_on = capability_registry.get(item)
                 if follow_on:
-                    suggestion_lines.append(f"• {capability_id} — {follow_on.summary}")
+                    suggestions.append({"id": item, "message": follow_on.summary})
+        if suggestions:
+            suggestion_lines = [f"• {item['id']} — {item['message']}" for item in suggestions]
             self.query_one("#review-panel", Static).update(
                 "[bold]Suggested next[/bold]\n"
                 + "\n".join(suggestion_lines)
@@ -783,6 +833,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "quickstart-btn": self._quickstart,
             "sessions-btn": self._show_sessions,
             "findings-btn": self._show_findings,
+            "command-only-btn": self._show_command_only,
+            "advanced-creds-btn": lambda: self._set_advanced_credentials_visible(
+                not self._advanced_credentials_visible
+            ),
             "copy-btn": self._copy_findings,
             "copy-command-btn": self._copy_ready_command,
             "ack-review-btn": self._acknowledge_review,
