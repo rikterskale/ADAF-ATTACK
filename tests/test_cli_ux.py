@@ -164,3 +164,18 @@ def test_doctor_first_run_hint_present(tmp_path: Path, monkeypatch) -> None:
     payload = json.loads(result.output)
     assert payload["first_run"] is True
     assert "engagement init" in payload["next_step"]
+
+
+def test_recent_capabilities_are_local_and_ordered(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(user_config, "config_path", lambda: tmp_path / "config.json")
+
+    first = runner.invoke(app, ["capability-help", "ldap-enum"])
+    second = runner.invoke(app, ["capability-help", "kerberoast"])
+    recent = runner.invoke(app, ["--format", "json", "recent"])
+
+    assert first.exit_code == second.exit_code == recent.exit_code == 0
+    payload = json.loads(recent.output)
+    assert [item["id"] for item in payload["capabilities"][:2]] == [
+        "kerberoast",
+        "ldap-enum",
+    ]

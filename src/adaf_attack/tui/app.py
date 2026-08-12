@@ -39,7 +39,12 @@ from adaf_attack.core.profiles import active_opsec, get_profile, list_profiles, 
 from adaf_attack.core.registry import Capability, capability_registry
 from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.target import Target
-from adaf_attack.core.user_config import load_user_config, save_user_config
+from adaf_attack.core.user_config import (
+    load_user_config,
+    recent_capabilities,
+    record_recent_capability,
+    save_user_config,
+)
 from adaf_attack.core.ux import (
     build_ready_command,
     group_capabilities_by_phase,
@@ -100,6 +105,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         Binding("p", "toggle_password", "Show/Hide password"),
         Binding("ctrl+k", "focus_search", "Search", priority=True),
         Binding("e", "jump_to_error", "Last error"),
+        Binding("u", "undo_form_reset", "Undo reset"),
     ]
 
     def __init__(self) -> None:
@@ -115,6 +121,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._active_stage: str | None = None
         self._safe_mode = bool(load_user_config().get("novice.safe_mode", True))
         self._advanced_credentials_visible = False
+        self._form_snapshot: dict[str, Any] | None = None
 
     def compose(self) -> ComposeResult:
         defaults = load_user_config()
@@ -124,6 +131,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 placeholder="Search capabilities by name, category, or keyword", id="search"
             )
             yield Button("Quickstart", id="quickstart-btn")
+            yield Switch(value=self._safe_mode, id="beginner-mode")
+            yield Label("Beginner mode")
+            yield Button("Reset form", id="reset-form-btn")
+            yield Button("Undo reset", id="undo-reset-btn", disabled=True)
             yield Button("Sessions", id="sessions-btn")
             yield Button("Findings", id="findings-btn")
             yield Button("Copy findings", id="copy-btn")
@@ -213,6 +224,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._refresh_profile_hint()
         self._update_credential_strip()
         self._set_advanced_credentials_visible(False)
+        self._apply_beginner_mode(self._safe_mode)
         self._show_log("[bold green]ADAF-ATTACK[/] ready. Use Quickstart or search capabilities.")
         if not self.query_one("#domain", Input).value:
             self.notify(
@@ -278,6 +290,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if event.switch.id == "force":
             self._reviewed_cap = None
             self._update_run_gate()
+        elif event.switch.id == "beginner-mode":
+            self._apply_beginner_mode(event.value)
 
     def on_checkbox_changed(self, _event: Checkbox.Changed) -> None:
         self._reviewed_cap = None
@@ -286,10 +300,105 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if isinstance(event.item, CapabilityItem):
             self.selected_cap = event.item.cap_id
+            record_recent_capability(event.item.cap_id)
             self._reviewed_cap = None
             self._update_status()
             self._update_help()
             self._update_run_gate()
+
+    def _apply_beginner_mode(self, enabled: bool) -> None:
+        """Hide optional controls; execution safety requirements remain unchanged."""
+        self._safe_mode = enabled
+        config = load_user_config()
+        config["novice.safe_mode"] = enabled
+        save_user_config(config)
+        for widget_id in (
+            "advanced-creds-btn",
+            "scope",
+            "start",
+            "kerberos",
+            "ldaps",
+            "include_secrets",
+        ):
+            self.query_one(f"#{widget_id}").display = not enabled
+        if enabled:
+            self._set_advanced_credentials_visible(False)
+        self.query_one("#novice-panel", Static).update(
+            "Beginner Mode: essential fields only; advanced controls stay hidden."
+            if enabled
+            else "Advanced Mode: optional credentials and targeting controls are available."
+        )
+
+    def _form_values(self) -> dict[str, Any]:
+        values: dict[str, Any] = {}
+        for widget_id in (
+            "domain",
+            "dc_ip",
+            "username",
+            "password",
+            "hashes",
+            "aes_key",
+            "ccache",
+            "creds_file",
+            "scope",
+            "start",
+        ):
+            values[widget_id] = self.query_one(f"#{widget_id}", Input).value
+        for widget_id in ("kerberos", "ldaps", "include_secrets", "force"):
+            values[widget_id] = self.query_one(f"#{widget_id}", Switch).value
+        return values
+
+    def _reset_form(self) -> None:
+        """Clear local form values with a one-step undo; no target action is involved."""
+        self._form_snapshot = self._form_values()
+        for widget_id in (
+            "domain",
+            "dc_ip",
+            "username",
+            "password",
+            "hashes",
+            "aes_key",
+            "ccache",
+            "creds_file",
+            "start",
+        ):
+            self.query_one(f"#{widget_id}", Input).value = ""
+        self.query_one("#scope", Input).value = "high-value"
+        for widget_id in ("kerberos", "ldaps", "include_secrets", "force"):
+            self.query_one(f"#{widget_id}", Switch).value = False
+        self.query_one("#undo-reset-btn", Button).disabled = False
+        self._reviewed_cap = None
+        self._update_status()
+        self._update_run_gate()
+        self.notify("Form reset. Undo is available until the next reset.", severity="information")
+
+    def action_undo_form_reset(self) -> None:
+        self._undo_form_reset()
+
+    def _undo_form_reset(self) -> None:
+        if self._form_snapshot is None:
+            self.notify("Nothing to undo.", severity="information")
+            return
+        for widget_id in (
+            "domain",
+            "dc_ip",
+            "username",
+            "password",
+            "hashes",
+            "aes_key",
+            "ccache",
+            "creds_file",
+            "scope",
+            "start",
+        ):
+            self.query_one(f"#{widget_id}", Input).value = str(self._form_snapshot[widget_id])
+        for widget_id in ("kerberos", "ldaps", "include_secrets", "force"):
+            self.query_one(f"#{widget_id}", Switch).value = bool(self._form_snapshot[widget_id])
+        self._form_snapshot = None
+        self.query_one("#undo-reset-btn", Button).disabled = True
+        self._update_status()
+        self._update_run_gate()
+        self.notify("Form restored.", severity="information")
 
     def _selected(self) -> Capability | None:
         return capability_registry.get(self.selected_cap) if self.selected_cap else None
@@ -302,10 +411,11 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         required = ", ".join(spec.required) or "none (offline/session input)"
         optional = ", ".join(spec.optional[:6]) or "none"
         notes = f"\n[italic]{spec.notes}[/]" if spec.notes else ""
+        recent = ", ".join(recent_capabilities()) or "none yet"
         self.query_one("#help-panel", Static).update(
             f"[bold]{cap.id}[/]\n{cap.summary}\nCategory: {cap.category}\n"
             f"Safety: {safety_summary(cap)['level']} — {plain_description(cap)}\n"
-            f"Required: {required}\nOptional: {optional}{notes}"
+            f"Required: {required}\nOptional: {optional}{notes}\nRecent: {recent}"
         )
 
     def _update_status(self) -> None:
@@ -831,6 +941,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "dry-run-btn": self._dry_run,
             "cancel-btn": self._cancel,
             "quickstart-btn": self._quickstart,
+            "reset-form-btn": self._reset_form,
+            "undo-reset-btn": self._undo_form_reset,
             "sessions-btn": self._show_sessions,
             "findings-btn": self._show_findings,
             "command-only-btn": self._show_command_only,

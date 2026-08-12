@@ -95,6 +95,24 @@ def test_tui_search_review_and_dry_run_are_available() -> None:
     asyncio.run(exercise())
 
 
+def test_tui_beginner_mode_and_form_reset_are_reversible() -> None:
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.query_one("#domain", Input).value = "corp.test"
+            app.query_one("#dc_ip", Input).value = "192.0.2.10"
+            app._reset_form()
+            assert app.query_one("#domain", Input).value == ""
+            assert app.query_one("#undo-reset-btn", tui_app.Button).disabled is False
+            app._undo_form_reset()
+            assert app.query_one("#domain", Input).value == "corp.test"
+            app._apply_beginner_mode(True)
+            assert app.query_one("#scope", Input).display is False
+
+    asyncio.run(exercise())
+
+
 def test_tui_controls_validation_sessions_and_findings(
     tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

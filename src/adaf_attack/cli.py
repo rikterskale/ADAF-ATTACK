@@ -389,6 +389,9 @@ def capability_help(
             )
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code)
+        from adaf_attack.core.user_config import record_recent_capability
+
+        record_recent_capability(cap.id)
         payload = {"ok": True, "capability": _capability_payload(cap)}
         item = _capability_payload(cap)
         from adaf_attack.core.ux import build_ready_command, risk_checklist
@@ -526,6 +529,28 @@ def tour(ctx: typer.Context) -> None:
         title="Operator tour",
     )
     _emit(ctx, {"ok": True, **payload}, human)
+
+
+@app.command("recent")
+def recent(ctx: typer.Context) -> None:
+    """Show recently viewed capabilities (stored locally, never targets or credentials)."""
+    from adaf_attack.core.registry import capability_registry
+    from adaf_attack.core.user_config import recent_capabilities
+
+    items = [capability_registry.get(capability_id) for capability_id in recent_capabilities()]
+    capabilities = [cap for cap in items if cap is not None]
+    payload = {
+        "ok": True,
+        "capabilities": [_capability_payload(cap) for cap in capabilities],
+        "count": len(capabilities),
+        "next_step": "Run `adaf-attack capability-help <id>` to review a recent capability.",
+    }
+    human = Panel(
+        "\n".join(f"{cap.id}: {cap.summary}" for cap in capabilities)
+        or "No recent capabilities yet. Browse with `adaf-attack capability-help <id>` or use the TUI.",
+        title="Recently viewed capabilities",
+    )
+    _emit(ctx, payload, human)
 
 
 @app.command("search")

@@ -21,6 +21,9 @@ _ALLOWED_KEYS = {
     "workspace",
     "opsec.profile",
     "profile.default",
+    "novice.safe_mode",
+    "ui.recent_capabilities",
+    "ui.tour_complete",
 }
 
 
@@ -76,3 +79,22 @@ def unset_key(key: str) -> tuple[Path, dict[str, Any]]:
 
 def get_key(key: str) -> Any:
     return load_user_config().get(key)
+
+
+def record_recent_capability(capability_id: str, *, limit: int = 5) -> list[str]:
+    """Record a capability selection without storing target or credential data."""
+    data = load_user_config()
+    existing = data.get("ui.recent_capabilities", [])
+    recent = [str(item) for item in existing if isinstance(item, str) and item != capability_id]
+    recent.insert(0, capability_id)
+    data["ui.recent_capabilities"] = recent[:limit]
+    save_user_config(data)
+    return data["ui.recent_capabilities"]
+
+
+def recent_capabilities(*, limit: int = 5) -> list[str]:
+    """Return recently selected capability IDs, newest first."""
+    value = load_user_config().get("ui.recent_capabilities", [])
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if isinstance(item, str)][:limit]
