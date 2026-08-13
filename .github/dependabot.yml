@@ -4,8 +4,43 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # codeql-action ships init/autobuild/analyze as one action; a workflow
+      # must run the same major across all three steps or CodeQL fails with
+      # "Loaded a configuration file for version X, but running version Y".
+      # Grouping every codeql-action/* bump into one PR keeps the steps in sync
+      # (this replaces the three separate, individually-broken PRs Dependabot
+      # used to open). No update-type filter, so even a major moves as one PR.
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
+      # Bundle the routine action bumps into a single weekly PR. Majors are
+      # excluded so breaking action upgrades (e.g. download-artifact 4 -> 8)
+      # still arrive individually and can be reviewed on their own.
+      actions-minor-and-patch:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "github/codeql-action*"
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: pip
     directory: /
     schedule:
       interval: weekly
+    # pydantic pins pydantic-core to an exact version, so pydantic-core must
+    # only move when pydantic does; an independent bump breaks `pip check`.
+    # Let pydantic drive it (Dependabot opened a broken standalone bump before).
+    ignore:
+      - dependency-name: "pydantic-core"
+    groups:
+      # One weekly PR for routine library bumps; majors stay individual for
+      # deliberate review.
+      python-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
