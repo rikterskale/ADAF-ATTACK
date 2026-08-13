@@ -315,8 +315,8 @@ jobs:
           jobs = workflow["jobs"]
           required_jobs = {
               "lint", "typecheck", "tests", "security", "codeql", "scripts",
-              "workflow-contract", "package", "operator-workflow", "windows-installer",
-              "ci-gate",
+              "workflow-contract", "package", "operator-workflow", "release-readiness",
+              "windows-installer", "ci-gate",
           }
           assert required_jobs <= jobs.keys()
           assert jobs["ci-gate"]["if"] == "always()"
@@ -351,6 +351,7 @@ jobs:
               "scripts/install-kali.sh",
               "scripts/Install-AdafAttack.ps1",
               "scripts/AdafAttack.psm1",
+              "scripts/check_release_readiness.py",
               ".pre-commit-config.yaml",
           ):
               assert Path(path).is_file(), path
@@ -790,6 +791,63 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  release-readiness:
+    name: New-user release-readiness standard
+    needs: [package]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Download built distribution
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: python-distributions
+          path: dist
+
+      - name: Verify downloaded distribution checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum -c SHA256SUMS)
+
+      # Install ONLY the base wheel in a clean venv - the exact artifact a new
+      # user gets, with optional tooling (impacket/certipy/tui/reports) absent.
+      # This is what makes the "degraded optional tooling warns, it does not
+      # fail" pillar a real test rather than a tautology. PyYAML is added solely
+      # for the verifier's CI-binding layer, which parses ci.yml.
+      - name: Install base artifact in a clean environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/newuser"
+          # shellcheck disable=SC1091
+          source "$RUNNER_TEMP/newuser/bin/activate"
+          python -m pip install --upgrade pip
+          wheel=(dist/*.whl)
+          python -m pip install "${wheel[0]}"
+          python -m pip install "pyyaml>=6.0"
+          python -m pip check
+          command -v adaf-attack
+
+      - name: Enforce the five-pillar release-readiness standard
+        shell: bash
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source "$RUNNER_TEMP/newuser/bin/activate"
+          # Drive the installed console script, exactly as a new user would.
+          ADAF_CLI="$(command -v adaf-attack)" \
+            python scripts/check_release_readiness.py --repo-root "$PWD"
+
   windows-installer:
     name: Windows installer smoke test
     needs: [package, scripts]
@@ -844,7 +902,7 @@ jobs:
   ci-gate:
     name: Production readiness gate
     if: always()
-    needs: [lint, typecheck, tests, security, codeql, scripts, workflow-contract, package, operator-workflow, windows-installer]
+    needs: [lint, typecheck, tests, security, codeql, scripts, workflow-contract, package, operator-workflow, release-readiness, windows-installer]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every CI lane to pass
@@ -858,4 +916,5 @@ jobs:
           test "${{ needs.workflow-contract.result }}" = success
           test "${{ needs.package.result }}" = success
           test "${{ needs.operator-workflow.result }}" = success
+          test "${{ needs.release-readiness.result }}" = success
           test "${{ needs.windows-installer.result }}" = success

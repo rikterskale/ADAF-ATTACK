@@ -17,6 +17,15 @@ Each gate is tagged:
 A version ships only when **every gate below is green and recorded** in the
 release checklist at the end.
 
+The five pillars are enforced as one build-breaking lane by the
+**`release-readiness`** job in `.github/workflows/ci.yml`, which runs
+`scripts/check_release_readiness.py` against a clean **base-wheel** install (the
+exact artifact a new user gets). That script does two things: it drives the
+installed `adaf-attack` console script to prove each pillar behaviorally, and it
+parses `ci.yml` to assert each pillar is still wired to a live job/step and its
+contract test — so this standard cannot silently decay back into a coverage
+number. Deleting any enforcement point turns the build red.
+
 ---
 
 ## 0. Scope
@@ -194,7 +203,7 @@ Version: __________        Release manager: __________        Date: __________
 
 [ ] All CI lanes green on the release commit (lint, typecheck, tests, security,
     codeql, scripts, workflow-contract, package, operator-workflow,
-    windows-installer, ci-gate)
+    release-readiness, windows-installer, ci-gate)
 [ ] §1 Install: fresh-artifact install recorded for every supported-matrix row
 [ ] §2 Troubleshooting: doctor green per platform; first-10-min walkthrough done
 [ ] §3 Features: offline lifecycle green; lab-validation transcript attached for
