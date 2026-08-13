@@ -83,12 +83,23 @@ class Cmd:
         return json.loads(self.out)
 
 
+# Deterministic output regardless of runner: no ANSI colour, no width-based
+# wrapping. Rich otherwise colourises error text on CI (splitting tokens like
+# ``--force`` with escape codes) and wraps at the terminal width.
+_CLI_ENV = {**os.environ, "NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "200"}
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def strip_ansi(text: str) -> str:
+    return _ANSI.sub("", text)
+
+
 def run_cli(*args: str, env: dict[str, str] | None = None) -> Cmd:
     proc = subprocess.run(
         [*_ARGV, *args],
         capture_output=True,
         text=True,
-        env=env,
+        env=env if env is not None else _CLI_ENV,
         timeout=120,
     )
     return Cmd(proc.returncode, proc.stdout, proc.stderr)
@@ -275,7 +286,7 @@ def _cleanup_requires_force() -> None:
         "10.0.0.10",
     )
     _require(result.code != 0, "cleanup ran without --force (must refuse)")
-    combined = f"{result.out}\n{result.err}"
+    combined = strip_ansi(f"{result.out}\n{result.err}")
     _require("--force" in combined, f"cleanup refusal did not mention --force: {combined}")
 
 
@@ -307,7 +318,7 @@ def _docs_exist() -> None:
 
 @documentation.check("every documented command and capability is real")
 def _docs_reference_real_surface() -> None:
-    commands = _registered_commands_via_help()
+    commands = _registered_commands()
     cap_ids = {
         c["id"] for c in run_cli("--format", "json", "list-capabilities").json()["capabilities"]
     }
@@ -332,22 +343,26 @@ def _docs_reference_real_surface() -> None:
     )
 
 
-def _registered_commands_via_help() -> set[str]:
-    """Extract the top-level command names from ``adaf-attack --help``."""
-    help_text = run_cli("--help").out
+def _registered_commands() -> set[str]:
+    """The authoritative set of top-level command names from the installed app.
+
+    Imported in-process (the verifier runs under the same venv the artifact is
+    installed into) rather than scraped from ``--help`` text, whose Rich layout
+    varies by terminal width and colour and cannot be parsed portably.
+    """
+    import adaf_attack.capabilities  # noqa: F401  # register every capability
+    from adaf_attack.cli import app
+
     names: set[str] = set()
-    # Typer/Rich help lists each command as a leading token on its own row.
-    in_commands = False
-    for line in help_text.splitlines():
-        stripped = line.strip()
-        if "Commands" in line:
-            in_commands = True
-            continue
-        if in_commands:
-            match = re.match(r"[│|]?\s*([a-z][a-z0-9-]+)\b", stripped)
-            if match:
-                names.add(match.group(1))
-    _require(names, "could not parse any commands from --help")
+    for command in app.registered_commands:
+        if command.name:
+            names.add(command.name)
+        elif command.callback is not None:
+            names.add(command.callback.__name__.replace("_", "-"))
+    for group in app.registered_groups:
+        if group.name:
+            names.add(group.name)
+    _require(names, "no commands registered on the installed app")
     return names
 
 
