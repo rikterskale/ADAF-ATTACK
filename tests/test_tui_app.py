@@ -14,6 +14,26 @@ from adaf_attack.tui import app as tui_app
 from adaf_attack.tui.app import ADAFAttackApp
 
 
+async def _wait_for(pilot, predicate, *, timeout: float = 5.0) -> None:
+    """Pump the Textual event loop until ``predicate()`` holds, or fail.
+
+    ``_start_run`` executes the capability on a daemon thread whose completion
+    (and its ``_capability_running = False`` reset) is reached only after its
+    ``call_from_thread`` log callbacks are marshalled back onto the app loop. A
+    fixed ``asyncio.sleep`` can't reliably pump the loop enough times on a loaded
+    CI runner, so we poll. A genuine regression still fails: the timeout raises.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        if predicate():
+            return
+        await asyncio.sleep(0.02)
+        await pilot.pause()
+    if not predicate():
+        raise AssertionError("condition was not met within the timeout")
+
+
 def test_tui_starts_populates_capabilities_and_updates_status() -> None:
     async def exercise() -> None:
         app = ADAFAttackApp()
@@ -255,8 +275,7 @@ def test_tui_controls_validation_sessions_and_findings(
 
             monkeypatch.setattr(tui_app, "execute_capability", successful_run)
             app._start_run()
-            await asyncio.sleep(0.1)
-            await pilot.pause()
+            await _wait_for(pilot, lambda: app._capability_running is False)
             assert app._capability_running is False
             monkeypatch.setattr(
                 tui_app,
@@ -264,8 +283,7 @@ def test_tui_controls_validation_sessions_and_findings(
                 lambda *args, **kwargs: (_ for _ in ()).throw(tui_app.RunError("offline failure")),
             )
             app._start_run()
-            await asyncio.sleep(0.1)
-            await pilot.pause()
+            await _wait_for(pilot, lambda: app._capability_running is False)
             app._capability_running = True
             app._cancel()
             monkeypatch.setattr(app, "copy_to_clipboard", lambda text: None)
