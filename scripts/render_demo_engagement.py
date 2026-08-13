@@ -7,7 +7,6 @@ from pathlib import Path
 
 from adaf_attack.core.reporting import generate_report_bundle
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "tests" / "fixtures" / "demo-session"
 OUTPUT = ROOT / "output" / "demo-engagement"
