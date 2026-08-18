@@ -285,6 +285,11 @@ jobs:
             exit 1
           fi
 
+      - name: Validate live capability and lab contracts
+        run: |
+          python scripts/validate_live_capability_matrix.py
+          python scripts/validate_live_lab_manifest.py --manifest docs/LIVE_LAB_MANIFEST.template.json
+
   workflow-contract:
     name: Validate CI and operator contracts
     runs-on: ubuntu-24.04

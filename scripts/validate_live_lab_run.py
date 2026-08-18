@@ -88,7 +88,7 @@ def validate_bundle(root: Path, required: list[str]) -> list[str]:
     return errors
 
 
-def validate_release_record(path: Path) -> list[str]:
+def validate_release_record(path: Path, capability_matrix: Path | None = None) -> list[str]:
     """Validate the machine-readable release sign-off record."""
     if not path.is_file():
         return [f"release evidence record does not exist: {path}"]
@@ -114,6 +114,15 @@ def validate_release_record(path: Path) -> list[str]:
         for index, item in enumerate(capabilities):
             if not isinstance(item, dict) or not item.get("name") or item.get("status") not in PASS_STATUSES:
                 errors.append(f"release evidence record optional_capabilities[{index}] is invalid")
+        if capability_matrix and capability_matrix.is_file():
+            try:
+                matrix = json.loads(capability_matrix.read_text(encoding="utf-8"))
+                known = matrix.get("capabilities", {}) if isinstance(matrix, dict) else {}
+                for index, item in enumerate(capabilities):
+                    if isinstance(item, dict) and item.get("name") not in known:
+                        errors.append(f"release evidence record optional_capabilities[{index}] is not in the live capability matrix")
+            except (OSError, json.JSONDecodeError) as exc:
+                errors.append(f"invalid capability matrix: {exc}")
     for location in _walk_sensitive(payload):
         errors.append(f"possible unredacted secret field in release record: {location}")
     return errors
@@ -124,11 +133,12 @@ def main() -> int:
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--require", action="append", dest="required", default=[])
     parser.add_argument("--release-record", type=Path, help="Machine-readable release sign-off JSON")
+    parser.add_argument("--capability-matrix", type=Path, help="Matrix used to validate recorded capability names")
     args = parser.parse_args()
     required = args.required or ["findings.json", "reports/report-manifest.json"]
     errors = validate_bundle(args.evidence_dir, required)
     if args.release_record:
-        errors.extend(validate_release_record(args.release_record))
+        errors.extend(validate_release_record(args.release_record, args.capability_matrix))
     if errors:
         for error in errors:
             print(f"ERROR: {error}", file=sys.stderr)

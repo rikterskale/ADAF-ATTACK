@@ -40,6 +40,17 @@ def test_release_record_rejects_unredacted_sensitive_value(tmp_path: Path) -> No
     assert any("possible unredacted secret" in error for error in errors)
 
 
+def test_release_record_rejects_unknown_capability(tmp_path: Path) -> None:
+    record = tmp_path / "release-evidence.json"
+    payload = _record()
+    payload["optional_capabilities"] = [{"name": "not-registered", "status": "pass"}]
+    record.write_text(json.dumps(payload), encoding="utf-8")
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(json.dumps({"capabilities": {"ldap-enum": {}}}), encoding="utf-8")
+    errors = validate_release_record(record, matrix)
+    assert any("not in the live capability matrix" in error for error in errors)
+
+
 def test_bundle_can_validate_record_and_required_files(tmp_path: Path) -> None:
     (tmp_path / "findings.json").write_text("{}", encoding="utf-8")
     reports = tmp_path / "reports"

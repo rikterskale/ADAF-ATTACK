@@ -81,6 +81,13 @@ also proven by the full source matrix.
       sanitized validator output, and record the release sign-off fields.
       Hosted CI does not provide a domain and must never be described as
       proving this.
+- [ ] The machine-readable capability matrix covers every registered feature,
+      classifies required tools/fixtures, and marks destructive rows as
+      rollback-required. **[CI: test_live_capability_matrix]** See
+      [LIVE_CAPABILITY_MATRIX.md](LIVE_CAPABILITY_MATRIX.md).
+- [ ] The disposable lab manifest passes the offline safety validator before
+      any operator connects to the lab. **[CI: test_live_lab_manifest; MANUAL:
+      operator validates the populated manifest]**
 - [ ] Doctor profiles distinguish offline, operator, Certipy, and explicit
       live-AD preflight requirements; support bundles redact identifiers and
       secrets. **[CI: test_doctor_profiles]**

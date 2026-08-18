@@ -22,6 +22,7 @@
   [Known limitations](docs/KNOWN_LIMITATIONS.md) · [Changelog](CHANGELOG.md)
 - [New-user readiness guide](docs/USER_READINESS.md) ·
   [Disposable AD lab validation](docs/LIVE_AD_LAB_VALIDATION.md) ·
+  [Live capability matrix](docs/LIVE_CAPABILITY_MATRIX.md) ·
   [Supported platforms and architectures](docs/SUPPORTED_PLATFORMS.md)
 
 ## Philosophy

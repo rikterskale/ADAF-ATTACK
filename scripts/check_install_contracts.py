@@ -143,6 +143,12 @@ def _check_ci() -> None:
             "test_offline_profile_is_local_and_has_scoped_contract",
             "test_support_bundle_redacts_sensitive_values",
         ),
+        "tests/test_live_capability_matrix.py": (
+            "test_live_capability_matrix_covers_registry",
+        ),
+        "tests/test_live_lab_manifest.py": (
+            "test_lab_manifest_template_is_safe_and_valid",
+        ),
     }
     for relative, names in release_contracts.items():
         source = (ROOT / relative).read_text(encoding="utf-8")
@@ -219,9 +225,13 @@ def _check_docs() -> None:
         "docs/USER_READINESS.md",
         "docs/LIVE_AD_LAB_VALIDATION.md",
         "docs/LIVE_LAB_RELEASE_EVIDENCE.template.json",
+        "docs/LIVE_CAPABILITY_MATRIX.json",
+        "docs/LIVE_LAB_MANIFEST.template.json",
         "docs/SUPPORTED_PLATFORMS.md",
         "requirements-runtime.txt",
         "scripts/validate_live_lab_run.py",
+        "scripts/validate_live_capability_matrix.py",
+        "scripts/validate_live_lab_manifest.py",
         "scripts/install-approved-wheel.py",
         "scripts/generate_release_manifest.py",
         "scripts/build-release-wheelhouse.py",

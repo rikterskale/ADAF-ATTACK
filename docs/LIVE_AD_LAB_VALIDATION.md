@@ -91,6 +91,18 @@ lab.example      -> <private lab IP>
 For Kerberos validation, synchronize VM clocks and use the lab DNS server. Do
 not disable time or certificate validation in a production environment.
 
+Before using a disposable lab, copy
+[LIVE_LAB_MANIFEST.template.json](LIVE_LAB_MANIFEST.template.json), replace
+only the lab metadata, and validate it without network access:
+
+```bash
+python scripts/validate_live_lab_manifest.py --manifest ./live-lab-manifest.json
+```
+
+The manifest must use a reserved lab domain, a private or documentation-only
+DC address, and an internal/host-only network. It must never contain a
+password, token, hash, private key, or ticket cache.
+
 ## Step 4: Run the read-only smoke workflow
 
 Create and review the plan before running it:
@@ -204,9 +216,15 @@ Validate the record together with the sanitized evidence bundle:
 python scripts/validate_live_lab_run.py \
   --evidence-dir ./live-lab-workspace/<session-id> \
   --release-record ./live-lab-release-evidence.json \
+  --capability-matrix docs/LIVE_CAPABILITY_MATRIX.json \
   --require findings.json \
   --require reports/report-manifest.json
 ```
 
 A release may claim live-AD readiness only when the required rows are marked
 pass and the sanitized evidence is retained with the candidate.
+
+The complete capability inventory is maintained in
+[LIVE_CAPABILITY_MATRIX.md](LIVE_CAPABILITY_MATRIX.md). CI validates that it
+covers every registered capability, but only this disposable-lab run proves
+live behavior.
