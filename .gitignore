@@ -56,3 +56,4 @@ output/
 **/*-with-secrets.*
 **/validation-result*.json
 .claude/
+.codex/
