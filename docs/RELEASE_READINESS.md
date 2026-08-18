@@ -91,9 +91,10 @@ also proven by the full source matrix.
 - [ ] Doctor profiles distinguish offline, operator, Certipy, and explicit
       live-AD preflight requirements; support bundles redact identifiers and
       secrets. **[CI: test_doctor_profiles]**
-- [ ] Every provider error path is guaranteed to map to the actionable error
-      catalog. **[GAP]** Representative doctor/CLI contracts are automated, not
-      every possible target/provider failure.
+- [ ] Common authentication, connectivity, missing-input, invalid-file, and
+      permission failures map to stable actionable codes with recovery text.
+      **[CI: test_actionable_error_contract]** Provider-specific unknown failures
+      remain intentionally classified as `RUN_FAILED`.
 
 ## 4. Packaging and documentation consistency
 
@@ -130,8 +131,7 @@ Version: __________  Release manager: __________  Date: __________
    target-side cleanup. The novice lab procedure and offline evidence validator
    now make the manual gate repeatable while credentials and lab infrastructure
    remain intentionally outside hosted CI.
-2. Broader actionable-error catalog coverage.
-3. Reproducible validation of organization-specific proxy, CA, endpoint, and
+2. Reproducible validation of organization-specific proxy, CA, endpoint, and
    air-gap transfer policies.
 
 For live-AD claims, the release candidate must also retain the machine-readable

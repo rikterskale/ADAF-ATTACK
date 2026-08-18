@@ -149,6 +149,10 @@ def _check_ci() -> None:
         "tests/test_live_lab_manifest.py": (
             "test_lab_manifest_template_is_safe_and_valid",
         ),
+        "tests/test_actionable_error_contract.py": (
+            "test_catalog_entries_have_complete_recovery_contracts",
+            "test_common_runner_failures_map_to_actionable_codes",
+        ),
     }
     for relative, names in release_contracts.items():
         source = (ROOT / relative).read_text(encoding="utf-8")

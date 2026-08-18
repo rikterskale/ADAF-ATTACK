@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -116,6 +117,31 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Choose a writable config directory, check permissions, then run `adaf-attack doctor --explain`.",
         "adaf-attack doctor --explain",
     ),
+    "AUTHENTICATION_FAILED": (
+        "The target rejected the supplied authentication material.",
+        "Verify the username, secret source, clock, DNS, and required authentication extra; do not put passwords in shell history.",
+        "adaf-attack doctor --profile live-ad --domain <domain> --dc-ip <dc>",
+    ),
+    "TARGET_UNREACHABLE": (
+        "The target could not be reached from this operator environment.",
+        "Verify DNS, routing, firewall rules, the private lab network, and the DC address before retrying.",
+        "adaf-attack doctor --profile live-ad --domain <domain> --dc-ip <dc>",
+    ),
+    "REQUIRED_INPUT_MISSING": (
+        "The capability is missing a required input.",
+        "Run capability-help for the capability and provide the named option or -P parameter.",
+        "adaf-attack capability-help <capability>",
+    ),
+    "INPUT_FILE_INVALID": (
+        "An input file or artifact could not be read or is not in the expected format.",
+        "Check that the path exists, is readable, and matches the documented JSON/YAML/artifact format.",
+        "adaf-attack doctor --explain",
+    ),
+    "PERMISSION_DENIED": (
+        "The operating system denied access to a file, directory, or protected operation.",
+        "Choose a writable workspace/config path or use the documented elevated operation only when authorized.",
+        "adaf-attack paths",
+    ),
     "SUPPORT_BUNDLE_WRITE_FAILED": (
         "The redacted support bundle could not be written.",
         "Choose a writable output directory and rerun the support-bundle command.",
@@ -142,6 +168,24 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "adaf-attack completions bash",
     ),
 }
+
+
+_ERROR_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("AUTHENTICATION_FAILED", ("ldap bind failed", "all credentials failed", "authentication failed", "invalid credentials", "logon failure")),
+    ("TARGET_UNREACHABLE", ("connection refused", "timed out", "timeout", "network is unreachable", "name or service not known", "could not connect", "connection error")),
+    ("PERMISSION_DENIED", ("permission denied", "access is denied", "operation not permitted")),
+    ("INPUT_FILE_INVALID", ("file not found", "not found:", "path is not a directory", "invalid json", "invalid yaml", "artifact not found", "could not read")),
+    ("REQUIRED_INPUT_MISSING", ("pass -p", "required", "username required", "provide -p", "requires --")),
+)
+
+
+def classify_run_error(message: str) -> str:
+    """Return the most actionable catalog code for a runner failure."""
+    lowered = re.sub(r"\s+", " ", message.lower())
+    for code, patterns in _ERROR_PATTERNS:
+        if any(pattern in lowered for pattern in patterns):
+            return code
+    return "RUN_FAILED"
 
 
 def error_for(

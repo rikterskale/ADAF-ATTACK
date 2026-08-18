@@ -25,7 +25,12 @@ from adaf_attack import __version__
 from adaf_attack.cli_ux_commands import register_ux_commands
 from adaf_attack.core.auth import describe_auth
 from adaf_attack.core.capability_help_data import capability_option_spec
-from adaf_attack.core.cli_contract import ERROR_CATALOG, ActionableError, error_for
+from adaf_attack.core.cli_contract import (
+    ERROR_CATALOG,
+    ActionableError,
+    classify_run_error,
+    error_for,
+)
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.paths import (
     default_workspace_dir,
@@ -1298,7 +1303,7 @@ def run_capability(
             _console(ctx).print(f"Inspect: adaf-attack sessions --session {session_id}")
     except RunError as exc:
         text = str(exc)
-        code = "RUN_FAILED"
+        code = classify_run_error(text)
         if text.startswith("Unknown capability:"):
             code = "UNKNOWN_CAPABILITY"
         elif "DESTRUCTIVE" in text and "--force" in text:

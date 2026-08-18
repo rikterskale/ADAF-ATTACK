@@ -112,6 +112,24 @@ Prefer a dedicated Certipy venv if pip cannot resolve the combined environment.
 Use `--profile operator` to make TUI, reporting, and Kerberos tooling blocking,
 or `--profile certipy` to validate the separate AD CS dependency boundary.
 
+## Target and input failures
+
+JSON failures include a stable error code, remediation, and often a suggested
+command. Use the code to choose the recovery path:
+
+| Error code | First recovery action |
+|---|---|
+| `AUTHENTICATION_FAILED` | Recheck the account, secret source, DNS, and clock; never add a password to shell history. |
+| `TARGET_UNREACHABLE` | Run the explicit live-AD doctor profile and verify private-lab routing/firewall rules. |
+| `REQUIRED_INPUT_MISSING` | Run `adaf-attack capability-help <capability>` and provide the named option or `-P` parameter. |
+| `INPUT_FILE_INVALID` | Confirm the path exists, is readable, and matches the documented artifact format. |
+| `PERMISSION_DENIED` | Select writable per-user data/config/workspace directories with `adaf-attack paths`. |
+
+For a complete catalog, run `adaf-attack --format json errors`. The generic
+`RUN_FAILED` code is reserved for provider failures that do not match a safer
+specific recovery class; retain the exact message and sanitized support bundle
+when requesting help.
+
 ## Read-only profile or managed workstation
 
 If `doctor` reports that the data or configuration directory is not writable,
