@@ -1,7 +1,9 @@
 # macOS installation and lifecycle
 
-ADAF-ATTACK supports Python 3.11-3.13 on macOS. Hosted CI installs the built
-wheel on macOS 14/Python 3.13 and exercises the public offline CLI.
+ADAF-ATTACK supports Python 3.11-3.14 on macOS. Hosted CI installs the built
+wheel on macOS 14/Python 3.13 and exercises the public offline CLI. Source tests
+also cover Python 3.14 on macOS; the focused artifact wheel path remains tested
+through Python 3.13.
 
 ## Prerequisites
 

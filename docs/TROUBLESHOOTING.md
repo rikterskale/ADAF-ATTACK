@@ -39,7 +39,7 @@ and remediation field.
 
 ## Python and virtual environments
 
-ADAF-ATTACK requires Python 3.11-3.13. The Windows installer accepts
+ADAF-ATTACK requires Python 3.11-3.14. The Windows installer accepts
 `-Python <full-path>` or `-Python py -PythonVersion 3.13`. On Debian-family
 systems, install `python3-venv` if venv creation fails. A PEP 668
 `externally-managed-environment` error means pip is protecting the system Python:

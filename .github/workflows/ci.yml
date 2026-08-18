@@ -92,7 +92,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, windows-2022, macos-14]
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Checkout
@@ -447,6 +447,10 @@ jobs:
             extras: base
           - os: macos-14
             python-version: "3.13"
+            artifact: wheel
+            extras: base
+          - os: ubuntu-24.04
+            python-version: "3.14"
             artifact: wheel
             extras: base
           - os: ubuntu-24.04
@@ -951,6 +955,9 @@ jobs:
           - shell: pwsh
             python-version: "3.13"
             preexisting-config: true
+          - shell: pwsh
+            python-version: "3.14"
+            preexisting-config: false
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

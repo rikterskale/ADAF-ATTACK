@@ -64,7 +64,7 @@ $ErrorActionPreference = "Stop"
 $global:AdafJsonInstallerErrors = $Json
 trap {
     $message = $_.Exception.Message
-    $remediation = "Check Python 3.11-3.13, artifact access, permissions, and rerun with -Json for machine-readable diagnostics."
+    $remediation = "Check Python 3.11-3.14, artifact access, permissions, and rerun with -Json for machine-readable diagnostics."
     if ($global:AdafJsonInstallerErrors) {
         [pscustomobject]@{
             ok = $false
@@ -81,7 +81,7 @@ trap {
     exit 1
 }
 $minimumPython = [Version]"3.11"
-$maximumPython = [Version]"3.14"
+$maximumPython = [Version]"3.15"
 $installRoot = Join-Path $env:LOCALAPPDATA "adaf-attack"
 $shimDir = Join-Path $installRoot "bin"
 $shim = Join-Path $shimDir "adaf-attack.cmd"
@@ -182,7 +182,7 @@ if ($pythonCommand -match "^(py(?:\.exe)?)\s+(.+)$") {
 }
 $resolvedPython = Get-Command $pythonCommand -ErrorAction SilentlyContinue
 if (-not $resolvedPython) {
-    throw "Python command not found: $pythonCommand. Install Python 3.11-3.13 or pass -Python with a full path."
+    throw "Python command not found: $pythonCommand. Install Python 3.11-3.14 or pass -Python with a full path."
 }
 if ($resolvedPython.Source) {
     $pythonCommand = $resolvedPython.Source
@@ -191,7 +191,7 @@ if ((Split-Path $pythonCommand -Leaf) -match "^py(?:\.exe)?$" -and $pythonPrefix
     $pythonPrefix = @("-$PythonVersion")
 }
 
-Write-Step "Validating Python 3.11 through 3.13"
+Write-Step "Validating Python 3.11 through 3.14"
 $probeArgs = @($pythonPrefix) + @(
     "-c",
     "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}|{sys.executable}')"
@@ -207,7 +207,7 @@ if ($probeParts.Count -ne 2) {
 }
 $detectedVersion = [Version]$probeParts[0]
 if ($detectedVersion -lt $minimumPython -or $detectedVersion -ge $maximumPython) {
-    throw "Python $detectedVersion is unsupported. ADAF-ATTACK requires Python 3.11 through 3.13."
+    throw "Python $detectedVersion is unsupported. ADAF-ATTACK requires Python 3.11 through 3.14."
 }
 $pythonExe = $probeParts[1]
 Write-Ok "Using Python $detectedVersion at $pythonExe"

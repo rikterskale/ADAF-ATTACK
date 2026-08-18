@@ -17,7 +17,7 @@ are offline and do not contact Active Directory.
 
 ## Prerequisites
 
-- Python 3.11-3.13
+- Python 3.11-3.14
 - `python3-venv` (Debian/Ubuntu) or the equivalent distribution package
 - Git only for a source checkout
 - Access to the private GitHub release wheel or an authorized checkout

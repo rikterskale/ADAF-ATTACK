@@ -114,9 +114,9 @@ if ((install_system_deps)); then
     python3 python3-venv python3-pip python3-dev build-essential libkrb5-dev libssl-dev
 fi
 
-command -v "$python_command" >/dev/null || fail "PYTHON_NOT_FOUND" "Python command not found: $python_command" "Install Python 3.11-3.13 or pass --python."
+command -v "$python_command" >/dev/null || fail "PYTHON_NOT_FOUND" "Python command not found: $python_command" "Install Python 3.11-3.14 or pass --python."
 "$python_command" -c \
-  'import sys; assert (3, 11) <= sys.version_info < (3, 14), f"Python 3.11-3.13 required, found {sys.version.split()[0]}"'
+  'import sys; assert (3, 11) <= sys.version_info < (3, 15), f"Python 3.11-3.14 required, found {sys.version.split()[0]}"'
 
 if [[ -e "$venv_path" && ! -f "$ownership_marker" ]]; then
   echo "Refusing to modify unowned virtual environment: $venv_path" >&2

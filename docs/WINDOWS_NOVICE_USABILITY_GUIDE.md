@@ -18,7 +18,7 @@ offline and does not contact Active Directory.
 ## Prerequisites
 
 - 64-bit Windows 10/11 or Windows Server
-- Python 3.11-3.13 from python.org, including the `py` launcher
+- Python 3.11-3.14 from python.org, including the `py` launcher
 - Windows PowerShell 5.1 or PowerShell 7
 - Git when using a source checkout
 - Access to this private repository or an approved release wheel
@@ -144,6 +144,6 @@ installation guidance.
 ## Support boundaries
 
 Hosted CI exercises wheel installation on Windows and the installer under
-Windows PowerShell 5.1/Python 3.11 and PowerShell 7/Python 3.13. It does not
+Windows PowerShell 5.1/Python 3.11 and PowerShell 7/Python 3.14. It does not
 prove live AD connectivity, endpoint security policy compatibility, scheduled
 task credentials, or destructive capability rollback in your environment.

@@ -118,7 +118,7 @@ Poetry release install at this time. Docker is intentionally limited to
 offline development/reporting; live AD/Kerberos workflows require host
 network, DNS, clock, and authentication integration.
 
-- Python 3.11, 3.12, or 3.13
+- Python 3.11, 3.12, 3.13, or 3.14
 - A virtual environment (`python -m venv`) and pip
 - Git only when installing from a source checkout
 - Written authorization before any target-interacting command

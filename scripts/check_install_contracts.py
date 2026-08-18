@@ -90,8 +90,8 @@ def _check_ci() -> None:
         "source tests must cover Ubuntu, Windows, and macOS",
     )
     _require(
-        set(jobs["tests"]["strategy"]["matrix"]["python-version"]) == {"3.11", "3.12", "3.13"},
-        "source tests must cover Python 3.11, 3.12, and 3.13",
+        set(jobs["tests"]["strategy"]["matrix"]["python-version"]) == {"3.11", "3.12", "3.13", "3.14"},
+        "source tests must cover Python 3.11, 3.12, 3.13, and 3.14",
     )
     ci_text = path.read_text(encoding="utf-8")
     _require(
@@ -326,8 +326,8 @@ def _check_metadata_and_versions() -> None:
 
     version = project["version"]
     _require(
-        project["requires-python"] == ">=3.11,<3.14",
-        "pyproject requires-python must match the CI-tested Python 3.11-3.13 contract",
+        project["requires-python"] == ">=3.11,<3.15",
+        "pyproject requires-python must match the CI-tested Python 3.11-3.14 contract",
     )
     runtime_requirements = {}
     for line in (ROOT / "requirements-runtime.txt").read_text(encoding="utf-8").splitlines():

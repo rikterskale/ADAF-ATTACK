@@ -15,10 +15,10 @@ Source/editable tests and artifact smoke have different purposes:
 
 | Surface | Current automated coverage |
 |---|---|
-| Source/editable tests | Ubuntu 24.04, Windows 2022, and macOS 14; Python 3.11, 3.12, 3.13 |
-| Built wheel | Ubuntu/Python 3.11, Windows/Python 3.12, macOS 14/Python 3.13 |
+| Source/editable tests | Ubuntu 24.04, Windows 2022, and macOS 14; Python 3.11, 3.12, 3.13, 3.14 |
+| Built wheel | Ubuntu/Python 3.11, Ubuntu/Python 3.14, Windows/Python 3.12, macOS 14/Python 3.13 |
 | Built sdist | Ubuntu/Python 3.13 |
-| Windows installer | Windows PowerShell 5.1/Python 3.11 and PowerShell 7/Python 3.13 |
+| Windows installer | Windows PowerShell 5.1/Python 3.11 and PowerShell 7/Python 3.13/3.14 |
 | Kali installer | Pinned Kali rolling container digest/system Python, built wheel |
 | Published release | Scheduled/manual GitHub release-asset workflow on Ubuntu, Windows, macOS/Python 3.12; it can pass only after an asset is published |
 
@@ -39,7 +39,7 @@ also proven by the full source matrix.
       user-readiness`, `demo`, and the evidence package workflow. **[CI:
       artifact-smoke; release-readiness]**
 - [ ] PowerShell installer consumes the downloaded wheel, validates Python
-      3.11-3.13, and proves its user PATH shim/environment ownership plus upgrade,
+      3.11-3.14, and proves its user PATH shim/environment ownership plus upgrade,
       uninstall-preserves-data, and explicit data deletion. **[CI:
       windows-installer]**
 - [ ] Kali performs a real built-wheel install plus both uninstall paths, while

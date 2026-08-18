@@ -7,7 +7,7 @@ name = "adaf-attack"
 version = "0.10.0"
 description = "Aggressive Active Directory offensive toolkit for senior internal red teamers"
 readme = "README.md"
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11,<3.15"
 license = "LicenseRef-Proprietary"
 authors = [{ name = "Rikter Skale" }]
 keywords = [
@@ -30,6 +30,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Security",
 ]
 dependencies = [

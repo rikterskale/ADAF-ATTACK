@@ -1,6 +1,6 @@
 # Kali Linux support
 
-ADAF-ATTACK supports Kali Linux with Python 3.11-3.13. It uses the standard
+ADAF-ATTACK supports Kali Linux with Python 3.11-3.14. It uses the standard
 XDG data locations, so session artifacts default to
 `~/.local/share/adaf-attack/workspaces`.
 
