@@ -504,7 +504,9 @@ jobs:
       XDG_DATA_HOME: /tmp/adaf-data
     steps:
       - name: Install action prerequisites
-        run: apt-get update && apt-get install --yes git ca-certificates
+        run: >-
+          apt-get update && apt-get install --yes git ca-certificates
+          python3.13 python3.13-venv python3.13-dev
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -532,6 +534,7 @@ jobs:
           bash scripts/install-kali.sh \
             --package "${artifacts[0]}" \
             --extras base \
+            --python python3.13 \
             --skip-completion
           .venv/bin/python -m pip check
           .venv/bin/adaf-attack --version
@@ -545,6 +548,7 @@ jobs:
           bash scripts/install-kali.sh \
             --package "${artifacts[0]}" \
             --extras base \
+            --python python3.13 \
             --skip-system-deps \
             --skip-completion
           bash scripts/install-kali.sh --uninstall --remove-workspace
