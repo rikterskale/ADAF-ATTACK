@@ -60,9 +60,12 @@ progress. Examples:
 - no authorization produces the required `authorize-scope` action;
 - authorized state with no evidence produces required `run-discovery`;
 - an open finding produces a required validation action;
-- a validated critical/high finding produces a decision point;
+- every validated finding produces a decision point, including low/info findings;
+- a completed decision produces a response action, while an exploited finding
+  produces a required mitigation action;
 - a mitigated finding produces required verification;
-- no required actions and a complete evidence set unlock reporting;
+- reporting unlocks only after every finding is closed (or the assessment has
+  no findings);
 - closure is rejected while required actions or non-closed findings remain.
 
 Operators may inject findings, enrich them, correlate them, or override an
@@ -118,6 +121,8 @@ runner authorization controls.
 - Empty findings are valid: discovery can complete and reporting/closure can
   proceed without inventing risk.
 - Required actions block closure; recommended actions never create a dead end.
+- `guidance()` returns a stable phase/status/progress/risk/blocker/next-action
+  snapshot for interactive, CLI, and agent clients.
 - The engine is transport-independent and can be resumed, queried, or driven
   by an automated client using the same public methods.
 

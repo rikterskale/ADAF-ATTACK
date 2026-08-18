@@ -11,6 +11,7 @@ from adaf_attack.core.workflow_engine import (
     FindingRecord,
     WorkflowEngine,
     WorkflowError,
+    WorkflowGuidance,
     finding_from_document,
 )
 
@@ -186,3 +187,65 @@ def test_engine_rejects_invalid_inputs_and_covers_recovery_paths(
     blocked.complete_action("validate:F")
     with pytest.raises(WorkflowError, match="findings remain open"):
         blocked.close()
+
+
+def test_low_finding_has_no_dead_end_and_guidance_is_queryable(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.start()
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    engine.ingest_finding({"id": "F-LOW", "title": "Minor control gap", "severity": "low"})
+    engine.transition_finding("F-LOW", "validated")
+    assert engine.recommendations()[0].id == "decision:F-LOW"
+    engine.decide("decision:F-LOW", "mitigate", rationale="Owner approved remediation")
+    assert engine.recommendations()[0].id == "response:F-LOW"
+    engine.complete_action("response:F-LOW")
+    assert engine.recommendations()[0].id == "verify:F-LOW"
+    engine.complete_action("verify:F-LOW")
+    engine.transition_finding("F-LOW", "closed", evidence={"artifact": "verify.json"})
+    assert engine.recommendations()[0].id == "generate-report"
+    guidance = engine.guidance()
+    assert isinstance(guidance, WorkflowGuidance)
+    assert guidance.next_action_id == "generate-report"
+    assert guidance.open_finding_ids == ()
+    assert guidance.document()["next_action_id"] == "generate-report"
+    engine.complete_action("generate-report")
+    engine.close()
+    assert engine.guidance().explanation.startswith("This workflow is finished")
+
+
+def test_exploited_finding_gets_mitigation_action(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.start()
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    engine.ingest_finding({"id": "F-EXP", "title": "Impact path", "severity": "high"})
+    engine.transition_finding("F-EXP", "validated")
+    engine.decide("decision:F-EXP", "confirm-impact")
+    engine.transition_finding("F-EXP", "exploited")
+    assert engine.recommendations()[0].id == "mitigate:F-EXP"
+    engine.complete_action("mitigate:F-EXP")
+    assert engine.state.findings["F-EXP"].status == "mitigated"
+
+
+def test_guidance_explains_idle_state_and_decision_guard(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    assert engine.guidance().explanation.startswith("No action is currently available")
+    engine.start()
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    engine.ingest_finding({"id": "F-DEC", "title": "Decision needed"})
+    engine.transition_finding("F-DEC", "validated")
+    with pytest.raises(WorkflowError, match="requires decide"):
+        engine.complete_action("decision:F-DEC")
+
+
+def test_empty_assessment_records_report_before_closure(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.start()
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    engine.close()
+    assert engine.state.status == "complete"
+    assert "final-report" in engine.state.completed_steps
+    assert any(event.event_type == "action.completed" for event in engine.state.audit_log)

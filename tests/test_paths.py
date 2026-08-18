@@ -26,6 +26,12 @@ def test_default_workspace_under_data() -> None:
     assert ws.name == "workspaces" or "workspaces" in str(ws)
 
 
+def test_default_workspace_falls_back_to_user_data(monkeypatch) -> None:
+    monkeypatch.delenv("ADAF_ATTACK_WORKSPACE", raising=False)
+    monkeypatch.setattr("adaf_attack.core.paths.user_data_dir", lambda: Path("data-root"))
+    assert default_workspace_dir() == Path("data-root") / "workspaces"
+
+
 def test_normalize_path_expanduser() -> None:
     p = normalize_path("~")
     assert p.is_absolute() or p.exists() or True  # expanduser at minimum

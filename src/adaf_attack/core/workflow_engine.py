@@ -164,6 +164,23 @@ class WorkflowState:
         }
 
 
+@dataclass(frozen=True)
+class WorkflowGuidance:
+    """Small, transport-neutral view for a guided client."""
+
+    phase: str
+    status: str
+    progress: float
+    risk_score: float
+    open_finding_ids: tuple[str, ...]
+    blockers: tuple[str, ...]
+    next_action_id: str | None
+    explanation: str
+
+    def document(self) -> dict[str, Any]:
+        return asdict(self)
+
+
 class WorkflowEngine:
     """Durable finding-driven state machine.
 
@@ -327,16 +344,42 @@ class WorkflowEngine:
                     [finding.id],
                     consequence="Response and closure remain locked until this finding is validated.",
                 )
-            elif finding.status == "validated" and finding.severity in {"critical", "high"}:
+            elif finding.status == "validated":
                 key = f"decision:{finding.id}"
+                decision_recorded = any(
+                    item.get("action_id") == key for item in self.state.decisions
+                )
+                if not decision_recorded:
+                    actions[key] = WorkflowAction(
+                        key,
+                        f"Choose response for: {finding.title}",
+                        "Choose whether to confirm impact, mitigate, or formally accept the risk.",
+                        "prioritization",
+                        "decision",
+                        [finding.id],
+                        consequence="The workflow cannot move to reporting until a response decision is recorded.",
+                    )
+                else:
+                    response_key = f"response:{finding.id}"
+                    actions[response_key] = WorkflowAction(
+                        response_key,
+                        f"Record response: {finding.title}",
+                        "Apply remediation or record a documented risk acceptance before verification.",
+                        "response",
+                        "required",
+                        [finding.id],
+                        consequence="The finding must be mitigated before verification and closure.",
+                    )
+            elif finding.status == "exploited":
+                key = f"mitigate:{finding.id}"
                 actions[key] = WorkflowAction(
                     key,
-                    f"Choose response for: {finding.title}",
-                    "Decide whether to safely confirm impact, mitigate, or accept the risk.",
-                    "prioritization",
-                    "decision",
+                    f"Mitigate: {finding.title}",
+                    "Apply or document remediation for the validated impact.",
+                    "response",
+                    "required",
                     [finding.id],
-                    consequence="The workflow cannot move to reporting until a response decision is recorded.",
+                    consequence="Verification cannot begin until the finding is mitigated.",
                 )
             elif finding.status == "mitigated":
                 key = f"verify:{finding.id}"
@@ -350,7 +393,10 @@ class WorkflowEngine:
                     consequence="The finding cannot be closed without verification evidence.",
                 )
         if (
-            self.state.findings
+            (
+                not self.state.findings
+                or all(item.status == "closed" for item in self.state.findings.values())
+            )
             and not self._required_actions()
             and self.state.phase in {"validation", "prioritization", "response", "verification"}
         ):
@@ -539,6 +585,8 @@ class WorkflowEngine:
             raise WorkflowError(f"Unknown workflow action: {action_id}")
         if action.blocked:
             raise WorkflowError(f"Action is blocked: {action_id}")
+        if action.kind == "decision":
+            raise WorkflowError(f"Decision action requires decide(): {action_id}")
         action.completed = True
         action.completed_at = _now()
         if action_id == "authorize-scope":
@@ -546,6 +594,27 @@ class WorkflowEngine:
             return self.state
         if action_id == "run-discovery":
             self.complete_step("discovery-complete", actor=actor, phase="validation")
+            return self.state
+        if action_id.startswith("mitigate:"):
+            finding_id = action_id.split(":", 1)[1]
+            self.transition_finding(
+                finding_id,
+                "mitigated",
+                actor=actor,
+                evidence={"action_id": action_id, "type": "operator-remediation"},
+            )
+            return self.state
+        if action_id.startswith("response:"):
+            finding_id = action_id.split(":", 1)[1]
+            # Preserve the explicit lifecycle even when the operator chose a
+            # direct mitigation response instead of a separate impact test.
+            self.transition_finding(finding_id, "exploited", actor=actor)
+            self.transition_finding(
+                finding_id,
+                "mitigated",
+                actor=actor,
+                evidence={"action_id": action_id, "type": "operator-response"},
+            )
             return self.state
         self._event(
             "action.completed",
@@ -571,6 +640,31 @@ class WorkflowEngine:
         )
         return actions[: max(0, limit)]
 
+    def guidance(self) -> WorkflowGuidance:
+        """Return the complete next-step view used by guided clients."""
+        recommendations = self.recommendations(limit=1)
+        required = self._required_actions()
+        blockers = tuple(action.id for action in required)
+        if recommendations:
+            action = recommendations[0]
+            explanation = action.consequence or action.description
+        elif self.state.status in {"complete", "archived"}:
+            explanation = "This workflow is finished and ready for retention or review."
+        else:
+            explanation = (
+                "No action is currently available; inspect the audit log or resume safely."
+            )
+        return WorkflowGuidance(
+            phase=self.state.phase,
+            status=self.state.status,
+            progress=self.state.progress,
+            risk_score=self.state.risk_score,
+            open_finding_ids=tuple(item.id for item in self.state.open_findings),
+            blockers=blockers,
+            next_action_id=recommendations[0].id if recommendations else None,
+            explanation=explanation,
+        )
+
     def query_findings(
         self, *, status: FindingStatus | None = None, severity: str | None = None
     ) -> list[FindingRecord]:
@@ -582,6 +676,10 @@ class WorkflowEngine:
         return sorted(records, key=lambda item: (-item.priority, item.id))
 
     def close(self, *, actor: str = "operator", archive: bool = False) -> WorkflowState:
+        # An empty, authorized assessment still gets a final-report audit step;
+        # keep the no-finding path one-call closeable for automation clients.
+        if not self.state.findings and "generate-report" in self.state.pending_actions:
+            self.complete_action("generate-report", actor=actor)
         if self._required_actions():
             raise WorkflowError("Cannot close workflow while required actions remain")
         if self.state.findings and any(
@@ -629,6 +727,7 @@ __all__ = [
     "WorkflowAction",
     "WorkflowEngine",
     "WorkflowError",
+    "WorkflowGuidance",
     "WorkflowState",
     "finding_from_document",
 ]
