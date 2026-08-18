@@ -210,8 +210,11 @@ def _check_docs() -> None:
         "docs/RELEASE_READINESS.md",
         "docs/USER_READINESS.md",
         "docs/LIVE_AD_LAB_VALIDATION.md",
+        "docs/LIVE_LAB_RELEASE_EVIDENCE.template.json",
+        "docs/SUPPORTED_PLATFORMS.md",
         "requirements-runtime.txt",
         "scripts/validate_live_lab_run.py",
+        "scripts/install-approved-wheel.py",
         "scripts/Setup-DisposableAdLab.ps1",
     )
     for relative in required_files:
@@ -278,6 +281,7 @@ def _check_docs() -> None:
         "docs/KNOWN_LIMITATIONS.md",
         "docs/USER_READINESS.md",
         "docs/LIVE_AD_LAB_VALIDATION.md",
+        "docs/SUPPORTED_PLATFORMS.md",
         "CHANGELOG.md",
     ):
         _require(link in readme, f"README.md: missing prominent link to {link}")
@@ -298,6 +302,24 @@ def _check_metadata_and_versions() -> None:
     )
 
     version = project["version"]
+    _require(
+        project["requires-python"] == ">=3.11,<3.14",
+        "pyproject requires-python must match the CI-tested Python 3.11-3.13 contract",
+    )
+    runtime_requirements = {}
+    for line in (ROOT / "requirements-runtime.txt").read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#") and "==" in line:
+            name, pinned = line.split("==", 1)
+            runtime_requirements[name.lower().replace("_", "-")] = pinned
+    project_requirements = {
+        item.split("==", 1)[0].lower().replace("_", "-"): item.split("==", 1)[1]
+        for item in project["dependencies"]
+        if "==" in item
+    }
+    _require(
+        project_requirements == runtime_requirements,
+        "pyproject runtime dependencies must exactly match requirements-runtime.txt",
+    )
     init_text = (ROOT / "src" / "adaf_attack" / "__init__.py").read_text(encoding="utf-8")
     init_match = re.search(r'__version__\s*=\s*"([^"]+)"', init_text)
     _require(

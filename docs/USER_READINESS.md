@@ -84,6 +84,18 @@ the public internet and assume it is reproducible. Direct runtime constraints
 are recorded in [requirements-runtime.txt](../requirements-runtime.txt); the
 candidate wheelhouse remains the release artifact of record.
 
+For an internal release bundle, use the portable bootstrap from the repository
+root:
+
+```bash
+python scripts/install-approved-wheel.py \
+  --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
+  --venv .venv --extras full
+```
+
+Use `--index-url` only with an organization-approved package index, or
+`--find-links ./wheelhouse` for an offline install.
+
 ## Support boundary
 
 CI proves installation, offline workflows, packaging, and safe command

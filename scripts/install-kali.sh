@@ -108,7 +108,7 @@ command -v "$python_command" >/dev/null || {
   exit 1
 }
 "$python_command" -c \
-  'import sys; assert sys.version_info >= (3, 11), f"Python 3.11+ required, found {sys.version.split()[0]}"'
+  'import sys; assert (3, 11) <= sys.version_info < (3, 14), f"Python 3.11-3.13 required, found {sys.version.split()[0]}"'
 
 if [[ -e "$venv_path" && ! -f "$ownership_marker" ]]; then
   echo "Refusing to modify unowned virtual environment: $venv_path" >&2

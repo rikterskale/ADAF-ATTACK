@@ -176,7 +176,11 @@ fields, credential file extensions, and obvious plaintext password assignments.
 
 ## Release evidence record
 
-Record this information with the release candidate:
+Record this information with the release candidate as both the human-readable
+checklist below and a JSON file copied from
+[LIVE_LAB_RELEASE_EVIDENCE.template.json](LIVE_LAB_RELEASE_EVIDENCE.template.json).
+The JSON record makes the live-AD gate machine-checkable without storing
+credentials or raw domain data.
 
 ```text
 Release/version: ____________________
@@ -192,6 +196,16 @@ Lab-only mutation/rollback: PASS / FAIL / NOT RUN
 Evidence validator: PASS / FAIL
 Sanitized evidence location: ________
 Reviewer/date: _______________________
+```
+
+Validate the record together with the sanitized evidence bundle:
+
+```bash
+python scripts/validate_live_lab_run.py \
+  --evidence-dir ./live-lab-workspace/<session-id> \
+  --release-record ./live-lab-release-evidence.json \
+  --require findings.json \
+  --require reports/report-manifest.json
 ```
 
 A release may claim live-AD readiness only when the required rows are marked

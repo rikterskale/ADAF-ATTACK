@@ -49,6 +49,9 @@ def platform_name() -> str:
 
 def user_data_dir(app_name: str = "adaf-attack") -> Path:
     """Per-user application data directory."""
+    override = os.environ.get("ADAF_ATTACK_DATA_DIR")
+    if override:
+        return Path(override).expanduser()
     if is_windows():
         base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
         return Path(base) / app_name
@@ -62,6 +65,9 @@ def user_data_dir(app_name: str = "adaf-attack") -> Path:
 
 
 def user_config_dir(app_name: str = "adaf-attack") -> Path:
+    override = os.environ.get("ADAF_ATTACK_CONFIG_DIR")
+    if override:
+        return Path(override).expanduser()
     if is_windows():
         base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
         return Path(base) / app_name / "config"

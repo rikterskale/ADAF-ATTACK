@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -89,7 +90,11 @@ def record_recent_capability(capability_id: str, *, limit: int = 5) -> list[str]
     recent.insert(0, capability_id)
     trimmed = recent[:limit]
     data["ui.recent_capabilities"] = trimmed
-    save_user_config(data)
+    # Recent-use history is an optional UX enhancement. A managed workstation
+    # may expose a read-only profile, but that must not prevent help or planning
+    # commands from completing successfully.
+    with suppress(OSError):
+        save_user_config(data)
     return trimmed
 
 

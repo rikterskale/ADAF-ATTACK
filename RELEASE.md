@@ -17,6 +17,10 @@
 - Windows and Kali uninstall preserve workspaces by default. Data deletion
   requires an explicit option.
 - Published packages are private GitHub release assets, not PyPI packages.
+- The portable `scripts/install-approved-wheel.py` bootstrap supports approved
+  internal indexes and offline wheelhouses without reusing an existing venv.
+- Live-AD release claims require the sanitized, machine-readable record validated
+  by `scripts/validate_live_lab_run.py --release-record`.
 
 ## Upgrade note
 

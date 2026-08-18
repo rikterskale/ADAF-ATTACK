@@ -15,5 +15,8 @@
   lanes.
 - Certipy is separate from `full` because of dependency constraints. Some
   external operator tools may need dedicated virtual environments.
+- Live-AD readiness requires a retained sanitized evidence record from the
+  disposable-lab procedure; hosted CI validates only offline and packaging
+  contracts.
 - Destructive capabilities require explicit safeguards, but release sign-off
   still needs a disposable authorized AD lab to prove target-side cleanup.

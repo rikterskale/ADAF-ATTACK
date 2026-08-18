@@ -12,6 +12,8 @@ declared in `pyproject.toml`.
 - Scheduled/manual GitHub release-asset smoke workflow.
 - Platform onboarding, offline installation, lifecycle, troubleshooting, and
   known-limitations documentation.
+- Portable approved-wheel bootstrap, explicit data/config directory overrides,
+  architecture support guidance, and machine-readable disposable-lab evidence.
 
 ### Changed
 
@@ -21,6 +23,8 @@ declared in `pyproject.toml`.
   production bundle explicitly.
 - Windows uninstall removes only installer-owned shim/PATH/environment state and
   preserves workspaces unless explicitly told to remove them.
+- Help and planning commands tolerate read-only user preference storage; explicit
+  configuration writes still report an actionable error.
 
 ### Known limitations
 

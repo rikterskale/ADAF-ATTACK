@@ -121,11 +121,11 @@ def _path_check(path_id: str, path: Path) -> dict[str, Any]:
     writable, error = _path_write_probe(path)
     remediation = None
     if not writable:
-        env_hint = (
-            " Set ADAF_ATTACK_WORKSPACE to a writable directory for the workspace."
-            if path_id == "workspace"
-            else " Check the directory permissions or set the platform data/config environment override."
-        )
+        env_hint = {
+            "data_dir": " Set ADAF_ATTACK_DATA_DIR to a writable directory for application data.",
+            "config_dir": " Set ADAF_ATTACK_CONFIG_DIR to a writable directory for user configuration.",
+            "workspace": " Set ADAF_ATTACK_WORKSPACE to a writable directory for the workspace.",
+        }.get(path_id, " Check the directory permissions.")
         remediation = (
             f"Cannot write {path_id} directory {path}.{env_hint} "
             "Then rerun `adaf-attack doctor --explain`."
@@ -205,6 +205,7 @@ def main(
 
 
 _MIN_PYTHON = (3, 11)
+_MAX_PYTHON = (3, 14)
 
 # Importable packages doctor probes. `optional` packages degrade a subset of
 # capabilities when missing (warning); required packages block everything.
@@ -233,7 +234,7 @@ _BINARY_CHECKS: tuple[tuple[str, tuple[str, ...], str], ...] = (
 
 
 def _python_supported() -> bool:
-    return sys.version_info >= _MIN_PYTHON
+    return _MIN_PYTHON <= sys.version_info < _MAX_PYTHON
 
 
 def _resolve_binary(candidates: tuple[str, ...]) -> str | None:
@@ -259,7 +260,7 @@ def doctor(
             "value": sys.version.split()[0],
             "remediation": None
             if python_ok
-            else f"Use Python {_MIN_PYTHON[0]}.{_MIN_PYTHON[1]}+ (see docs/ install guides).",
+            else "Use Python 3.11, 3.12, or 3.13 (see the supported-platform guide).",
         },
         _path_check("data_dir", user_data_dir()),
         _path_check("config_dir", user_config_dir()),

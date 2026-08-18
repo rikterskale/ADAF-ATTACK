@@ -16,7 +16,7 @@ adaf-attack doctor --explain
 adaf-attack paths
 ```
 
-On another Linux distribution with Python 3.11+:
+On another Linux distribution with Python 3.11-3.13:
 
 ```bash
 python3 -m venv .venv

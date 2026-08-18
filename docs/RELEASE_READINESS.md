@@ -35,7 +35,7 @@ also proven by the full source matrix.
       `--version`, `doctor --explain`, `list-capabilities`, and `paths`.
       **[CI: artifact-smoke]**
 - [ ] PowerShell installer consumes the downloaded wheel, validates Python
-      3.11+, and proves its user PATH shim/environment ownership plus upgrade,
+      3.11-3.13, and proves its user PATH shim/environment ownership plus upgrade,
       uninstall-preserves-data, and explicit data deletion. **[CI:
       windows-installer]**
 - [ ] Kali performs a real built-wheel install plus both uninstall paths, while
@@ -107,6 +107,8 @@ Version: __________  Release manager: __________  Date: __________
 [ ] Air-gapped install is recorded with candidate artifacts.
 [ ] First-ten-minutes onboarding is completed by a new operator.
 [ ] Live-AD capability and one destructive rollback are recorded in an authorized lab.
+[ ] Sanitized live-lab evidence and the machine-readable release record pass
+    `scripts/validate_live_lab_run.py --release-record`.
 [ ] CHANGELOG, RELEASE, and known limitations are reviewed.
 [ ] Rollback/recovery location for the exact release assets is recorded.
 ```
@@ -120,3 +122,6 @@ Version: __________  Release manager: __________  Date: __________
 2. Broader actionable-error catalog coverage.
 3. Reproducible validation of organization-specific proxy, CA, endpoint, and
    air-gap transfer policies.
+
+For live-AD claims, the release candidate must also retain the machine-readable
+record described in [LIVE_AD_LAB_VALIDATION.md](LIVE_AD_LAB_VALIDATION.md).

@@ -79,6 +79,22 @@ python -m pip install "adaf-attack[certipy]"
 Prefer a dedicated Certipy venv if pip cannot resolve the combined environment.
 `doctor --explain` distinguishes required failures from optional warnings.
 
+## Read-only profile or managed workstation
+
+If `doctor` reports that the data or configuration directory is not writable,
+choose writable per-user locations and rerun the check:
+
+```powershell
+$env:ADAF_ATTACK_DATA_DIR = "D:\adaf-data"
+$env:ADAF_ATTACK_CONFIG_DIR = "D:\adaf-config"
+$env:ADAF_ATTACK_WORKSPACE = "D:\adaf-workspaces"
+adaf-attack --format json doctor --explain
+```
+
+On Linux/macOS use the same variable names with shell syntax. Help and planning
+commands remain usable when recent-command preferences cannot be saved, but
+explicit `adaf-attack config set` changes require a writable config directory.
+
 ## Sanitized support evidence
 
 Provide:

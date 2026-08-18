@@ -1,6 +1,6 @@
 # Windows support — ADAF-ATTACK
 
-ADAF-ATTACK runs on **Windows 10/11 and Windows Server** with Python 3.11+.
+ADAF-ATTACK runs on **Windows 10/11 and Windows Server** with Python 3.11-3.13.
 
 ## Quick install
 

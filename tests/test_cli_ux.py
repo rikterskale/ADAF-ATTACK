@@ -72,6 +72,19 @@ def test_config_unset_permission_error_is_actionable(monkeypatch) -> None:
     assert json.loads(result.output)["error"]["code"] == "CONFIG_WRITE_FAILED"
 
 
+def test_capability_help_survives_read_only_preferences(monkeypatch) -> None:
+    import adaf_attack.core.user_config as user_config
+
+    monkeypatch.setattr(
+        user_config,
+        "save_user_config",
+        lambda data: (_ for _ in ()).throw(PermissionError("profile is locked")),
+    )
+    result = runner.invoke(app, ["capability-help", "ldap-enum"])
+    assert result.exit_code == 0, result.output
+    assert "ldap-enum" in result.output
+
+
 def test_sessions_shows_bytes_human_and_supports_limit(tmp_path: Path) -> None:
     for i in range(3):
         session = tmp_path / f"session-{i}"
@@ -184,6 +197,9 @@ def test_session_subgroup_list_alias_works(tmp_path: Path) -> None:
 
 
 def test_doctor_first_run_hint_present(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("adaf_attack.cli._python_supported", lambda: True)
+    monkeypatch.setenv("ADAF_ATTACK_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("ADAF_ATTACK_CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path / "ws"))
     result = runner.invoke(app, ["--format", "json", "doctor"])
     assert result.exit_code == 0

@@ -112,6 +112,8 @@ def test_guidance_configuration_and_rollback_capability(
     assert user_config.record_recent_capability("ldap-enum") == ["ldap-enum"]
     assert user_config.recent_capabilities() == ["ldap-enum"]
     assert user_config.unset_key("run.limit")[1].get("run.limit") is None
+    monkeypatch.setattr(user_config, "save_user_config", lambda data: (_ for _ in ()).throw(PermissionError("locked")))
+    assert user_config.record_recent_capability("acl-enum") == ["acl-enum", "ldap-enum"]
     with pytest.raises(ValueError, match="Unknown"):
         user_config.set_key("bad", "x")
     config.write_text("[]", encoding="utf-8")

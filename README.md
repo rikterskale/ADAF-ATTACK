@@ -21,7 +21,8 @@
 - [Troubleshooting](docs/TROUBLESHOOTING.md) ·
   [Known limitations](docs/KNOWN_LIMITATIONS.md) · [Changelog](CHANGELOG.md)
 - [New-user readiness guide](docs/USER_READINESS.md) ·
-  [Disposable AD lab validation](docs/LIVE_AD_LAB_VALIDATION.md)
+  [Disposable AD lab validation](docs/LIVE_AD_LAB_VALIDATION.md) ·
+  [Supported platforms and architectures](docs/SUPPORTED_PLATFORMS.md)
 
 ## Philosophy
 
@@ -108,6 +109,11 @@ installs use wheel assets attached to this repository's private GitHub releases.
 If you cannot access those assets, ask the repository owner for an approved
 wheel or use an authorized source checkout.
 
+The runtime dependency versions used by the release are pinned in both
+`pyproject.toml` and [requirements-runtime.txt](requirements-runtime.txt).
+The complete transitive dependency set is reproducible from the approved
+wheelhouse described below.
+
 ## Recommended release install
 
 Download the `.whl` asset for the required GitHub release, then install it into
@@ -128,6 +134,20 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install ".\adaf_attack-0.10.0-py3-none-any.whl[full]"
 ```
+
+For an internal release bundle, the portable bootstrap performs the same clean
+environment setup on every OS:
+
+```bash
+python scripts/install-approved-wheel.py \
+  --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
+  --venv .venv --extras full
+```
+
+If your organization provides an approved package index, add
+`--index-url <approved-index-url>`. For an air-gapped wheelhouse, use
+`--find-links ./wheelhouse`; the script refuses to reuse an existing virtual
+environment.
 
 The platform guides show the installer-assisted Windows and Kali paths.
 
@@ -178,6 +198,12 @@ adaf-attack --format json paths
 
 Exit code `0` and JSON containing `"ok": true` confirm the install. `paths`
 shows where future session evidence will be stored.
+
+Without an AD lab, the supported offline functionality includes diagnostics,
+capability discovery, planning, evidence correlation, engagement reporting,
+and package generation. LDAP reconnaissance, Kerberos, AD CS, relay/coercion,
+and destructive capabilities require the disposable authorized lab described
+in [LIVE_AD_LAB_VALIDATION.md](docs/LIVE_AD_LAB_VALIDATION.md).
 
 ## Offline and air-gapped installation
 
@@ -305,6 +331,17 @@ adaf-attack --no-color plan shadow-creds -d corp.local --dc-ip 10.0.0.10
 adaf-attack --format json sessions
 ```
 
+## Offline versus live functionality
+
+| Functionality | Required setup |
+|---|---|
+| `doctor`, `paths`, capability help, workflow profiles | Base install only |
+| Reports, evidence correlation, engagement packaging | Saved session or demo fixture |
+| LDAP/AD reconnaissance | Authorized account, DNS, network path to the DC |
+| Kerberos/Impacket | `[kerberos]`, correct DNS and synchronized clocks |
+| AD CS workflows | Separate `[certipy]` environment and test CA |
+| Relay/coercion/destructive operations | Disposable lab, explicit authorization, rollback evidence |
+
 ## Offline correlation workflows
 
 The following commands operate only on saved session artifacts or authorized
@@ -399,7 +436,9 @@ Default workspaces:
 
 - Linux: `~/.local/share/adaf-attack/workspaces`
 - Windows: `%LOCALAPPDATA%\adaf-attack\workspaces`
-- Override: `ADAF_ATTACK_WORKSPACE` or `--workspace`
+- Application data override: `ADAF_ATTACK_DATA_DIR`
+- Configuration override: `ADAF_ATTACK_CONFIG_DIR`
+- Workspace override: `ADAF_ATTACK_WORKSPACE` or `--workspace`
 
 ## License
 
