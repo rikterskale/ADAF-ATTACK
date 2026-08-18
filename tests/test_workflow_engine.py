@@ -9,6 +9,7 @@ import pytest
 
 from adaf_attack.core.workflow_engine import (
     FindingRecord,
+    WorkflowAction,
     WorkflowEngine,
     WorkflowError,
     WorkflowGuidance,
@@ -281,3 +282,89 @@ def test_terminal_state_is_immutable_and_corrupt_disk_state_fails_closed(tmp_pat
     (corrupt / "workflow-state.json").write_text("not-json", encoding="utf-8")
     with pytest.raises(WorkflowError, match="Invalid persisted workflow state"):
         WorkflowEngine(corrupt)
+    non_object = tmp_path / "non-object"
+    non_object.mkdir()
+    (non_object / "workflow-state.json").write_text("[]", encoding="utf-8")
+    with pytest.raises(WorkflowError, match="expected an object"):
+        WorkflowEngine(non_object)
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({"workflow_id": "x", "mode": "invalid"}, "Unknown workflow mode"),
+        ({"workflow_id": "x", "status": "invalid"}, "Unknown workflow status"),
+        (
+            {"workflow_id": "x", "findings": {"F": {"id": "F", "title": "x", "status": "bad"}}},
+            "Unknown finding status",
+        ),
+        (
+            {
+                "workflow_id": "x",
+                "pending_actions": {
+                    "a": {
+                        "id": "a",
+                        "title": "x",
+                        "description": "x",
+                        "phase": "bad",
+                    }
+                },
+            },
+            "Unknown action phase",
+        ),
+        (
+            {
+                "workflow_id": "x",
+                "pending_actions": {
+                    "a": {
+                        "id": "a",
+                        "title": "x",
+                        "description": "x",
+                        "phase": "scoping",
+                        "kind": "bad",
+                    }
+                },
+            },
+            "Unknown action kind",
+        ),
+    ],
+)
+def test_state_decoder_rejects_invalid_enums(
+    tmp_path: Path, payload: dict[str, object], message: str
+) -> None:
+    with pytest.raises(WorkflowError, match=message):
+        WorkflowEngine.from_state(tmp_path, payload)
+
+
+def test_query_and_audit_filters_cover_transport_views(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.start()
+    engine.state.pending_actions["custom"] = WorkflowAction(
+        "custom", "Custom", "Custom action", "discovery", "recommended"
+    )
+    engine.complete_action("custom")
+    assert engine.query_actions(phase="discovery", include_completed=True)[0].id == "custom"
+    assert engine.query_actions(phase="missing") == []
+    assert engine.audit_history()
+    assert engine.audit_history(event_type="workflow.started")
+    assert engine.audit_history(event_type="missing") == []
+
+
+def test_validation_and_close_guards_cover_unauthorized_and_unstarted_paths(
+    tmp_path: Path,
+) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.ingest_finding({"id": "F-GUARD", "title": "Guard"})
+    with pytest.raises(WorkflowError, match="authorized scope"):
+        engine.transition_finding("F-GUARD", "validated")
+
+    no_scope = WorkflowEngine(tmp_path / "no-scope")
+    no_scope.state.pending_actions = {}
+    with pytest.raises(WorkflowError, match="scope authorization"):
+        no_scope.close()
+
+    no_discovery = WorkflowEngine(tmp_path / "no-discovery")
+    no_discovery.state.pending_actions = {}
+    no_discovery.state.completed_steps = ["scope-authorized"]
+    with pytest.raises(WorkflowError, match="discovery completes"):
+        no_discovery.close()
