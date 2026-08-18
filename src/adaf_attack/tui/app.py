@@ -85,6 +85,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     #log-panel { height: 1fr; }
     #status, #progress, #credential-strip { height: auto; border-top: solid $accent; padding: 0 1; }
     #help-panel, #review-panel, #session-panel { height: auto; padding: 1; border-bottom: solid $accent; }
+    #wizard-panel { height: auto; padding: 1; border: solid $success; margin-bottom: 1; }
+    #wizard-step { color: $success; text-style: bold; }
+    #wizard-actions { height: auto; margin-top: 1; }
     #session-panel { max-height: 8; overflow-y: auto; }
     #search { margin-bottom: 1; }
     Input { margin-bottom: 1; }
@@ -122,6 +125,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._safe_mode = bool(load_user_config().get("novice.safe_mode", True))
         self._advanced_credentials_visible = False
         self._form_snapshot: dict[str, Any] | None = None
+        self._wizard_step = 0
 
     def compose(self) -> ComposeResult:
         defaults = load_user_config()
@@ -140,6 +144,13 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             yield Button("Copy findings", id="copy-btn")
             yield Button("Copy ready command", id="copy-command-btn")
             yield Button("Command only", id="command-only-btn")
+        with Vertical(id="wizard-panel"):
+            yield Static("Guided workflow", id="wizard-step")
+            yield Static("", id="wizard-guide")
+            with Horizontal(id="wizard-actions"):
+                yield Button("Back", id="wizard-back", disabled=True)
+                yield Button("Next", id="wizard-next", variant="primary")
+                yield Button("Start over", id="wizard-start-over")
         with Horizontal():
             with Vertical(id="sidebar"):
                 yield Static("[bold]Capabilities[/bold]", id="sidebar-title")
@@ -225,6 +236,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._update_credential_strip()
         self._set_advanced_credentials_visible(False)
         self._apply_beginner_mode(self._safe_mode)
+        self._set_wizard_step(0)
         self._show_log("[bold green]ADAF-ATTACK[/] ready. Use Quickstart or search capabilities.")
         if not self.query_one("#domain", Input).value:
             self.notify(
@@ -305,6 +317,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._update_status()
             self._update_help()
             self._update_run_gate()
+            if self._wizard_step < 2:
+                self._set_wizard_step(2)
 
     def _apply_beginner_mode(self, enabled: bool) -> None:
         """Hide optional controls; execution safety requirements remain unchanged."""
@@ -328,6 +342,78 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             if enabled
             else "Advanced Mode: optional credentials and targeting controls are available."
         )
+
+    def _set_wizard_step(self, step: int) -> None:
+        """Move the operator through one predictable, review-first workflow."""
+        self._wizard_step = max(0, min(step, 5))
+        steps = (
+            ("1 of 5 · Target", "Start with the authorized domain and domain controller. These are the only required values for the first step."),
+            ("2 of 5 · Access", "Add the least-privileged credentials or session material available. Leave optional fields empty when you are using an existing session."),
+            ("3 of 5 · Objective", "Choose one capability. The sidebar is grouped by phase and every capability shows its prerequisites and safety level."),
+            ("4 of 5 · Review", "Review scope, authentication, OPSEC, rollback, and force requirements. Nothing executes until the review is acknowledged."),
+            ("5 of 5 · Run & learn", "Run, watch the staged progress, then use the findings dashboard and suggested next action to continue the engagement."),
+            ("Complete · Findings", "This session is complete. Inspect findings, copy the evidence summary, or start the next guided action."),
+        )
+        title, guide = steps[self._wizard_step]
+        self.query_one("#wizard-step", Static).update(title)
+        self.query_one("#wizard-guide", Static).update(guide)
+        back = self.query_one("#wizard-back", Button)
+        next_button = self.query_one("#wizard-next", Button)
+        back.disabled = self._wizard_step == 0 or self._capability_running
+        next_button.disabled = self._capability_running
+        next_button.label = (
+            "Continue to access" if self._wizard_step == 0 else
+            "Continue to objective" if self._wizard_step == 1 else
+            "Review objective" if self._wizard_step == 2 else
+            "Continue to run" if self._wizard_step == 3 else
+            "Run selected" if self._wizard_step == 4 else
+            "Start another"
+        )
+        self.query_one("#wizard-start-over", Button).disabled = self._capability_running
+
+    def _wizard_next(self) -> None:
+        if self._wizard_step == 0:
+            if self._validate_target() is None:
+                return
+            self._set_wizard_step(1)
+            self.query_one("#username", Input).focus()
+        elif self._wizard_step == 1:
+            self._set_wizard_step(2)
+            self.query_one("#search", Input).focus()
+        elif self._wizard_step == 2:
+            if not self._selected():
+                self.notify("Choose a capability before continuing.", severity="warning")
+                self.query_one("#search", Input).focus()
+                return
+            self._set_wizard_step(3)
+            self._review_run()
+        elif self._wizard_step == 3:
+            self._review_run()
+            cap = self._selected()
+            if cap and (not cap.destructive or self._reviewed_cap == cap.id):
+                self._set_wizard_step(4)
+            else:
+                self.notify("Complete the review checklist before continuing.", severity="warning")
+        elif self._wizard_step == 4:
+            self._start_run()
+        else:
+            self._reset_form()
+            self.selected_cap = None
+            self._set_wizard_step(0)
+            self.query_one("#domain", Input).focus()
+
+    def _wizard_back(self) -> None:
+        if self._wizard_step > 0 and not self._capability_running:
+            self._set_wizard_step(self._wizard_step - 1)
+
+    def _wizard_start_over(self) -> None:
+        if self._capability_running:
+            return
+        self._reset_form()
+        self.selected_cap = None
+        self._set_wizard_step(0)
+        self.query_one("#domain", Input).focus()
+        self.notify("Guided workflow reset. Start with the authorized target.", severity="information")
 
     def _form_values(self) -> dict[str, Any]:
         values: dict[str, Any] = {}
@@ -794,6 +880,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 )
                 self.call_from_thread(self._load_findings, Path(out["session_path"]))
                 self.call_from_thread(self._show_next_actions, capability_id)
+                self.call_from_thread(self._set_wizard_step, 5)
                 self.call_from_thread(
                     self.notify,
                     f"Completed {capability_id}; session ready",
@@ -956,6 +1043,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "save-profile-btn": self._save_profile,
             "default-profile-btn": lambda: self._save_profile(make_default=True),
             "toggle-password-btn": self._toggle_password,
+            "wizard-next": self._wizard_next,
+            "wizard-back": self._wizard_back,
+            "wizard-start-over": self._wizard_start_over,
         }
         action = actions.get(event.button.id or "")
         if action:
