@@ -511,9 +511,9 @@ def register_workflow_commands(
             _guard(
                 lambda: engine.transition_finding(
                     finding_id,
-                    status,
+                    status,  # type: ignore[arg-type]  # validated by the engine
                     actor=actor,
-                    evidence=evidence,  # type: ignore[arg-type]
+                    evidence=evidence,
                 )
             )
         except ActionableError as error:
