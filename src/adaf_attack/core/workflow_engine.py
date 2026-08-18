@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from collections.abc import Iterable
 from contextlib import suppress
@@ -46,6 +47,23 @@ STATUS_ORDER: dict[FindingStatus, int] = {
 
 class WorkflowError(ValueError):
     """Raised for invalid workflow transitions or malformed persisted state."""
+
+
+_SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def _is_verifiable_evidence(item: Any) -> bool:
+    """Return whether an evidence item identifies a durable artifact."""
+    if not isinstance(item, dict):
+        return False
+    artifact = item.get("artifact")
+    if not isinstance(artifact, str) or not artifact.strip():
+        return False
+    pointer = item.get("pointer", "/")
+    if not isinstance(pointer, str) or not pointer.startswith("/"):
+        return False
+    digest = item.get("sha256")
+    return digest is None or (isinstance(digest, str) and bool(_SHA256.fullmatch(digest)))
 
 
 class WorkflowRule(Protocol):
@@ -626,7 +644,10 @@ class WorkflowEngine:
             raise WorkflowError(f"Invalid finding transition: {record.status} -> {status}")
         if status != "open" and "scope-authorized" not in self.state.completed_steps:
             raise WorkflowError("Finding validation requires authorized scope")
-        if status == "closed" and not evidence and not record.evidence:
+        if status == "closed" and not any(
+            _is_verifiable_evidence(item)
+            for item in record.evidence + ([evidence] if evidence else [])
+        ):
             raise WorkflowError("Closing a finding requires verification evidence")
         record.status = status
         if evidence:
@@ -732,7 +753,6 @@ class WorkflowEngine:
         if action_id.startswith("verify:"):
             finding_id = action_id.split(":", 1)[1]
             record = self._finding(finding_id)
-            record.evidence.append({"action_id": action_id, "type": "verification"})
             record.updated_at = _now()
             self.state.phase = "verification"
             self._event(

@@ -7,6 +7,8 @@ Every run creates a session directory so operators can later answer
 from __future__ import annotations
 
 import json
+import os
+import threading
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,6 +27,7 @@ class Session:
         self.session_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
         self.root = ensure_dir(self.base_dir / self.session_id)
         self._events: list[dict[str, Any]] = []
+        self._event_lock = threading.Lock()
         self._write_meta()
 
     def _write_meta(self) -> None:
@@ -39,17 +42,31 @@ class Session:
         )
 
     def log(self, event_type: str, **payload: Any) -> None:
+        if not event_type.strip():
+            raise ValueError("event_type must be non-empty")
+        if "type" in payload or "ts" in payload:
+            raise ValueError("event payload cannot override reserved audit fields")
         event = {
             "ts": datetime.now(UTC).isoformat(),
             "type": event_type,
             **payload,
         }
         self._events.append(event)
-        with (self.root / "events.jsonl").open("a", encoding="utf-8", newline="\n") as f:
-            f.write(json.dumps(event) + "\n")
+        with (
+            self._event_lock,
+            (self.root / "events.jsonl").open("a", encoding="utf-8", newline="\n") as f,
+        ):
+            f.write(json.dumps(event, sort_keys=True) + "\n")
+            f.flush()
+            # An audit event should not disappear silently on process loss.
+            os.fsync(f.fileno())
 
     def path(self, *parts: str) -> Path:
-        p = self.root.joinpath(*parts)
+        p = self.root.joinpath(*parts).resolve(strict=False)
+        try:
+            p.relative_to(self.root.resolve())
+        except ValueError as exc:
+            raise ValueError("Session paths must remain inside the session root") from exc
         p.parent.mkdir(parents=True, exist_ok=True)
         return p
 

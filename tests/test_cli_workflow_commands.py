@@ -81,6 +81,27 @@ def test_full_lifecycle_start_to_closure(tmp_path: Path) -> None:
     assert closed["guidance"]["progress"] == 100.0
 
 
+def test_transition_accepts_explicit_artifact_evidence(tmp_path: Path) -> None:
+    _authorized_with_finding(tmp_path, "F-NOTE")
+    _json(_run(tmp_path, "transition", "F-NOTE", "validated", "--note", "observed"))
+    _authorized_with_finding(tmp_path, "F-ARTIFACT")
+    result = _run(
+        tmp_path,
+        "transition",
+        "F-ARTIFACT",
+        "validated",
+        "--artifact",
+        "evidence.json",
+        "--pointer",
+        "/status",
+        "--sha256",
+        "a" * 64,
+        "--note",
+        "observed",
+    )
+    assert _json(result)["guidance"]["phase"] == "validation"
+
+
 def test_close_with_no_findings(tmp_path: Path) -> None:
     _json(_run(tmp_path, "authorize"))
     _json(_run(tmp_path, "do", "run-discovery"))

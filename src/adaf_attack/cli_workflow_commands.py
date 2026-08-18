@@ -14,6 +14,7 @@ codes, remediation, and next-step suggestions as the rest of the CLI.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -502,12 +503,46 @@ def register_workflow_commands(
         note: str | None = typer.Option(
             None, "--note", help="Evidence note attached to the change."
         ),
+        artifact: str | None = typer.Option(
+            None, "--artifact", help="Relative evidence artifact path for closure/verification."
+        ),
+        pointer: str = typer.Option("/", "--pointer", help="JSON pointer within --artifact."),
+        sha256: str | None = typer.Option(
+            None, "--sha256", help="SHA-256 of the evidence artifact."
+        ),
         actor: str = typer.Option("operator", "--actor"),
     ) -> None:
         """Advance a finding's lifecycle status (monotonic, evidence-gated)."""
         try:
             engine = _engine(workspace)
-            evidence = {"type": "operator-note", "value": note} if note else None
+            evidence = None
+            if artifact:
+                evidence = {"artifact": artifact, "pointer": pointer}
+                if sha256:
+                    evidence["sha256"] = sha256
+                if note:
+                    evidence["note"] = note
+            elif note:
+                if status == "closed":
+                    # Preserve the convenient --note workflow while making
+                    # closure evidence durable and independently inspectable.
+                    artifact_name = f"verification-{finding_id}.json"
+                    artifact_path = engine.workspace / artifact_name
+                    artifact_path.write_text(
+                        json.dumps(
+                            {
+                                "finding_id": finding_id,
+                                "note": note,
+                                "actor": actor,
+                            },
+                            indent=2,
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
+                    evidence = {"artifact": artifact_name, "pointer": "/note"}
+                else:
+                    evidence = {"type": "operator-note", "value": note}
             _guard(
                 lambda: engine.transition_finding(
                     finding_id,

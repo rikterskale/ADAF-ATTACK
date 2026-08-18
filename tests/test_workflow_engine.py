@@ -146,6 +146,27 @@ def test_engine_handles_decision_edges_and_closure_guards(tmp_path: Path) -> Non
         WorkflowEngine.from_state(tmp_path, malformed)
 
 
+def test_closure_requires_artifact_backed_evidence(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.start()
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    engine.ingest_finding({"id": "F-1", "title": "Issue"})
+    engine.transition_finding("F-1", "validated")
+    engine.decide("decision:F-1", "mitigate")
+    engine.complete_action("response:F-1")
+    engine.complete_action("verify:F-1")
+    with pytest.raises(WorkflowError, match="verification evidence"):
+        engine.transition_finding("F-1", "closed", evidence={"type": "verification"})
+    with pytest.raises(WorkflowError, match="verification evidence"):
+        engine.transition_finding("F-1", "closed", evidence={"artifact": "x", "pointer": "bad"})
+    with pytest.raises(WorkflowError, match="verification evidence"):
+        engine.transition_finding("F-1", "closed", evidence="not-a-dict")  # type: ignore[arg-type]
+    engine.transition_finding(
+        "F-1", "closed", evidence={"artifact": "verification.json", "pointer": "/status"}
+    )
+
+
 def test_canonical_finding_adapter_is_report_safe() -> None:
     record = finding_from_document(
         {
