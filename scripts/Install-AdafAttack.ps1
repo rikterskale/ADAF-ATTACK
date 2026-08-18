@@ -54,7 +54,7 @@ param(
     [switch]$Uninstall,
 
     [Parameter(Mandatory = $false)]
-    [switch]$RemoveWorkspace
+    [switch]$RemoveWorkspace,
 
     [Parameter(Mandatory = $false)]
     [switch]$Json

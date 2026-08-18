@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import socket
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from typer.testing import CliRunner
 
 import adaf_attack.cli as cli
+import adaf_attack.demo as demo
 from adaf_attack.cli import app
 
 runner = CliRunner()
@@ -138,6 +140,59 @@ def test_returning_workspace_and_redaction_branches(monkeypatch, tmp_path: Path)
     assert "capability-help" in payload["next_step"]
     assert cli._package_version("package-that-does-not-exist") is None
     assert cli._sanitize_support_value({"password": "secret"}) == {"password": "<redacted>"}
+
+
+@pytest.mark.parametrize(
+    ("direct_url", "expected"),
+    [(None, "wheel-or-sdist"), ('{"editable": true}', "editable"), ('{"dir_info": {}}', "source")],
+)
+def test_installation_kind_contract(monkeypatch, direct_url: str | None, expected: str) -> None:
+    distribution = SimpleNamespace(read_text=lambda name: direct_url)
+    monkeypatch.setattr(cli.importlib_metadata, "distribution", lambda name: distribution)
+    assert cli._installation_kind() == expected
+
+
+def test_installation_kind_handles_missing_distribution(monkeypatch) -> None:
+    def missing(name: str):
+        raise cli.importlib_metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(cli.importlib_metadata, "distribution", missing)
+    assert cli._installation_kind() == "unknown"
+
+
+def test_packaged_demo_reports_missing_resource(monkeypatch, tmp_path: Path) -> None:
+    class MissingResource:
+        def is_file(self) -> bool:
+            return False
+
+    class MissingPackage:
+        def joinpath(self, name: str) -> MissingResource:
+            return MissingResource()
+
+    monkeypatch.setattr(demo, "files", lambda package: MissingPackage())
+    with pytest.raises(FileNotFoundError, match="acl-enum.json"):
+        demo.materialize_demo_session(tmp_path / "demo")
+
+
+def test_user_readiness_profile_checks_packaged_demo(monkeypatch, tmp_path: Path) -> None:
+    _localize_paths(monkeypatch, tmp_path)
+    payload = cli._doctor_payload("user-readiness")
+    packaged = next(item for item in payload["checks"] if item["id"] == "packaged-demo")
+    assert packaged["status"] == "ok"
+    assert packaged["scope"] == "user-readiness"
+
+
+def test_user_readiness_profile_reports_resource_errors(monkeypatch, tmp_path: Path) -> None:
+    _localize_paths(monkeypatch, tmp_path)
+
+    def fail_files(package: str):
+        raise OSError("resource unavailable")
+
+    monkeypatch.setattr("importlib.resources.files", fail_files)
+    payload = cli._doctor_payload("user-readiness")
+    packaged = next(item for item in payload["checks"] if item["id"] == "packaged-demo")
+    assert packaged["status"] == "error"
+    assert "resource unavailable" in str(packaged)
 
 
 def test_support_bundle_write_failure_is_actionable(monkeypatch, tmp_path: Path) -> None:
