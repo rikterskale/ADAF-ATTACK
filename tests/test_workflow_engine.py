@@ -378,6 +378,22 @@ def test_state_decoder_rejects_invalid_enums(
         WorkflowEngine.from_state(tmp_path, payload)
 
 
+def test_rule_registration_rejects_invalid_derived_actions(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.register_rule(lambda _state: [])
+
+    with pytest.raises(WorkflowError, match="Workflow rules must return"):
+        engine.register_rule(lambda _state: [object()])  # type: ignore[list-item]
+
+    phase_engine = WorkflowEngine(tmp_path / "phase")
+    with pytest.raises(WorkflowError, match="Unknown workflow phase"):
+        phase_engine.register_rule(
+            lambda _state: [
+                WorkflowAction("invalid-phase", "Invalid", "Invalid", "not-a-phase")
+            ]
+        )
+
+
 def test_query_and_audit_filters_cover_transport_views(tmp_path: Path) -> None:
     engine = WorkflowEngine(tmp_path)
     engine.start()
