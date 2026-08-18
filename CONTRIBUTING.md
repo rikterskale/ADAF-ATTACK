@@ -48,6 +48,19 @@ python -m compileall -q src tests
 pytest --cov=adaf_attack --cov-report=term-missing --cov-fail-under=100
 ```
 
+On Windows, if pytest reports `PermissionError` for a global
+`AppData\Local\Temp\pytest-of-*` directory, run tests through the repository
+wrapper instead:
+
+```powershell
+.\scripts\Invoke-Tests.ps1 tests/test_workflow_engine.py
+```
+
+The wrapper redirects `TEMP`/`TMP` and pytest's base directory to writable
+repository-local folders. It does not modify system ACLs and is safe to use on
+managed workstations. The same arguments can be passed for coverage or a
+full-suite run.
+
 ### About the 100% coverage gate
 
 New code needs tests that exercise it — including error and edge branches.

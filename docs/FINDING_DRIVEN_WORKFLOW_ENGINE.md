@@ -155,3 +155,49 @@ finding views, `query_actions()` for phase or action-kind views, and
 action advances the lifecycle and phase where the engine can do so safely;
 explicit status transitions remain available for evidence that must be supplied
 by a scanner, operator, or external remediation system.
+
+## Extension contract
+
+Products can add domain-specific branches without modifying the core state
+machine by registering a pure `WorkflowRule`:
+
+```python
+from adaf_attack.core.workflow_engine import WorkflowAction, WorkflowEngine
+
+def critical_escalation(state):
+    if any(f.severity == "critical" for f in state.open_findings):
+        yield WorkflowAction(
+            "escalate:critical",
+            "Escalate critical exposure",
+            "Notify the incident owner and preserve evidence.",
+            "prioritization",
+            "required",
+        )
+
+engine = WorkflowEngine(workspace, rules=[critical_escalation])
+# Rules can also be installed after construction:
+engine.register_rule(critical_escalation)
+```
+
+Rules may only derive `WorkflowAction` objects. They cannot mutate findings or
+skip authorization, lifecycle transitions, verification evidence, or closure
+guards. Rule failures become `WorkflowError` and are therefore visible to the
+caller and safe to audit. Action completion is retry-safe, which prevents a
+network timeout or agent retry from applying a lifecycle transition twice.
+
+The complete transport-neutral surface is:
+
+| Concern | Interface |
+|---|---|
+| Start/resume | `WorkflowEngine(workspace)` / `start()` |
+| State transport | `snapshot()` / `WorkflowState.document()` |
+| Finding lifecycle | `ingest_finding()`, `inject_finding()`, `enrich_finding()`, `correlate()`, `transition_finding()` |
+| Guided next step | `guidance()` / `recommendations()` |
+| Decisions | `decide()` |
+| Action execution | `complete_action()` |
+| Queries | `query_findings()`, `query_actions()`, `audit_history()` |
+| Finish/archive | `close(archive=True)` |
+
+This allows a TUI, REST adapter, CLI, scanner, or agent to share the same
+durable rules and audit trail. `workflow-state.json` is the recovery boundary:
+it is written atomically after every mutation, and malformed state fails closed.

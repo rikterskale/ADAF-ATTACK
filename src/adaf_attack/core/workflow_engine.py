@@ -16,7 +16,7 @@ from contextlib import suppress
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 from uuid import uuid4
 
 FindingStatus = Literal["open", "validated", "exploited", "mitigated", "closed"]
@@ -46,6 +46,17 @@ STATUS_ORDER: dict[FindingStatus, int] = {
 
 class WorkflowError(ValueError):
     """Raised for invalid workflow transitions or malformed persisted state."""
+
+
+class WorkflowRule(Protocol):
+    """Extension point for product-specific finding-driven branching.
+
+    Rules are deliberately pure: they inspect the current state and return
+    derived actions. The engine remains the only component allowed to mutate
+    state, which keeps custom integrations auditable and deterministic.
+    """
+
+    def __call__(self, state: WorkflowState) -> Iterable[WorkflowAction]: ...
 
 
 def _now() -> str:
@@ -198,10 +209,17 @@ class WorkflowEngine:
         title: str = "ADAF-ATTACK guided assessment",
         workflow_id: str | None = None,
         mode: WorkflowMode = "interactive",
+        rules: Iterable[WorkflowRule] = (),
     ) -> None:
         self.workspace = Path(workspace)
         self.path = self.workspace / self.STATE_FILE
+        self._rules: list[WorkflowRule] = list(rules)
         self.state = self._load_or_new(title=title, workflow_id=workflow_id, mode=mode)
+
+    def register_rule(self, rule: WorkflowRule) -> None:
+        """Register a pure rule used to derive product-specific actions."""
+        self._rules.append(rule)
+        self._recalculate()
 
     @classmethod
     def from_state(cls, workspace: Path, payload: dict[str, Any]) -> WorkflowEngine:
@@ -431,6 +449,19 @@ class WorkflowEngine:
         for key, prior in existing.items():
             if prior.completed and key in actions:
                 actions[key] = prior
+        for rule in self._rules:
+            try:
+                derived = rule(self.state)
+            except Exception as exc:  # pragma: no cover - defensive integration boundary
+                raise WorkflowError(f"Workflow rule failed: {exc}") from exc
+            for action in derived:
+                if not isinstance(action, WorkflowAction):
+                    raise WorkflowError("Workflow rules must return WorkflowAction objects")
+                if action.id in actions:
+                    continue
+                if action.phase not in PHASES:
+                    raise WorkflowError(f"Unknown workflow phase: {action.phase}")
+                actions[action.id] = action
         self.state.pending_actions = actions
 
     def start(self, *, actor: str = "operator") -> WorkflowState:
@@ -621,6 +652,10 @@ class WorkflowEngine:
         action = self.state.pending_actions.get(action_id)
         if not action:
             raise WorkflowError(f"Unknown workflow action: {action_id}")
+        # Clients may retry after a timeout. A completed action is a safe
+        # no-op, making interactive, automated, and agent callers resumable.
+        if action.completed:
+            return self.state
         if action.blocked:
             raise WorkflowError(f"Action is blocked: {action_id}")
         if action.kind == "decision":
@@ -762,13 +797,25 @@ class WorkflowEngine:
         )
 
     def query_findings(
-        self, *, status: FindingStatus | None = None, severity: str | None = None
+        self,
+        *,
+        status: FindingStatus | None = None,
+        severity: str | None = None,
+        source: str | None = None,
+        tag: str | None = None,
+        asset: str | None = None,
     ) -> list[FindingRecord]:
         records = list(self.state.findings.values())
         if status:
             records = [item for item in records if item.status == status]
         if severity:
             records = [item for item in records if item.severity == severity.lower()]
+        if source:
+            records = [item for item in records if item.source == source]
+        if tag:
+            records = [item for item in records if tag in item.tags]
+        if asset:
+            records = [item for item in records if asset in item.affected_assets]
         return sorted(records, key=lambda item: (-item.priority, item.id))
 
     def close(self, *, actor: str = "operator", archive: bool = False) -> WorkflowState:
@@ -829,6 +876,7 @@ __all__ = [
     "WorkflowEngine",
     "WorkflowError",
     "WorkflowGuidance",
+    "WorkflowRule",
     "WorkflowState",
     "finding_from_document",
 ]

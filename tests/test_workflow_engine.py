@@ -17,6 +17,46 @@ from adaf_attack.core.workflow_engine import (
 )
 
 
+def test_custom_rules_and_retry_safe_actions(tmp_path: Path) -> None:
+    def rule(state):
+        if any(item.severity == "critical" for item in state.open_findings):
+            return [
+                WorkflowAction(
+                    "custom:escalate",
+                    "Escalate critical exposure",
+                    "Notify the incident owner and preserve the evidence bundle.",
+                    "prioritization",
+                    "required",
+                )
+            ]
+        return []
+
+    engine = WorkflowEngine(tmp_path, rules=[rule])
+    engine.start()
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    engine.ingest_finding({"id": "F-CRIT", "title": "Critical exposure", "severity": "critical"})
+    assert any(item.id == "custom:escalate" for item in engine.query_actions(kind="required"))
+    engine.complete_action("custom:escalate")
+    revision = engine.state.revision
+    engine.complete_action("custom:escalate")
+    assert engine.state.revision == revision
+
+
+def test_query_findings_supports_operational_filters(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.ingest_finding(
+        {
+            "id": "F-FILTER",
+            "title": "Asset issue",
+            "source": "scanner",
+            "tags": ["identity"],
+            "affected_assets": ["dc-01"],
+        }
+    )
+    assert engine.query_findings(source="scanner", tag="identity", asset="dc-01")[0].id == "F-FILTER"
+
+
 def test_engine_drives_finding_lifecycle_and_persists(tmp_path: Path) -> None:
     engine = WorkflowEngine(tmp_path, title="Lab assessment")
     engine.start()
