@@ -46,7 +46,12 @@ ruff format --check src tests
 mypy src/adaf_attack
 python -m compileall -q src tests
 pytest --cov=adaf_attack --cov-report=term-missing --cov-fail-under=100
+python scripts/check_cli_documentation.py
 ```
+
+When adding or renaming a CLI command, update `docs/CLI_REFERENCE.md` in the
+same change. The parity check compares the table with the registered Typer
+commands and fails on missing, duplicate, or stale entries.
 
 On Windows, if pytest reports `PermissionError` for a global
 `AppData\Local\Temp\pytest-of-*` directory, run tests through the repository

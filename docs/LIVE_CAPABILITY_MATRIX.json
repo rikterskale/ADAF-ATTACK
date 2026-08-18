@@ -18,7 +18,7 @@
     "coerce": {"environment": "live-read-only", "status": "supported", "network_required": true, "external_tools": ["impacket"], "fixtures": ["coercion-target"], "rollback": "not-required", "evidence": ["coerce.json"]},
     "coercion-map": {"environment": "live-read-only", "status": "supported", "network_required": true, "external_tools": [], "fixtures": ["coercion-target"], "rollback": "not-required", "evidence": ["coercion-map.json"]},
     "computer-takeover": {"environment": "live-mutating", "status": "supported", "network_required": true, "external_tools": [], "fixtures": ["member-workstation"], "rollback": "required", "evidence": ["computer-takeover.json", "rollback.json"]},
-    "credential-inventory": {"environment": "live-mutating", "status": "supported", "network_required": true, "external_tools": [], "fixtures": ["credential-fixture"], "rollback": "required", "evidence": ["credential-inventory.json", "rollback.json"]},
+    "credential-inventory": {"environment": "offline-analysis", "status": "supported", "network_required": false, "external_tools": [], "fixtures": ["credential-fixture"], "rollback": "required", "evidence": ["credential-inventory.json", "rollback.json"]},
     "dcsync": {"environment": "live-read-only", "status": "supported", "network_required": true, "external_tools": ["impacket"], "fixtures": ["delegated-replication"], "rollback": "not-required", "evidence": ["dcsync.json"]},
     "esc-chain": {"environment": "live-read-only", "status": "supported", "network_required": true, "external_tools": ["certipy"], "fixtures": ["adcs-lab"], "rollback": "not-required", "evidence": ["esc-chain.json"]},
     "gmsa-laps-enum": {"environment": "live-read-only", "status": "supported", "network_required": true, "external_tools": [], "fixtures": ["gmsa-laps"], "rollback": "not-required", "evidence": ["gmsa-laps-enum.json"]},
@@ -48,7 +48,7 @@
     "sysvol-hunt": {"environment": "live-read-only", "status": "supported", "network_required": true, "external_tools": [], "fixtures": ["baseline-directory"], "rollback": "not-required", "evidence": ["sysvol-hunt.json"]},
     "template-mod": {"environment": "live-mutating", "status": "supported", "network_required": true, "external_tools": ["certipy"], "fixtures": ["adcs-lab"], "rollback": "required", "evidence": ["template-mod.json", "rollback.json"]},
     "ticket-forge": {"environment": "offline-analysis", "status": "supported", "network_required": false, "external_tools": ["impacket"], "fixtures": ["ticket-fixture"], "rollback": "not-required", "evidence": ["ticket-forge.json"]},
-    "ticket-lifecycle": {"environment": "live-read-only", "status": "supported", "network_required": true, "external_tools": ["impacket"], "fixtures": ["ticket-fixture"], "rollback": "not-required", "evidence": ["ticket-lifecycle.json"]},
+    "ticket-lifecycle": {"environment": "offline-analysis", "status": "supported", "network_required": false, "external_tools": [], "fixtures": ["ticket-fixture"], "rollback": "not-required", "evidence": ["ticket-lifecycle.json"]},
     "trusts-enum": {"environment": "live-read-only", "status": "supported", "network_required": true, "external_tools": [], "fixtures": ["trust-lab"], "rollback": "not-required", "evidence": ["trusts-enum.json"]},
     "unpac-the-hash": {"environment": "live-read-only", "status": "supported", "network_required": true, "external_tools": ["impacket"], "fixtures": ["asrep-user"], "rollback": "not-required", "evidence": ["unpac-the-hash.json"]}
   }

@@ -90,7 +90,8 @@ def _check_ci() -> None:
         "source tests must cover Ubuntu, Windows, and macOS",
     )
     _require(
-        set(jobs["tests"]["strategy"]["matrix"]["python-version"]) == {"3.11", "3.12", "3.13", "3.14"},
+        set(jobs["tests"]["strategy"]["matrix"]["python-version"])
+        == {"3.11", "3.12", "3.13", "3.14"},
         "source tests must cover Python 3.11, 3.12, 3.13, and 3.14",
     )
     ci_text = path.read_text(encoding="utf-8")
