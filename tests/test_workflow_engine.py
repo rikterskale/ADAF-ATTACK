@@ -388,9 +388,7 @@ def test_rule_registration_rejects_invalid_derived_actions(tmp_path: Path) -> No
     phase_engine = WorkflowEngine(tmp_path / "phase")
     with pytest.raises(WorkflowError, match="Unknown workflow phase"):
         phase_engine.register_rule(
-            lambda _state: [
-                WorkflowAction("invalid-phase", "Invalid", "Invalid", "not-a-phase")
-            ]
+            lambda _state: [WorkflowAction("invalid-phase", "Invalid", "Invalid", "not-a-phase")]
         )
 
 
