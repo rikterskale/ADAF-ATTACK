@@ -76,3 +76,18 @@ jobs:
           python scripts/smoke_distribution.py \
             --artifact "$artifact" \
             --venv "$RUNNER_TEMP/adaf-published-smoke"
+
+      - name: Publish smoke status
+        if: always()
+        shell: bash
+        env:
+          REQUESTED_RELEASE: ${{ inputs.release || 'latest' }}
+        run: |
+          {
+            echo "## Published artifact smoke"
+            echo "- Release requested: ${REQUESTED_RELEASE}"
+            echo "- Platform: ${{ matrix.os }}"
+            echo "- Result: ${{ job.status }}"
+            echo "- Scope: published wheel install, manifest validation, and offline CLI smoke"
+            echo "- Live AD validation: not included"
+          } >> "$GITHUB_STEP_SUMMARY"

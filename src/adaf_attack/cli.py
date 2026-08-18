@@ -135,8 +135,9 @@ def _path_check(path_id: str, path: Path) -> dict[str, Any]:
             "workspace": " Set ADAF_ATTACK_WORKSPACE to a writable directory for the workspace.",
         }.get(path_id, " Check the directory permissions.")
         remediation = (
-            f"Cannot write {path_id} directory {path}.{env_hint} "
-            "Then rerun `adaf-attack doctor --explain`."
+            f"Cannot write {path_id} directory {path}. Run `adaf-attack paths --repair` "
+            f"to create missing directories.{env_hint} Then rerun "
+            "`adaf-attack doctor --profile user-readiness`."
         )
     return {
         "id": path_id,
@@ -615,13 +616,28 @@ def list_capabilities(
 
 
 @app.command("paths")
-def show_paths(ctx: typer.Context) -> None:
-    """Show platform data / workspace paths with existence and writability."""
+def show_paths(
+    ctx: typer.Context,
+    repair: bool = typer.Option(
+        False,
+        "--repair",
+        help="Create missing application directories, without deleting or moving data.",
+    ),
+) -> None:
+    """Show paths and optionally create missing per-user directories."""
     entries = [
         ("data", user_data_dir()),
         ("config", user_config_dir()),
         ("workspace", default_workspace_dir()),
     ]
+    repairs: list[dict[str, str]] = []
+    if repair:
+        for name, path in entries:
+            try:
+                path.mkdir(parents=True, exist_ok=True)
+                repairs.append({"name": name, "path": str(path), "status": "created-or-present"})
+            except OSError as exc:
+                repairs.append({"name": name, "path": str(path), "status": f"error: {exc}"})
     rows = []
     for name, path in entries:
         exists, writable = _path_status(path)
@@ -647,13 +663,22 @@ def show_paths(ctx: typer.Context) -> None:
             "[green]yes[/green]" if row["writable"] else "[red]no[/red]",
         )
     payload = {
-        "ok": True,
+        "ok": not any(item["status"].startswith("error:") for item in repairs),
         "platform": platform_name(),
         "data": str(user_data_dir()),
         "config": str(user_config_dir()),
         "workspace": str(default_workspace_dir()),
         "entries": rows,
+        "repair": repairs if repair else None,
+        "next_step": (
+            "Run `adaf-attack doctor --profile user-readiness` to verify the installation."
+            if repair
+            else "If a path is not writable, run `adaf-attack paths --repair` or set ADAF_ATTACK_* overrides."
+        ),
     }
+    if repair:
+        table.title = "ADAF-ATTACK paths (repair attempted)"
+        table.add_row("next", str(payload["next_step"]), "-", "-")
     _emit(ctx, payload, table)
 
 
@@ -2140,6 +2165,7 @@ register_ux_commands(
     emit_error=_emit_error,
     json_mode=_json_mode,
     console=_console,
+    doctor_payload=lambda *args, **kwargs: _doctor_payload(*args, **kwargs),
 )
 
 

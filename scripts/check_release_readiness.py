@@ -294,6 +294,12 @@ def _documented_offline_runs() -> None:
         result = run_cli("--format", "json", "demo", "--workspace", root)
         _require(result.code == 0, f"packaged demo failed: {result.err or result.out}")
         _require(result.json().get("ok") is True, "packaged demo returned ok != true")
+    with tempfile.TemporaryDirectory(prefix="adaf-readiness-quickstart-") as root:
+        result = run_cli("--format", "json", "quickstart", "--workspace", root)
+        _require(result.code == 0, f"quickstart failed: {result.err or result.out}")
+        payload = result.json()
+        _require(payload.get("ok") is True, "quickstart returned ok != true")
+        _require(payload.get("stage") == "complete", "quickstart did not complete all stages")
 
 
 # --------------------------------------------------------------------------- #

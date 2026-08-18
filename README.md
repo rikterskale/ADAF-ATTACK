@@ -97,6 +97,21 @@ Analysis / reporting:
 
 ## Prerequisites
 
+### Choose your installation path
+
+| Situation | Start here |
+|---|---|
+| Windows operator | [Windows new-user guide](docs/WINDOWS_NOVICE_USABILITY_GUIDE.md) |
+| Kali operator | [Kali guide](docs/KALI.md) |
+| Linux or macOS operator | [New-user readiness guide](docs/USER_READINESS.md) |
+| Contributor | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Air-gapped operator | [Offline installation](docs/USER_READINESS.md#reproducible-installs) |
+| No approved wheel or checkout access | Contact the repository owner; this project is not on PyPI |
+
+Distribution access is required before installation: this project is delivered
+through private release assets or an authorized source checkout. The commands
+below assume that you already have an approved wheel or repository access.
+
 For the shortest route, use the [new-user readiness guide](docs/USER_READINESS.md)
 to choose the correct platform path. There is no public PyPI, pipx, uv, or
 Poetry release install at this time. Docker is intentionally limited to
@@ -211,6 +226,21 @@ adaf-attack doctor --profile user-readiness
 adaf-attack demo --workspace ./demo-session
 ```
 
+For the shortest safe first run, use the single-command quickstart. It checks
+the installation and creates a disposable offline demo session without
+contacting a domain controller:
+
+```bash
+adaf-attack quickstart --workspace ./quickstart
+```
+
+If the quickstart reports a permissions problem, run:
+
+```bash
+adaf-attack paths --repair
+adaf-attack quickstart --workspace ./quickstart
+```
+
 For support, export a redacted diagnostic bundle and review it before sharing:
 
 ```bash
@@ -235,6 +265,27 @@ capability discovery, planning, evidence correlation, engagement reporting,
 and package generation. LDAP reconnaissance, Kerberos, AD CS, relay/coercion,
 and destructive capabilities require the disposable authorized lab described
 in [LIVE_AD_LAB_VALIDATION.md](docs/LIVE_AD_LAB_VALIDATION.md).
+
+### Recommended first 30 minutes
+
+1. Run `adaf-attack quickstart --workspace ./quickstart`.
+2. Inspect the generated session with `adaf-attack sessions show --session ./quickstart/demo-session`.
+3. Generate a report with `adaf-attack engagement report --session ./quickstart/demo-session --engagement-id QUICKSTART-2026-001`.
+4. Read the capability prerequisites with `adaf-attack capability-help`.
+5. Create and validate a scoped plan with `adaf-attack engagement init --output engagement.yaml` and `adaf-attack engagement validate engagement.yaml`.
+6. Before any target interaction, read the authorized lab and engagement guidance.
+
+### What works without an AD lab?
+
+| Surface | Works offline? | Additional setup |
+|---|---:|---|
+| Installation checks, paths, capability help | Yes | None |
+| Planning and workflow profiles | Yes | None |
+| Demo sessions, findings, reports, packaging | Yes | Base install; reports extra for PDF output |
+| LDAP and AD reconnaissance | No | Authorized account, DNS, DC reachability |
+| Kerberos and Impacket adapters | No | `[kerberos]`, DNS, synchronized clocks |
+| AD CS workflows | No | Separate `[certipy]` environment and test CA |
+| Relay, coercion, and destructive operations | No | Authorized disposable lab and rollback evidence |
 
 ## Offline and air-gapped installation
 
@@ -445,9 +496,12 @@ the wheel. For offline development and reporting, build the optional image:
 ```bash
 docker build -t adaf-attack:local .
 docker run --rm adaf-attack:local doctor --profile user-readiness
+docker run --rm -v "${PWD}/output:/output" adaf-attack:local demo --workspace /output/quickstart
 ```
 
-The image is not a live-AD deployment surface.
+The image is an offline development/reporting quickstart, not a live-AD
+deployment surface. Live Kerberos, DNS, SMB, and target-network behavior
+requires host integration and is intentionally outside this Docker path.
 
 ## Session vault and workflow helpers
 

@@ -22,12 +22,95 @@ def register_ux_commands(
     emit_error: Callable[..., None],
     json_mode: Callable[..., bool],
     console: Callable[..., Any],
+    doctor_payload: Callable[..., dict[str, Any]],
 ) -> None:
     """Attach profile/demo/completions/session-show commands to the main CLI app."""
     _emit = emit
     _emit_error = emit_error
     _json_mode = json_mode
     _console = console
+
+    @app.command("quickstart")
+    def quickstart_cmd(
+        ctx: typer.Context,
+        workspace: Path | None = typer.Option(
+            None, "--workspace", help="Where to create the disposable offline demo session."
+        ),
+    ) -> None:
+        """Run the complete safe first-install check and offline demo."""
+        from adaf_attack.core.ux import session_findings_dashboard
+        from adaf_attack.demo import materialize_demo_session
+
+        doctor = doctor_payload("user-readiness")
+        if not doctor["ok"]:
+            payload = {
+                "ok": False,
+                "stage": "doctor",
+                "doctor": doctor,
+                "next_step": "Run `adaf-attack paths --repair`, then rerun `adaf-attack quickstart`.",
+            }
+            _emit(
+                ctx,
+                payload,
+                Panel(
+                    f"Quickstart stopped at doctor.\nNext: {payload['next_step']}",
+                    title="ADAF-ATTACK quickstart",
+                ),
+            )
+            raise typer.Exit(code=1)
+
+        dest_root = workspace or (default_workspace_dir() / "quickstart")
+        dest = dest_root / "demo-session"
+        if dest.exists():
+            error = ActionableError(
+                "QUICKSTART_WORKSPACE_EXISTS",
+                f"The quickstart session already exists: {dest}",
+                "Choose an empty directory with `--workspace <path>` or remove the disposable quickstart session yourself.",
+                suggested_command="adaf-attack quickstart --workspace ./quickstart-2",
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+        try:
+            materialize_demo_session(dest)
+        except (OSError, FileNotFoundError) as exc:
+            error = ActionableError(
+                "QUICKSTART_WRITE_FAILED",
+                f"Could not create the quickstart demo session: {exc}",
+                "Choose a writable directory with `adaf-attack paths` and rerun `adaf-attack quickstart --workspace <path>`.",
+                suggested_command="adaf-attack paths",
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+
+        dashboard = session_findings_dashboard(dest)
+        payload = {
+            "ok": True,
+            "stage": "complete",
+            "checks": [
+                "doctor --profile user-readiness",
+                "packaged demo fixtures",
+                "offline demo session",
+            ],
+            "doctor": doctor,
+            "session_path": str(dest),
+            "dashboard": dashboard,
+            "next_steps": [
+                f"adaf-attack sessions show --session {dest}",
+                f"adaf-attack engagement report --session {dest} --engagement-id QUICKSTART-2026-001",
+                "Read docs/USER_READINESS.md before connecting to an authorized AD lab.",
+            ],
+        }
+        _emit(
+            ctx,
+            payload,
+            Panel(
+                "Installation and offline demo passed.\n"
+                f"Session: {dest}\n"
+                f"Findings: {dashboard.get('finding_count', 0)}\n"
+                f"Next: adaf-attack sessions show --session {dest}",
+                title="ADAF-ATTACK quickstart",
+            ),
+        )
 
     # --- Profile management (named target + opsec profiles) --------------------
     profile_app = typer.Typer(help="Named target and opsec profiles.")

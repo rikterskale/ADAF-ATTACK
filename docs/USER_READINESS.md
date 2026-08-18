@@ -38,6 +38,21 @@ If every command exits with status 0 and the JSON payload has `"ok": true`,
 the base installation is usable. Optional warnings are expected when TUI,
 Kerberos, reporting, Certipy, or Impacket command-line tools were not selected.
 
+For the shortest safe first run, use the bundled quickstart:
+
+```bash
+adaf-attack quickstart --workspace ./quickstart
+```
+
+It runs the user-readiness doctor and creates a disposable offline demo session.
+It never contacts a domain controller. If a managed workstation blocks the
+default application directories, repair missing directories and retry:
+
+```bash
+adaf-attack paths --repair
+adaf-attack quickstart --workspace ./quickstart
+```
+
 For a deterministic offline demo from a release wheel, run:
 
 ```bash

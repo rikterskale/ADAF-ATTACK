@@ -71,6 +71,8 @@ also proven by the full source matrix.
 - [ ] A person unfamiliar with the project completes the first-ten-minutes
       walkthrough from a release artifact without reading source. **[MANUAL]**
       Use [USER_READINESS.md](USER_READINESS.md) as the canonical decision guide.
+- [ ] The release artifact's `adaf-attack quickstart` completes on a clean,
+      writable user environment and produces a demo session. **[CI: release-readiness]**
 
 ## 3. Feature and recovery validation
 

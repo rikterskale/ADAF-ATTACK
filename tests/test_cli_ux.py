@@ -46,6 +46,97 @@ def test_paths_reports_existence_and_writability(tmp_path: Path, monkeypatch) ->
         assert isinstance(entry["writable"], bool)
 
 
+def test_paths_repair_creates_application_directories(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("ADAF_ATTACK_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path / "workspace"))
+
+    result = runner.invoke(app, ["--format", "json", "paths", "--repair"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert all(item["status"] == "created-or-present" for item in payload["repair"])
+    assert (tmp_path / "data").is_dir()
+    assert (tmp_path / "config").is_dir()
+    assert (tmp_path / "workspace").is_dir()
+
+
+def test_paths_repair_reports_permission_failure(monkeypatch) -> None:
+    def deny_mkdir(self, *args, **kwargs):
+        raise PermissionError("locked")
+
+    monkeypatch.setattr(Path, "mkdir", deny_mkdir)
+    result = runner.invoke(app, ["--format", "json", "paths", "--repair"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert all(item["status"].startswith("error:") for item in payload["repair"])
+
+
+def test_quickstart_runs_safe_offline_acceptance(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("ADAF_ATTACK_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path / "workspace"))
+
+    result = runner.invoke(
+        app, ["--format", "json", "quickstart", "--workspace", str(tmp_path / "quickstart")]
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["stage"] == "complete"
+    assert Path(payload["session_path"]).joinpath("session.json").is_file()
+
+
+def test_quickstart_does_not_overwrite_existing_session(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("ADAF_ATTACK_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path / "workspace"))
+    destination = tmp_path / "quickstart" / "demo-session"
+    destination.mkdir(parents=True)
+    marker = destination / "preserve-me.txt"
+    marker.write_text("keep", encoding="utf-8")
+
+    result = runner.invoke(
+        app, ["--format", "json", "quickstart", "--workspace", str(tmp_path / "quickstart")]
+    )
+
+    assert result.exit_code != 0
+    assert json.loads(result.output)["error"]["code"] == "QUICKSTART_WORKSPACE_EXISTS"
+    assert marker.read_text(encoding="utf-8") == "keep"
+
+
+def test_quickstart_stops_when_doctor_fails(tmp_path: Path, monkeypatch) -> None:
+    import adaf_attack.cli as cli
+
+    monkeypatch.setattr(
+        cli,
+        "_doctor_payload",
+        lambda *args, **kwargs: {"ok": False, "checks": [], "next_step": "repair paths"},
+    )
+    result = runner.invoke(app, ["--format", "json", "quickstart", "--workspace", str(tmp_path)])
+
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["stage"] == "doctor"
+
+
+def test_quickstart_reports_demo_write_failure(tmp_path: Path, monkeypatch) -> None:
+    import adaf_attack.demo as demo
+
+    def fail_materialize(destination: Path) -> Path:
+        raise OSError("locked")
+
+    monkeypatch.setattr(demo, "materialize_demo_session", fail_materialize)
+    result = runner.invoke(app, ["--format", "json", "quickstart", "--workspace", str(tmp_path)])
+
+    assert result.exit_code == 1
+    assert json.loads(result.output)["error"]["code"] == "QUICKSTART_WRITE_FAILED"
+
+
 def test_config_set_permission_error_is_actionable(monkeypatch) -> None:
     import adaf_attack.core.user_config as user_config
 

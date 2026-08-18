@@ -146,6 +146,18 @@ $env:ADAF_ATTACK_WORKSPACE = "D:\adaf-workspaces"
 adaf-attack --format json doctor --explain
 ```
 
+If the directories are simply missing, the non-destructive repair command can
+create them for you:
+
+```bash
+adaf-attack paths --repair
+adaf-attack doctor --profile user-readiness
+```
+
+`paths --repair` only creates the data, configuration, and workspace directories;
+it does not delete, move, or overwrite existing session data. If repair itself
+is denied, set the three `ADAF_ATTACK_*` variables to approved writable paths.
+
 On Linux/macOS use the same variable names with shell syntax. Help and planning
 commands remain usable when recent-command preferences cannot be saved, but
 explicit `adaf-attack config set` changes require a writable config directory.
