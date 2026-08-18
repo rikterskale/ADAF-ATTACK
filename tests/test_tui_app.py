@@ -11,6 +11,7 @@ from unittest.mock import Mock
 import pytest
 from textual.widgets import Input, ListView, Static
 
+from adaf_attack.core.workflow_engine import WorkflowEngine
 from adaf_attack.tui import app as tui_app
 from adaf_attack.tui.app import ADAFAttackApp
 
@@ -42,6 +43,7 @@ def test_tui_starts_populates_capabilities_and_updates_status() -> None:
             await pilot.pause()
             capabilities = app.query_one("#cap-list", ListView)
             assert len(capabilities) > 10
+            assert "Workflow:" in str(app.query_one("#workflow-state-panel", Static).render())
             app.query_one("#domain", Input).value = "corp.test"
             app.query_one("#dc_ip", Input).value = "192.0.2.10"
             app.selected_cap = "ldap-enum"
@@ -463,6 +465,27 @@ def test_tui_guided_workflow_persistence_recommendations_and_exports(
         async with app.run_test() as pilot:
             await pilot.pause()
             app.notify = Mock()  # type: ignore[method-assign]
+            app._workflow = None
+            app._refresh_workflow_panel()
+            monkeypatch.setattr(tui_app, "default_workspace_dir", lambda: tmp_path / "workflow")
+            app._ensure_workflow_started()
+            assert app._workflow is not None
+            missing = tmp_path / "missing-session"
+            app._workflow = None
+            app._ingest_session_findings(missing)
+            app._workflow = WorkflowEngine(tmp_path / "workflow")
+            bad = tmp_path / "bad-session"
+            bad.mkdir()
+            (bad / "findings.json").write_text("not-json", encoding="utf-8")
+            app._ingest_session_findings(bad)
+            (bad / "findings.json").write_text('{"findings": {}}', encoding="utf-8")
+            app._ingest_session_findings(bad)
+            (bad / "findings.json").write_text(
+                '[{"id": "F-TUI", "title": "TUI finding", "severity": "low"}, {"id": "", "title": "skip"}]',
+                encoding="utf-8",
+            )
+            app._ingest_session_findings(bad)
+            assert "F-TUI" in app._workflow.state.findings
             saved: list[dict[str, object]] = []
             monkeypatch.setattr(tui_app, "save_user_config", lambda value: saved.append(value))
             monkeypatch.setattr(
@@ -502,6 +525,10 @@ def test_tui_guided_workflow_persistence_recommendations_and_exports(
             app._reviewed_cap = "ldap-enum"
             app._update_readiness()
             app._show_run_summary()
+            monkeypatch.setattr(
+                tui_app, "default_workspace_dir", lambda: tmp_path / "missing" / "nested"
+            )
+            app._update_status()
             app.selected_cap = None
             app._show_run_summary()
             app._wizard_step = 0
@@ -605,6 +632,18 @@ def test_tui_guided_workflow_persistence_recommendations_and_exports(
                 return {"session_path": str(session), "session_id": "test", "graph_summary": {}}
 
             monkeypatch.setattr(tui_app, "execute_capability", paused_runner)
+            app._start_run()
+            await _wait_for(pilot, lambda: app._capability_running is False)
+            monkeypatch.setattr(
+                app,
+                "_ensure_workflow_started",
+                lambda: (_ for _ in ()).throw(RuntimeError("workflow unavailable")),
+            )
+            monkeypatch.setattr(
+                tui_app,
+                "execute_capability",
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(tui_app.RunError("runner")),
+            )
             app._start_run()
             await _wait_for(pilot, lambda: app._capability_running is False)
 

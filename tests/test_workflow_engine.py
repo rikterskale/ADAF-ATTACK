@@ -1,0 +1,188 @@
+"""Finding-driven workflow engine coverage."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from adaf_attack.core.workflow_engine import (
+    FindingRecord,
+    WorkflowEngine,
+    WorkflowError,
+    finding_from_document,
+)
+
+
+def test_engine_drives_finding_lifecycle_and_persists(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path, title="Lab assessment")
+    engine.start()
+    assert engine.state.pending_actions["authorize-scope"].kind == "required"
+
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    finding = engine.ingest_finding(
+        FindingRecord(
+            "F-1",
+            "Dangerous delegation",
+            severity="critical",
+            confidence="observed",
+            affected_assets=["COMPUTER01", "DC01"],
+        )
+    )
+    assert finding.priority > 80
+    assert engine.recommendations()[0].id == "validate:F-1"
+
+    engine.transition_finding("F-1", "validated")
+    assert engine.recommendations()[0].id == "decision:F-1"
+    with pytest.raises(WorkflowError, match="Decision cannot be empty"):
+        engine.decide("decision:F-1", "")
+    engine.decide("decision:F-1", "confirm-impact", rationale="Approved validation plan")
+    engine.transition_finding("F-1", "exploited", actor="operator")
+    engine.transition_finding("F-1", "mitigated", actor="operator")
+    assert engine.recommendations()[0].id == "verify:F-1"
+    engine.complete_action("verify:F-1")
+    engine.transition_finding("F-1", "closed", evidence={"artifact": "mitigation-validation.json"})
+    assert engine.query_findings(status="closed")[0].id == "F-1"
+    assert engine.state.risk_score == 0
+    assert engine.recommendations()[0].id == "generate-report"
+    engine.complete_action("generate-report")
+    engine.close()
+    assert engine.state.status == "complete"
+
+    reloaded = WorkflowEngine(tmp_path)
+    assert reloaded.state.workflow_id == engine.state.workflow_id
+    assert reloaded.state.findings["F-1"].status == "closed"
+    assert reloaded.state.audit_log
+    assert (
+        json.loads((tmp_path / "workflow-state.json").read_text(encoding="utf-8"))["revision"] > 0
+    )
+
+
+def test_engine_supports_injection_enrichment_correlation_and_overrides(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    one = engine.inject_finding("Operator observation", id="F-1", severity="medium")
+    two = engine.ingest_finding({"id": "F-2", "title": "Observed path", "severity": "high"})
+    engine.correlate([one.id, two.id], relation="same-control")
+    assert engine.state.findings["F-1"].related_findings == ["F-2"]
+    assert "same-control" in engine.state.findings["F-2"].tags
+    engine.enrich_finding("F-1", confidence="confirmed", affected_assets=["user-a"])
+    assert engine.state.findings["F-1"].priority > 45
+    engine.ingest_finding(
+        {"id": "F-1", "title": "Reclassified observation", "severity": "low"}, override=True
+    )
+    assert engine.state.findings["F-1"].title == "Reclassified observation"
+    assert engine.query_findings(severity="high")[0].id == "F-2"
+
+
+def test_engine_handles_decision_edges_and_closure_guards(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.start()
+    with pytest.raises(WorkflowError, match="required actions"):
+        engine.close()
+    with pytest.raises(WorkflowError, match="Unknown workflow action"):
+        engine.decide("missing", "accept")
+    with pytest.raises(WorkflowError, match="Finding id"):
+        engine.ingest_finding({"id": "", "title": ""})
+
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    engine.ingest_finding({"id": "F-1", "title": "Suspected issue", "severity": "low"})
+    with pytest.raises(WorkflowError, match="Invalid finding transition"):
+        engine.transition_finding("F-1", "closed")
+    with pytest.raises(WorkflowError, match="verification evidence"):
+        engine.transition_finding("F-1", "validated")
+        engine.transition_finding("F-1", "exploited")
+        engine.transition_finding("F-1", "mitigated")
+        engine.transition_finding("F-1", "closed")
+
+    malformed = {"workflow_id": "x", "phase": "unknown"}
+    with pytest.raises(WorkflowError, match="Unknown workflow phase"):
+        WorkflowEngine.from_state(tmp_path, malformed)
+
+
+def test_canonical_finding_adapter_is_report_safe() -> None:
+    record = finding_from_document(
+        {
+            "id": "ADAF-1",
+            "title": "Test finding",
+            "severity": "high",
+            "confidence": "confirmed",
+            "impact": "impact",
+            "remediation": "fix",
+            "source_capability": "ldap-enum",
+            "evidence": [{"artifact": "x.json", "pointer": "/a"}],
+            "affected_assets": ["user-a"],
+            "attack_techniques": ["T1003"],
+        }
+    )
+    assert record.source == "ldap-enum"
+    assert record.evidence[0]["artifact"] == "x.json"
+    assert record.priority == 77
+
+
+def test_engine_rejects_invalid_inputs_and_covers_recovery_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    invalid = FindingRecord("F", "bad", severity="not-a-severity", confidence="not-confidence")
+    invalid.normalize()
+    assert invalid.severity == "info"
+    assert invalid.confidence == "unknown"
+
+    engine = WorkflowEngine(tmp_path)
+    with pytest.raises(WorkflowError, match="Step name"):
+        engine.complete_step("")
+    with pytest.raises(WorkflowError, match="Unknown workflow phase"):
+        engine.complete_step("step", phase="not-a-phase")
+    with pytest.raises(WorkflowError, match="Unknown finding status"):
+        engine.ingest_finding({"id": "F", "title": "bad", "status": "invalid"})
+    engine.ingest_finding({"id": "F", "title": "one"})
+    engine.ingest_finding({"id": "F", "title": "two", "related_findings": ["other"]})
+    assert engine.state.findings["F"].created_at
+    with pytest.raises(WorkflowError, match="cannot be enriched"):
+        engine.enrich_finding("F", id="nope")
+    with pytest.raises(WorkflowError, match="Unknown finding"):
+        engine.enrich_finding("missing", confidence="confirmed")
+    with pytest.raises(WorkflowError, match="Unknown finding status"):
+        engine.transition_finding("F", "invalid")  # type: ignore[arg-type]
+    with pytest.raises(WorkflowError, match="not a decision"):
+        engine.decide("validate:F", "accept")
+    with pytest.raises(WorkflowError, match="Unknown workflow action"):
+        engine.complete_action("missing")
+    engine.state.pending_actions["validate:F"].blocked = True
+    with pytest.raises(WorkflowError, match="blocked"):
+        engine.complete_action("validate:F")
+    with pytest.raises(WorkflowError, match="Unknown finding"):
+        engine.transition_finding("missing", "validated")
+
+    payload = engine.state.document()
+    restored = WorkflowEngine.from_state(tmp_path, payload)
+    assert restored.state.workflow_id == engine.state.workflow_id
+    with pytest.raises(WorkflowError, match="Invalid workflow state"):
+        WorkflowEngine.from_state(tmp_path, {"phase": "scoping"})
+
+    original_replace = __import__("adaf_attack.core.workflow_engine", fromlist=["os"]).os.replace
+    monkeypatch.setattr(
+        "adaf_attack.core.workflow_engine.os.replace",
+        lambda *_args: (_ for _ in ()).throw(OSError("replace failed")),
+    )
+    with pytest.raises(OSError, match="replace failed"):
+        engine.persist()
+    monkeypatch.setattr("adaf_attack.core.workflow_engine.os.replace", original_replace)
+
+    clean = WorkflowEngine(tmp_path / "clean")
+    clean.start()
+    clean.complete_action("authorize-scope")
+    clean.complete_action("run-discovery")
+    clean.close(archive=True)
+    assert clean.state.status == "archived"
+
+    blocked = WorkflowEngine(tmp_path / "blocked")
+    blocked.start()
+    blocked.complete_action("authorize-scope")
+    blocked.complete_action("run-discovery")
+    blocked.ingest_finding({"id": "F", "title": "open"})
+    blocked.complete_action("validate:F")
+    with pytest.raises(WorkflowError, match="findings remain open"):
+        blocked.close()

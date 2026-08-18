@@ -54,6 +54,7 @@ from adaf_attack.core.ux import (
     risk_checklist,
     suggested_next_actions,
 )
+from adaf_attack.core.workflow_engine import WorkflowEngine, finding_from_document
 
 
 class CapabilityItem(ListItem):  # type: ignore[misc,unused-ignore]
@@ -133,6 +134,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._wizard_step = 0
         self._pause_requested = threading.Event()
         self._wizard_resume_available = False
+        self._workflow: WorkflowEngine | None = None
 
     def compose(self) -> ComposeResult:
         defaults = load_user_config()
@@ -165,6 +167,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             yield Static("", id="target-validation")
             yield Static("", id="recommendations-panel")
             yield Static("", id="summary-panel")
+            yield Static("Workflow state: initializing", id="workflow-state-panel")
         with Horizontal(id="template-panel"):
             yield Label("Start with a workflow: ")
             yield Button("Safe reconnaissance", id="template-recon")
@@ -260,6 +263,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._set_wizard_step(0)
         self._load_wizard_resume()
         self._update_readiness()
+        self._workflow = WorkflowEngine(default_workspace_dir())
+        self._refresh_workflow_panel()
         self._show_log("[bold green]ADAF-ATTACK[/] ready. Use Quickstart or search capabilities.")
         if not self.query_one("#domain", Input).value:
             self.notify(
@@ -573,6 +578,43 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"[bold]Run summary[/bold] · {cap.id} · {risk}\n"
             f"Target: {target} @ {dc}\nEstimated duration: {estimate} · OPSEC: {active_opsec().upper()}"
         )
+
+    def _refresh_workflow_panel(self) -> None:
+        if not self._workflow:
+            return
+        state = self._workflow.state
+        recommendations = self._workflow.recommendations(limit=3)
+        next_action = recommendations[0].title if recommendations else "No pending actions"
+        self.query_one("#workflow-state-panel", Static).update(
+            f"Workflow: {state.phase} · {state.status} · {state.progress:.0f}% · "
+            f"risk {state.risk_score:.0f}\n"
+            f"Findings: {len(state.findings)} total / {len(state.open_findings)} open · Next: {next_action}"
+        )
+
+    def _ensure_workflow_started(self) -> None:
+        if not self._workflow:
+            self._workflow = WorkflowEngine(default_workspace_dir())
+        if not self._workflow.state.audit_log:
+            self._workflow.start(actor="tui")
+        if "scope-authorized" not in self._workflow.state.completed_steps:
+            self._workflow.complete_action("authorize-scope", actor="tui-review")
+        self._refresh_workflow_panel()
+
+    def _ingest_session_findings(self, session: Path) -> None:
+        if not self._workflow:
+            return
+        try:
+            payload = json.loads((session / "findings.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        documents = payload.get("findings", []) if isinstance(payload, dict) else payload
+        if not isinstance(documents, list):
+            return
+        for document in documents:
+            if isinstance(document, dict) and document.get("id") and document.get("title"):
+                self._workflow.ingest_finding(finding_from_document(document), actor="session")
+        self._workflow.complete_step("discovery-complete", actor="tui", phase="validation")
+        self._refresh_workflow_panel()
 
     def _wizard_next(self) -> None:
         if self._wizard_step == 0:
@@ -1047,6 +1089,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             use_kerberos=kerberos,
             ldaps=ldaps,
         )
+        try:
+            self._ensure_workflow_started()
+        except Exception as exc:  # noqa: BLE001
+            self._show_log(f"[yellow]Workflow state unavailable:[/] {exc}")
         self._show_log(f"\n[bold]→ {capability_id}[/] on {domain} @ {dc_ip}")
         self._cancel_requested.clear()
         self._pause_requested.clear()
@@ -1094,6 +1140,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     f"[green]Done[/] session={out['session_id']}  nodes={summary.get('nodes', 0)} edges={summary.get('edges', 0)}"
                 )
                 self.call_from_thread(self._load_findings, Path(out["session_path"]))
+                self.call_from_thread(self._ingest_session_findings, Path(out["session_path"]))
                 self.call_from_thread(self._show_next_actions, capability_id)
                 self.call_from_thread(self._set_wizard_step, 5)
                 self.call_from_thread(
