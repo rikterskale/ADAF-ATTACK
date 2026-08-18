@@ -8,7 +8,9 @@ approved data.
 ## Install and verify
 
 ```powershell
-.\scripts\Install-AdafAttack.ps1 -Extras full
+.\scripts\Install-AdafAttack.ps1 `
+  -Package .\dist\adaf_attack-0.10.0-py3-none-any.whl `
+  -Extras full
 .\.venv\Scripts\Activate.ps1
 adaf-attack --version
 adaf-attack doctor --explain
@@ -136,3 +138,7 @@ and confidence.
 | `GRAPH_NOT_FOUND` | Pass an existing `graph.json` to `rank-paths`. |
 | Session not found | Use `adaf-attack sessions` to identify the exact directory. |
 | JSON needs parsing | Use `--format json --no-color`; do not scrape the table output. |
+
+For installer upgrade/uninstall, PATH cleanup, data preservation, and offline
+setup, use the [Windows new-user guide](WINDOWS_NOVICE_USABILITY_GUIDE.md) and
+[troubleshooting guide](TROUBLESHOOTING.md).

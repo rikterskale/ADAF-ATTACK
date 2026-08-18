@@ -298,12 +298,17 @@ documentation = Pillar("documentation", "Documentation")
 
 _REQUIRED_DOCS = (
     "README.md",
+    "CHANGELOG.md",
     "RELEASE.md",
     "CONTRIBUTING.md",
     "docs/RELEASE_READINESS.md",
+    "docs/KNOWN_LIMITATIONS.md",
+    "docs/TROUBLESHOOTING.md",
+    "docs/MACOS.md",
     "docs/KALI.md",
     "docs/WINDOWS.md",
     "docs/LINUX_NOVICE_USABILITY_GUIDE.md",
+    "docs/WINDOWS_NOVICE_USABILITY_GUIDE.md",
 )
 
 _FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
@@ -377,9 +382,17 @@ binding = Pillar("binding", "Standard is bound to live CI enforcement")
 # so the five-pillar standard can never silently degrade to a coverage number.
 _PILLAR_BINDINGS: dict[str, dict[str, Any]] = {
     "Proven installation": {
-        "jobs": ["package", "windows-installer", "release-readiness"],
-        "steps": ["Install wheel in clean environment"],
-        "tests": [],
+        "jobs": [
+            "package",
+            "artifact-smoke",
+            "kali-installer",
+            "windows-installer",
+            "release-readiness",
+        ],
+        "steps": ["Install and exercise the clean distribution"],
+        "tests": [
+            ("tests/test_install_contracts.py", ["test_install_and_documentation_contracts"])
+        ],
     },
     "Guided troubleshooting": {
         "jobs": ["tests", "operator-workflow", "release-readiness"],
@@ -517,7 +530,7 @@ def main() -> int:
         for failure in failures:
             print(f"  - {failure}")
         return 1
-    print("RELEASE READY - all five pillars proven and bound to CI.")
+    print("AUTOMATED READINESS PASSED - complete the manual release sign-off checklist.")
     return 0
 
 

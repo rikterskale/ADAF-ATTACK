@@ -5,15 +5,17 @@ ADAF-ATTACK runs on **Windows 10/11 and Windows Server** with Python 3.11+.
 ## Quick install
 
 ```powershell
-# From an elevated or normal PowerShell in the repo root
+# From a normal PowerShell in the repo root
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # if needed
-.\scripts\Install-AdafAttack.ps1 -Extras full
+.\scripts\Install-AdafAttack.ps1 `
+  -Package .\dist\adaf_attack-0.10.0-py3-none-any.whl `
+  -Extras full
 ```
 
 This will:
 
 1. Create `.venv` under the repo
-2. `pip install -e ".[full]"`
+2. Install the wheel (or authorized source checkout) with the production `full` extras
 3. Drop a user PATH shim at `%LOCALAPPDATA%\adaf-attack\bin\adaf-attack.cmd`
 4. Set `ADAF_ATTACK_WORKSPACE=%LOCALAPPDATA%\adaf-attack\workspaces`
 
@@ -23,6 +25,27 @@ Open a **new** terminal, then:
 adaf-attack doctor
 adaf-attack paths
 adaf-attack list-capabilities
+```
+
+The script supports Windows PowerShell 5.1 and PowerShell 7. Select a specific
+interpreter with `-Python C:\Path\python.exe`, or use the launcher with
+`-Python py -PythonVersion 3.13`. It rejects Python older than 3.11 before
+creating the environment.
+
+## Upgrade and uninstall
+
+Rerun the installer with the exact approved wheel to upgrade or downgrade.
+Uninstall removes the installer-owned venv, shim, exact PATH entry, and
+`ADAF_ATTACK_WORKSPACE` value while preserving evidence:
+
+```powershell
+.\scripts\Install-AdafAttack.ps1 -Uninstall
+```
+
+Delete the owned workspace only after evidence-retention approval:
+
+```powershell
+.\scripts\Install-AdafAttack.ps1 -Uninstall -RemoveWorkspace
 ```
 
 ## PowerShell module
@@ -81,3 +104,5 @@ Run the task under a dedicated AD account with least privilege for the intended 
 - **Textual TUI** (`adaf-attack start`) works in Windows Terminal; legacy `conhost` is a poorer experience.
 - Line endings: session JSON/JSONL are written with `\n` for cross-platform portability.
 - If SmartScreen blocks scripts, unblock: `Unblock-File .\scripts\*.ps1`
+- For PATH, launcher, proxy/CA, offline, and PEP 668 guidance, see
+  [TROUBLESHOOTING.md](TROUBLESHOOTING.md).

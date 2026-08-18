@@ -22,7 +22,7 @@ On another Linux distribution with Python 3.11+:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e '.[full]'
+python -m pip install '.[full]'
 adaf-attack doctor --explain
 ```
 
@@ -111,9 +111,13 @@ Each run writes `session.json`, `events.jsonl`, result JSON, and usually
 
 | Symptom | Action |
 |---|---|
-| `ModuleNotFoundError` | Activate `.venv` and install `.[full]`. |
+| `ModuleNotFoundError` | Activate `.venv` and install `.[full]`; see the new-user guide. |
 | Kerberos capability unavailable | Install `adaf-attack[kerberos]`. |
 | TUI unavailable | Install `adaf-attack[tui]`. |
 | `GRAPH_NOT_FOUND` | Pass an existing `graph.json` to `rank-paths`. |
 | Session path rejected | Use `adaf-attack sessions` and supply the session directory. |
 | Automation parsing fails | Use `--format json --no-color`; do not parse Rich tables. |
+
+For installation lifecycle, air-gapped setup, and host restoration, use the
+[Linux new-user guide](LINUX_NOVICE_USABILITY_GUIDE.md) and
+[troubleshooting guide](TROUBLESHOOTING.md).

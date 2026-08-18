@@ -4,20 +4,22 @@
 
 > Authorized internal red team use only.
 
-## Platforms
+## Platform guides
 
 | OS | Support |
 |----|---------|
 | **Kali Linux** | First-class (installer, platform detection, XDG paths) |
 | **Linux** | Primary (generic distributions) |
 | **Windows** | First-class (PowerShell install, paths, scheduled tasks) |
-| **macOS** | Supported (same Python stack) |
+| **macOS** | Supported (wheel install and POSIX paths) |
 
-Windows guide: [docs/WINDOWS.md](docs/WINDOWS.md)
-
-Kali guide: [docs/KALI.md](docs/KALI.md)
-
-Command guides: [Windows](docs/WINDOWS_COMMAND_GUIDE.md) · [Linux](docs/LINUX_COMMAND_GUIDE.md)
+- New-user guides: [Windows](docs/WINDOWS_NOVICE_USABILITY_GUIDE.md) ·
+  [Linux](docs/LINUX_NOVICE_USABILITY_GUIDE.md) · [macOS](docs/MACOS.md)
+- Platform/operator references: [Windows](docs/WINDOWS.md) ·
+  [Kali](docs/KALI.md) · [Windows commands](docs/WINDOWS_COMMAND_GUIDE.md) ·
+  [Linux commands](docs/LINUX_COMMAND_GUIDE.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md) ·
+  [Known limitations](docs/KNOWN_LIMITATIONS.md) · [Changelog](CHANGELOG.md)
 
 ## Philosophy
 
@@ -88,35 +90,151 @@ Analysis / reporting:
 | `next-actions` | Ranked, review-first plans with risk tags |
 | `report` | Canonical findings + evidence bundle |
 
-## Install
+## Prerequisites
 
-**Linux / macOS**
+- Python 3.11, 3.12, or 3.13
+- A virtual environment (`python -m venv`) and pip
+- Git only when installing from a source checkout
+- Written authorization before any target-interacting command
+
+The package is proprietary and is **not currently published on PyPI**. Release
+installs use wheel assets attached to this repository's private GitHub releases.
+If you cannot access those assets, ask the repository owner for an approved
+wheel or use an authorized source checkout.
+
+## Recommended release install
+
+Download the `.whl` asset for the required GitHub release, then install it into
+an isolated environment. The `full` extra contains production operator features
+(TUI, Kerberos, and reports), not contributor tools.
 
 ```bash
-pip install -e ".[full]"
-adaf-attack doctor
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install "./adaf_attack-0.10.0-py3-none-any.whl[full]"
 ```
 
-**Kali Linux**
-
-```bash
-bash scripts/install-kali.sh
-adaf-attack doctor
-```
-
-**Windows (PowerShell)**
+On Windows PowerShell:
 
 ```powershell
-.\scripts\Install-AdafAttack.ps1 -Extras full
-# new terminal
-adaf-attack doctor
-Import-Module .\scripts\AdafAttack.psm1
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install ".\adaf_attack-0.10.0-py3-none-any.whl[full]"
 ```
 
-`adaf-attack doctor` verifies interpreter, packages, and the external CLI tools
-capabilities shell out to (`ntlmrelayx`, `certipy`), printing the exact
-remediation for anything missing. Run `adaf-attack doctor --explain` when
-troubleshooting.
+The platform guides show the installer-assisted Windows and Kali paths.
+
+## Source checkout and development install
+
+Operators installing from an authorized checkout:
+
+```bash
+git clone <approved-repository-url> ADAF-ATTACK
+cd ADAF-ATTACK
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install ".[full]"
+```
+
+Contributors use an editable install with the separate development extra:
+
+```bash
+python -m pip install --editable ".[dev,operator]"
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the pinned CI toolchain.
+
+## Verify the installation
+
+```bash
+python -m pip check
+adaf-attack --version
+adaf-attack doctor --explain
+adaf-attack list-capabilities
+adaf-attack paths
+```
+
+`doctor --explain` verifies the interpreter, required packages, and optional
+external tools such as `ntlmrelayx` and `certipy`. Missing optional tooling is
+reported with remediation; it does not invalidate the base installation.
+
+## First safe offline success
+
+These commands do not contact a domain controller and do not modify a target:
+
+```bash
+adaf-attack --format json doctor --explain
+adaf-attack --format json list-capabilities
+adaf-attack --format json paths
+```
+
+Exit code `0` and JSON containing `"ok": true` confirm the install. `paths`
+shows where future session evidence will be stored.
+
+## Offline and air-gapped installation
+
+On a connected machine with the same OS/Python family, place the approved wheel
+in an empty directory and download all dependencies:
+
+```bash
+mkdir wheelhouse
+python -m pip download --dest wheelhouse "./adaf_attack-0.10.0-py3-none-any.whl[full]"
+```
+
+Transfer the complete `wheelhouse` through your approved media process. On the
+offline host:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --no-index --find-links wheelhouse "adaf-attack[full]==0.10.0"
+python -m pip check
+adaf-attack doctor --explain
+```
+
+Custom package indexes, proxies, and private certificate authorities must be
+configured before building the wheelhouse; see
+[troubleshooting](docs/TROUBLESHOOTING.md).
+
+## Upgrade and downgrade
+
+Install the explicitly approved artifact version into the existing environment:
+
+```bash
+python -m pip install --upgrade "./adaf_attack-0.10.0-py3-none-any.whl[full]"
+python -m pip check
+adaf-attack --version
+```
+
+The same command downgrades when the path names an older approved wheel. Keep
+workspaces outside disposable virtual environments.
+
+## Uninstall
+
+For a direct wheel/source install, remove the isolated environment. Workspace
+data is separate and must be deleted explicitly:
+
+```bash
+deactivate 2>/dev/null || true
+rm -rf .venv
+# Optional and destructive: rm -rf ~/.local/share/adaf-attack/workspaces
+```
+
+Windows installer users must run
+`.\scripts\Install-AdafAttack.ps1 -Uninstall`; Kali installer users run
+`bash scripts/install-kali.sh --uninstall`. Both preserve workspace data by
+default. Their explicit `-RemoveWorkspace` / `--remove-workspace` options delete
+operator data.
+
+## Troubleshooting
+
+Start with `adaf-attack doctor --explain`, then use the
+[first-install troubleshooting guide](docs/TROUBLESHOOTING.md) for PATH refresh,
+Python launcher selection, missing `venv`, PEP 668, PowerShell policy and
+SmartScreen, proxies/custom CAs, offline installs, optional dependency conflicts,
+and sanitized support evidence.
 
 **Optional add-on: AD CS enrollment.** `cert-request` and `esc-chain` drive the
 `certipy` binary. It is intentionally *not* part of `[full]` because
@@ -223,7 +341,7 @@ adaf-attack engagement report --session ./workspaces/<session-id> --engagement-i
 ```
 
 The bundle contains print-ready HTML and, when installed with
-`pip install -e ".[reports]"`, PDF reports. Findings map to MITRE ATT&CK and
+`pip install "adaf-attack[reports]"`, PDF reports. Findings map to MITRE ATT&CK and
 NIS2 Article 21 themes in `src/adaf_attack/mappings/`. These mappings support
 assessment and remediation; they do not constitute a compliance certification.
 
