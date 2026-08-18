@@ -707,7 +707,10 @@ class WorkflowEngine:
         return actions[: max(0, limit)]
 
     def query_actions(
-        self, *, phase: str | None = None, kind: str | None = None,
+        self,
+        *,
+        phase: str | None = None,
+        kind: str | None = None,
         include_completed: bool = False,
     ) -> list[WorkflowAction]:
         """Return a deterministic, queryable action view for UI and agents."""
@@ -730,9 +733,7 @@ class WorkflowEngine:
         """Return a JSON-safe state plus current guidance for transport adapters."""
         document = self.state.document()
         document["guidance"] = self.guidance().document()
-        document["recommendations"] = [
-            asdict(action) for action in self.recommendations(limit=20)
-        ]
+        document["recommendations"] = [asdict(action) for action in self.recommendations(limit=20)]
         return document
 
     def guidance(self) -> WorkflowGuidance:
