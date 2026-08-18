@@ -171,11 +171,45 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
 
 
 _ERROR_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("AUTHENTICATION_FAILED", ("ldap bind failed", "all credentials failed", "authentication failed", "invalid credentials", "logon failure")),
-    ("TARGET_UNREACHABLE", ("connection refused", "timed out", "timeout", "network is unreachable", "name or service not known", "could not connect", "connection error")),
+    (
+        "AUTHENTICATION_FAILED",
+        (
+            "ldap bind failed",
+            "all credentials failed",
+            "authentication failed",
+            "invalid credentials",
+            "logon failure",
+        ),
+    ),
+    (
+        "TARGET_UNREACHABLE",
+        (
+            "connection refused",
+            "timed out",
+            "timeout",
+            "network is unreachable",
+            "name or service not known",
+            "could not connect",
+            "connection error",
+        ),
+    ),
     ("PERMISSION_DENIED", ("permission denied", "access is denied", "operation not permitted")),
-    ("INPUT_FILE_INVALID", ("file not found", "not found:", "path is not a directory", "invalid json", "invalid yaml", "artifact not found", "could not read")),
-    ("REQUIRED_INPUT_MISSING", ("pass -p", "required", "username required", "provide -p", "requires --")),
+    (
+        "INPUT_FILE_INVALID",
+        (
+            "file not found",
+            "not found:",
+            "path is not a directory",
+            "invalid json",
+            "invalid yaml",
+            "artifact not found",
+            "could not read",
+        ),
+    ),
+    (
+        "REQUIRED_INPUT_MISSING",
+        ("pass -p", "required", "username required", "provide -p", "requires --"),
+    ),
 )
 
 

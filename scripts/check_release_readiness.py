@@ -269,7 +269,10 @@ def _capabilities_reachable() -> None:
             failures.append(f"{cap_id}: exit {helped.code}: {helped.err.strip()}")
             continue
         help_payload = helped.json()
-        if help_payload.get("ok") is not True or help_payload.get("capability", {}).get("id") != cap_id:
+        if (
+            help_payload.get("ok") is not True
+            or help_payload.get("capability", {}).get("id") != cap_id
+        ):
             failures.append(f"{cap_id}: invalid capability-help payload")
     _require(not failures, "capability-help failures:\n  - " + "\n  - ".join(failures))
 

@@ -143,12 +143,8 @@ def _check_ci() -> None:
             "test_offline_profile_is_local_and_has_scoped_contract",
             "test_support_bundle_redacts_sensitive_values",
         ),
-        "tests/test_live_capability_matrix.py": (
-            "test_live_capability_matrix_covers_registry",
-        ),
-        "tests/test_live_lab_manifest.py": (
-            "test_lab_manifest_template_is_safe_and_valid",
-        ),
+        "tests/test_live_capability_matrix.py": ("test_live_capability_matrix_covers_registry",),
+        "tests/test_live_lab_manifest.py": ("test_lab_manifest_template_is_safe_and_valid",),
         "tests/test_actionable_error_contract.py": (
             "test_catalog_entries_have_complete_recovery_contracts",
             "test_common_runner_failures_map_to_actionable_codes",
@@ -383,9 +379,13 @@ def _check_metadata_and_versions() -> None:
         for found in version_pattern.findall(doc.read_text(encoding="utf-8")):
             if found != version:
                 stale_versions.append(f"{doc.relative_to(ROOT)}: {found}")
-    _require(not stale_versions, "stale hardcoded release versions in docs: " + ", ".join(stale_versions))
+    _require(
+        not stale_versions, "stale hardcoded release versions in docs: " + ", ".join(stale_versions)
+    )
 
-    manifest_script = (ROOT / "scripts" / "generate_release_manifest.py").read_text(encoding="utf-8")
+    manifest_script = (ROOT / "scripts" / "generate_release_manifest.py").read_text(
+        encoding="utf-8"
+    )
     _require(
         "requires_python" in manifest_script and '"wheelhouse"' in manifest_script,
         "release manifest must record the Python and wheelhouse contracts",

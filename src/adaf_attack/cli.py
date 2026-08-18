@@ -350,7 +350,11 @@ def _doctor_payload(
             if sys.prefix != sys.base_prefix
             else "Create and activate an isolated venv before installing: python -m venv .venv.",
         ),
-        _doctor_check("pip", "ok" if _package_version("pip") else "warning", _package_version("pip") or "not found"),
+        _doctor_check(
+            "pip",
+            "ok" if _package_version("pip") else "warning",
+            _package_version("pip") or "not found",
+        ),
         _doctor_check("installation", "ok", _installation_kind()),
         _path_check("data_dir", user_data_dir()),
         _path_check("config_dir", user_config_dir()),
@@ -364,9 +368,7 @@ def _doctor_payload(
     for package, optional, remediation in _MODULE_CHECKS:
         try:
             module = __import__(package)
-            checks.append(
-                _doctor_check(package, "ok", _package_version(package) or "installed")
-            )
+            checks.append(_doctor_check(package, "ok", _package_version(package) or "installed"))
             del module
         except ImportError:
             checks.append(
@@ -415,7 +417,9 @@ def _doctor_payload(
                 "certipy",
                 "ok" if _package_version("certipy-ad") else "error",
                 _package_version("certipy-ad") or "missing",
-                None if _package_version("certipy-ad") else "Install AD CS tooling: pip install 'adaf-attack[certipy]'.",
+                None
+                if _package_version("certipy-ad")
+                else "Install AD CS tooling: pip install 'adaf-attack[certipy]'.",
                 scope="certipy",
             )
         )
@@ -456,7 +460,12 @@ def _doctor_payload(
             try:
                 addresses = sorted({item[4][0] for item in socket.getaddrinfo(domain, None)})
                 checks.append(
-                    _doctor_check("domain-dns", "ok", {"host": domain, "addresses": addresses}, scope="live-ad")
+                    _doctor_check(
+                        "domain-dns",
+                        "ok",
+                        {"host": domain, "addresses": addresses},
+                        scope="live-ad",
+                    )
                 )
             except (OSError, socket.gaierror) as exc:
                 checks.append(
@@ -488,7 +497,9 @@ def _doctor_payload(
     if blocking:
         next_step = blocking["remediation"]
     elif profile == "live-ad":
-        next_step = "Run `adaf-attack plan ldap-enum --domain <domain> --dc-ip <dc>` before connecting."
+        next_step = (
+            "Run `adaf-attack plan ldap-enum --domain <domain> --dc-ip <dc>` before connecting."
+        )
     elif first_run:
         next_step = (
             "First run detected. Try:\n"
@@ -518,8 +529,12 @@ def doctor(
         "--profile",
         help="Check profile: offline, user-readiness, operator, certipy, or live-ad.",
     ),
-    domain: str | None = typer.Option(None, "--domain", help="Authorized domain for the live-ad profile."),
-    dc_ip: str | None = typer.Option(None, "--dc-ip", help="Authorized domain-controller address for live-ad."),
+    domain: str | None = typer.Option(
+        None, "--domain", help="Authorized domain for the live-ad profile."
+    ),
+    dc_ip: str | None = typer.Option(
+        None, "--dc-ip", help="Authorized domain-controller address for live-ad."
+    ),
     timeout: float = typer.Option(3.0, "--timeout", help="Per-network-probe timeout in seconds."),
 ) -> None:
     """Check local prerequisites, or explicitly preflight an authorized AD target."""
@@ -699,8 +714,12 @@ def support_bundle(
     ctx: typer.Context,
     output: Path = typer.Option(Path("adaf-support-bundle.json"), "--output", "-o"),
     profile: str = typer.Option("offline", "--profile", help="Doctor profile to capture."),
-    domain: str | None = typer.Option(None, "--domain", help="Authorized domain for live-ad preflight."),
-    dc_ip: str | None = typer.Option(None, "--dc-ip", help="Authorized DC address for live-ad preflight."),
+    domain: str | None = typer.Option(
+        None, "--domain", help="Authorized domain for live-ad preflight."
+    ),
+    dc_ip: str | None = typer.Option(
+        None, "--dc-ip", help="Authorized DC address for live-ad preflight."
+    ),
     timeout: float = typer.Option(3.0, "--timeout", help="Per-network-probe timeout in seconds."),
 ) -> None:
     """Write a redacted diagnostic bundle safe to attach to support requests."""

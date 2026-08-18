@@ -27,12 +27,12 @@ def test_manifest_records_artifact_and_wheelhouse_hashes(tmp_path: Path) -> None
     wheelhouse.mkdir()
     (repo / "pyproject.toml").write_text(
         "[project]\n"
-        "name = \"adaf-attack\"\n"
-        "version = \"9.9.9\"\n"
-        "requires-python = \">=3.11,<3.14\"\n"
+        'name = "adaf-attack"\n'
+        'version = "9.9.9"\n'
+        'requires-python = ">=3.11,<3.14"\n'
         "dependencies = []\n"
         "[project.optional-dependencies]\n"
-        "full = [\"example==1.0\"]\n",
+        'full = ["example==1.0"]\n',
         encoding="utf-8",
     )
     artifact = dist / "adaf_attack-9.9.9-py3-none-any.whl"
@@ -56,8 +56,7 @@ def test_manifest_rejects_tampered_artifact(tmp_path: Path) -> None:
     dist = repo / "dist"
     dist.mkdir(parents=True)
     (repo / "pyproject.toml").write_text(
-        '[project]\nname = "adaf-attack"\nversion = "1.0.0"\n'
-        'requires-python = ">=3.11,<3.14"\n',
+        '[project]\nname = "adaf-attack"\nversion = "1.0.0"\nrequires-python = ">=3.11,<3.14"\n',
         encoding="utf-8",
     )
     artifact = dist / "adaf_attack-1.0.0-py3-none-any.whl"
@@ -75,8 +74,7 @@ def test_manifest_json_is_stable_and_readable(tmp_path: Path) -> None:
     dist = repo / "dist"
     dist.mkdir(parents=True)
     (repo / "pyproject.toml").write_text(
-        '[project]\nname = "adaf-attack"\nversion = "1.0.0"\n'
-        'requires-python = ">=3.11,<3.14"\n',
+        '[project]\nname = "adaf-attack"\nversion = "1.0.0"\nrequires-python = ">=3.11,<3.14"\n',
         encoding="utf-8",
     )
     (dist / "adaf_attack-1.0.0-py3-none-any.whl").write_bytes(b"artifact")

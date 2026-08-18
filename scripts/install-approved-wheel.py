@@ -58,7 +58,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wheel", type=Path, required=True, help="Approved .whl file")
     parser.add_argument("--venv", type=Path, default=Path(".venv"))
-    parser.add_argument("--extras", default="full", help="Optional dependency extra (default: full)")
+    parser.add_argument(
+        "--extras", default="full", help="Optional dependency extra (default: full)"
+    )
     parser.add_argument("--index-url", help="Approved internal Python package index")
     parser.add_argument("--find-links", type=Path, help="Offline wheelhouse directory")
     parser.add_argument(
@@ -108,7 +110,9 @@ def main() -> int:
     _run([str(python), "-m", "adaf_attack.cli", "--format", "json", "doctor", "--explain"])
     _run([str(python), "-m", "adaf_attack.cli", "--format", "json", "list-capabilities"])
     _run([str(python), "-m", "adaf_attack.cli", "--format", "json", "paths"])
-    print(f"Install complete. Activate: {venv_root / ('Scripts/Activate.ps1' if sys.platform == 'win32' else 'bin/activate')}")
+    print(
+        f"Install complete. Activate: {venv_root / ('Scripts/Activate.ps1' if sys.platform == 'win32' else 'bin/activate')}"
+    )
     return 0
 
 

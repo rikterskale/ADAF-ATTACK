@@ -55,11 +55,7 @@ def main() -> int:
     _run(command)
 
     checksum_file = output / "SHA256SUMS"
-    rows = [
-        f"{_sha256(path)}  {path.name}"
-        for path in sorted(output.iterdir())
-        if path.is_file()
-    ]
+    rows = [f"{_sha256(path)}  {path.name}" for path in sorted(output.iterdir()) if path.is_file()]
     checksum_file.write_text("\n".join(rows) + "\n", encoding="utf-8")
     _run(
         [

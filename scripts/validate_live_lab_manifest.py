@@ -10,7 +10,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
-REQUIRED = {"schema_version", "domain", "domain_netbios", "dc_hostname", "dc_ip", "network_mode", "snapshot", "fixtures", "operator_account", "created_at", "expires_at"}
+REQUIRED = {
+    "schema_version",
+    "domain",
+    "domain_netbios",
+    "dc_hostname",
+    "dc_ip",
+    "network_mode",
+    "snapshot",
+    "fixtures",
+    "operator_account",
+    "created_at",
+    "expires_at",
+}
 FORBIDDEN = {"password", "passwd", "secret", "token", "private_key", "nt_hash", "lm_hash", "ccache"}
 
 
@@ -37,7 +49,9 @@ def validate_manifest(path: Path) -> list[str]:
     errors = [f"lab manifest missing field: {key}" for key in sorted(REQUIRED - payload.keys())]
     if payload.get("schema_version") != 1:
         errors.append("lab manifest schema_version must be 1")
-    if not isinstance(payload.get("domain"), str) or not payload.get("domain", "").lower().endswith((".example", ".test", ".invalid")):
+    if not isinstance(payload.get("domain"), str) or not payload.get("domain", "").lower().endswith(
+        (".example", ".test", ".invalid")
+    ):
         errors.append("domain must use a reserved lab suffix: .example, .test, or .invalid")
     try:
         address = ipaddress.ip_address(str(payload.get("dc_ip", "")))

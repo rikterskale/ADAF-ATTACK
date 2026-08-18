@@ -98,10 +98,21 @@ def validate_release_record(path: Path, capability_matrix: Path | None = None) -
         return [f"invalid release evidence record: {exc}"]
     if not isinstance(payload, dict):
         return ["release evidence record must be a JSON object"]
-    errors = [f"release evidence record missing field: {key}" for key in sorted(RECORD_REQUIRED - payload.keys())]
+    errors = [
+        f"release evidence record missing field: {key}"
+        for key in sorted(RECORD_REQUIRED - payload.keys())
+    ]
     if payload.get("schema_version") != 1:
         errors.append("release evidence record schema_version must be 1")
-    for key in ("release_version", "commit_sha", "lab_snapshot", "operator_os", "operator_python", "reviewer", "review_date"):
+    for key in (
+        "release_version",
+        "commit_sha",
+        "lab_snapshot",
+        "operator_os",
+        "operator_python",
+        "reviewer",
+        "review_date",
+    ):
         if not isinstance(payload.get(key), str) or not payload[key].strip():
             errors.append(f"release evidence record field must be non-empty text: {key}")
     for key in ("read_only_smoke", "force_guard", "mutation_rollback", "evidence_validator"):
@@ -112,7 +123,11 @@ def validate_release_record(path: Path, capability_matrix: Path | None = None) -
         errors.append("release evidence record optional_capabilities must be a list")
     else:
         for index, item in enumerate(capabilities):
-            if not isinstance(item, dict) or not item.get("name") or item.get("status") not in PASS_STATUSES:
+            if (
+                not isinstance(item, dict)
+                or not item.get("name")
+                or item.get("status") not in PASS_STATUSES
+            ):
                 errors.append(f"release evidence record optional_capabilities[{index}] is invalid")
         if capability_matrix and capability_matrix.is_file():
             try:
@@ -120,7 +135,9 @@ def validate_release_record(path: Path, capability_matrix: Path | None = None) -
                 known = matrix.get("capabilities", {}) if isinstance(matrix, dict) else {}
                 for index, item in enumerate(capabilities):
                     if isinstance(item, dict) and item.get("name") not in known:
-                        errors.append(f"release evidence record optional_capabilities[{index}] is not in the live capability matrix")
+                        errors.append(
+                            f"release evidence record optional_capabilities[{index}] is not in the live capability matrix"
+                        )
             except (OSError, json.JSONDecodeError) as exc:
                 errors.append(f"invalid capability matrix: {exc}")
     for location in _walk_sensitive(payload):
@@ -132,8 +149,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--require", action="append", dest="required", default=[])
-    parser.add_argument("--release-record", type=Path, help="Machine-readable release sign-off JSON")
-    parser.add_argument("--capability-matrix", type=Path, help="Matrix used to validate recorded capability names")
+    parser.add_argument(
+        "--release-record", type=Path, help="Machine-readable release sign-off JSON"
+    )
+    parser.add_argument(
+        "--capability-matrix", type=Path, help="Matrix used to validate recorded capability names"
+    )
     args = parser.parse_args()
     required = args.required or ["findings.json", "reports/report-manifest.json"]
     errors = validate_bundle(args.evidence_dir, required)

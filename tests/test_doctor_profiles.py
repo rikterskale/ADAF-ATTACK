@@ -78,15 +78,25 @@ def test_profile_validation_and_socket_failures(monkeypatch, tmp_path: Path) -> 
     with pytest.raises(Exception, match="between 0 and 60"):
         cli._doctor_payload("offline", timeout=0)
 
-    monkeypatch.setattr(cli.socket, "create_connection", lambda *args, **kwargs: (_ for _ in ()).throw(socket.gaierror("bad dns")))
+    monkeypatch.setattr(
+        cli.socket,
+        "create_connection",
+        lambda *args, **kwargs: (_ for _ in ()).throw(socket.gaierror("bad dns")),
+    )
     status, detail = cli._socket_check("bad.test", 389, 1.0)
     assert status == "error" and "DNS resolution failed" in detail
-    monkeypatch.setattr(cli.socket, "create_connection", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("refused")))
+    monkeypatch.setattr(
+        cli.socket,
+        "create_connection",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("refused")),
+    )
     status, detail = cli._socket_check("dc.test", 389, 1.0)
     assert status == "warning" and "not reachable" in detail
 
 
-def test_operator_and_certipy_profiles_make_missing_tools_blocking(monkeypatch, tmp_path: Path) -> None:
+def test_operator_and_certipy_profiles_make_missing_tools_blocking(
+    monkeypatch, tmp_path: Path
+) -> None:
     _localize_paths(monkeypatch, tmp_path)
     monkeypatch.setattr(cli, "_resolve_binary", lambda candidates: None)
     operator = cli._doctor_payload("operator")
@@ -94,7 +104,9 @@ def test_operator_and_certipy_profiles_make_missing_tools_blocking(monkeypatch, 
     assert relay["status"] == "error" and relay["severity"] == "blocking"
 
     real_version = cli._package_version
-    monkeypatch.setattr(cli, "_package_version", lambda name: None if name == "certipy-ad" else real_version(name))
+    monkeypatch.setattr(
+        cli, "_package_version", lambda name: None if name == "certipy-ad" else real_version(name)
+    )
     certipy = cli._doctor_payload("certipy")
     certipy_check = next(item for item in certipy["checks"] if item["id"] == "certipy")
     assert certipy_check["status"] == "error"
@@ -102,11 +114,21 @@ def test_operator_and_certipy_profiles_make_missing_tools_blocking(monkeypatch, 
 
 def test_live_profile_reports_dns_and_port_failures(monkeypatch, tmp_path: Path) -> None:
     _localize_paths(monkeypatch, tmp_path)
-    monkeypatch.setattr(cli.socket, "getaddrinfo", lambda *args: (_ for _ in ()).throw(socket.gaierror("missing")))
-    monkeypatch.setattr(cli.socket, "create_connection", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("refused")))
+    monkeypatch.setattr(
+        cli.socket, "getaddrinfo", lambda *args: (_ for _ in ()).throw(socket.gaierror("missing"))
+    )
+    monkeypatch.setattr(
+        cli.socket,
+        "create_connection",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("refused")),
+    )
     payload = cli._doctor_payload("live-ad", domain="lab.test", dc_ip="10.0.0.10")
-    assert next(item for item in payload["checks"] if item["id"] == "domain-dns")["status"] == "error"
-    assert next(item for item in payload["checks"] if item["id"] == "dc-ldap")["status"] == "warning"
+    assert (
+        next(item for item in payload["checks"] if item["id"] == "domain-dns")["status"] == "error"
+    )
+    assert (
+        next(item for item in payload["checks"] if item["id"] == "dc-ldap")["status"] == "warning"
+    )
 
 
 def test_returning_workspace_and_redaction_branches(monkeypatch, tmp_path: Path) -> None:
@@ -122,7 +144,9 @@ def test_support_bundle_write_failure_is_actionable(monkeypatch, tmp_path: Path)
     _localize_paths(monkeypatch, tmp_path)
     occupied = tmp_path / "occupied"
     occupied.write_text("file", encoding="utf-8")
-    result = runner.invoke(app, ["--format", "json", "support-bundle", "--output", str(occupied / "bundle.json")])
+    result = runner.invoke(
+        app, ["--format", "json", "support-bundle", "--output", str(occupied / "bundle.json")]
+    )
     assert result.exit_code == 1
     payload = json.loads(result.output)
     assert payload["error"]["code"] == "SUPPORT_BUNDLE_WRITE_FAILED"

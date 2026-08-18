@@ -13,7 +13,15 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MATRIX = ROOT / "docs" / "LIVE_CAPABILITY_MATRIX.json"
 ENVIRONMENTS = {"live-read-only", "live-mutating", "offline-analysis"}
 STATUSES = {"supported", "experimental", "manual-only"}
-REQUIRED_FIELDS = {"environment", "status", "network_required", "external_tools", "fixtures", "rollback", "evidence"}
+REQUIRED_FIELDS = {
+    "environment",
+    "status",
+    "network_required",
+    "external_tools",
+    "fixtures",
+    "rollback",
+    "evidence",
+}
 
 
 def _registered() -> dict[str, Any]:
@@ -59,11 +67,17 @@ def validate_matrix(path: Path = DEFAULT_MATRIX) -> list[str]:
         if not isinstance(item["network_required"], bool):
             errors.append(f"{capability_id}: network_required must be boolean")
         for field in ("external_tools", "fixtures", "evidence"):
-            if not isinstance(item[field], list) or not all(isinstance(value, str) and value for value in item[field]):
+            if not isinstance(item[field], list) or not all(
+                isinstance(value, str) and value for value in item[field]
+            ):
                 errors.append(f"{capability_id}: {field} must be a non-empty-text list")
         if not isinstance(item["rollback"], str) or not item["rollback"]:
             errors.append(f"{capability_id}: rollback must be non-empty text")
-        if capability_id in registered and registered[capability_id].destructive and item["rollback"] != "required":
+        if (
+            capability_id in registered
+            and registered[capability_id].destructive
+            and item["rollback"] != "required"
+        ):
             errors.append(f"{capability_id}: destructive capability must declare rollback=required")
         if item["environment"].startswith("live-") and item["network_required"] is not True:
             errors.append(f"{capability_id}: live capability must set network_required=true")

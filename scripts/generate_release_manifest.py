@@ -38,7 +38,9 @@ def _project_metadata(repo_root: Path) -> dict[str, Any]:
 
 def _artifact_rows(directory: Path) -> list[dict[str, str]]:
     artifacts = sorted(
-        path for path in directory.iterdir() if path.is_file() and path.name.endswith(ARTIFACT_SUFFIXES)
+        path
+        for path in directory.iterdir()
+        if path.is_file() and path.name.endswith(ARTIFACT_SUFFIXES)
     )
     if not artifacts:
         raise ValueError(f"no wheel or sdist artifacts found in {directory}")
@@ -74,7 +76,15 @@ def build_manifest(repo_root: Path, dist: Path, wheelhouse: Path | None) -> dict
 def validate_manifest(
     manifest: dict[str, Any], *, dist: Path | None = None, wheelhouse: Path | None = None
 ) -> None:
-    required = {"schema", "project", "version", "requires_python", "artifacts", "extras", "wheelhouse"}
+    required = {
+        "schema",
+        "project",
+        "version",
+        "requires_python",
+        "artifacts",
+        "extras",
+        "wheelhouse",
+    }
     missing = required - manifest.keys()
     if missing:
         raise ValueError(f"manifest is missing keys: {sorted(missing)}")
@@ -111,16 +121,22 @@ def main() -> int:
     parser.add_argument("--dist", type=Path, required=True)
     parser.add_argument("--wheelhouse", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--validate", action="store_true", help="validate an existing output manifest")
+    parser.add_argument(
+        "--validate", action="store_true", help="validate an existing output manifest"
+    )
     args = parser.parse_args()
 
     try:
         if args.validate:
             manifest = json.loads(args.output.read_text(encoding="utf-8"))
         else:
-            manifest = build_manifest(args.repo_root.resolve(), args.dist.resolve(), args.wheelhouse)
+            manifest = build_manifest(
+                args.repo_root.resolve(), args.dist.resolve(), args.wheelhouse
+            )
             args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            args.output.write_text(
+                json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
         validate_manifest(manifest, dist=args.dist.resolve(), wheelhouse=args.wheelhouse)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"release manifest validation failed: {exc}", file=sys.stderr)
