@@ -117,6 +117,8 @@ class WorkflowAction:
     consequence: str = ""
     completed: bool = False
     blocked: bool = False
+    priority: float = 0.0
+    unlock_conditions: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=_now)
     completed_at: str | None = None
 
@@ -339,12 +341,24 @@ class WorkflowEngine:
         if persist:
             self.persist()
 
-    def _required_actions(self) -> list[WorkflowAction]:
+    def _required_actions(
+        self, actions: dict[str, WorkflowAction] | None = None
+    ) -> list[WorkflowAction]:
+        source = actions if actions is not None else self.state.pending_actions
         return [
             action
-            for action in self.state.pending_actions.values()
+            for action in source.values()
             if action.kind == "required" and not action.completed and not action.blocked
         ]
+
+    def _action_priority(self, action: WorkflowAction) -> float:
+        """Return the highest linked finding priority for recommendation ordering."""
+        if not action.finding_ids:
+            return 0.0
+        return max(
+            (self.state.findings[item].priority for item in action.finding_ids if item in self.state.findings),
+            default=0.0,
+        )
 
     def _rebuild_actions(self) -> None:
         existing = self.state.pending_actions
@@ -359,6 +373,7 @@ class WorkflowEngine:
                 "scoping",
                 "required",
                 consequence="Without authorization, all network actions remain locked.",
+                unlock_conditions=["scope and authorization decision recorded"],
             )
         elif not self.state.findings and "discovery-complete" not in self.state.completed_steps:
             actions["run-discovery"] = WorkflowAction(
@@ -369,6 +384,7 @@ class WorkflowEngine:
                 "required",
                 capability_id="ldap-enum",
                 consequence="No finding-driven branches are available until discovery completes.",
+                unlock_conditions=["scope authorization completed"],
             )
         for finding in self.state.findings.values():
             if finding.status == "open":
@@ -381,6 +397,8 @@ class WorkflowEngine:
                     "required",
                     [finding.id],
                     consequence="Response and closure remain locked until this finding is validated.",
+                    priority=finding.priority,
+                    unlock_conditions=["authorized scope", "finding evidence available"],
                 )
             elif finding.status == "validated":
                 key = f"decision:{finding.id}"
@@ -396,6 +414,8 @@ class WorkflowEngine:
                         "decision",
                         [finding.id],
                         consequence="The workflow cannot move to reporting until a response decision is recorded.",
+                        priority=finding.priority,
+                        unlock_conditions=["finding validated"],
                     )
                 else:
                     response_key = f"response:{finding.id}"
@@ -407,6 +427,8 @@ class WorkflowEngine:
                         "required",
                         [finding.id],
                         consequence="The finding must be mitigated before verification and closure.",
+                        priority=finding.priority,
+                        unlock_conditions=["response decision recorded"],
                     )
             elif finding.status == "exploited":
                 key = f"mitigate:{finding.id}"
@@ -418,6 +440,8 @@ class WorkflowEngine:
                     "required",
                     [finding.id],
                     consequence="Verification cannot begin until the finding is mitigated.",
+                    priority=finding.priority,
+                    unlock_conditions=["finding impact confirmed or response recorded"],
                 )
             elif finding.status == "mitigated":
                 key = f"verify:{finding.id}"
@@ -429,13 +453,15 @@ class WorkflowEngine:
                     "required",
                     [finding.id],
                     consequence="The finding cannot be closed without verification evidence.",
+                    priority=finding.priority,
+                    unlock_conditions=["finding mitigated", "verification evidence collected"],
                 )
         if (
             (
                 not self.state.findings
                 or all(item.status == "closed" for item in self.state.findings.values())
             )
-            and not self._required_actions()
+            and not self._required_actions(actions)
             and self.state.phase in {"validation", "prioritization", "response", "verification"}
         ):
             actions["generate-report"] = WorkflowAction(
@@ -445,6 +471,7 @@ class WorkflowEngine:
                 "reporting",
                 "required",
                 capability_id="report",
+                unlock_conditions=["all findings closed", "required actions completed"],
             )
         for key, prior in existing.items():
             if prior.completed and key in actions:
@@ -735,6 +762,7 @@ class WorkflowEngine:
         actions.sort(
             key=lambda item: (
                 item.kind != "required",
+                -max(item.priority, self._action_priority(item)),
                 PHASES.index(item.phase) if item.phase in PHASES else len(PHASES),
                 item.id,
             )

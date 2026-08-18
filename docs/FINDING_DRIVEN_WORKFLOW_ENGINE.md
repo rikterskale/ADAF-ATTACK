@@ -45,8 +45,9 @@ existing canonical `core.findings.Finding` model is adapted with
 
 `WorkflowAction` is a derived or completed action. Its `kind` is `required`,
 `recommended`, or `decision`; it can point to findings and a capability and
-includes the consequence of ignoring it. `AuditEvent` records who changed
-what, when, and why.
+includes the consequence of ignoring it, explicit `unlock_conditions` for
+guided clients, and a finding-derived priority. `AuditEvent` records who
+changed what, when, and why.
 
 ## State machine and branching
 
@@ -85,7 +86,8 @@ Severity weights are critical 100, high 75, medium 45, low 20, and info 5.
 Confidence weights are confirmed 1.0, observed 0.85, suspected 0.6, and
 unknown 0.4. Workflow risk is the capped sum of priorities for non-closed
 findings. Recommendations sort required actions before decision and optional
-actions, then by phase and stable ID.
+actions, then by linked finding priority, phase, and stable ID. This makes the
+next step deterministic while elevating the highest-risk open finding.
 
 ## Guided user experience
 

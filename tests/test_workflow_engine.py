@@ -408,3 +408,35 @@ def test_validation_and_close_guards_cover_unauthorized_and_unstarted_paths(
     no_discovery.state.completed_steps = ["scope-authorized"]
     with pytest.raises(WorkflowError, match="discovery completes"):
         no_discovery.close()
+
+
+def test_recommendations_prioritize_highest_risk_finding_and_explain_unlocks(
+    tmp_path: Path,
+) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.start()
+    assert engine.guidance().next_action_id == "authorize-scope"
+    assert engine.query_actions(include_completed=True)[0].unlock_conditions
+
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    engine.ingest_finding({"id": "F-LOW", "title": "Minor gap", "severity": "low"})
+    engine.ingest_finding(
+        {"id": "F-CRITICAL", "title": "Domain compromise path", "severity": "critical"}
+    )
+    assert engine.recommendations()[0].id == "validate:F-CRITICAL"
+    assert engine.recommendations()[0].priority == 40
+
+
+def test_report_unlock_uses_newly_derived_actions(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.start()
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    engine.ingest_finding({"id": "F-1", "title": "Issue", "severity": "medium"})
+    engine.complete_action("validate:F-1")
+    engine.decide("decision:F-1", "mitigate")
+    engine.complete_action("response:F-1")
+    engine.complete_action("verify:F-1")
+    engine.transition_finding("F-1", "closed", evidence={"artifact": "verified.json"})
+    assert engine.recommendations()[0].id == "generate-report"
