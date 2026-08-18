@@ -100,6 +100,29 @@ def _check_ci() -> None:
         "scripts/smoke_distribution.py" in ci_text,
         "ci.yml must use the shared clean-distribution smoke script",
     )
+    for job_name, job in jobs.items():
+        for step in job.get("steps", []):
+            shell = step.get("shell", "")
+            _require(
+                not (isinstance(shell, str) and "matrix." in shell),
+                f"ci.yml:{job_name}:{step.get('name', '<unnamed>')}: "
+                f"matrix expressions are unsupported in shell: {shell}",
+            )
+    windows_steps = jobs["windows-installer"]["steps"]
+    lifecycle_shells = {
+        step.get("shell")
+        for step in windows_steps
+        if "scripts\\Test-WindowsInstaller.ps1" in step.get("run", "")
+    }
+    _require(
+        {"powershell", "pwsh"} <= lifecycle_shells,
+        "windows-installer must invoke Test-WindowsInstaller.ps1 with static "
+        "powershell and pwsh shells",
+    )
+    _require(
+        (ROOT / "scripts" / "Test-WindowsInstaller.ps1").is_file(),
+        "missing shared Windows installer lifecycle helper",
+    )
 
     release_contracts = {
         "tests/test_release_contracts.py": (

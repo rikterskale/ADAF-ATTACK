@@ -877,92 +877,15 @@ jobs:
           name: python-distributions
           path: dist
 
-      - name: Run artifact installer and verify owned lifecycle
-        shell: ${{ matrix.shell }}
-        run: |
-          $ErrorActionPreference = "Stop"
-          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP "adaf-localappdata"
-          $wheel = @(Get-ChildItem dist\*.whl)
-          if ($wheel.Count -ne 1) { throw "Expected exactly one wheel, found $($wheel.Count)" }
-          $python = (Get-Command python).Source
-          $shimDir = Join-Path $env:LOCALAPPDATA "adaf-attack\bin"
-          $previousWorkspace = Join-Path $env:RUNNER_TEMP "preexisting-workspace"
-          $hadPreexistingConfig = "${{ matrix.preexisting-config }}" -eq "true"
-          if ($hadPreexistingConfig) {
-            $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-            [Environment]::SetEnvironmentVariable("Path", "$userPath;$shimDir", "User")
-            [Environment]::SetEnvironmentVariable(
-              "ADAF_ATTACK_WORKSPACE",
-              $previousWorkspace,
-              "User"
-            )
-          }
-          & .\scripts\Install-AdafAttack.ps1 `
-            -RepoRoot $PWD `
-            -Package $wheel[0].FullName `
-            -Extras base `
-            -Python $python `
-            -SkipCompletion
-          $venvPython = Join-Path $PWD ".venv\Scripts\python.exe"
-          & $venvPython -m pip check
-          if ($LASTEXITCODE -ne 0) { throw "pip check failed" }
+      - name: Run lifecycle with Windows PowerShell 5.1
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: .\scripts\Test-WindowsInstaller.ps1 -RepoRoot $PWD
 
-          $shim = Join-Path $shimDir "adaf-attack.cmd"
-          if (-not (Test-Path $shim)) { throw "Installer PATH shim missing: $shim" }
-          $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-          if ($userPath -notlike "*$shimDir*") { throw "Installer shim directory missing from user PATH" }
-          $workspace = [Environment]::GetEnvironmentVariable("ADAF_ATTACK_WORKSPACE", "User")
-          if (-not $workspace) { throw "Installer did not set ADAF_ATTACK_WORKSPACE" }
-          $env:Path = "$shimDir;$env:Path"
-          & adaf-attack --version
-          if ($LASTEXITCODE -ne 0) { throw "Installer-created shim failed" }
-          & adaf-attack --format json doctor --explain | ConvertFrom-Json | ForEach-Object {
-            if (-not $_.ok) { throw "doctor reported failure" }
-          }
-          & adaf-attack list-capabilities
-          if ($LASTEXITCODE -ne 0) { throw "list-capabilities failed through shim" }
-          & adaf-attack paths
-          if ($LASTEXITCODE -ne 0) { throw "paths failed through shim" }
-
-          New-Item -ItemType Directory -Force $workspace | Out-Null
-          $sentinel = Join-Path $workspace "preserve-me.txt"
-          Set-Content $sentinel "operator data"
-
-          # Re-running the installer is the supported in-place upgrade path.
-          & .\scripts\Install-AdafAttack.ps1 `
-            -RepoRoot $PWD `
-            -Package $wheel[0].FullName `
-            -Extras base `
-            -Python $python `
-            -SkipCompletion
-          & .\scripts\Install-AdafAttack.ps1 -Uninstall
-          if (Test-Path $shim) { throw "Uninstall left the PATH shim behind" }
-          if (-not (Test-Path $sentinel)) { throw "Default uninstall deleted workspace data" }
-          $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-          $restoredWorkspace = [Environment]::GetEnvironmentVariable(
-            "ADAF_ATTACK_WORKSPACE",
-            "User"
-          )
-          if ($hadPreexistingConfig) {
-            if ($userPath -notlike "*$shimDir*") { throw "Uninstall removed a pre-existing PATH entry" }
-            if ($restoredWorkspace -ne $previousWorkspace) {
-              throw "Uninstall did not restore the previous workspace environment value"
-            }
-          } else {
-            if ($userPath -like "*$shimDir*") { throw "Uninstall left its user PATH entry behind" }
-            if ($restoredWorkspace) {
-              throw "Uninstall left its owned workspace environment variable behind"
-            }
-          }
-
-          & .\scripts\Install-AdafAttack.ps1 `
-            -RepoRoot $PWD `
-            -Package $wheel[0].FullName `
-            -Extras base `
-            -Python $python `
-            -SkipCompletion
-          & .\scripts\Install-AdafAttack.ps1 -Uninstall -RemoveWorkspace
-          if (Test-Path $workspace) { throw "Explicit workspace removal did not delete data" }
+      - name: Run lifecycle with PowerShell 7
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: .\scripts\Test-WindowsInstaller.ps1 -RepoRoot $PWD -PreexistingConfig
 
   ci-gate:
     name: Production readiness gate

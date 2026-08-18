@@ -39,6 +39,14 @@ def test_windows_installer_is_powershell_51_compatible_and_lifecycle_aware() -> 
         assert token in script, f"Windows installer is missing lifecycle contract token: {token}"
 
 
+def test_windows_installer_workflow_uses_static_shells() -> None:
+    workflow_text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "shell: ${{ matrix." not in workflow_text
+    assert "shell: powershell" in workflow_text
+    assert "shell: pwsh" in workflow_text
+    assert workflow_text.count(r"scripts\Test-WindowsInstaller.ps1") == 2
+
+
 def test_kali_installer_keeps_non_kali_guard_and_supports_artifacts() -> None:
     script = (ROOT / "scripts" / "install-kali.sh").read_text(encoding="utf-8")
     for token in (
