@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -420,5 +421,191 @@ def test_tui_operator_safety_and_profile_controls(
             app._show_next_actions("missing")
             app._show_next_actions("ldap-enum")
             assert "Suggested next" in str(app.query_one("#review-panel", Static).render())
+
+    asyncio.run(exercise())
+
+
+def test_tui_guided_workflow_templates_readiness_and_pause_controls() -> None:
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert app._wizard_step == 0
+            assert "Readiness:" in str(app.query_one("#readiness", Static).render())
+
+            app.query_one("#domain", Input).value = "corp.test"
+            app.query_one("#dc_ip", Input).value = "192.0.2.10"
+            app.on_button_pressed(SimpleNamespace(button=SimpleNamespace(id="template-adcs")))
+            assert app.selected_cap == "adcs-enum"
+            assert app._wizard_step == 0
+
+            app._wizard_next()
+            assert app._wizard_step == 1
+            app._wizard_next()
+            assert app._wizard_step == 2
+            app._show_run_summary()
+            assert "Estimated duration" in str(app.query_one("#summary-panel", Static).render())
+
+            app._capability_running = True
+            app._toggle_pause()
+            assert app._pause_requested.is_set() is True
+            app._toggle_pause()
+            assert app._pause_requested.is_set() is False
+
+    asyncio.run(exercise())
+
+
+def test_tui_guided_workflow_persistence_recommendations_and_exports(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.notify = Mock()  # type: ignore[method-assign]
+            saved: list[dict[str, object]] = []
+            monkeypatch.setattr(tui_app, "save_user_config", lambda value: saved.append(value))
+            monkeypatch.setattr(
+                tui_app,
+                "load_user_config",
+                lambda: {
+                    "ui.wizard_state": {
+                        "step": 2,
+                        "selected_cap": "ldap-enum",
+                        "domain": "corp.test",
+                        "dc_ip": "192.0.2.10",
+                        "username": "operator",
+                        "scope": "domain",
+                    }
+                },
+            )
+            app.selected_cap = "ldap-enum"
+            app._save_wizard_state()
+            assert saved
+            app._load_wizard_resume()
+            app._resume_wizard()
+            assert app.selected_cap == "ldap-enum"
+            monkeypatch.setattr(tui_app, "load_user_config", lambda: {"ui.wizard_state": "invalid"})
+            app._resume_wizard()
+            monkeypatch.setattr(tui_app, "load_user_config", lambda: {"ui.wizard_state": {}})
+
+            app.query_one("#domain", Input).value = ""
+            app._validate_target_inline()
+            app.query_one("#domain", Input).value = "corp.test"
+            app.query_one("#dc_ip", Input).value = "192.0.2.10"
+            app._validate_target_inline()
+            app._show_recommendations()
+            app.selected_cap = None
+            app._show_recommendations()
+            app._update_readiness()
+            app.selected_cap = "ldap-enum"
+            app._reviewed_cap = "ldap-enum"
+            app._update_readiness()
+            app._show_run_summary()
+            app.selected_cap = None
+            app._show_run_summary()
+            app._wizard_step = 0
+            app.query_one("#domain", Input).value = ""
+            app._wizard_next()
+            app._wizard_step = 2
+            app._wizard_next()
+            app.query_one("#domain", Input).value = "corp.test"
+            app.query_one("#dc_ip", Input).value = "192.0.2.10"
+            app.selected_cap = "shadow-creds"
+            app._wizard_step = 3
+            app._wizard_next()
+
+            app._toggle_pause()
+            app._capability_running = True
+            app._toggle_pause()
+            app._toggle_pause()
+            app._wizard_step = 5
+            app._wizard_next()
+            app._wizard_step = 2
+            app._capability_running = False
+            app._wizard_back()
+            app.query_one("#domain", Input).value = "corp.test"
+            app.query_one("#dc_ip", Input).value = "192.0.2.10"
+            app.selected_cap = "ldap-enum"
+            app._wizard_step = 2
+            app._wizard_next()
+            app._wizard_step = 3
+            app._wizard_next()
+            app._wizard_step = 4
+            app._capability_running = True
+            app._wizard_next()
+            app._wizard_start_over()
+            app._capability_running = False
+            app._wizard_start_over()
+
+            monkeypatch.setattr(tui_app.capability_registry, "get", lambda _value: None)
+            app._apply_template("recon")
+            monkeypatch.undo()
+
+            app._last_session = None
+            app._create_reports()
+            app._package_evidence()
+            session = tmp_path / "session"
+            session.mkdir()
+            app._last_session = session
+            (session / "findings.json").write_text('{"findings": []}', encoding="utf-8")
+            (session / "cleanup.json").write_text("[]", encoding="utf-8")
+            from adaf_attack.core import reporting
+
+            monkeypatch.setattr(reporting, "_pdf", lambda *_args: True)
+            reporting.generate_report_bundle(session)
+            monkeypatch.setattr(
+                tui_app,
+                "generate_report_bundle",
+                lambda _session: {"executive_html": "report.html"},
+            )
+            monkeypatch.setattr(
+                tui_app,
+                "package_evidence",
+                lambda _session, _destination: {
+                    "archive": "evidence.zip",
+                    "file_count": 1,
+                    "profile": "client",
+                },
+            )
+            app._create_reports()
+            app._package_evidence()
+            monkeypatch.setattr(
+                tui_app,
+                "generate_report_bundle",
+                lambda _session: (_ for _ in ()).throw(RuntimeError("report")),
+            )
+            monkeypatch.setattr(
+                tui_app,
+                "package_evidence",
+                lambda _session, _destination: (_ for _ in ()).throw(RuntimeError("package")),
+            )
+            app._create_reports()
+            app._package_evidence()
+
+            monkeypatch.setattr(
+                tui_app, "save_user_config", lambda _value: (_ for _ in ()).throw(OSError())
+            )
+            app._save_wizard_state()
+            monkeypatch.setattr(
+                tui_app, "load_user_config", lambda: (_ for _ in ()).throw(OSError())
+            )
+            app._load_wizard_resume()
+            app._resume_wizard()
+
+            app._capability_running = False
+            app.selected_cap = "ldap-enum"
+            app.query_one("#domain", Input).value = "corp.test"
+            app.query_one("#dc_ip", Input).value = "192.0.2.10"
+
+            def paused_runner(*_args: object, **kwargs: object) -> dict[str, object]:
+                app._pause_requested.set()
+                threading.Timer(0.05, app._pause_requested.clear).start()
+                kwargs["log"]("pause boundary")  # type: ignore[index]
+                return {"session_path": str(session), "session_id": "test", "graph_summary": {}}
+
+            monkeypatch.setattr(tui_app, "execute_capability", paused_runner)
+            app._start_run()
+            await _wait_for(pilot, lambda: app._capability_running is False)
 
     asyncio.run(exercise())

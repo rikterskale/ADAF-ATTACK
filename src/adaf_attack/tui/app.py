@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import threading
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +29,7 @@ from textual.widgets import (
 
 from adaf_attack import __version__
 from adaf_attack.core.capability_help_data import capability_option_spec
+from adaf_attack.core.control_plane import package_evidence
 from adaf_attack.core.novice import (
     beginner_next_actions,
     explain_finding,
@@ -37,6 +39,7 @@ from adaf_attack.core.novice import (
 from adaf_attack.core.paths import default_workspace_dir
 from adaf_attack.core.profiles import active_opsec, get_profile, list_profiles, set_profile
 from adaf_attack.core.registry import Capability, capability_registry
+from adaf_attack.core.reporting import generate_report_bundle
 from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.target import Target
 from adaf_attack.core.user_config import (
@@ -88,6 +91,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     #wizard-panel { height: auto; padding: 1; border: solid $success; margin-bottom: 1; }
     #wizard-step { color: $success; text-style: bold; }
     #wizard-actions { height: auto; margin-top: 1; }
+    #readiness, #target-validation, #recommendations-panel, #summary-panel { height: auto; padding: 0 1; }
+    #template-panel { height: auto; padding: 1; border-bottom: solid $accent; }
     #session-panel { max-height: 8; overflow-y: auto; }
     #search { margin-bottom: 1; }
     Input { margin-bottom: 1; }
@@ -126,6 +131,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._advanced_credentials_visible = False
         self._form_snapshot: dict[str, Any] | None = None
         self._wizard_step = 0
+        self._pause_requested = threading.Event()
+        self._wizard_resume_available = False
 
     def compose(self) -> ComposeResult:
         defaults = load_user_config()
@@ -151,6 +158,20 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 yield Button("Back", id="wizard-back", disabled=True)
                 yield Button("Next", id="wizard-next", variant="primary")
                 yield Button("Start over", id="wizard-start-over")
+                yield Button("Pause", id="pause-btn", disabled=True)
+                yield Button("Create reports", id="reports-btn", disabled=True)
+                yield Button("Package evidence", id="package-btn", disabled=True)
+            yield Static("Readiness: 0/100", id="readiness")
+            yield Static("", id="target-validation")
+            yield Static("", id="recommendations-panel")
+            yield Static("", id="summary-panel")
+        with Horizontal(id="template-panel"):
+            yield Label("Start with a workflow: ")
+            yield Button("Safe reconnaissance", id="template-recon")
+            yield Button("AD CS review", id="template-adcs")
+            yield Button("Full assessment", id="template-full")
+            yield Button("I'm not sure", id="template-help")
+            yield Button("Resume saved", id="resume-btn", disabled=True)
         with Horizontal():
             with Vertical(id="sidebar"):
                 yield Static("[bold]Capabilities[/bold]", id="sidebar-title")
@@ -237,6 +258,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._set_advanced_credentials_visible(False)
         self._apply_beginner_mode(self._safe_mode)
         self._set_wizard_step(0)
+        self._load_wizard_resume()
+        self._update_readiness()
         self._show_log("[bold green]ADAF-ATTACK[/] ready. Use Quickstart or search capabilities.")
         if not self.query_one("#domain", Input).value:
             self.notify(
@@ -295,8 +318,11 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._refresh_log()
         elif event.input.id in {"domain", "dc_ip"}:
             self._update_status()
+            self._update_readiness()
+            self._validate_target_inline()
         elif event.input.id in {"username", "password", "hashes", "aes_key", "ccache"}:
             self._update_credential_strip()
+            self._update_readiness()
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
         if event.switch.id == "force":
@@ -304,6 +330,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._update_run_gate()
         elif event.switch.id == "beginner-mode":
             self._apply_beginner_mode(event.value)
+        self._update_readiness()
 
     def on_checkbox_changed(self, _event: Checkbox.Changed) -> None:
         self._reviewed_cap = None
@@ -317,6 +344,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._update_status()
             self._update_help()
             self._update_run_gate()
+            self._update_readiness()
             if self._wizard_step < 2:
                 self._set_wizard_step(2)
 
@@ -325,7 +353,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._safe_mode = enabled
         config = load_user_config()
         config["novice.safe_mode"] = enabled
-        save_user_config(config)
+        with suppress(OSError, PermissionError):
+            save_user_config(config)
+        # Managed workstations may expose a read-only profile directory. The
+        # setting still applies for this process.
         for widget_id in (
             "advanced-creds-btn",
             "scope",
@@ -347,12 +378,30 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         """Move the operator through one predictable, review-first workflow."""
         self._wizard_step = max(0, min(step, 5))
         steps = (
-            ("1 of 5 · Target", "Start with the authorized domain and domain controller. These are the only required values for the first step."),
-            ("2 of 5 · Access", "Add the least-privileged credentials or session material available. Leave optional fields empty when you are using an existing session."),
-            ("3 of 5 · Objective", "Choose one capability. The sidebar is grouped by phase and every capability shows its prerequisites and safety level."),
-            ("4 of 5 · Review", "Review scope, authentication, OPSEC, rollback, and force requirements. Nothing executes until the review is acknowledged."),
-            ("5 of 5 · Run & learn", "Run, watch the staged progress, then use the findings dashboard and suggested next action to continue the engagement."),
-            ("Complete · Findings", "This session is complete. Inspect findings, copy the evidence summary, or start the next guided action."),
+            (
+                "1 of 5 · Target",
+                "Start with the authorized domain and domain controller. These are the only required values for the first step.",
+            ),
+            (
+                "2 of 5 · Access",
+                "Add the least-privileged credentials or session material available. Leave optional fields empty when you are using an existing session.",
+            ),
+            (
+                "3 of 5 · Objective",
+                "Choose one capability. The sidebar is grouped by phase and every capability shows its prerequisites and safety level.",
+            ),
+            (
+                "4 of 5 · Review",
+                "Review scope, authentication, OPSEC, rollback, and force requirements. Nothing executes until the review is acknowledged.",
+            ),
+            (
+                "5 of 5 · Run & learn",
+                "Run, watch the staged progress, then use the findings dashboard and suggested next action to continue the engagement.",
+            ),
+            (
+                "Complete · Findings",
+                "This session is complete. Inspect findings, copy the evidence summary, or start the next guided action.",
+            ),
         )
         title, guide = steps[self._wizard_step]
         self.query_one("#wizard-step", Static).update(title)
@@ -362,14 +411,168 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         back.disabled = self._wizard_step == 0 or self._capability_running
         next_button.disabled = self._capability_running
         next_button.label = (
-            "Continue to access" if self._wizard_step == 0 else
-            "Continue to objective" if self._wizard_step == 1 else
-            "Review objective" if self._wizard_step == 2 else
-            "Continue to run" if self._wizard_step == 3 else
-            "Run selected" if self._wizard_step == 4 else
-            "Start another"
+            "Continue to access"
+            if self._wizard_step == 0
+            else "Continue to objective"
+            if self._wizard_step == 1
+            else "Review objective"
+            if self._wizard_step == 2
+            else "Continue to run"
+            if self._wizard_step == 3
+            else "Run selected"
+            if self._wizard_step == 4
+            else "Start another"
         )
         self.query_one("#wizard-start-over", Button).disabled = self._capability_running
+        self._save_wizard_state()
+
+    def _save_wizard_state(self) -> None:
+        """Persist non-secret wizard state so an interrupted workflow can resume."""
+        try:
+            config = load_user_config()
+            config["ui.wizard_state"] = {
+                "step": self._wizard_step,
+                "selected_cap": self.selected_cap,
+                "domain": self.query_one("#domain", Input).value.strip(),
+                "dc_ip": self.query_one("#dc_ip", Input).value.strip(),
+                "username": self.query_one("#username", Input).value.strip(),
+                "scope": self.query_one("#scope", Input).value.strip(),
+            }
+            save_user_config(config)
+        except (OSError, PermissionError):
+            # A locked-down operator workstation should not prevent execution.
+            return
+
+    def _load_wizard_resume(self) -> None:
+        try:
+            state = load_user_config().get("ui.wizard_state") or {}
+        except (OSError, PermissionError):
+            state = {}
+        if not isinstance(state, dict) or not any(
+            state.get(key) for key in ("domain", "dc_ip", "selected_cap")
+        ):
+            return
+        self._wizard_resume_available = True
+        self.query_one("#resume-btn", Button).disabled = False
+
+    def _resume_wizard(self) -> None:
+        try:
+            state = load_user_config().get("ui.wizard_state") or {}
+        except (OSError, PermissionError):
+            state = {}
+        if not isinstance(state, dict):
+            return
+        for key in ("domain", "dc_ip", "username", "scope"):
+            if state.get(key) is not None:
+                self.query_one(f"#{key}", Input).value = str(state[key])
+        selected = str(state.get("selected_cap") or "")
+        if selected and capability_registry.get(selected):
+            self.selected_cap = selected
+            self._update_help()
+        self._set_wizard_step(int(state.get("step", 0)))
+        self._update_readiness()
+        self.notify(
+            "Saved workflow restored. Review the target and continue when ready.",
+            severity="information",
+        )
+
+    def _update_readiness(self) -> None:
+        checks = (
+            bool(self.query_one("#domain", Input).value.strip()),
+            bool(self.query_one("#dc_ip", Input).value.strip()),
+            bool(
+                self.query_one("#username", Input).value.strip()
+                or self.query_one("#ccache", Input).value.strip()
+                or self.query_one("#password", Input).value
+            ),
+            bool(self.selected_cap),
+            bool(self._reviewed_cap == self.selected_cap),
+        )
+        score = sum(
+            value * weight for value, weight in zip(checks, (20, 20, 20, 20, 20), strict=True)
+        )
+        missing = [
+            label
+            for value, label in zip(
+                checks, ("domain", "DC", "access", "objective", "review"), strict=True
+            )
+            if not value
+        ]
+        text = f"Readiness: {score}/100"
+        if missing:
+            text += f" · Next: {missing[0]}"
+        else:
+            text += " · Ready to run"
+        self.query_one("#readiness", Static).update(text)
+
+    def _validate_target_inline(self) -> None:
+        domain = self.query_one("#domain", Input).value.strip()
+        dc_ip = self.query_one("#dc_ip", Input).value.strip()
+        message = (
+            "Target looks ready."
+            if domain and dc_ip
+            else "Enter both the authorized domain and DC IP / hostname."
+        )
+        self.query_one("#target-validation", Static).update(message)
+
+    def _show_recommendations(self) -> None:
+        cap = self._selected()
+        if cap:
+            suggestions = suggested_next_actions(cap)[:3]
+            text = "Recommended next actions: " + (
+                ", ".join(suggestions)
+                if suggestions
+                else "run the selected capability and inspect findings"
+            )
+        else:
+            text = "Recommended starting point: ldap-enum for safe directory reconnaissance."
+        self.query_one("#recommendations-panel", Static).update(text)
+
+    def _apply_template(self, template: str) -> None:
+        choices = {
+            "recon": ("ldap-enum", "Safe reconnaissance"),
+            "adcs": ("adcs-enum", "AD CS review"),
+            "full": ("ldap-enum", "Full assessment"),
+        }
+        capability_id, label = choices[template]
+        if not capability_registry.get(capability_id):
+            self.notify(f"Template unavailable: {capability_id}", severity="warning")
+            return
+        self.selected_cap = capability_id
+        self._update_help()
+        self._show_recommendations()
+        self._set_wizard_step(0)
+        self.notify(
+            f"{label} template selected. Enter the authorized target to continue.",
+            severity="information",
+        )
+
+    def _toggle_pause(self) -> None:
+        if not self._capability_running:
+            return
+        if self._pause_requested.is_set():
+            self._pause_requested.clear()
+            self.query_one("#pause-btn", Button).label = "Pause"
+            self._show_log("[green]Execution resumed at the next safe boundary.[/]")
+        else:
+            self._pause_requested.set()
+            self.query_one("#pause-btn", Button).label = "Resume"
+            self._show_log(
+                "[yellow]Pause requested; execution will pause at the next safe boundary.[/]"
+            )
+
+    def _show_run_summary(self) -> None:
+        cap = self._selected()
+        if not cap:
+            return
+        target = self.query_one("#domain", Input).value.strip() or "(missing)"
+        dc = self.query_one("#dc_ip", Input).value.strip() or "(missing)"
+        risk = "destructive" if cap.destructive else "read-only"
+        estimate = "1–3 minutes" if cap.category in {"discovery", "analysis"} else "3–10 minutes"
+        self.query_one("#summary-panel", Static).update(
+            f"[bold]Run summary[/bold] · {cap.id} · {risk}\n"
+            f"Target: {target} @ {dc}\nEstimated duration: {estimate} · OPSEC: {active_opsec().upper()}"
+        )
 
     def _wizard_next(self) -> None:
         if self._wizard_step == 0:
@@ -387,11 +590,14 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 return
             self._set_wizard_step(3)
             self._review_run()
+            self._show_run_summary()
+            self._show_recommendations()
         elif self._wizard_step == 3:
             self._review_run()
             cap = self._selected()
             if cap and (not cap.destructive or self._reviewed_cap == cap.id):
                 self._set_wizard_step(4)
+                self._show_run_summary()
             else:
                 self.notify("Complete the review checklist before continuing.", severity="warning")
         elif self._wizard_step == 4:
@@ -413,7 +619,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self.selected_cap = None
         self._set_wizard_step(0)
         self.query_one("#domain", Input).focus()
-        self.notify("Guided workflow reset. Start with the authorized target.", severity="information")
+        self.notify(
+            "Guided workflow reset. Start with the authorized target.", severity="information"
+        )
 
     def _form_values(self) -> dict[str, Any]:
         values: dict[str, Any] = {}
@@ -753,6 +961,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
         self._reviewed_cap = cap.id
         self._update_run_gate()
+        self._update_readiness()
         self.notify("Review acknowledged. Run is enabled when permitted.")
 
     def _ready_command(self, capability_id: str | None = None) -> str:
@@ -840,14 +1049,20 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         )
         self._show_log(f"\n[bold]→ {capability_id}[/] on {domain} @ {dc_ip}")
         self._cancel_requested.clear()
+        self._pause_requested.clear()
         self._capability_running = True
         self._active_stage = "prepare"
         self.query_one("#cancel-btn", Button).disabled = False
+        self.query_one("#pause-btn", Button).disabled = False
+        self.query_one("#reports-btn", Button).disabled = True
+        self.query_one("#package-btn", Button).disabled = True
         self._update_status()
         self._update_progress()
 
         def worker() -> None:
             def log_fn(msg: str) -> None:
+                while self._pause_requested.is_set() and not self._cancel_requested.is_set():
+                    threading.Event().wait(0.1)
                 lowered = msg.lower()
                 if "connect" in lowered or "ldap bind" in lowered:
                     self._active_stage = "connect"
@@ -882,6 +1097,12 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 self.call_from_thread(self._show_next_actions, capability_id)
                 self.call_from_thread(self._set_wizard_step, 5)
                 self.call_from_thread(
+                    self.query_one("#reports-btn", Button).__setattr__, "disabled", False
+                )
+                self.call_from_thread(
+                    self.query_one("#package-btn", Button).__setattr__, "disabled", False
+                )
+                self.call_from_thread(
                     self.notify,
                     f"Completed {capability_id}; session ready",
                     severity="information",
@@ -896,6 +1117,12 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 self._active_stage = "next-actions"
                 self.call_from_thread(
                     self.query_one("#cancel-btn", Button).__setattr__, "disabled", True
+                )
+                self.call_from_thread(
+                    self.query_one("#pause-btn", Button).__setattr__, "disabled", True
+                )
+                self.call_from_thread(
+                    self.query_one("#pause-btn", Button).__setattr__, "label", "Pause"
                 )
                 self.call_from_thread(self._update_status)
                 self.call_from_thread(self._update_progress)
@@ -936,6 +1163,43 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self.query_one("#session-panel", Static).update(
             "[bold]Recent sessions[/bold]\n" + ("\n".join(rows[:8]) or "No sessions found.")
         )
+
+    def _create_reports(self) -> None:
+        if not self._last_session or not self._last_session.is_dir():
+            self.notify("Complete a session before creating reports.", severity="warning")
+            return
+        try:
+            result = generate_report_bundle(self._last_session)
+            self.query_one("#session-panel", Static).update(
+                "[bold]Reports created[/bold]\n"
+                + "\n".join(
+                    f"{key}: {value}"
+                    for key, value in result.items()
+                    if key.endswith("html") or key.endswith("pdf")
+                )
+            )
+            self.notify(
+                "Executive, technical, and remediation reports are ready.", severity="information"
+            )
+        except (OSError, ValueError, RuntimeError) as exc:
+            self._show_log(f"[red]Report generation failed:[/] {exc}")
+            self.notify("Report generation failed. See the log for remediation.", severity="error")
+
+    def _package_evidence(self) -> None:
+        if not self._last_session or not self._last_session.is_dir():
+            self.notify("Complete a session before packaging evidence.", severity="warning")
+            return
+        destination = self._last_session.parent / f"{self._last_session.name}-evidence.zip"
+        try:
+            result = package_evidence(self._last_session, destination)
+            self.query_one("#session-panel", Static).update(
+                f"[bold]Evidence package ready[/bold]\nArchive: {result['archive']}\n"
+                f"Files: {result['file_count']} · Profile: {result['profile']}"
+            )
+            self.notify("Redacted evidence package created.", severity="information")
+        except (OSError, ValueError, RuntimeError) as exc:
+            self._show_log(f"[red]Evidence packaging failed:[/] {exc}")
+            self.notify("Evidence packaging failed. See the log for remediation.", severity="error")
 
     def _show_next_actions(self, capability_id: str) -> None:
         cap = capability_registry.get(capability_id)
@@ -1043,6 +1307,14 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "save-profile-btn": self._save_profile,
             "default-profile-btn": lambda: self._save_profile(make_default=True),
             "toggle-password-btn": self._toggle_password,
+            "pause-btn": self._toggle_pause,
+            "reports-btn": self._create_reports,
+            "package-btn": self._package_evidence,
+            "template-recon": lambda: self._apply_template("recon"),
+            "template-adcs": lambda: self._apply_template("adcs"),
+            "template-full": lambda: self._apply_template("full"),
+            "template-help": lambda: self._apply_template("recon"),
+            "resume-btn": self._resume_wizard,
             "wizard-next": self._wizard_next,
             "wizard-back": self._wizard_back,
             "wizard-start-over": self._wizard_start_over,
