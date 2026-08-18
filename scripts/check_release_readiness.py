@@ -47,6 +47,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -276,10 +277,20 @@ def _capabilities_reachable() -> None:
 @features.check("documented offline commands actually execute")
 def _documented_offline_runs() -> None:
     # A new user copy-pastes the quickstart; the safe offline subset must work.
-    for argv in (["doctor"], ["list-capabilities"], ["paths"], ["workflow-profiles"]):
+    for argv in (
+        ["doctor"],
+        ["doctor", "--profile", "user-readiness"],
+        ["list-capabilities"],
+        ["paths"],
+        ["workflow-profiles"],
+    ):
         result = run_cli("--format", "json", *argv)
         _require(result.code == 0, f"documented `{' '.join(argv)}` failed: {result.err}")
         _require(result.json().get("ok") is True, f"`{' '.join(argv)}` returned ok != true")
+    with tempfile.TemporaryDirectory(prefix="adaf-readiness-demo-") as root:
+        result = run_cli("--format", "json", "demo", "--workspace", root)
+        _require(result.code == 0, f"packaged demo failed: {result.err or result.out}")
+        _require(result.json().get("ok") is True, "packaged demo returned ok != true")
 
 
 # --------------------------------------------------------------------------- #
@@ -326,6 +337,7 @@ _REQUIRED_DOCS = (
     "docs/WINDOWS.md",
     "docs/LINUX_NOVICE_USABILITY_GUIDE.md",
     "docs/WINDOWS_NOVICE_USABILITY_GUIDE.md",
+    "docs/FEATURE_MATRIX.md",
 )
 
 _FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)

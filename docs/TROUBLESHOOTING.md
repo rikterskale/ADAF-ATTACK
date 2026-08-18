@@ -27,6 +27,10 @@ adaf-attack --format json support-bundle --output adaf-support-bundle.json
 
 ## Command not found or old version
 
+For scripted installer diagnostics, use `-Json` with the Windows installer or
+`--json` with the Kali installer. Both include a stable error code, message,
+and remediation field.
+
 - Open a new terminal after a Windows installer changes user PATH.
 - Windows: run `Get-Command adaf-attack -All` and `py -0p`.
 - Linux/macOS: run `command -v adaf-attack` and `command -v python`.

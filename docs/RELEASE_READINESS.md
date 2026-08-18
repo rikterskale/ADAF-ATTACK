@@ -35,6 +35,9 @@ also proven by the full source matrix.
       compare package metadata to `adaf_attack.__version__`, and exercise
       `--version`, `doctor --explain`, `list-capabilities`, and `paths`.
       **[CI: artifact-smoke]**
+- [ ] From the same wheel-only environment, run `doctor --profile
+      user-readiness`, `demo`, and the evidence package workflow. **[CI:
+      artifact-smoke; release-readiness]**
 - [ ] PowerShell installer consumes the downloaded wheel, validates Python
       3.11-3.13, and proves its user PATH shim/environment ownership plus upgrade,
       uninstall-preserves-data, and explicit data deletion. **[CI:
@@ -48,6 +51,9 @@ also proven by the full source matrix.
 - [ ] Record the first successful published-artifact workflow for the candidate.
       **[MANUAL]** No current source branch can prove an asset has already been
       published.
+- [ ] Attach the readiness summary, exact production-extra lock, artifact
+      hashes, and explicit live-AD/manual-lab status to the release record.
+      **[MANUAL: release manager]**
 - [ ] Reproduce the air-gapped wheelhouse path with candidate artifacts and the
       organization's transfer controls. **[MANUAL]**
 

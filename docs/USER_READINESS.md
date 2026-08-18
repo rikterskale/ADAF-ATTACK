@@ -38,13 +38,18 @@ If every command exits with status 0 and the JSON payload has `"ok": true`,
 the base installation is usable. Optional warnings are expected when TUI,
 Kerberos, reporting, Certipy, or Impacket command-line tools were not selected.
 
-For a deterministic report demonstration, run:
+For a deterministic offline demo from a release wheel, run:
 
 ```bash
-python scripts/render_demo_engagement.py
-adaf-attack engagement report --session output/demo-engagement --engagement-id DEMO-2026-001
-adaf-attack engagement package --session output/demo-engagement --output demo-engagement.zip --profile client
+adaf-attack doctor --profile user-readiness
+adaf-attack demo --workspace ./demo-session
+adaf-attack engagement report --session ./demo-session/demo-session --engagement-id DEMO-2026-001
+adaf-attack engagement package --session ./demo-session/demo-session --output demo-engagement.zip --profile client
 ```
+
+The release wheel includes the demo fixtures. The source-only
+`scripts/render_demo_engagement.py` helper remains available for checkout
+development.
 
 For live AD, stop here and read [the disposable lab procedure](LIVE_AD_LAB_VALIDATION.md)
 or your organization's approved engagement runbook before supplying credentials.
@@ -98,7 +103,12 @@ python scripts/install-approved-wheel.py \
 Use `--index-url` only with an organization-approved package index, or
 `--find-links ./wheelhouse` for an offline install.
 
-## Support boundary
+## Release access and support boundary
+
+Before installation, obtain the approved wheel, matching `SHA256SUMS`, and
+`release-manifest.json` from the private GitHub release channel or an approved
+internal package index. If you cannot access those assets, request access from
+the repository owner; there is no public PyPI fallback.
 
 CI proves installation, offline workflows, packaging, and safe command
 contracts. It does not prove the behavior of a customer's AD forest, proxy,

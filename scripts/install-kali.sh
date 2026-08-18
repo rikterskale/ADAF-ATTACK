@@ -11,8 +11,23 @@ python_command="python3"
 venv_path="$repo_root/.venv"
 uninstall=0
 remove_workspace=0
+json_output=0
 workspace="${XDG_DATA_HOME:-$HOME/.local/share}/adaf-attack/workspaces"
 ownership_marker="$venv_path/.adaf-attack-installer"
+
+fail() {
+  local code="$1" message="$2" remediation="$3"
+  if ((json_output)); then
+    python3 - "$code" "$message" "$remediation" <<'PY'
+import json
+import sys
+print(json.dumps({"ok": False, "error": {"code": sys.argv[1], "message": sys.argv[2], "remediation": sys.argv[3]}}))
+PY
+  else
+    printf 'Error [%s]: %s\nNext step: %s\n' "$code" "$message" "$remediation" >&2
+  fi
+  exit 1
+}
 
 usage() {
   cat <<'EOF'
@@ -27,6 +42,7 @@ Options:
   --skip-completion       Do not modify shell completion files
   --uninstall             Remove the installer venv; preserve workspaces
   --remove-workspace      With --uninstall, also delete workspace data
+  --json                  Emit structured JSON errors
 EOF
 }
 
@@ -44,33 +60,30 @@ while (($#)); do
     --skip-completion) install_completion=0; shift ;;
     --uninstall) uninstall=1; shift ;;
     --remove-workspace) remove_workspace=1; shift ;;
+    --json) json_output=1; shift ;;
     --help|-h) usage; exit 0 ;;
-    *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
+    *) fail "INSTALLER_ARGUMENT" "Unknown option: $1" "Run bash scripts/install-kali.sh --help." ;;
   esac
 done
 
 case "$extras" in base|dev|tui|kerberos|reports|full) ;; *)
-  echo "Unsupported extras: $extras" >&2
-  exit 2
+  fail "UNSUPPORTED_EXTRAS" "Unsupported extras: $extras" "Choose base, dev, tui, kerberos, reports, or full."
 esac
 
 # shellcheck disable=SC1091
 if [[ "$(. /etc/os-release 2>/dev/null && printf '%s' "${ID:-}")" != "kali" ]]; then
-  echo "This installer is intended for Kali Linux; use the generic Linux guide instead." >&2
-  exit 1
+  fail "KALI_REQUIRED" "This installer is intended for Kali Linux." "Use the generic Linux guide on another distribution."
 fi
 
 if ((uninstall)); then
   if [[ ! -f "$ownership_marker" ]] ||
     [[ "$(<"$ownership_marker")" != "ADAF_ATTACK_INSTALLER_V1" ]]; then
-    echo "Refusing to remove unowned virtual environment: $venv_path" >&2
-    exit 1
+    fail "UNOWNED_VENV" "Refusing to remove unowned virtual environment: $venv_path" "Use the matching installer ownership marker or choose another --venv."
   fi
   canonical_venv="$(cd "$venv_path" && pwd -P)"
   case "$canonical_venv" in
     /|"$HOME"|"$repo_root")
-      echo "Refusing unsafe virtual environment removal: $canonical_venv" >&2
-      exit 1
+      fail "UNSAFE_VENV" "Refusing unsafe virtual environment removal: $canonical_venv" "Choose a dedicated project virtual environment."
       ;;
   esac
   rm -rf -- "$canonical_venv"
@@ -85,16 +98,14 @@ if ((uninstall)); then
 fi
 
 if ((remove_workspace)); then
-  echo "--remove-workspace is valid only with --uninstall." >&2
-  exit 2
+  fail "INVALID_UNINSTALL_OPTION" "--remove-workspace is valid only with --uninstall." "Rerun with --uninstall or remove the option."
 fi
 
 if ((install_system_deps)); then
   apt=(apt-get)
   if ((EUID != 0)); then
     command -v sudo >/dev/null || {
-      echo "sudo is required for system packages; use --skip-system-deps if already provisioned." >&2
-      exit 1
+      fail "SUDO_REQUIRED" "sudo is required for system packages." "Use --skip-system-deps if dependencies are already provisioned."
     }
     apt=(sudo apt-get)
   fi
@@ -103,10 +114,7 @@ if ((install_system_deps)); then
     python3 python3-venv python3-pip python3-dev build-essential libkrb5-dev libssl-dev
 fi
 
-command -v "$python_command" >/dev/null || {
-  echo "Python command not found: $python_command" >&2
-  exit 1
-}
+command -v "$python_command" >/dev/null || fail "PYTHON_NOT_FOUND" "Python command not found: $python_command" "Install Python 3.11-3.13 or pass --python."
 "$python_command" -c \
   'import sys; assert (3, 11) <= sys.version_info < (3, 14), f"Python 3.11-3.13 required, found {sys.version.split()[0]}"'
 

@@ -18,6 +18,7 @@ from adaf_attack.capabilities import (  # noqa: F401
     cert_request,
     coerce,
     coercion_map,
+    computer_takeover,
     credential_inventory,
     dcsync,
     esc_chain,

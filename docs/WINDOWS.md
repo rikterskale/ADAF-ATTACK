@@ -32,6 +32,9 @@ interpreter with `-Python C:\Path\python.exe`, or use the launcher with
 `-Python py -PythonVersion 3.13`. It rejects Python older than 3.11 before
 creating the environment.
 
+Pass `-Json` when invoking the installer from automation. Failures are emitted
+as a stable `INSTALLER_FAILURE` object with a remediation field.
+
 ## Upgrade and uninstall
 
 Rerun the installer with the exact approved wheel to upgrade or downgrade.

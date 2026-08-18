@@ -68,6 +68,7 @@ def smoke(artifact: Path, venv_root: Path, extras: str | None) -> None:
     _run([str(cli), "--version"])
     for arguments in (
         ["--format", "json", "doctor", "--explain"],
+        ["--format", "json", "doctor", "--profile", "user-readiness"],
         ["--format", "json", "list-capabilities"],
         ["--format", "json", "paths"],
     ):
@@ -75,6 +76,38 @@ def smoke(artifact: Path, venv_root: Path, extras: str | None) -> None:
         payload = json.loads(result.stdout)
         if payload.get("ok") is not True:
             raise RuntimeError(f"{arguments[-1]} returned ok != true: {payload}")
+
+    demo_root = venv_root.parent / f"{venv_root.name}-demo"
+    demo = _run([str(cli), "--format", "json", "demo", "--workspace", str(demo_root)], capture=True)
+    demo_payload = json.loads(demo.stdout)
+    if demo_payload.get("ok") is not True:
+        raise RuntimeError(f"packaged demo failed: {demo_payload}")
+    session = demo_payload["session_path"]
+    if extras in {"full", "operator", "reports"}:
+        _run(
+            [
+                str(cli),
+                "engagement",
+                "report",
+                "--session",
+                session,
+                "--engagement-id",
+                "SMOKE-2026-001",
+            ]
+        )
+        _run(
+            [
+                str(cli),
+                "engagement",
+                "package",
+                "--session",
+                session,
+                "--output",
+                str(demo_root / "demo-package.zip"),
+                "--profile",
+                "client",
+            ]
+        )
 
 
 def main() -> int:

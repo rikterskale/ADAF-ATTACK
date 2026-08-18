@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import json
-import shutil
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -267,37 +264,25 @@ def register_ux_commands(
         """Offline first-success path using packaged demo fixtures (no network)."""
         from adaf_attack.core.ux import session_findings_dashboard
 
-        source = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "demo-session"
-        if not source.is_dir():
-            error = ActionableError(
-                "DEMO_FIXTURES_MISSING",
-                "Demo session fixtures are not available in this install.",
-                "Run from a source checkout or reinstall the package with test fixtures.",
-                suggested_command="adaf-attack doctor",
-            )
-            _emit_error(ctx, error)
-            raise typer.Exit(code=error.exit_code)
-
         dest_root = workspace or (default_workspace_dir() / "demo")
         dest = dest_root / "demo-session"
         if dest.exists():
+            import shutil
+
             shutil.rmtree(dest)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(source, dest)
-        session_meta = dest / "session.json"
-        if not session_meta.is_file():
-            session_meta.write_text(
-                json.dumps(
-                    {
-                        "session_id": "demo-session",
-                        "created_at": datetime.now(UTC).isoformat(),
-                        "demo": True,
-                    },
-                    indent=2,
-                )
-                + "\n",
-                encoding="utf-8",
+        from adaf_attack.demo import materialize_demo_session
+
+        try:
+            materialize_demo_session(dest)
+        except (OSError, FileNotFoundError) as exc:
+            error = ActionableError(
+                "DEMO_FIXTURES_MISSING",
+                f"Could not create the packaged demo session: {exc}",
+                "Choose a writable workspace and rerun `adaf-attack demo`.",
+                suggested_command="adaf-attack paths",
             )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
         dashboard = session_findings_dashboard(dest)
         payload = {
             "ok": True,

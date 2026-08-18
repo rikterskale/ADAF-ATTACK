@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools==84.0.0", "wheel==0.48.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ version = "0.10.0"
 description = "Aggressive Active Directory offensive toolkit for senior internal red teamers"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
-license = { text = "Proprietary" }
+license = "LicenseRef-Proprietary"
 authors = [{ name = "Rikter Skale" }]
 keywords = [
     "active-directory",
@@ -58,11 +58,11 @@ ci = [
     "twine>=5.0.0",
 ]
 tui = [
-    "textual>=0.80.0",
+    "textual==8.2.8",
 ]
-certipy = ["certipy-ad>=4.8.0"]
+certipy = ["certipy-ad==4.8.0"]
 kerberos = [
-    "impacket>=0.12.0",
+    "impacket==0.13.1",
 ]
 operator = [
     "adaf-attack[tui,kerberos,reports]",
@@ -70,10 +70,10 @@ operator = [
 full = [
     "adaf-attack[operator]",
 ]
-reports = ["reportlab>=4.0", "pypdf>=5.0"]
+reports = ["reportlab==5.0.0", "pypdf==6.16.1"]
 
 [tool.setuptools.package-data]
-adaf_attack = ["mappings/*.yaml"]
+adaf_attack = ["mappings/*.yaml", "demo_data/*.json"]
 
 [project.scripts]
 adaf-attack = "adaf_attack.cli:app"

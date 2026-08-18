@@ -21,6 +21,7 @@
 - [Troubleshooting](docs/TROUBLESHOOTING.md) ·
   [Known limitations](docs/KNOWN_LIMITATIONS.md) · [Changelog](CHANGELOG.md)
 - [New-user readiness guide](docs/USER_READINESS.md) ·
+  [Feature and support matrix](docs/FEATURE_MATRIX.md) ·
   [Disposable AD lab validation](docs/LIVE_AD_LAB_VALIDATION.md) ·
   [Live capability matrix](docs/LIVE_CAPABILITY_MATRIX.md) ·
   [Supported platforms and architectures](docs/SUPPORTED_PLATFORMS.md)
@@ -202,6 +203,13 @@ adaf-attack --format json doctor --profile live-ad \
 The default `offline` profile never performs network probes. The `live-ad`
 profile performs only explicit DNS and TCP preflight checks; it does not
 authenticate or execute a capability.
+
+For the complete wheel-only acceptance path, run:
+
+```bash
+adaf-attack doctor --profile user-readiness
+adaf-attack demo --workspace ./demo-session
+```
 
 For support, export a redacted diagnostic bundle and review it before sharing:
 
@@ -424,11 +432,22 @@ The bundle contains print-ready HTML and, when installed with
 NIS2 Article 21 themes in `src/adaf_attack/mappings/`. These mappings support
 assessment and remediation; they do not constitute a compliance certification.
 
-For a deterministic, no-network demonstration of the reporting pipeline:
+For a deterministic, no-network demonstration of the reporting pipeline from a
+source checkout:
 
 ```bash
 python scripts/render_demo_engagement.py
 ```
+
+Release-wheel users should use `adaf-attack demo`; its fixtures are included in
+the wheel. For offline development and reporting, build the optional image:
+
+```bash
+docker build -t adaf-attack:local .
+docker run --rm adaf-attack:local doctor --profile user-readiness
+```
+
+The image is not a live-AD deployment surface.
 
 ## Session vault and workflow helpers
 

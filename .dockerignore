@@ -1,0 +1,13 @@
+.git
+.venv
+.pytest_cache
+.pytest-local
+.pytest-runtime
+.mypy_cache
+.ruff_cache
+coverage.xml
+.coverage
+dist
+output
+*.pyc
+__pycache__

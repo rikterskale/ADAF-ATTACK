@@ -227,11 +227,13 @@ def _check_docs() -> None:
         "docs/KNOWN_LIMITATIONS.md",
         "docs/RELEASE_READINESS.md",
         "docs/USER_READINESS.md",
+        "docs/FEATURE_MATRIX.md",
         "docs/LIVE_AD_LAB_VALIDATION.md",
         "docs/LIVE_LAB_RELEASE_EVIDENCE.template.json",
         "docs/LIVE_CAPABILITY_MATRIX.json",
         "docs/LIVE_LAB_MANIFEST.template.json",
         "docs/SUPPORTED_PLATFORMS.md",
+        "requirements-operator.txt",
         "requirements-runtime.txt",
         "scripts/validate_live_lab_run.py",
         "scripts/validate_live_capability_matrix.py",
@@ -345,6 +347,21 @@ def _check_metadata_and_versions() -> None:
         project_requirements == runtime_requirements,
         "pyproject runtime dependencies must exactly match requirements-runtime.txt",
     )
+    operator_lock = {}
+    for line in (ROOT / "requirements-operator.txt").read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#") and "==" in line:
+            name, pinned = line.split("==", 1)
+            operator_lock[name.lower().replace("_", "-")] = pinned
+    expected_operator = {}
+    for extra_name in ("tui", "kerberos", "reports", "certipy"):
+        for requirement in optional[extra_name]:
+            if "==" in requirement:
+                name, pinned = requirement.split("==", 1)
+                expected_operator[name.lower().replace("_", "-")] = pinned
+    _require(
+        operator_lock == expected_operator,
+        "requirements-operator.txt must exactly match pinned production extras",
+    )
     init_text = (ROOT / "src" / "adaf_attack" / "__init__.py").read_text(encoding="utf-8")
     init_match = re.search(r'__version__\s*=\s*"([^"]+)"', init_text)
     _require(
@@ -359,6 +376,14 @@ def _check_metadata_and_versions() -> None:
     ):
         text = (ROOT / relative).read_text(encoding="utf-8")
         _require(version in text, f"{relative}: current version {version} is not documented")
+
+    stale_versions = []
+    version_pattern = re.compile(r"adaf_attack-(\d+\.\d+\.\d+)")
+    for doc in _markdown_files():
+        for found in version_pattern.findall(doc.read_text(encoding="utf-8")):
+            if found != version:
+                stale_versions.append(f"{doc.relative_to(ROOT)}: {found}")
+    _require(not stale_versions, "stale hardcoded release versions in docs: " + ", ".join(stale_versions))
 
     manifest_script = (ROOT / "scripts" / "generate_release_manifest.py").read_text(encoding="utf-8")
     _require(

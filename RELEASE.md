@@ -36,3 +36,22 @@ use `adaf-attack[full]`.
 See [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md). In particular, hosted
 CI does not prove live AD behavior, organization-specific endpoint policy, or a
 published artifact before a release asset exists.
+
+## Release sign-off evidence
+
+Every release candidate must attach this summary to the private release record:
+
+```text
+Installation: PASS / FAIL
+Clean artifact smoke: PASS / FAIL
+Packaged offline demo: PASS / FAIL
+Reports and evidence package: PASS / FAIL
+Windows installer: PASS / FAIL
+Kali installer: PASS / FAIL
+Published artifact smoke: PASS / FAIL / NOT YET PUBLISHED
+Live AD validation: MANUAL SIGN-OFF / NOT CLAIMED
+```
+
+Also record the candidate hashes, `release-manifest.json`,
+`requirements-operator.txt`, supported OS/Python matrix, and sanitized lab
+evidence when live functionality is claimed.

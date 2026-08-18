@@ -694,17 +694,15 @@ def test_start_reports_missing_tui_dependency(monkeypatch: pytest.MonkeyPatch) -
 
 
 # ---------------------------------------------------------------------------
-# cli.demo: missing fixtures error and replacement of an existing session
+# cli.demo: packaged fixture errors and replacement of an existing session
 # ---------------------------------------------------------------------------
 def test_demo_reports_missing_fixtures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    real_is_dir = Path.is_dir
+    import adaf_attack.demo as demo
 
-    def fake_is_dir(self: Path) -> bool:
-        if self.name == "demo-session":
-            return False
-        return real_is_dir(self)
+    def fail_materialize(destination: Path) -> Path:
+        raise FileNotFoundError("packaged demo fixture missing")
 
-    monkeypatch.setattr(Path, "is_dir", fake_is_dir)
+    monkeypatch.setattr(demo, "materialize_demo_session", fail_materialize)
     result = runner.invoke(cli.app, ["--format", "json", "demo", "--workspace", str(tmp_path)])
     assert result.exit_code != 0
     assert "DEMO_FIXTURES_MISSING" in result.output

@@ -6,16 +6,16 @@ import shutil
 from pathlib import Path
 
 from adaf_attack.core.reporting import generate_report_bundle
+from adaf_attack.demo import materialize_demo_session
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "tests" / "fixtures" / "demo-session"
 OUTPUT = ROOT / "output" / "demo-engagement"
 
 
 def main() -> None:
     if OUTPUT.exists():
         shutil.rmtree(OUTPUT)
-    shutil.copytree(SOURCE, OUTPUT)
+    materialize_demo_session(OUTPUT)
     result = generate_report_bundle(OUTPUT, engagement_id="DEMO-2026-001")
     print(result)
 

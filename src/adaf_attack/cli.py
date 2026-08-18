@@ -257,6 +257,7 @@ def _resolve_binary(candidates: tuple[str, ...]) -> str | None:
 
 _DOCTOR_PROFILES = {
     "offline": "Base installation and safe local workflows; no network probes.",
+    "user-readiness": "Fresh-user installation, packaged demo, and safe local workflows; no network probes.",
     "operator": "Full operator extras, reporting, and Kerberos tooling; no network probes.",
     "certipy": "AD CS tooling boundary; no network probes.",
     "live-ad": "Target preflight for DNS and common AD ports; requires explicit target arguments.",
@@ -287,6 +288,19 @@ def _package_version(name: str) -> str | None:
         return importlib_metadata.version(name)
     except importlib_metadata.PackageNotFoundError:
         return None
+
+
+def _installation_kind() -> str:
+    try:
+        distribution = importlib_metadata.distribution("adaf-attack")
+        direct_url = distribution.read_text("direct_url.json")
+    except (importlib_metadata.PackageNotFoundError, OSError):
+        return "unknown"
+    if direct_url and '"editable": true' in direct_url:
+        return "editable"
+    if direct_url and '"dir_info"' in direct_url:
+        return "source"
+    return "wheel-or-sdist"
 
 
 def _socket_check(host: str, port: int, timeout: float) -> tuple[str, str | None]:
@@ -337,6 +351,7 @@ def _doctor_payload(
             else "Create and activate an isolated venv before installing: python -m venv .venv.",
         ),
         _doctor_check("pip", "ok" if _package_version("pip") else "warning", _package_version("pip") or "not found"),
+        _doctor_check("installation", "ok", _installation_kind()),
         _path_check("data_dir", user_data_dir()),
         _path_check("config_dir", user_config_dir()),
         _path_check("workspace", default_workspace_dir()),
@@ -363,6 +378,30 @@ def _doctor_payload(
                     severity="advisory" if optional else "blocking",
                 )
             )
+
+    if profile == "user-readiness":
+        try:
+            from importlib.resources import files
+
+            demo_files = files("adaf_attack.demo_data")
+            missing = [
+                name
+                for name in ("acl-enum.json", "adcs-enum.json")
+                if not demo_files.joinpath(name).is_file()
+            ]
+        except (ImportError, ModuleNotFoundError, OSError) as exc:
+            missing = [str(exc)]
+        checks.append(
+            _doctor_check(
+                "packaged-demo",
+                "ok" if not missing else "error",
+                "available" if not missing else ", ".join(missing),
+                None
+                if not missing
+                else "Reinstall the release artifact; packaged demo fixtures are missing.",
+                scope="user-readiness",
+            )
+        )
 
     required_packages: set[str] = set()
     if profile == "operator":
@@ -474,7 +513,11 @@ def _doctor_payload(
 def doctor(
     ctx: typer.Context,
     explain: bool = typer.Option(False, "--explain", help="Include remediation for every check."),
-    profile: str = typer.Option("offline", "--profile", help="Check profile: offline, operator, certipy, or live-ad."),
+    profile: str = typer.Option(
+        "offline",
+        "--profile",
+        help="Check profile: offline, user-readiness, operator, certipy, or live-ad.",
+    ),
     domain: str | None = typer.Option(None, "--domain", help="Authorized domain for the live-ad profile."),
     dc_ip: str | None = typer.Option(None, "--dc-ip", help="Authorized domain-controller address for live-ad."),
     timeout: float = typer.Option(3.0, "--timeout", help="Per-network-probe timeout in seconds."),

@@ -27,6 +27,9 @@ Select a smaller dependency set with `--extras base`, `--extras tui`, or
 `--extras kerberos`. Omitting `--package` installs the authorized source
 checkout.
 
+For automation, pass `--json` to receive structured installer failures with a
+stable error code, message, and remediation field.
+
 ## Verify
 
 ```bash

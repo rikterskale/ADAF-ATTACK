@@ -1,0 +1,10 @@
+# Release-tested production extras for the 0.10.x operator bundle.
+# Keep this file synchronized with pyproject.toml and the release wheelhouse.
+textual==8.2.8
+impacket==0.13.1
+reportlab==5.0.0
+pypdf==6.16.1
+
+# Certipy remains a separate dependency boundary because of cryptography
+# compatibility constraints. Install it in a dedicated environment when needed.
+certipy-ad==4.8.0

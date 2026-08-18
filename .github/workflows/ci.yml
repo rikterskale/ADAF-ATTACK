@@ -426,15 +426,23 @@ jobs:
           - os: ubuntu-24.04
             python-version: "3.11"
             artifact: wheel
+            extras: base
           - os: ubuntu-24.04
             python-version: "3.13"
             artifact: sdist
+            extras: base
           - os: windows-2022
             python-version: "3.12"
             artifact: wheel
+            extras: base
           - os: macos-14
             python-version: "3.13"
             artifact: wheel
+            extras: base
+          - os: ubuntu-24.04
+            python-version: "3.12"
+            artifact: wheel
+            extras: full
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -472,7 +480,8 @@ jobs:
           fi
           python scripts/smoke_distribution.py \
             --artifact "${artifacts[0]}" \
-            --venv "$RUNNER_TEMP/adaf-artifact-smoke"
+            --venv "$RUNNER_TEMP/adaf-artifact-smoke" \
+            --extras "${{ matrix.extras }}"
 
   kali-installer:
     name: Kali artifact installer lifecycle
@@ -651,8 +660,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python scripts/render_demo_engagement.py
-          session="output/demo-engagement"
+          adaf-attack --format json demo --workspace "$RUNNER_TEMP/demo-root" > "$RUNNER_TEMP/demo.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads((Path(os.environ["RUNNER_TEMP"]) / "demo.json").read_text())
+          assert payload["ok"] is True and payload["mode"] == "offline-demo"
+          Path(os.environ["RUNNER_TEMP"]).joinpath("demo-session.txt").write_text(
+              payload["session_path"], encoding="utf-8"
+          )
+          PY
+          session="$(cat "$RUNNER_TEMP/demo-session.txt")"
           adaf-attack --format json engagement report --session "$session" --engagement-id DEMO-2026-001 > "$RUNNER_TEMP/report.json"
           adaf-attack --format json engagement package --session "$session" --output "$RUNNER_TEMP/demo-engagement.zip" --profile client > "$RUNNER_TEMP/package.json"
           adaf-attack --format json coercion-fixtures --fixtures tests/fixtures/demo-session --authorized-fixtures > "$RUNNER_TEMP/fixtures.json"
@@ -670,9 +690,8 @@ jobs:
           assert report["ok"] is True and report["finding_count"] >= 1
           assert package["ok"] is True and package["profile"] == "client"
           assert fixtures["ok"] is True
-          findings = json.loads(
-              (Path("output/demo-engagement") / "findings.json").read_text(encoding="utf-8")
-          )
+          session = Path(os.environ["RUNNER_TEMP"]).joinpath("demo-session.txt").read_text(encoding="utf-8")
+          findings = json.loads((Path(session) / "findings.json").read_text(encoding="utf-8"))
           assert isinstance(findings, list) and findings
           required_finding_keys = {
               "id", "title", "severity", "confidence", "impact", "remediation", "evidence"
@@ -694,40 +713,40 @@ jobs:
               path = evidence_manifest.parent / entry["path"]
               assert path.is_file()
               assert hashlib.sha256(path.read_bytes()).hexdigest() == entry["sha256"]
-          manifest = json.loads(
-              (Path("output/demo-engagement/reports") / "report-manifest.json").read_text()
-          )
+          reports = Path(session) / "reports"
+          manifest = json.loads((reports / "report-manifest.json").read_text())
           assert manifest["finding_count"] == report["finding_count"]
           for finding in findings:
               title = finding["title"]
-              assert title in (Path("output/demo-engagement/reports") / "technical-report.html").read_text()
+              assert title in (reports / "technical-report.html").read_text()
           from pypdf import PdfReader
           technical_pdf = "\n".join(
               page.extract_text() or ""
-              for page in PdfReader("output/demo-engagement/reports/technical-report.pdf").pages
+              for page in PdfReader(reports / "technical-report.pdf").pages
           )
           assert all(finding["title"] in technical_pdf for finding in findings)
           for report_name in ("executive", "technical", "remediation"):
-            assert (Path("output/demo-engagement/reports") / f"{report_name}-report.html").is_file()
-            assert (Path("output/demo-engagement/reports") / f"{report_name}-report.pdf").is_file()
+            assert (reports / f"{report_name}-report.html").is_file()
+            assert (reports / f"{report_name}-report.pdf").is_file()
           PY
 
       - name: Validate sanitized evidence contract
         shell: bash
         run: |
-          python scripts/validate_live_lab_run.py --evidence-dir output/demo-engagement
+          python scripts/validate_live_lab_run.py --evidence-dir "$(cat "$RUNNER_TEMP/demo-session.txt")"
 
       - name: Sweep offline operator review workflow
         shell: bash
         run: |
           set -euo pipefail
-          session="output/demo-engagement"
+          session="$(cat "$RUNNER_TEMP/demo-session.txt")"
           python - <<'PY'
           import json
           import os
           from pathlib import Path
 
-          session = Path("output/demo-engagement")
+          session = Path(os.environ["RUNNER_TEMP"]).joinpath("demo-session.txt").read_text(encoding="utf-8")
+          session = Path(session)
           (session / "graph.json").write_text(
               json.dumps(
                   {
@@ -819,7 +838,7 @@ jobs:
         with:
           name: operator-workflow-evidence
           path: |
-            output/demo-engagement/reports/
+            ${{ runner.temp }}/demo-root/
             ${{ runner.temp }}/demo-engagement.zip
           if-no-files-found: error
           retention-days: 14
@@ -886,6 +905,22 @@ jobs:
           # Drive the installed console script, exactly as a new user would.
           ADAF_CLI="$(command -v adaf-attack)" \
             python scripts/check_release_readiness.py --repo-root "$PWD"
+
+      - name: Publish readiness summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## ADAF-ATTACK user readiness"
+            echo "- Installation: PASS"
+            echo "- Clean artifact smoke: ${{ needs.artifact-smoke.result }}"
+            echo "- Packaged offline demo: PASS (enforced above)"
+            echo "- Reports and evidence package: PASS (operator workflow)"
+            echo "- Windows installer: gated CI job"
+            echo "- Kali installer: gated CI job"
+            echo "- Published artifact smoke: separate release-channel workflow"
+            echo "- Live AD validation: manual disposable-lab sign-off required"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   windows-installer:
     name: Windows installer (${{ matrix.shell }} / Python ${{ matrix.python-version }})

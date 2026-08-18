@@ -21,6 +21,9 @@
 
 .EXAMPLE
   .\scripts\Install-AdafAttack.ps1 -Uninstall
+
+.EXAMPLE
+  .\scripts\Install-AdafAttack.ps1 -Json -Package .\dist\adaf_attack-0.10.0-py3-none-any.whl
 #>
 [CmdletBinding()]
 param(
@@ -52,9 +55,31 @@ param(
 
     [Parameter(Mandatory = $false)]
     [switch]$RemoveWorkspace
+
+    [Parameter(Mandatory = $false)]
+    [switch]$Json
 )
 
 $ErrorActionPreference = "Stop"
+$global:AdafJsonInstallerErrors = $Json
+trap {
+    $message = $_.Exception.Message
+    $remediation = "Check Python 3.11-3.13, artifact access, permissions, and rerun with -Json for machine-readable diagnostics."
+    if ($global:AdafJsonInstallerErrors) {
+        [pscustomobject]@{
+            ok = $false
+            error = [pscustomobject]@{
+                code = "INSTALLER_FAILURE"
+                message = $message
+                remediation = $remediation
+            }
+        } | ConvertTo-Json -Depth 4 -Compress
+    } else {
+        Write-Error $message
+        Write-Error "Next step: $remediation"
+    }
+    exit 1
+}
 $minimumPython = [Version]"3.11"
 $maximumPython = [Version]"3.14"
 $installRoot = Join-Path $env:LOCALAPPDATA "adaf-attack"
