@@ -213,12 +213,14 @@ class WorkflowEngine:
     def _load_or_new(
         self, *, title: str, workflow_id: str | None, mode: WorkflowMode
     ) -> WorkflowState:
-        try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
-            if isinstance(payload, dict):
-                return self._decode_state(payload)
-        except (OSError, json.JSONDecodeError):
-            pass
+        if self.path.exists():
+            try:
+                payload = json.loads(self.path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError, UnicodeError) as exc:
+                raise WorkflowError(f"Invalid persisted workflow state: {exc}") from exc
+            if not isinstance(payload, dict):
+                raise WorkflowError("Invalid persisted workflow state: expected an object")
+            return self._decode_state(payload)
         return WorkflowState(workflow_id or _id("WF"), title, mode=mode)
 
     @staticmethod
@@ -233,12 +235,18 @@ class WorkflowEngine:
                 for key, value in (payload.get("pending_actions") or {}).items()
             }
             audit = [AuditEvent(**value) for value in (payload.get("audit_log") or [])]
+            mode = payload.get("mode", "interactive")
+            status = payload.get("status", "active")
+            if mode not in {"interactive", "automated", "agent"}:
+                raise WorkflowError(f"Unknown workflow mode: {mode}")
+            if status not in {"active", "blocked", "complete", "archived"}:
+                raise WorkflowError(f"Unknown workflow status: {status}")
             state = WorkflowState(
                 workflow_id=str(payload["workflow_id"]),
                 title=str(payload.get("title", "guided assessment")),
-                mode=payload.get("mode", "interactive"),
+                mode=mode,
                 phase=str(payload.get("phase", "scoping")),
-                status=payload.get("status", "active"),
+                status=status,
                 completed_steps=list(payload.get("completed_steps") or []),
                 findings=findings,
                 pending_actions=actions,
@@ -254,6 +262,14 @@ class WorkflowEngine:
             raise WorkflowError(f"Invalid workflow state: {exc}") from exc
         if state.phase not in PHASES:
             raise WorkflowError(f"Unknown workflow phase: {state.phase}")
+        for finding in state.findings.values():
+            if finding.status not in STATUS_ORDER:
+                raise WorkflowError(f"Unknown finding status: {finding.status}")
+        for action in state.pending_actions.values():
+            if action.phase not in PHASES:
+                raise WorkflowError(f"Unknown action phase: {action.phase}")
+            if action.kind not in {"required", "recommended", "decision"}:
+                raise WorkflowError(f"Unknown action kind: {action.kind}")
         return state
 
     def persist(self) -> Path:
@@ -278,6 +294,10 @@ class WorkflowEngine:
         )
         self.state.revision += 1
         self.state.updated_at = _now()
+
+    def _ensure_mutable(self) -> None:
+        if self.state.status in {"complete", "archived"}:
+            raise WorkflowError("Workflow is already closed")
 
     def _recalculate(self, *, persist: bool = True) -> None:
         for finding in self.state.findings.values():
@@ -414,6 +434,7 @@ class WorkflowEngine:
         self.state.pending_actions = actions
 
     def start(self, *, actor: str = "operator") -> WorkflowState:
+        self._ensure_mutable()
         self._event("workflow.started", "Guided workflow started", actor=actor)
         self._recalculate()
         return self.state
@@ -421,6 +442,7 @@ class WorkflowEngine:
     def complete_step(
         self, step: str, *, actor: str = "operator", phase: str | None = None
     ) -> WorkflowState:
+        self._ensure_mutable()
         if not step.strip():
             raise WorkflowError("Step name cannot be empty")
         if step not in self.state.completed_steps:
@@ -446,6 +468,7 @@ class WorkflowEngine:
         actor: str = "system",
         override: bool = False,
     ) -> FindingRecord:
+        self._ensure_mutable()
         record = finding if isinstance(finding, FindingRecord) else FindingRecord(**finding)
         if not record.id.strip() or not record.title.strip():
             raise WorkflowError("Finding id and title are required")
@@ -478,6 +501,7 @@ class WorkflowEngine:
     def enrich_finding(
         self, finding_id: str, *, actor: str = "system", **updates: Any
     ) -> FindingRecord:
+        self._ensure_mutable()
         record = self._finding(finding_id)
         for key, value in updates.items():
             if not hasattr(record, key) or key in {"id", "created_at", "updated_at"}:
@@ -497,6 +521,7 @@ class WorkflowEngine:
     def correlate(
         self, finding_ids: Iterable[str], *, actor: str = "system", relation: str = "related"
     ) -> None:
+        self._ensure_mutable()
         ids = list(dict.fromkeys(finding_ids))
         for finding_id in ids:
             self._finding(finding_id)
@@ -524,6 +549,7 @@ class WorkflowEngine:
         actor: str = "operator",
         evidence: dict[str, Any] | None = None,
     ) -> FindingRecord:
+        self._ensure_mutable()
         record = self._finding(finding_id)
         if status not in STATUS_ORDER:
             raise WorkflowError(f"Unknown finding status: {status}")
@@ -531,12 +557,22 @@ class WorkflowEngine:
         target = STATUS_ORDER[status]
         if target < current or target > current + 1:
             raise WorkflowError(f"Invalid finding transition: {record.status} -> {status}")
+        if status != "open" and "scope-authorized" not in self.state.completed_steps:
+            raise WorkflowError("Finding validation requires authorized scope")
         if status == "closed" and not evidence and not record.evidence:
             raise WorkflowError("Closing a finding requires verification evidence")
         record.status = status
         if evidence:
             record.evidence.append(evidence)
         record.updated_at = _now()
+        phase_for_status = {
+            "validated": "validation",
+            "exploited": "prioritization",
+            "mitigated": "response",
+            "closed": "verification",
+        }
+        if status in phase_for_status:
+            self.state.phase = phase_for_status[status]
         self._event(
             "finding.status_changed",
             f"{record.id}: {status}",
@@ -550,6 +586,7 @@ class WorkflowEngine:
     def decide(
         self, action_id: str, decision: str, *, actor: str = "operator", rationale: str = ""
     ) -> WorkflowState:
+        self._ensure_mutable()
         action = self.state.pending_actions.get(action_id)
         if not action:
             raise WorkflowError(f"Unknown workflow action: {action_id}")
@@ -580,6 +617,7 @@ class WorkflowEngine:
         return self.state
 
     def complete_action(self, action_id: str, *, actor: str = "operator") -> WorkflowState:
+        self._ensure_mutable()
         action = self.state.pending_actions.get(action_id)
         if not action:
             raise WorkflowError(f"Unknown workflow action: {action_id}")
@@ -594,6 +632,10 @@ class WorkflowEngine:
             return self.state
         if action_id == "run-discovery":
             self.complete_step("discovery-complete", actor=actor, phase="validation")
+            return self.state
+        if action_id.startswith("validate:"):
+            finding_id = action_id.split(":", 1)[1]
+            self.transition_finding(finding_id, "validated", actor=actor)
             return self.state
         if action_id.startswith("mitigate:"):
             finding_id = action_id.split(":", 1)[1]
@@ -615,6 +657,30 @@ class WorkflowEngine:
                 actor=actor,
                 evidence={"action_id": action_id, "type": "operator-response"},
             )
+            return self.state
+        if action_id.startswith("verify:"):
+            finding_id = action_id.split(":", 1)[1]
+            record = self._finding(finding_id)
+            record.evidence.append({"action_id": action_id, "type": "verification"})
+            record.updated_at = _now()
+            self.state.phase = "verification"
+            self._event(
+                "finding.verification_recorded",
+                f"Verification recorded: {record.title}",
+                actor=actor,
+                finding_id=finding_id,
+                action_id=action_id,
+            )
+            self._recalculate()
+            return self.state
+        if action_id == "generate-report":
+            self._event(
+                "action.completed",
+                f"Action completed: {action.title}",
+                actor=actor,
+                action_id=action_id,
+            )
+            self.complete_step("report-generated", actor=actor, phase="reporting")
             return self.state
         self._event(
             "action.completed",
@@ -639,6 +705,35 @@ class WorkflowEngine:
             )
         )
         return actions[: max(0, limit)]
+
+    def query_actions(
+        self, *, phase: str | None = None, kind: str | None = None,
+        include_completed: bool = False,
+    ) -> list[WorkflowAction]:
+        """Return a deterministic, queryable action view for UI and agents."""
+        actions = list(self.state.pending_actions.values())
+        if phase:
+            actions = [item for item in actions if item.phase == phase]
+        if kind:
+            actions = [item for item in actions if item.kind == kind]
+        if not include_completed:
+            actions = [item for item in actions if not item.completed and not item.blocked]
+        return sorted(actions, key=lambda item: (PHASES.index(item.phase), item.id))
+
+    def audit_history(self, *, event_type: str | None = None) -> list[AuditEvent]:
+        """Return the append-only audit history, optionally filtered by type."""
+        if event_type is None:
+            return list(self.state.audit_log)
+        return [event for event in self.state.audit_log if event.event_type == event_type]
+
+    def snapshot(self) -> dict[str, Any]:
+        """Return a JSON-safe state plus current guidance for transport adapters."""
+        document = self.state.document()
+        document["guidance"] = self.guidance().document()
+        document["recommendations"] = [
+            asdict(action) for action in self.recommendations(limit=20)
+        ]
+        return document
 
     def guidance(self) -> WorkflowGuidance:
         """Return the complete next-step view used by guided clients."""
@@ -676,12 +771,17 @@ class WorkflowEngine:
         return sorted(records, key=lambda item: (-item.priority, item.id))
 
     def close(self, *, actor: str = "operator", archive: bool = False) -> WorkflowState:
+        self._ensure_mutable()
         # An empty, authorized assessment still gets a final-report audit step;
         # keep the no-finding path one-call closeable for automation clients.
         if not self.state.findings and "generate-report" in self.state.pending_actions:
             self.complete_action("generate-report", actor=actor)
         if self._required_actions():
             raise WorkflowError("Cannot close workflow while required actions remain")
+        if "scope-authorized" not in self.state.completed_steps:
+            raise WorkflowError("Cannot close workflow before scope authorization")
+        if "discovery-complete" not in self.state.completed_steps:
+            raise WorkflowError("Cannot close workflow before discovery completes")
         if self.state.findings and any(
             item.status != "closed" for item in self.state.findings.values()
         ):

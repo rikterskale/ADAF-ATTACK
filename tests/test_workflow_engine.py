@@ -249,3 +249,35 @@ def test_empty_assessment_records_report_before_closure(tmp_path: Path) -> None:
     assert engine.state.status == "complete"
     assert "final-report" in engine.state.completed_steps
     assert any(event.event_type == "action.completed" for event in engine.state.audit_log)
+
+
+def test_action_completion_advances_finding_and_exposes_transport_snapshot(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.start()
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    engine.ingest_finding({"id": "F-ACTION", "title": "Action-driven finding"})
+
+    engine.complete_action("validate:F-ACTION")
+    assert engine.state.findings["F-ACTION"].status == "validated"
+    assert engine.state.phase == "validation"
+    snapshot = engine.snapshot()
+    assert snapshot["guidance"]["next_action_id"] == "decision:F-ACTION"
+    assert snapshot["recommendations"]
+    assert engine.query_actions(kind="decision")[0].id == "decision:F-ACTION"
+
+
+def test_terminal_state_is_immutable_and_corrupt_disk_state_fails_closed(tmp_path: Path) -> None:
+    engine = WorkflowEngine(tmp_path)
+    engine.start()
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    engine.close()
+    with pytest.raises(WorkflowError, match="already closed"):
+        engine.inject_finding("late observation")
+
+    corrupt = tmp_path / "corrupt"
+    corrupt.mkdir()
+    (corrupt / "workflow-state.json").write_text("not-json", encoding="utf-8")
+    with pytest.raises(WorkflowError, match="Invalid persisted workflow state"):
+        WorkflowEngine(corrupt)

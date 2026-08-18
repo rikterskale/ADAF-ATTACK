@@ -142,10 +142,16 @@ engine.ingest_finding(finding_from_document(session_finding), actor="session")
 for action in engine.recommendations():
     print(action.id, action.kind, action.consequence)
 
-engine.transition_finding("ADAF-1", "validated")
+engine.complete_action("validate:ADAF-1")
 engine.decide("decision:ADAF-1", "mitigate", rationale="Owner approved")
 ```
 
 The persisted document is queryable JSON, making it suitable for CLI output,
 agent context, audit review, and later report packaging without exposing
-credentials or vault contents.
+credentials or vault contents. Transport adapters can use `snapshot()` for a
+single state/guidance/recommendations payload, `query_findings()` for filtered
+finding views, `query_actions()` for phase or action-kind views, and
+`audit_history()` for append-only audit inspection. Completing a finding-linked
+action advances the lifecycle and phase where the engine can do so safely;
+explicit status transitions remain available for evidence that must be supplied
+by a scanner, operator, or external remediation system.
