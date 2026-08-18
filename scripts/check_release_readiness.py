@@ -199,6 +199,23 @@ def _doctor_contract() -> None:
             )
 
 
+@troubleshooting.check("error catalog exposes actionable recovery")
+def _error_catalog_contract() -> None:
+    result = run_cli("--format", "json", "errors")
+    _require(result.code == 0, f"errors failed: {result.err or result.out}")
+    payload = result.json()
+    entries = payload.get("errors")
+    _require(isinstance(entries, list) and entries, "error catalog is empty")
+    for entry in entries:
+        _require(
+            {"code", "message", "remediation", "suggested_command"} <= entry.keys(),
+            f"error catalog entry is incomplete: {entry}",
+        )
+        _require(entry["code"].isupper(), f"error code is not uppercase: {entry['code']}")
+        _require(entry["message"].strip(), f"error has no message: {entry['code']}")
+        _require(entry["remediation"].strip(), f"error has no remediation: {entry['code']}")
+
+
 @troubleshooting.check("degraded optional tooling warns, it does not fail")
 def _doctor_optional_is_warning() -> None:
     # With only the base wheel installed, the external CLI tools (ntlmrelayx,
@@ -234,7 +251,7 @@ def _doctor_human_verbatim() -> None:
 features = Pillar("features", "Full-feature validation")
 
 
-@features.check("advertised capability surface is reachable via capability-help")
+@features.check("every advertised capability is reachable via capability-help")
 def _capabilities_reachable() -> None:
     caps = run_cli("--format", "json", "list-capabilities").json()
     _require(caps["count"] == len(caps["capabilities"]), "list-capabilities count mismatch")
@@ -243,17 +260,17 @@ def _capabilities_reachable() -> None:
         {"id", "category", "summary", "destructive"} <= caps["capabilities"][0].keys(),
         "capability metadata is missing contract keys",
     )
-    # Spot-check the live help contract on a representative pair (first listed and
-    # the first destructive one). Exhaustive per-id reachability is enforced by
-    # the bound contract test test_release_contracts::test_every_capability_is_reachable.
-    sample_ids = [caps["capabilities"][0]["id"]]
-    destructive = next((c["id"] for c in caps["capabilities"] if c["destructive"]), None)
-    if destructive:
-        sample_ids.append(destructive)
-    for cap_id in sample_ids:
+    failures: list[str] = []
+    for capability in caps["capabilities"]:
+        cap_id = capability["id"]
         helped = run_cli("--format", "json", "capability-help", cap_id)
-        _require(helped.code == 0, f"capability-help failed for {cap_id}: {helped.err}")
-        _require(helped.json().get("ok") is True, f"capability-help not ok for {cap_id}")
+        if helped.code != 0:
+            failures.append(f"{cap_id}: exit {helped.code}: {helped.err.strip()}")
+            continue
+        help_payload = helped.json()
+        if help_payload.get("ok") is not True or help_payload.get("capability", {}).get("id") != cap_id:
+            failures.append(f"{cap_id}: invalid capability-help payload")
+    _require(not failures, "capability-help failures:\n  - " + "\n  - ".join(failures))
 
 
 @features.check("documented offline commands actually execute")
@@ -398,7 +415,11 @@ _PILLAR_BINDINGS: dict[str, dict[str, Any]] = {
         "jobs": ["tests", "operator-workflow", "release-readiness"],
         "steps": ["Validate operator-facing CLI contract"],
         "tests": [
-            ("tests/test_cli_contract.py", ["test_doctor_json_has_stable_remediation_contract"])
+            ("tests/test_cli_contract.py", ["test_doctor_json_has_stable_remediation_contract"]),
+            (
+                "tests/test_actionable_error_contract.py",
+                ["test_catalog_entries_have_complete_recovery_contracts"],
+            ),
         ],
     },
     "Full-feature validation": {
