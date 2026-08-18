@@ -216,7 +216,7 @@ def main(
 
 
 _MIN_PYTHON = (3, 11)
-_MAX_PYTHON = (3, 14)
+_MAX_PYTHON = (3, 15)
 
 # Importable packages doctor probes. `optional` packages degrade a subset of
 # capabilities when missing (warning); required packages block everything.
@@ -340,7 +340,7 @@ def _doctor_payload(
             sys.version.split()[0],
             None
             if python_ok
-            else "Use Python 3.11, 3.12, or 3.13 (see the supported-platform guide).",
+            else "Use Python 3.11, 3.12, 3.13, or 3.14 (see the supported-platform guide).",
         ),
         _doctor_check("python-executable", "ok", str(Path(sys.executable).resolve())),
         _doctor_check(

@@ -21,7 +21,7 @@ runner = CliRunner()
 
 
 def test_python_supported_matches_running_interpreter() -> None:
-    assert cli._python_supported() is ((3, 11) <= sys.version_info < (3, 14))
+    assert cli._python_supported() is ((3, 11) <= sys.version_info < (3, 15))
 
 
 def test_resolve_binary_returns_first_match_then_none(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -84,7 +84,7 @@ def test_doctor_flags_unsupported_python(monkeypatch: pytest.MonkeyPatch) -> Non
     assert python_check["remediation"] and "Python" in python_check["remediation"]
 
 
-def test_python_fourteen_is_outside_release_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_python_fourteen_is_inside_release_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     class VersionInfo:
         major = 3
         minor = 14
@@ -96,7 +96,7 @@ def test_python_fourteen_is_outside_release_contract(monkeypatch: pytest.MonkeyP
             return (self.major, self.minor) < other
 
     monkeypatch.setattr(cli.sys, "version_info", VersionInfo())
-    assert cli._python_supported() is False
+    assert cli._python_supported() is True
 
 
 def test_doctor_reports_resolved_external_binaries(monkeypatch: pytest.MonkeyPatch) -> None:
