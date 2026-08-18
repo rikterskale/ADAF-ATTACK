@@ -18,5 +18,8 @@
 - Live-AD readiness requires a retained sanitized evidence record from the
   disposable-lab procedure; hosted CI validates only offline and packaging
   contracts.
+- Docker is not a live-AD release surface. It is suitable only for offline
+  development/reporting because live Kerberos, DNS, SMB, and target-network
+  behavior requires host integration.
 - Destructive capabilities require explicit safeguards, but release sign-off
   still needs a disposable authorized AD lab to prove target-side cleanup.

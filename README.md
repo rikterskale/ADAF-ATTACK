@@ -96,8 +96,10 @@ Analysis / reporting:
 ## Prerequisites
 
 For the shortest route, use the [new-user readiness guide](docs/USER_READINESS.md)
-to choose the correct platform path. There is no public PyPI, Docker, pipx, uv,
-or Poetry release install at this time.
+to choose the correct platform path. There is no public PyPI, pipx, uv, or
+Poetry release install at this time. Docker is intentionally limited to
+offline development/reporting; live AD/Kerberos workflows require host
+network, DNS, clock, and authentication integration.
 
 - Python 3.11, 3.12, or 3.13
 - A virtual environment (`python -m venv`) and pip
@@ -141,13 +143,14 @@ environment setup on every OS:
 ```bash
 python scripts/install-approved-wheel.py \
   --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
-  --venv .venv --extras full
+  --venv .venv --extras full \
+  --manifest ./wheelhouse/release-manifest.json
 ```
 
 If your organization provides an approved package index, add
 `--index-url <approved-index-url>`. For an air-gapped wheelhouse, use
 `--find-links ./wheelhouse`; the script refuses to reuse an existing virtual
-environment.
+environment and verifies every manifest-listed artifact before installation.
 
 The platform guides show the installer-assisted Windows and Kali paths.
 
@@ -211,8 +214,9 @@ On a connected machine with the same OS/Python family, place the approved wheel
 in an empty directory and download all dependencies:
 
 ```bash
-mkdir wheelhouse
-python -m pip download --dest wheelhouse "./adaf_attack-0.10.0-py3-none-any.whl[full]"
+python scripts/build-release-wheelhouse.py \
+  --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
+  --output ./wheelhouse --extras full
 ```
 
 Transfer the complete `wheelhouse` through your approved media process. On the
@@ -224,6 +228,16 @@ source .venv/bin/activate
 python -m pip install --no-index --find-links wheelhouse "adaf-attack[full]==0.10.0"
 python -m pip check
 adaf-attack doctor --explain
+```
+
+The generated `wheelhouse/release-manifest.json` records the exact artifact,
+dependency files, hashes, Python contract, and optional extras. Validate it
+before transfer with:
+
+```bash
+python scripts/generate_release_manifest.py \
+  --dist . --wheelhouse ./wheelhouse \
+  --output ./wheelhouse/release-manifest.json --validate
 ```
 
 Custom package indexes, proxies, and private certificate authorities must be

@@ -387,6 +387,18 @@ jobs:
             sha256sum -c SHA256SUMS
           )
 
+      - name: Generate and validate release manifest
+        run: |
+          python scripts/generate_release_manifest.py \
+            --repo-root . \
+            --dist dist \
+            --output dist/release-manifest.json
+          python scripts/generate_release_manifest.py \
+            --repo-root . \
+            --dist dist \
+            --output dist/release-manifest.json \
+            --validate
+
       - name: Validate package metadata
         run: python -m twine check dist/*.whl dist/*.tar.gz
 
@@ -432,6 +444,12 @@ jobs:
         with:
           name: python-distributions
           path: dist
+
+      - name: Validate release manifest
+        run: >-
+          python scripts/generate_release_manifest.py
+          --repo-root . --dist dist
+          --output dist/release-manifest.json --validate
 
       - name: Install and exercise the clean distribution
         shell: bash
@@ -529,6 +547,12 @@ jobs:
         with:
           name: python-distributions
           path: dist
+
+      - name: Validate release manifest
+        run: >-
+          python scripts/generate_release_manifest.py
+          --repo-root . --dist dist
+          --output dist/release-manifest.json --validate
 
       - name: Verify downloaded distribution checksums
         shell: bash
@@ -816,6 +840,12 @@ jobs:
         with:
           name: python-distributions
           path: dist
+
+      - name: Validate release manifest
+        run: >-
+          python scripts/generate_release_manifest.py
+          --repo-root . --dist dist
+          --output dist/release-manifest.json --validate
 
       - name: Verify downloaded distribution checksums
         shell: bash

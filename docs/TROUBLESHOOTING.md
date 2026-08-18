@@ -55,11 +55,27 @@ that trusts the organization's CA.
 ## Offline or air-gapped install
 
 Build a wheelhouse on a connected host matching the offline OS and Python
-family:
+family. The repository helper creates the wheelhouse and its manifest
+together:
 
 ```bash
-python -m pip download --dest wheelhouse "./adaf_attack-0.10.0-py3-none-any.whl[full]"
-python -m pip install --no-index --find-links wheelhouse "adaf-attack[full]==0.10.0"
+python scripts/build-release-wheelhouse.py \
+  --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
+  --output ./wheelhouse --extras full
+python scripts/generate_release_manifest.py \
+  --dist . --wheelhouse ./wheelhouse \
+  --output ./wheelhouse/release-manifest.json --validate
+```
+
+Install through the portable bootstrap to verify the approved artifact and
+every manifest-listed wheelhouse file before pip runs:
+
+```bash
+python scripts/install-approved-wheel.py \
+  --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
+  --venv .venv --extras full \
+  --find-links ./wheelhouse \
+  --manifest ./wheelhouse/release-manifest.json
 ```
 
 Transfer every file and, when supplied, verify `SHA256SUMS`. If pip reports a

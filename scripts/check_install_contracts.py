@@ -168,6 +168,10 @@ def _check_published_workflow() -> None:
         "scripts/smoke_distribution.py" in text,
         f"{path.name}: must run the same distribution smoke contract as CI",
     )
+    _require(
+        "release-manifest.json" in text,
+        f"{path.name}: must validate the published release manifest",
+    )
 
 
 def _markdown_files() -> list[Path]:
@@ -215,6 +219,8 @@ def _check_docs() -> None:
         "requirements-runtime.txt",
         "scripts/validate_live_lab_run.py",
         "scripts/install-approved-wheel.py",
+        "scripts/generate_release_manifest.py",
+        "scripts/build-release-wheelhouse.py",
         "scripts/Setup-DisposableAdLab.ps1",
     )
     for relative in required_files:
@@ -334,6 +340,17 @@ def _check_metadata_and_versions() -> None:
     ):
         text = (ROOT / relative).read_text(encoding="utf-8")
         _require(version in text, f"{relative}: current version {version} is not documented")
+
+    manifest_script = (ROOT / "scripts" / "generate_release_manifest.py").read_text(encoding="utf-8")
+    _require(
+        "requires_python" in manifest_script and '"wheelhouse"' in manifest_script,
+        "release manifest must record the Python and wheelhouse contracts",
+    )
+    bootstrap = (ROOT / "scripts" / "install-approved-wheel.py").read_text(encoding="utf-8")
+    _require(
+        '"--manifest"' in bootstrap,
+        "approved bootstrap must support release manifest verification",
+    )
 
     requirements = (ROOT / "requirements-ci.txt").read_text(encoding="utf-8")
     ruff_match = re.search(r"(?m)^ruff==([0-9.]+)", requirements)

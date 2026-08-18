@@ -28,8 +28,9 @@ also proven by the full source matrix.
 
 ## 1. Proven installation and lifecycle
 
-- [ ] Build wheel/sdist once, validate metadata, generate checksums, and upload
-      the exact artifacts consumed downstream. **[CI: package]**
+- [ ] Build wheel/sdist once, validate metadata, generate checksums and a
+      `release-manifest.json`, and upload the exact artifacts consumed
+      downstream. **[CI: package]**
 - [ ] In a clean venv install the selected downloaded artifact, run `pip check`,
       compare package metadata to `adaf_attack.__version__`, and exercise
       `--version`, `doctor --explain`, `list-capabilities`, and `paths`.
@@ -41,9 +42,9 @@ also proven by the full source matrix.
 - [ ] Kali performs a real built-wheel install plus both uninstall paths, while
       the non-Kali rejection guard remains exercised on Ubuntu. **[CI:
       kali-installer; scripts]**
-- [ ] Latest/specified published wheel installs from the private GitHub release
-      channel on three OS families. **[CI: published-artifact-smoke, once a
-      release asset exists]**
+- [ ] Latest/specified published wheel and release manifest install from the
+      private GitHub release channel on three OS families. **[CI:
+      published-artifact-smoke, once a release asset exists]**
 - [ ] Record the first successful published-artifact workflow for the candidate.
       **[MANUAL]** No current source branch can prove an asset has already been
       published.
@@ -102,7 +103,7 @@ also proven by the full source matrix.
 Version: __________  Release manager: __________  Date: __________
 
 [ ] All required CI jobs pass on the release commit.
-[ ] Candidate wheel/sdist and SHA256SUMS are attached to the private GitHub release.
+[ ] Candidate wheel/sdist, SHA256SUMS, and release-manifest.json are attached to the private GitHub release.
 [ ] Published-artifact smoke passes on Ubuntu, Windows, and macOS.
 [ ] Air-gapped install is recorded with candidate artifacts.
 [ ] First-ten-minutes onboarding is completed by a new operator.

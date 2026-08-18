@@ -16,9 +16,9 @@ authorized internal red-team work only.
 | No private release/checkout access | Ask the repository owner | There is no public PyPI install |
 
 Docker, pipx, uv, and Poetry are not release installation surfaces today. Do
-not invent a public package URL or use an unapproved mirror. A containerized
-development environment may be added later, but live AD/Kerberos behavior
-still needs host and network integration testing.
+not invent a public package URL or use an unapproved mirror. Docker may be used
+only for offline development/reporting; live AD/Kerberos behavior requires
+host-integrated DNS, clock, authentication, and network access.
 
 ## First ten minutes
 
@@ -73,16 +73,17 @@ The repository's `requirements-ci.txt` is the hashed CI lock. For a release,
 the reliable user-facing reproducibility boundary is the complete wheelhouse:
 
 ```bash
-python -m pip download --only-binary=:all: --dest wheelhouse \
-  "./adaf_attack-0.10.0-py3-none-any.whl[full]"
-python -m pip hash wheelhouse/* > wheelhouse/SHA256SUMS.txt
+python scripts/build-release-wheelhouse.py \
+  --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
+  --output ./wheelhouse --extras full
 ```
 
 Transfer the entire directory through the approved media process, then install
 with `--no-index --find-links wheelhouse`. Never mix a partial wheelhouse with
 the public internet and assume it is reproducible. Direct runtime constraints
 are recorded in [requirements-runtime.txt](../requirements-runtime.txt); the
-candidate wheelhouse remains the release artifact of record.
+candidate wheelhouse and its `release-manifest.json` remain the release
+artifacts of record.
 
 For an internal release bundle, use the portable bootstrap from the repository
 root:
@@ -90,7 +91,8 @@ root:
 ```bash
 python scripts/install-approved-wheel.py \
   --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
-  --venv .venv --extras full
+  --venv .venv --extras full \
+  --manifest ./wheelhouse/release-manifest.json
 ```
 
 Use `--index-url` only with an organization-approved package index, or
