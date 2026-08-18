@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import platform as host_platform
 import shutil
+import socket
 import sys
 import tempfile
 from datetime import UTC, datetime, timedelta
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
 
@@ -133,6 +136,8 @@ def _path_check(path_id: str, path: Path) -> dict[str, Any]:
     return {
         "id": path_id,
         "status": "ok" if writable else "error",
+        "severity": "advisory" if writable else "blocking",
+        "scope": "offline",
         "value": str(path) if error is None else f"{path} ({error})",
         "remediation": remediation,
     }
@@ -245,56 +250,201 @@ def _resolve_binary(candidates: tuple[str, ...]) -> str | None:
     return None
 
 
-@app.command("doctor")
-def doctor(
-    ctx: typer.Context,
-    explain: bool = typer.Option(False, "--explain", help="Include remediation for every check."),
-) -> None:
-    """Check local prerequisites (no network)."""
+_DOCTOR_PROFILES = {
+    "offline": "Base installation and safe local workflows; no network probes.",
+    "operator": "Full operator extras, reporting, and Kerberos tooling; no network probes.",
+    "certipy": "AD CS tooling boundary; no network probes.",
+    "live-ad": "Target preflight for DNS and common AD ports; requires explicit target arguments.",
+}
+
+
+def _doctor_check(
+    check_id: str,
+    status: str,
+    value: Any,
+    remediation: str | None = None,
+    *,
+    scope: str = "offline",
+    severity: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": check_id,
+        "status": status,
+        "severity": severity or ("blocking" if status == "error" else "advisory"),
+        "scope": scope,
+        "value": value,
+        "remediation": remediation,
+    }
+
+
+def _package_version(name: str) -> str | None:
+    try:
+        return importlib_metadata.version(name)
+    except importlib_metadata.PackageNotFoundError:
+        return None
+
+
+def _socket_check(host: str, port: int, timeout: float) -> tuple[str, str | None]:
+    try:
+        socket.create_connection((host, port), timeout=timeout).close()
+    except socket.gaierror as exc:
+        return "error", f"DNS resolution failed for {host}: {exc}"
+    except OSError as exc:
+        return "warning", f"{host}:{port} is not reachable: {type(exc).__name__}: {exc}"
+    return "ok", None
+
+
+def _doctor_payload(
+    profile: str,
+    *,
+    domain: str | None = None,
+    dc_ip: str | None = None,
+    timeout: float = 3.0,
+) -> dict[str, Any]:
+    if profile not in _DOCTOR_PROFILES:
+        raise typer.BadParameter(
+            f"unknown doctor profile {profile!r}; choose from {', '.join(_DOCTOR_PROFILES)}",
+            param_hint="--profile",
+        )
+    if timeout <= 0 or timeout > 60:
+        raise typer.BadParameter("must be between 0 and 60 seconds", param_hint="--timeout")
+
     python_ok = _python_supported()
     checks: list[dict[str, Any]] = [
-        {"id": "platform", "status": "ok", "value": platform_name(), "remediation": None},
-        {
-            "id": "python",
-            "status": "ok" if python_ok else "error",
-            "value": sys.version.split()[0],
-            "remediation": None
+        _doctor_check("platform", "ok", platform_name()),
+        _doctor_check("architecture", "ok", host_platform.machine() or "unknown"),
+        _doctor_check("os-release", "ok", f"{host_platform.system()} {host_platform.release()}"),
+        _doctor_check(
+            "python",
+            "ok" if python_ok else "error",
+            sys.version.split()[0],
+            None
             if python_ok
             else "Use Python 3.11, 3.12, or 3.13 (see the supported-platform guide).",
-        },
+        ),
+        _doctor_check("python-executable", "ok", str(Path(sys.executable).resolve())),
+        _doctor_check(
+            "virtual-environment",
+            "ok" if sys.prefix != sys.base_prefix else "warning",
+            "active" if sys.prefix != sys.base_prefix else "not active",
+            None
+            if sys.prefix != sys.base_prefix
+            else "Create and activate an isolated venv before installing: python -m venv .venv.",
+        ),
+        _doctor_check("pip", "ok" if _package_version("pip") else "warning", _package_version("pip") or "not found"),
         _path_check("data_dir", user_data_dir()),
         _path_check("config_dir", user_config_dir()),
         _path_check("workspace", default_workspace_dir()),
     ]
+
+    for check in checks:
+        if check["id"] in {"data_dir", "config_dir", "workspace"}:
+            check["scope"] = "offline"
+
     for package, optional, remediation in _MODULE_CHECKS:
         try:
-            __import__(package)
+            module = __import__(package)
             checks.append(
-                {"id": package, "status": "ok", "value": "installed", "remediation": None}
+                _doctor_check(package, "ok", _package_version(package) or "installed")
             )
+            del module
         except ImportError:
             checks.append(
-                {
-                    "id": package,
-                    "status": "warning" if optional else "error",
-                    "value": "missing",
-                    "remediation": remediation,
-                }
+                _doctor_check(
+                    package,
+                    "warning" if optional else "error",
+                    "missing",
+                    remediation,
+                    severity="advisory" if optional else "blocking",
+                )
             )
+
+    required_packages: set[str] = set()
+    if profile == "operator":
+        required_packages.add("impacket")
+    if profile == "operator":
+        required_packages.update({"textual", "reportlab", "pypdf"})
+    if profile == "certipy":
+        required_packages.add("certipy")
+        checks.append(
+            _doctor_check(
+                "certipy",
+                "ok" if _package_version("certipy-ad") else "error",
+                _package_version("certipy-ad") or "missing",
+                None if _package_version("certipy-ad") else "Install AD CS tooling: pip install 'adaf-attack[certipy]'.",
+                scope="certipy",
+            )
+        )
+    for check in checks:
+        if check["id"] in required_packages and check["status"] != "ok":
+            check["status"] = "error"
+            check["severity"] = "blocking"
+            check["scope"] = profile
+
     for check_id, candidates, remediation in _BINARY_CHECKS:
         resolved = _resolve_binary(candidates)
-        checks.append(
-            {
-                "id": f"{check_id} (cli)",
-                "status": "ok" if resolved else "warning",
-                "value": resolved or "not found",
-                "remediation": None if resolved else remediation,
-            }
+        binary_required = (profile == "operator" and check_id == "ntlmrelayx") or (
+            profile == "certipy" and check_id == "certipy"
         )
-    blocking = next((c for c in checks if c["status"] == "error"), None)
+        checks.append(
+            _doctor_check(
+                f"{check_id} (cli)",
+                "ok" if resolved else ("error" if binary_required else "warning"),
+                resolved or "not found",
+                None if resolved else remediation,
+                scope=profile if binary_required else "offline",
+                severity="blocking" if binary_required and not resolved else "advisory",
+            )
+        )
+
+    if profile == "live-ad":
+        if not domain or not dc_ip:
+            checks.append(
+                _doctor_check(
+                    "target-arguments",
+                    "error",
+                    "domain and dc-ip are required",
+                    "Pass --domain <authorized-domain> and --dc-ip <authorized-dc> to run live-AD preflight.",
+                    scope="live-ad",
+                )
+            )
+        else:
+            try:
+                addresses = sorted({item[4][0] for item in socket.getaddrinfo(domain, None)})
+                checks.append(
+                    _doctor_check("domain-dns", "ok", {"host": domain, "addresses": addresses}, scope="live-ad")
+                )
+            except (OSError, socket.gaierror) as exc:
+                checks.append(
+                    _doctor_check(
+                        "domain-dns",
+                        "error",
+                        f"{domain}: {type(exc).__name__}: {exc}",
+                        "Configure DNS for the authorized domain or use the lab DNS server, then rerun doctor.",
+                        scope="live-ad",
+                    )
+                )
+            for port, service in ((53, "dns"), (88, "kerberos"), (389, "ldap"), (445, "smb")):
+                status, detail = _socket_check(dc_ip, port, timeout)
+                checks.append(
+                    _doctor_check(
+                        f"dc-{service}",
+                        status,
+                        f"{dc_ip}:{port}" if status == "ok" else detail,
+                        None
+                        if status == "ok"
+                        else f"Verify the authorized DC address, firewall, and lab network for {service} ({dc_ip}:{port}).",
+                        scope="live-ad",
+                        severity="advisory" if status == "warning" else None,
+                    )
+                )
+
+    blocking = next((check for check in checks if check["status"] == "error"), None)
     first_run = _workspace_is_empty(default_workspace_dir())
     if blocking:
         next_step = blocking["remediation"]
+    elif profile == "live-ad":
+        next_step = "Run `adaf-attack plan ldap-enum --domain <domain> --dc-ip <dc>` before connecting."
     elif first_run:
         next_step = (
             "First run detected. Try:\n"
@@ -304,13 +454,30 @@ def doctor(
         )
     else:
         next_step = "Run `adaf-attack capability-help` to choose a capability."
-    payload = {
+    return {
         "ok": blocking is None,
+        "profile": profile,
+        "profile_description": _DOCTOR_PROFILES[profile],
         "version": __version__,
         "checks": checks,
         "first_run": first_run,
         "next_step": next_step,
     }
+
+
+@app.command("doctor")
+def doctor(
+    ctx: typer.Context,
+    explain: bool = typer.Option(False, "--explain", help="Include remediation for every check."),
+    profile: str = typer.Option("offline", "--profile", help="Check profile: offline, operator, certipy, or live-ad."),
+    domain: str | None = typer.Option(None, "--domain", help="Authorized domain for the live-ad profile."),
+    dc_ip: str | None = typer.Option(None, "--dc-ip", help="Authorized domain-controller address for live-ad."),
+    timeout: float = typer.Option(3.0, "--timeout", help="Per-network-probe timeout in seconds."),
+) -> None:
+    """Check local prerequisites, or explicitly preflight an authorized AD target."""
+    payload = _doctor_payload(profile, domain=domain, dc_ip=dc_ip, timeout=timeout)
+    checks = payload["checks"]
+    first_run = payload["first_run"]
     glyph = {
         "ok": "[green]OK[/green]",
         "warning": "[yellow]WARN[/yellow]",
@@ -324,7 +491,7 @@ def doctor(
     if first_run:
         lines.append("")
         lines.append("[bold]First run - quickstart:[/bold]")
-        for line in next_step.splitlines()[1:]:
+        for line in payload["next_step"].splitlines()[1:]:
             lines.append(line)
     _emit(
         ctx,
@@ -425,6 +592,113 @@ def show_paths(ctx: typer.Context) -> None:
         "entries": rows,
     }
     _emit(ctx, payload, table)
+
+
+_SUPPORT_SENSITIVE_KEYS = (
+    "password",
+    "secret",
+    "token",
+    "key",
+    "credential",
+    "username",
+    "domain",
+    "dc_ip",
+    "proxy",
+    "certificate",
+)
+
+
+def _sanitize_support_value(value: Any, key: str = "") -> Any:
+    lowered = key.lower()
+    if any(marker in lowered for marker in _SUPPORT_SENSITIVE_KEYS):
+        return "<redacted>"
+    if isinstance(value, dict):
+        return {str(name): _sanitize_support_value(item, str(name)) for name, item in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_support_value(item, key) for item in value]
+    if isinstance(value, str):
+        sanitized = value.replace(str(Path.home()), "<HOME>")
+        for username_key in ("USERNAME", "USER", "USERPROFILE"):
+            username = os.environ.get(username_key)
+            if username:
+                sanitized = sanitized.replace(username, "<USER>")
+        return sanitized
+    return value
+
+
+def _support_environment() -> dict[str, Any]:
+    relevant = {}
+    for key in sorted(os.environ):
+        if key.startswith(("ADAF_", "XDG_")) or key in {"SHELL", "COMSPEC", "OS"}:
+            relevant[key] = {"set": True}
+    return relevant
+
+
+def _replace_support_identifiers(value: Any, identifiers: tuple[str, ...]) -> Any:
+    if isinstance(value, dict):
+        return {key: _replace_support_identifiers(item, identifiers) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_replace_support_identifiers(item, identifiers) for item in value]
+    if isinstance(value, str):
+        for identifier in identifiers:
+            if identifier:
+                value = value.replace(identifier, "<TARGET>")
+    return value
+
+
+@app.command("support-bundle")
+def support_bundle(
+    ctx: typer.Context,
+    output: Path = typer.Option(Path("adaf-support-bundle.json"), "--output", "-o"),
+    profile: str = typer.Option("offline", "--profile", help="Doctor profile to capture."),
+    domain: str | None = typer.Option(None, "--domain", help="Authorized domain for live-ad preflight."),
+    dc_ip: str | None = typer.Option(None, "--dc-ip", help="Authorized DC address for live-ad preflight."),
+    timeout: float = typer.Option(3.0, "--timeout", help="Per-network-probe timeout in seconds."),
+) -> None:
+    """Write a redacted diagnostic bundle safe to attach to support requests."""
+    payload = _doctor_payload(profile, domain=domain, dc_ip=dc_ip, timeout=timeout)
+    bundle = {
+        "schema": 1,
+        "type": "adaf-attack-support-bundle",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "version": __version__,
+        "runtime": {
+            "python": sys.version.split()[0],
+            "executable": str(Path(sys.executable).resolve()),
+            "prefix": str(Path(sys.prefix).resolve()),
+            "base_prefix": str(Path(sys.base_prefix).resolve()),
+            "architecture": host_platform.machine() or "unknown",
+            "system": host_platform.system(),
+            "release": host_platform.release(),
+        },
+        "environment": _support_environment(),
+        "doctor": _replace_support_identifiers(
+            _sanitize_support_value(payload), tuple(item for item in (domain, dc_ip) if item)
+        ),
+    }
+    destination = output.expanduser().resolve()
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(
+            json.dumps(bundle, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
+        )
+    except OSError as exc:
+        error = error_for(
+            "SUPPORT_BUNDLE_WRITE_FAILED",
+            message=f"Could not write support bundle: {exc}",
+            details={"output": str(destination)},
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+    _emit(
+        ctx,
+        {"ok": True, "output": str(destination), "profile": profile},
+        Panel(
+            f"Wrote redacted support bundle to {destination}\n"
+            "Review it for organization-specific identifiers before sharing.",
+            title="ADAF-ATTACK support bundle",
+        ),
+    )
 
 
 def _capability_payload(cap: Any) -> dict[str, Any]:

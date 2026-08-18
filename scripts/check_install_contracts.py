@@ -139,6 +139,10 @@ def _check_ci() -> None:
             "test_every_documented_capability_is_real",
         ),
         "tests/test_install_contracts.py": ("test_install_and_documentation_contracts",),
+        "tests/test_doctor_profiles.py": (
+            "test_offline_profile_is_local_and_has_scoped_contract",
+            "test_support_bundle_redacts_sensitive_values",
+        ),
     }
     for relative, names in release_contracts.items():
         source = (ROOT / relative).read_text(encoding="utf-8")
@@ -222,6 +226,7 @@ def _check_docs() -> None:
         "scripts/generate_release_manifest.py",
         "scripts/build-release-wheelhouse.py",
         "scripts/Setup-DisposableAdLab.ps1",
+        "tests/test_doctor_profiles.py",
     )
     for relative in required_files:
         _require(

@@ -10,6 +10,21 @@ python -m pip --version
 python -m pip check
 ```
 
+The default doctor profile is offline and performs no network probes. For a
+disposable authorized lab, run the explicit live preflight instead:
+
+```bash
+adaf-attack --format json doctor --profile live-ad \
+  --domain lab.example --dc-ip 10.0.0.10
+```
+
+To attach diagnostics to a support request, export a redacted bundle and
+review it for organization-specific identifiers before sharing:
+
+```bash
+adaf-attack --format json support-bundle --output adaf-support-bundle.json
+```
+
 ## Command not found or old version
 
 - Open a new terminal after a Windows installer changes user PATH.
@@ -94,6 +109,8 @@ python -m pip install "adaf-attack[certipy]"
 
 Prefer a dedicated Certipy venv if pip cannot resolve the combined environment.
 `doctor --explain` distinguishes required failures from optional warnings.
+Use `--profile operator` to make TUI, reporting, and Kerberos tooling blocking,
+or `--profile certipy` to validate the separate AD CS dependency boundary.
 
 ## Read-only profile or managed workstation
 

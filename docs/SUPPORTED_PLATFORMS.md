@@ -26,5 +26,9 @@ adaf-attack --format json doctor --explain
 adaf-attack --format json paths
 ```
 
+For a broader local check, use `doctor --profile operator`. Only the explicit
+`doctor --profile live-ad --domain <domain> --dc-ip <dc>` form performs DNS and
+TCP preflight probes; the default profile is offline-safe.
+
 If a platform or architecture is not listed as CI-tested, treat it as a manual
 compatibility validation and retain the output with the release evidence.

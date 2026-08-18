@@ -185,9 +185,28 @@ adaf-attack list-capabilities
 adaf-attack paths
 ```
 
-`doctor --explain` verifies the interpreter, required packages, and optional
-external tools such as `ntlmrelayx` and `certipy`. Missing optional tooling is
-reported with remediation; it does not invalidate the base installation.
+`doctor --explain` verifies the interpreter, architecture, runtime packages,
+virtual environment, writable paths, and optional external tools such as
+`ntlmrelayx` and `certipy`. Missing optional tooling is reported with
+remediation; it does not invalidate the base installation. Use an explicit
+profile when checking a broader workflow:
+
+```bash
+adaf-attack --format json doctor --profile operator
+adaf-attack --format json doctor --profile certipy
+adaf-attack --format json doctor --profile live-ad \
+  --domain lab.example --dc-ip 10.0.0.10
+```
+
+The default `offline` profile never performs network probes. The `live-ad`
+profile performs only explicit DNS and TCP preflight checks; it does not
+authenticate or execute a capability.
+
+For support, export a redacted diagnostic bundle and review it before sharing:
+
+```bash
+adaf-attack --format json support-bundle --output adaf-support-bundle.json
+```
 
 ## First safe offline success
 
@@ -276,7 +295,9 @@ operator data.
 
 ## Troubleshooting
 
-Start with `adaf-attack doctor --explain`, then use the
+Start with `adaf-attack doctor --profile offline --explain`, or use
+`adaf-attack doctor --profile live-ad --domain <authorized-domain> --dc-ip <authorized-dc>`
+before a target-scoped preflight. Then use the
 [first-install troubleshooting guide](docs/TROUBLESHOOTING.md) for PATH refresh,
 Python launcher selection, missing `venv`, PEP 668, PowerShell policy and
 SmartScreen, proxies/custom CAs, offline installs, optional dependency conflicts,

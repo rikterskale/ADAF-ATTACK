@@ -81,9 +81,12 @@ also proven by the full source matrix.
       sanitized validator output, and record the release sign-off fields.
       Hosted CI does not provide a domain and must never be described as
       proving this.
-- [ ] Every error path is guaranteed to map to the actionable error catalog.
-      **[GAP]** Representative doctor/CLI contracts are automated, not every
-      possible target/provider failure.
+- [ ] Doctor profiles distinguish offline, operator, Certipy, and explicit
+      live-AD preflight requirements; support bundles redact identifiers and
+      secrets. **[CI: test_doctor_profiles]**
+- [ ] Every provider error path is guaranteed to map to the actionable error
+      catalog. **[GAP]** Representative doctor/CLI contracts are automated, not
+      every possible target/provider failure.
 
 ## 4. Packaging and documentation consistency
 

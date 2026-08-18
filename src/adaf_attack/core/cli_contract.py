@@ -116,6 +116,11 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Choose a writable config directory, check permissions, then run `adaf-attack doctor --explain`.",
         "adaf-attack doctor --explain",
     ),
+    "SUPPORT_BUNDLE_WRITE_FAILED": (
+        "The redacted support bundle could not be written.",
+        "Choose a writable output directory and rerun the support-bundle command.",
+        "adaf-attack support-bundle --output <writable-path>",
+    ),
     "UNKNOWN_PROFILE": (
         "The requested profile is not saved.",
         "Run `adaf-attack profile list` to see saved profiles.",
