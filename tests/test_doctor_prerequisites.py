@@ -8,6 +8,7 @@ operator can trust `doctor` as a real troubleshooting surface.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -30,6 +31,34 @@ def test_resolve_binary_returns_first_match_then_none(monkeypatch: pytest.Monkey
         cli._resolve_binary(("impacket-ntlmrelayx", "ntlmrelayx.py")) == "/opt/tools/ntlmrelayx.py"
     )
     assert cli._resolve_binary(("missing-a", "missing-b")) is None
+
+
+def test_path_write_probe_creates_and_removes_a_probe(tmp_path: Path) -> None:
+    ok, error = cli._path_write_probe(tmp_path / "nested")
+    assert ok is True and error is None
+    assert list((tmp_path / "nested").iterdir()) == []
+
+
+def test_path_write_probe_reports_os_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def fail(*args, **kwargs):
+        raise PermissionError("locked")
+
+    monkeypatch.setattr(cli.tempfile, "NamedTemporaryFile", fail)
+    ok, error = cli._path_write_probe(tmp_path)
+    assert ok is False and error and "PermissionError" in error
+
+
+def test_workspace_is_empty_for_missing_directory(tmp_path: Path) -> None:
+    assert cli._workspace_is_empty(tmp_path / "missing") is True
+
+
+def test_path_check_returns_actionable_error_for_unwritable_probe(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(cli, "_path_write_probe", lambda path: (False, "PermissionError"))
+    result = cli._path_check("workspace", tmp_path / "workspace")
+    assert result["status"] == "error"
+    assert "ADAF_ATTACK_WORKSPACE" in result["remediation"]
 
 
 def test_doctor_flags_unsupported_python(monkeypatch: pytest.MonkeyPatch) -> None:

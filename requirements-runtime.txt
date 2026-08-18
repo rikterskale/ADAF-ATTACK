@@ -1,0 +1,13 @@
+# Direct runtime constraints for the 0.10.0 release line.
+#
+# This file intentionally contains direct dependencies only. The complete,
+# hash-verified reproducibility artifact is a release wheelhouse generated from
+# the candidate wheel; see docs/USER_READINESS.md and requirements-ci.txt.
+typer==0.27.1
+rich==15.0.0
+pydantic==2.13.4
+pydantic-settings==2.15.0
+httpx==0.28.1
+ldap3==2.9.1
+PyYAML==6.0.3
+cryptography==50.0.0

@@ -111,6 +111,11 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Run `adaf-attack config keys` to list allowed keys.",
         "adaf-attack config keys",
     ),
+    "CONFIG_WRITE_FAILED": (
+        "The per-user configuration could not be written.",
+        "Choose a writable config directory, check permissions, then run `adaf-attack doctor --explain`.",
+        "adaf-attack doctor --explain",
+    ),
     "UNKNOWN_PROFILE": (
         "The requested profile is not saved.",
         "Run `adaf-attack profile list` to see saved profiles.",

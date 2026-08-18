@@ -91,7 +91,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2022]
+        os: [ubuntu-24.04, windows-2022, macos-14]
         python-version: ["3.11", "3.12", "3.13"]
 
     steps:
@@ -679,9 +679,14 @@ jobs:
           )
           assert all(finding["title"] in technical_pdf for finding in findings)
           for report_name in ("executive", "technical", "remediation"):
-              assert (Path("output/demo-engagement/reports") / f"{report_name}-report.html").is_file()
-              assert (Path("output/demo-engagement/reports") / f"{report_name}-report.pdf").is_file()
+            assert (Path("output/demo-engagement/reports") / f"{report_name}-report.html").is_file()
+            assert (Path("output/demo-engagement/reports") / f"{report_name}-report.pdf").is_file()
           PY
+
+      - name: Validate sanitized evidence contract
+        shell: bash
+        run: |
+          python scripts/validate_live_lab_run.py --evidence-dir output/demo-engagement
 
       - name: Sweep offline operator review workflow
         shell: bash

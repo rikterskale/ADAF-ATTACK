@@ -1,6 +1,8 @@
 name: Published artifact smoke
 
 on:
+  release:
+    types: [published]
   schedule:
     - cron: "23 7 * * 1"
   workflow_dispatch:

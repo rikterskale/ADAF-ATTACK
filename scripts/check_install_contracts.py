@@ -85,8 +85,9 @@ def _check_ci() -> None:
         f"kali-installer must pin the container manifest digest, got {kali_image}",
     )
     _require(
-        set(jobs["tests"]["strategy"]["matrix"]["os"]) == {"ubuntu-24.04", "windows-2022"},
-        "source tests must cover Ubuntu and Windows",
+        set(jobs["tests"]["strategy"]["matrix"]["os"])
+        == {"ubuntu-24.04", "windows-2022", "macos-14"},
+        "source tests must cover Ubuntu, Windows, and macOS",
     )
     _require(
         set(jobs["tests"]["strategy"]["matrix"]["python-version"]) == {"3.11", "3.12", "3.13"},
@@ -207,6 +208,11 @@ def _check_docs() -> None:
         "docs/TROUBLESHOOTING.md",
         "docs/KNOWN_LIMITATIONS.md",
         "docs/RELEASE_READINESS.md",
+        "docs/USER_READINESS.md",
+        "docs/LIVE_AD_LAB_VALIDATION.md",
+        "requirements-runtime.txt",
+        "scripts/validate_live_lab_run.py",
+        "scripts/Setup-DisposableAdLab.ps1",
     )
     for relative in required_files:
         _require(
@@ -270,6 +276,8 @@ def _check_docs() -> None:
         "docs/MACOS.md",
         "docs/TROUBLESHOOTING.md",
         "docs/KNOWN_LIMITATIONS.md",
+        "docs/USER_READINESS.md",
+        "docs/LIVE_AD_LAB_VALIDATION.md",
         "CHANGELOG.md",
     ):
         _require(link in readme, f"README.md: missing prominent link to {link}")

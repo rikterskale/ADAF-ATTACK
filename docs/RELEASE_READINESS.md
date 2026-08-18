@@ -15,7 +15,7 @@ Source/editable tests and artifact smoke have different purposes:
 
 | Surface | Current automated coverage |
 |---|---|
-| Source/editable tests | Ubuntu 24.04 and Windows 2022; Python 3.11, 3.12, 3.13 |
+| Source/editable tests | Ubuntu 24.04, Windows 2022, and macOS 14; Python 3.11, 3.12, 3.13 |
 | Built wheel | Ubuntu/Python 3.11, Windows/Python 3.12, macOS 14/Python 3.13 |
 | Built sdist | Ubuntu/Python 3.13 |
 | Windows installer | Windows PowerShell 5.1/Python 3.11 and PowerShell 7/Python 3.13 |
@@ -63,6 +63,7 @@ also proven by the full source matrix.
       conflicts, and sanitized diagnostics. **[CI: test_install_contracts]**
 - [ ] A person unfamiliar with the project completes the first-ten-minutes
       walkthrough from a release artifact without reading source. **[MANUAL]**
+      Use [USER_READINESS.md](USER_READINESS.md) as the canonical decision guide.
 
 ## 3. Feature and recovery validation
 
@@ -74,8 +75,11 @@ also proven by the full source matrix.
       offline revertable kinds round-trip. **[CI: test_release_contracts;
       test_rollback_matrix]**
 - [ ] Live LDAP/Kerberos/AD CS/coercion/relay and destructive rollback operate
-      correctly in a disposable authorized forest. **[MANUAL]** Hosted CI does
-      not provide a domain and must never be described as proving this.
+      correctly in a disposable authorized forest. **[MANUAL]** Follow
+      [LIVE_AD_LAB_VALIDATION.md](LIVE_AD_LAB_VALIDATION.md), attach the
+      sanitized validator output, and record the release sign-off fields.
+      Hosted CI does not provide a domain and must never be described as
+      proving this.
 - [ ] Every error path is guaranteed to map to the actionable error catalog.
       **[GAP]** Representative doctor/CLI contracts are automated, not every
       possible target/provider failure.
@@ -110,7 +114,9 @@ Version: __________  Release manager: __________  Date: __________
 ## Remaining automation gaps
 
 1. A credential-gated disposable AD forest workflow for network capabilities and
-   target-side cleanup.
+   target-side cleanup. The novice lab procedure and offline evidence validator
+   now make the manual gate repeatable while credentials and lab infrastructure
+   remain intentionally outside hosted CI.
 2. Broader actionable-error catalog coverage.
 3. Reproducible validation of organization-specific proxy, CA, endpoint, and
    air-gap transfer policies.

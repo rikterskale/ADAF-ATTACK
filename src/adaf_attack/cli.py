@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import sys
+import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -103,6 +104,38 @@ def _path_status(path: Path) -> tuple[bool, bool]:
         return True, os.access(path, os.W_OK)
     parent = path.parent
     return False, parent.exists() and os.access(parent, os.W_OK)
+
+
+def _path_write_probe(path: Path) -> tuple[bool, str | None]:
+    """Create and remove a harmless probe file so doctor tests real write access."""
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(prefix=".adaf-attack-write-test-", dir=path):
+            pass
+    except OSError as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+    return True, None
+
+
+def _path_check(path_id: str, path: Path) -> dict[str, Any]:
+    writable, error = _path_write_probe(path)
+    remediation = None
+    if not writable:
+        env_hint = (
+            " Set ADAF_ATTACK_WORKSPACE to a writable directory for the workspace."
+            if path_id == "workspace"
+            else " Check the directory permissions or set the platform data/config environment override."
+        )
+        remediation = (
+            f"Cannot write {path_id} directory {path}.{env_hint} "
+            "Then rerun `adaf-attack doctor --explain`."
+        )
+    return {
+        "id": path_id,
+        "status": "ok" if writable else "error",
+        "value": str(path) if error is None else f"{path} ({error})",
+        "remediation": remediation,
+    }
 
 
 app = typer.Typer(
@@ -228,14 +261,9 @@ def doctor(
             if python_ok
             else f"Use Python {_MIN_PYTHON[0]}.{_MIN_PYTHON[1]}+ (see docs/ install guides).",
         },
-        {"id": "data_dir", "status": "ok", "value": str(user_data_dir()), "remediation": None},
-        {"id": "config_dir", "status": "ok", "value": str(user_config_dir()), "remediation": None},
-        {
-            "id": "workspace",
-            "status": "ok",
-            "value": str(default_workspace_dir()),
-            "remediation": None,
-        },
+        _path_check("data_dir", user_data_dir()),
+        _path_check("config_dir", user_config_dir()),
+        _path_check("workspace", default_workspace_dir()),
     ]
     for package, optional, remediation in _MODULE_CHECKS:
         try:
@@ -1705,6 +1733,13 @@ def config_set(
         error = error_for("CONFIG_KEY_INVALID", message=str(exc))
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code) from exc
+    except OSError as exc:
+        error = error_for(
+            "CONFIG_WRITE_FAILED",
+            message=f"Could not write the configuration file: {exc}",
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
     _emit(
         ctx,
         {"ok": True, "path": str(path), "config": data},
@@ -1717,7 +1752,15 @@ def config_unset(ctx: typer.Context, key: str = typer.Argument(...)) -> None:
     """Remove a persisted default."""
     from adaf_attack.core.user_config import unset_key
 
-    path, data = unset_key(key)
+    try:
+        path, data = unset_key(key)
+    except OSError as exc:
+        error = error_for(
+            "CONFIG_WRITE_FAILED",
+            message=f"Could not write the configuration file: {exc}",
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
     _emit(
         ctx,
         {"ok": True, "path": str(path), "config": data},

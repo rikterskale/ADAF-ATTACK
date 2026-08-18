@@ -46,6 +46,32 @@ def test_paths_reports_existence_and_writability(tmp_path: Path, monkeypatch) ->
         assert isinstance(entry["writable"], bool)
 
 
+def test_config_set_permission_error_is_actionable(monkeypatch) -> None:
+    import adaf_attack.core.user_config as user_config
+
+    def fail(*args, **kwargs):
+        raise PermissionError("profile is locked")
+
+    monkeypatch.setattr(user_config, "set_key", fail)
+    result = runner.invoke(app, ["--format", "json", "config", "set", "workspace", "./lab"])
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["error"]["code"] == "CONFIG_WRITE_FAILED"
+    assert "doctor --explain" in payload["error"]["remediation"]
+
+
+def test_config_unset_permission_error_is_actionable(monkeypatch) -> None:
+    import adaf_attack.core.user_config as user_config
+
+    def fail(*args, **kwargs):
+        raise PermissionError("profile is locked")
+
+    monkeypatch.setattr(user_config, "unset_key", fail)
+    result = runner.invoke(app, ["--format", "json", "config", "unset", "workspace"])
+    assert result.exit_code == 1
+    assert json.loads(result.output)["error"]["code"] == "CONFIG_WRITE_FAILED"
+
+
 def test_sessions_shows_bytes_human_and_supports_limit(tmp_path: Path) -> None:
     for i in range(3):
         session = tmp_path / f"session-{i}"

@@ -20,6 +20,8 @@
   [Linux commands](docs/LINUX_COMMAND_GUIDE.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md) ·
   [Known limitations](docs/KNOWN_LIMITATIONS.md) · [Changelog](CHANGELOG.md)
+- [New-user readiness guide](docs/USER_READINESS.md) ·
+  [Disposable AD lab validation](docs/LIVE_AD_LAB_VALIDATION.md)
 
 ## Philosophy
 
@@ -91,6 +93,10 @@ Analysis / reporting:
 | `report` | Canonical findings + evidence bundle |
 
 ## Prerequisites
+
+For the shortest route, use the [new-user readiness guide](docs/USER_READINESS.md)
+to choose the correct platform path. There is no public PyPI, Docker, pipx, uv,
+or Poetry release install at this time.
 
 - Python 3.11, 3.12, or 3.13
 - A virtual environment (`python -m venv`) and pip
@@ -250,9 +256,9 @@ Without it, those capabilities still run and emit a ready-to-paste playbook.
 ## Examples
 
 ```bash
-adaf-attack run ldap-enum -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1'
-adaf-attack run acl-enum -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1'
-adaf-attack run bloodhound-export -d corp.local --dc-ip 10.0.0.10 -u alice -p 'Password1'
+adaf-attack run ldap-enum -d <authorized-domain> --dc-ip <authorized-dc> -u <authorized-user>
+adaf-attack run acl-enum -d <authorized-domain> --dc-ip <authorized-dc> -u <authorized-user>
+adaf-attack run bloodhound-export -d <authorized-domain> --dc-ip <authorized-dc> -u <authorized-user>
 adaf-attack paths
 adaf-attack start
 ```
@@ -269,7 +275,7 @@ before running it.
 adaf-attack ad-recon profile
 adaf-attack ad-recon init --output ad-recon.yaml
 adaf-attack engagement validate ad-recon.yaml
-adaf-attack engagement run ad-recon.yaml --workspace ./workspaces -u alice -p 'Password1'
+adaf-attack engagement run ad-recon.yaml --workspace ./workspaces -u <authorized-user>
 ```
 
 `rank-paths` also emits `exploit_chains`: evidence-backed chains for findings
@@ -322,7 +328,7 @@ allowlist and phases, then validate it before any network action:
 ```bash
 adaf-attack engagement init --output engagement.yaml
 adaf-attack engagement validate engagement.yaml
-adaf-attack engagement run engagement.yaml --workspace ./workspaces -u alice -p 'Password1'
+adaf-attack engagement run engagement.yaml --workspace ./workspaces -u <authorized-user>
 ```
 
 The plan permits only the listed targets and capabilities. Destructive
