@@ -7,6 +7,10 @@ declared in `pyproject.toml`.
 
 ### Added
 
+- `adaf-attack workflow` command group: a CLI and agent-driven surface for the
+  finding-driven guided workflow engine, sharing the durable workflow state the
+  TUI drives (status, next, snapshot, inject, import-session, decide, transition,
+  close, and related commands).
 - Focused wheel/sdist smoke coverage across Ubuntu, Windows, and macOS.
 - Artifact-based Windows and Kali installer lifecycle coverage.
 - Scheduled/manual GitHub release-asset smoke workflow.

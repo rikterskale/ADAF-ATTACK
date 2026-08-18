@@ -334,6 +334,11 @@ class WorkflowEngine:
         self.state.progress = round(
             min(100.0, phase_progress + finding_progress + min(completed, 8) * 2.5), 2
         )
+        # A definitively finished workflow reads 100% regardless of how many
+        # findings it carried; an empty, authorized, reported assessment is a
+        # complete finish, not a partial one.
+        if self.state.status in {"complete", "archived"}:
+            self.state.progress = 100.0
         if self.state.status == "active" and self._required_actions():
             self.state.status = "blocked"
         elif self.state.status == "blocked" and not self._required_actions():

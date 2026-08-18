@@ -97,6 +97,16 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "The requested workflow profile is not defined.",
         "Run `adaf-attack workflow-profiles` to list valid profile names.",
     ),
+    "WORKFLOW_STATE_INVALID": (
+        "The persisted guided-workflow state could not be read.",
+        "Inspect workflow-state.json in the workspace, or start a new workflow in a clean workspace.",
+        "adaf-attack workflow status --workspace <workspace>",
+    ),
+    "WORKFLOW_TRANSITION_INVALID": (
+        "The guided-workflow engine rejected this transition or action.",
+        "Run `adaf-attack workflow next` to see the ranked, allowed next actions.",
+        "adaf-attack workflow next --workspace <workspace>",
+    ),
     "INTERACTIVE_MODE_DISABLED": (
         "An interactive command was invoked with --non-interactive.",
         "Use a non-interactive command such as `adaf-attack capability-help` or `adaf-attack plan`.",

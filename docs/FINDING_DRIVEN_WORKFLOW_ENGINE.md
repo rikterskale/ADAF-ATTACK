@@ -148,6 +148,55 @@ engine.complete_action("validate:ADAF-1")
 engine.decide("decision:ADAF-1", "mitigate", rationale="Owner approved")
 ```
 
+## Command-line and agent surface
+
+The engine ships a first-class `adaf-attack workflow` command group
+(`src/adaf_attack/cli_workflow_commands.py`). It is the CLI/agent client of the
+same durable engine the TUI drives: both default to the shared workspace, so a
+workflow started in either surface is visible and resumable in the other. Every
+command honors the global `--format json` and `--no-color` contract and maps
+`WorkflowError` to the stable `ActionableError` catalog (`WORKFLOW_STATE_INVALID`,
+`WORKFLOW_TRANSITION_INVALID`).
+
+Any command run against a never-initialized workspace auto-starts a coherent
+scoping-phase workflow, so there is no empty-state dead end. A complete guided
+run from absolute start to definitive finish:
+
+```bash
+adaf-attack workflow status                       # phase, progress, risk, next step
+adaf-attack workflow authorize                     # record scope authorization
+adaf-attack workflow do run-discovery              # complete baseline discovery
+adaf-attack workflow inject "DCSync rights" \
+  --id ADAF-1 --severity critical --confidence confirmed --asset dc-01
+adaf-attack workflow do validate:ADAF-1            # open -> validated
+adaf-attack workflow decide decision:ADAF-1 mitigate --rationale "owner approved"
+adaf-attack workflow do response:ADAF-1            # validated -> exploited -> mitigated
+adaf-attack workflow do verify:ADAF-1              # attach verification evidence
+adaf-attack workflow transition ADAF-1 closed --note "retest clean"
+adaf-attack workflow do generate-report
+adaf-attack workflow close                         # phase closure, progress 100%
+```
+
+The read/query commands (`status`, `next`, `snapshot`, `findings`, `actions`,
+`audit`) never mutate state. `snapshot` runs in `agent` mode and returns the full
+state plus guidance and recommendations in a single JSON document, which is the
+intended integration point for automated and agent-driven callers. Findings can
+also be imported from a saved session with
+`adaf-attack workflow import-session --session <dir>`, which adapts every
+canonical `core.findings.Finding` through `finding_from_document`.
+
+| Command | Engine method |
+|---|---|
+| `workflow status` / `next` | `guidance()` / `recommendations()` |
+| `workflow snapshot` | `snapshot()` |
+| `workflow authorize` / `do` | `complete_action()` |
+| `workflow inject` / `enrich` / `correlate` | `inject_finding()` / `enrich_finding()` / `correlate()` |
+| `workflow import-session` | `ingest_finding(finding_from_document(...))` |
+| `workflow transition` | `transition_finding()` |
+| `workflow decide` | `decide()` |
+| `workflow findings` / `actions` / `audit` | `query_findings()` / `query_actions()` / `audit_history()` |
+| `workflow close` | `close(archive=…)` |
+
 The persisted document is queryable JSON, making it suitable for CLI output,
 agent context, audit review, and later report packaging without exposing
 credentials or vault contents. Transport adapters can use `snapshot()` for a

@@ -23,6 +23,7 @@ from rich.table import Table
 
 from adaf_attack import __version__
 from adaf_attack.cli_ux_commands import register_ux_commands
+from adaf_attack.cli_workflow_commands import register_workflow_commands
 from adaf_attack.core.auth import describe_auth
 from adaf_attack.core.capability_help_data import capability_option_spec
 from adaf_attack.core.cli_contract import (
@@ -2167,6 +2168,10 @@ register_ux_commands(
     console=_console,
     doctor_payload=lambda *args, **kwargs: _doctor_payload(*args, **kwargs),
 )
+
+# Finding-driven guided workflow surface: the CLI/agent client of the same
+# durable engine the TUI drives (src/adaf_attack/core/workflow_engine.py).
+register_workflow_commands(app, emit=_emit, emit_error=_emit_error)
 
 
 @capability_app.command("list")

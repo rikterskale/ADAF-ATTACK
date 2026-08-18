@@ -66,6 +66,22 @@ for current options, defaults, validation, and examples.
 | `adaf-attack support-bundle` | Write a redacted diagnostic bundle |
 | `adaf-attack tour` | Show the guided operator tour |
 | `adaf-attack trust-correlation` | Correlate trust evidence |
+| `adaf-attack workflow` | Finding-driven guided workflow command group |
+| `adaf-attack workflow actions` | List derived workflow actions |
+| `adaf-attack workflow audit` | Show the append-only audit history |
+| `adaf-attack workflow authorize` | Record the scope authorization decision |
+| `adaf-attack workflow close` | Finish and close or archive the workflow |
+| `adaf-attack workflow correlate` | Link related findings |
+| `adaf-attack workflow decide` | Record a decision at a decision point |
+| `adaf-attack workflow do` | Complete a required or recommended action |
+| `adaf-attack workflow enrich` | Enrich a finding's fields |
+| `adaf-attack workflow findings` | Query findings by status, severity, or asset |
+| `adaf-attack workflow import-session` | Import canonical session findings |
+| `adaf-attack workflow inject` | Inject an operator finding |
+| `adaf-attack workflow next` | Show ranked next actions |
+| `adaf-attack workflow snapshot` | Emit full state, guidance, and recommendations |
+| `adaf-attack workflow status` | Show phase, progress, risk, and next step |
+| `adaf-attack workflow transition` | Advance a finding's lifecycle status |
 | `adaf-attack workflow-profiles` | Show repeatable workflow profiles |
 
 The reference intentionally documents command names centrally; detailed option
