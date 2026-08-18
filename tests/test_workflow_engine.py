@@ -54,7 +54,9 @@ def test_query_findings_supports_operational_filters(tmp_path: Path) -> None:
             "affected_assets": ["dc-01"],
         }
     )
-    assert engine.query_findings(source="scanner", tag="identity", asset="dc-01")[0].id == "F-FILTER"
+    assert (
+        engine.query_findings(source="scanner", tag="identity", asset="dc-01")[0].id == "F-FILTER"
+    )
 
 
 def test_engine_drives_finding_lifecycle_and_persists(tmp_path: Path) -> None:

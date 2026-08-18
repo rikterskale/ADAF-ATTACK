@@ -356,7 +356,11 @@ class WorkflowEngine:
         if not action.finding_ids:
             return 0.0
         return max(
-            (self.state.findings[item].priority for item in action.finding_ids if item in self.state.findings),
+            (
+                self.state.findings[item].priority
+                for item in action.finding_ids
+                if item in self.state.findings
+            ),
             default=0.0,
         )
 
