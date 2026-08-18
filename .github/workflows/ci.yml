@@ -304,95 +304,7 @@ jobs:
         run: python -m pip install --requirement requirements-ci.txt
 
       - name: Validate workflow YAML and referenced operator assets
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import yaml
-
-          workflow_path = Path(".github/workflows/ci.yml")
-          workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
-          assert isinstance(workflow, dict)
-          jobs = workflow["jobs"]
-          required_jobs = {
-              "lint", "typecheck", "tests", "security", "codeql", "scripts",
-              "workflow-contract", "package", "operator-workflow", "release-readiness",
-              "windows-installer", "ci-gate",
-          }
-          assert required_jobs <= jobs.keys()
-          assert jobs["ci-gate"]["if"] == "always()"
-          gate_needs = set(jobs["ci-gate"]["needs"])
-          assert gate_needs == required_jobs - {"ci-gate"}
-          assert workflow["concurrency"]["cancel-in-progress"] is True
-          import re
-          for job in jobs.values():
-              for step in job.get("steps", []):
-                  if "uses" in step:
-                      assert re.fullmatch(r"[0-9a-f]{40}", step["uses"].split("@", 1)[1]), step["uses"]
-          codeql = yaml.safe_load(Path(".github/workflows/codeql.yml").read_text(encoding="utf-8"))
-          analyze = next(
-              step for step in codeql["jobs"]["analyze"]["steps"]
-              if "codeql-action/analyze@" in step.get("uses", "")
-          )
-          assert analyze["with"]["upload"] is False
-          assert set(jobs["tests"]["strategy"]["matrix"]["os"]) == {
-              "ubuntu-24.04", "windows-2022"
-          }
-          assert set(jobs["tests"]["strategy"]["matrix"]["python-version"]) == {
-              "3.11", "3.12", "3.13"
-          }
-          for path in (
-              "README.md",
-              "RELEASE.md",
-              "CONTRIBUTING.md",
-              "docs/KALI.md",
-              "docs/WINDOWS.md",
-              "docs/LINUX_NOVICE_USABILITY_GUIDE.md",
-              "docs/RELEASE_READINESS.md",
-              "scripts/install-kali.sh",
-              "scripts/Install-AdafAttack.ps1",
-              "scripts/AdafAttack.psm1",
-              "scripts/check_release_readiness.py",
-              ".pre-commit-config.yaml",
-          ):
-              assert Path(path).is_file(), path
-          # Release-readiness gates that must stay enforced (see
-          # docs/RELEASE_READINESS.md). These tests run in the `tests` matrix job;
-          # asserting they exist keeps the gate from being silently deleted.
-          release_contracts = {
-              "tests/test_release_contracts.py": (
-                  "test_every_capability_is_reachable",
-                  "test_destructive_capabilities_declare_rollback_or_are_exempt",
-              ),
-              "tests/test_rollback_matrix.py": (
-                  "test_execute_cleanup_reverts_ldap_kind",
-                  "test_matrix_covers_exactly_the_destructive_capabilities_with_rollback",
-              ),
-              "tests/test_docs_commands.py": (
-                  "test_every_documented_command_is_real",
-                  "test_every_documented_capability_is_real",
-              ),
-          }
-          for contract_path, required_tests in release_contracts.items():
-              contract_test = Path(contract_path)
-              assert contract_test.is_file(), contract_path
-              contract_src = contract_test.read_text(encoding="utf-8")
-              for required in required_tests:
-                  assert required in contract_src, f"{contract_path}: missing {required}"
-          # The pinned pre-commit ruff must match the ruff CI actually runs.
-          import re as _re
-
-          precommit = yaml.safe_load(Path(".pre-commit-config.yaml").read_text(encoding="utf-8"))
-          ruff_rev = next(
-              repo["rev"]
-              for repo in precommit["repos"]
-              if "ruff-pre-commit" in repo["repo"]
-          )
-          lock = Path("requirements-ci.txt").read_text(encoding="utf-8")
-          lock_ruff = _re.search(r"^ruff==([0-9.]+)", lock, _re.MULTILINE).group(1)
-          assert ruff_rev == f"v{lock_ruff}", (
-              f"pre-commit ruff {ruff_rev} != pinned ruff v{lock_ruff}"
-          )
-          PY
+        run: python scripts/check_install_contracts.py
 
   package:
     name: Build and install package
@@ -478,36 +390,123 @@ jobs:
       - name: Validate package metadata
         run: python -m twine check dist/*.whl dist/*.tar.gz
 
-      - name: Install wheel in clean environment
-        run: |
-          python -m venv .smoke-venv
-          .smoke-venv/bin/python -m pip install --upgrade pip setuptools wheel
-          python -m pip install --upgrade "backports.tarfile==1.2.0"
-          python -m pip install --upgrade "importlib_metadata==9.0.0"
-          python -m pip install --upgrade "colorama==0.4.6"
-          .smoke-venv/bin/python -m pip install dist/*.whl
-          .smoke-venv/bin/python -m pip check
-          .smoke-venv/bin/python -c "import adaf_attack; from adaf_attack.cli import app; assert adaf_attack.__version__ == '0.10.0' and app is not None"
-          .smoke-venv/bin/adaf-attack --version
-          .smoke-venv/bin/adaf-attack list-capabilities
-
-      - name: Install source distribution in a separate clean environment
-        run: |
-          python -m venv .sdist-smoke-venv
-          .sdist-smoke-venv/bin/python -m pip install --upgrade pip setuptools wheel
-          .sdist-smoke-venv/bin/python -m pip install --requirement requirements-ci.txt
-          .sdist-smoke-venv/bin/python -m pip install --no-index --no-deps --no-build-isolation dist/*.tar.gz
-          .sdist-smoke-venv/bin/python -m pip check
-          .sdist-smoke-venv/bin/python -c "import adaf_attack; from adaf_attack.cli import app; assert adaf_attack.__version__ == '0.10.0' and app is not None"
-          .sdist-smoke-venv/bin/adaf-attack --version
-          .sdist-smoke-venv/bin/adaf-attack doctor
-
       - name: Upload distribution artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: python-distributions
           path: dist/
           retention-days: 14
+
+  artifact-smoke:
+    name: Artifact smoke (${{ matrix.os }} / Python ${{ matrix.python-version }} / ${{ matrix.artifact }})
+    needs: [package]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            python-version: "3.11"
+            artifact: wheel
+          - os: ubuntu-24.04
+            python-version: "3.13"
+            artifact: sdist
+          - os: windows-2022
+            python-version: "3.12"
+            artifact: wheel
+          - os: macos-14
+            python-version: "3.13"
+            artifact: wheel
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download built distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-distributions
+          path: dist
+
+      - name: Install and exercise the clean distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          if [[ "${{ matrix.artifact }}" == "wheel" ]]; then
+            artifacts=(dist/*.whl)
+          else
+            artifacts=(dist/*.tar.gz)
+          fi
+          if [[ "${#artifacts[@]}" -ne 1 ]]; then
+            echo "Expected exactly one ${{ matrix.artifact }} artifact, found ${#artifacts[@]}" >&2
+            exit 1
+          fi
+          python scripts/smoke_distribution.py \
+            --artifact "${artifacts[0]}" \
+            --venv "$RUNNER_TEMP/adaf-artifact-smoke"
+
+  kali-installer:
+    name: Kali artifact installer lifecycle
+    needs: [package, scripts]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: kalilinux/kali-rolling@sha256:1a2eb0501a2dbe8aa8f513b0791699dbd9b539696768f40b2cbe1dead2fb0d67
+    env:
+      XDG_DATA_HOME: /tmp/adaf-data
+    steps:
+      - name: Install action prerequisites
+        run: apt-get update && apt-get install --yes git ca-certificates
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download built distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-distributions
+          path: dist
+
+      - name: Install the wheel and verify lifecycle behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          artifacts=(dist/*.whl)
+          [[ "${#artifacts[@]}" -eq 1 ]]
+          mkdir unowned-venv
+          touch unowned-venv/preserve-me
+          if bash scripts/install-kali.sh --uninstall --venv unowned-venv; then
+            echo "Kali installer removed an unowned venv" >&2
+            exit 1
+          fi
+          [[ -f unowned-venv/preserve-me ]]
+          bash scripts/install-kali.sh \
+            --package "${artifacts[0]}" \
+            --extras base \
+            --skip-completion
+          .venv/bin/python -m pip check
+          .venv/bin/adaf-attack --version
+          .venv/bin/adaf-attack --format json doctor --explain
+          .venv/bin/adaf-attack list-capabilities
+          .venv/bin/adaf-attack paths
+          touch "$XDG_DATA_HOME/adaf-attack/workspaces/preserve-me"
+          bash scripts/install-kali.sh --uninstall
+          [[ ! -d .venv ]]
+          [[ -f "$XDG_DATA_HOME/adaf-attack/workspaces/preserve-me" ]]
+          bash scripts/install-kali.sh \
+            --package "${artifacts[0]}" \
+            --extras base \
+            --skip-system-deps \
+            --skip-completion
+          bash scripts/install-kali.sh --uninstall --remove-workspace
+          [[ ! -e "$XDG_DATA_HOME/adaf-attack/workspaces" ]]
 
   operator-workflow:
     name: Offline operator workflow
@@ -793,7 +792,7 @@ jobs:
 
   release-readiness:
     name: New-user release-readiness standard
-    needs: [package]
+    needs: [artifact-smoke]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -849,10 +848,20 @@ jobs:
             python scripts/check_release_readiness.py --repo-root "$PWD"
 
   windows-installer:
-    name: Windows installer smoke test
+    name: Windows installer (${{ matrix.shell }} / Python ${{ matrix.python-version }})
     needs: [package, scripts]
     runs-on: windows-2022
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shell: powershell
+            python-version: "3.11"
+            preexisting-config: false
+          - shell: pwsh
+            python-version: "3.13"
+            preexisting-config: true
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -860,49 +869,105 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements-ci.txt
+          python-version: ${{ matrix.python-version }}
 
-      - name: Run Windows installer and verify operator entry points
-        shell: pwsh
+      - name: Download built distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-distributions
+          path: dist
+
+      - name: Run artifact installer and verify owned lifecycle
+        shell: ${{ matrix.shell }}
         run: |
-          & .\scripts\Install-AdafAttack.ps1 -RepoRoot $PWD -Extras full -Python python
+          $ErrorActionPreference = "Stop"
+          $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP "adaf-localappdata"
+          $wheel = @(Get-ChildItem dist\*.whl)
+          if ($wheel.Count -ne 1) { throw "Expected exactly one wheel, found $($wheel.Count)" }
+          $python = (Get-Command python).Source
+          $shimDir = Join-Path $env:LOCALAPPDATA "adaf-attack\bin"
+          $previousWorkspace = Join-Path $env:RUNNER_TEMP "preexisting-workspace"
+          $hadPreexistingConfig = "${{ matrix.preexisting-config }}" -eq "true"
+          if ($hadPreexistingConfig) {
+            $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+            [Environment]::SetEnvironmentVariable("Path", "$userPath;$shimDir", "User")
+            [Environment]::SetEnvironmentVariable(
+              "ADAF_ATTACK_WORKSPACE",
+              $previousWorkspace,
+              "User"
+            )
+          }
+          & .\scripts\Install-AdafAttack.ps1 `
+            -RepoRoot $PWD `
+            -Package $wheel[0].FullName `
+            -Extras base `
+            -Python $python `
+            -SkipCompletion
           $venvPython = Join-Path $PWD ".venv\Scripts\python.exe"
-          $venvCli = Join-Path $PWD ".venv\Scripts\adaf-attack.exe"
-          if (-not (Test-Path $venvCli)) { throw "Installed console script missing: $venvCli" }
           & $venvPython -m pip check
-          & $venvCli --version
-          & $venvCli --format json doctor --explain | ConvertFrom-Json | ForEach-Object {
+          if ($LASTEXITCODE -ne 0) { throw "pip check failed" }
+
+          $shim = Join-Path $shimDir "adaf-attack.cmd"
+          if (-not (Test-Path $shim)) { throw "Installer PATH shim missing: $shim" }
+          $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+          if ($userPath -notlike "*$shimDir*") { throw "Installer shim directory missing from user PATH" }
+          $workspace = [Environment]::GetEnvironmentVariable("ADAF_ATTACK_WORKSPACE", "User")
+          if (-not $workspace) { throw "Installer did not set ADAF_ATTACK_WORKSPACE" }
+          $env:Path = "$shimDir;$env:Path"
+          & adaf-attack --version
+          if ($LASTEXITCODE -ne 0) { throw "Installer-created shim failed" }
+          & adaf-attack --format json doctor --explain | ConvertFrom-Json | ForEach-Object {
             if (-not $_.ok) { throw "doctor reported failure" }
           }
-          & $venvCli list-capabilities
-          Import-Module .\scripts\AdafAttack.psm1 -Force
+          & adaf-attack list-capabilities
+          if ($LASTEXITCODE -ne 0) { throw "list-capabilities failed through shim" }
+          & adaf-attack paths
+          if ($LASTEXITCODE -ne 0) { throw "paths failed through shim" }
 
-          & $venvPython scripts\render_demo_engagement.py
-          $session = Join-Path $PWD "output\demo-engagement"
-          & $venvCli engagement report --session $session --engagement-id WIN-2026-001
-          $package = Join-Path $env:RUNNER_TEMP "windows-demo-engagement.zip"
-          & $venvCli --format json engagement package --session $session --output $package --profile client | ConvertFrom-Json | ForEach-Object {
-            if (-not $_.ok) { throw "engagement package reported failure" }
+          New-Item -ItemType Directory -Force $workspace | Out-Null
+          $sentinel = Join-Path $workspace "preserve-me.txt"
+          Set-Content $sentinel "operator data"
+
+          # Re-running the installer is the supported in-place upgrade path.
+          & .\scripts\Install-AdafAttack.ps1 `
+            -RepoRoot $PWD `
+            -Package $wheel[0].FullName `
+            -Extras base `
+            -Python $python `
+            -SkipCompletion
+          & .\scripts\Install-AdafAttack.ps1 -Uninstall
+          if (Test-Path $shim) { throw "Uninstall left the PATH shim behind" }
+          if (-not (Test-Path $sentinel)) { throw "Default uninstall deleted workspace data" }
+          $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+          $restoredWorkspace = [Environment]::GetEnvironmentVariable(
+            "ADAF_ATTACK_WORKSPACE",
+            "User"
+          )
+          if ($hadPreexistingConfig) {
+            if ($userPath -notlike "*$shimDir*") { throw "Uninstall removed a pre-existing PATH entry" }
+            if ($restoredWorkspace -ne $previousWorkspace) {
+              throw "Uninstall did not restore the previous workspace environment value"
+            }
+          } else {
+            if ($userPath -like "*$shimDir*") { throw "Uninstall left its user PATH entry behind" }
+            if ($restoredWorkspace) {
+              throw "Uninstall left its owned workspace environment variable behind"
+            }
           }
-          if (-not (Test-Path (Join-Path $session "reports\report-manifest.json"))) {
-            throw "report manifest missing"
-          }
-          if (-not (Test-Path $package)) { throw "engagement package missing" }
-          Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $archive = [System.IO.Compression.ZipFile]::OpenRead($package)
-          try {
-            if ($archive.Entries.Count -eq 0) { throw "engagement package is empty" }
-            if ($archive.Entries.FullName -match "vault") { throw "engagement package contains vault material" }
-          } finally {
-            $archive.Dispose()
-          }
+
+          & .\scripts\Install-AdafAttack.ps1 `
+            -RepoRoot $PWD `
+            -Package $wheel[0].FullName `
+            -Extras base `
+            -Python $python `
+            -SkipCompletion
+          & .\scripts\Install-AdafAttack.ps1 -Uninstall -RemoveWorkspace
+          if (Test-Path $workspace) { throw "Explicit workspace removal did not delete data" }
 
   ci-gate:
     name: Production readiness gate
     if: always()
-    needs: [lint, typecheck, tests, security, codeql, scripts, workflow-contract, package, operator-workflow, release-readiness, windows-installer]
+    needs: [lint, typecheck, tests, security, codeql, scripts, workflow-contract, package, artifact-smoke, kali-installer, operator-workflow, release-readiness, windows-installer]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every CI lane to pass
@@ -915,6 +980,8 @@ jobs:
           test "${{ needs.scripts.result }}" = success
           test "${{ needs.workflow-contract.result }}" = success
           test "${{ needs.package.result }}" = success
+          test "${{ needs.artifact-smoke.result }}" = success
+          test "${{ needs.kali-installer.result }}" = success
           test "${{ needs.operator-workflow.result }}" = success
           test "${{ needs.release-readiness.result }}" = success
           test "${{ needs.windows-installer.result }}" = success

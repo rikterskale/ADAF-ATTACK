@@ -1,0 +1,70 @@
+name: Published artifact smoke
+
+on:
+  schedule:
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "GitHub release tag to test, or latest"
+        required: true
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONUTF8: "1"
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  github-release-wheel:
+    name: GitHub release wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    steps:
+      - name: Checkout smoke contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Download wheel from the requested GitHub release
+        shell: bash
+        env:
+          REQUESTED_RELEASE: ${{ inputs.release || 'latest' }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          tag="$REQUESTED_RELEASE"
+          if [[ "$tag" == "latest" ]]; then
+            tag="$(gh release view --json tagName --jq .tagName)" || {
+              echo "No published GitHub release exists. Publish a release with wheel assets before running this smoke workflow." >&2
+              exit 1
+            }
+          fi
+          mkdir -p published-dist
+          gh release download "$tag" --dir published-dist --pattern "*.whl"
+          wheels=(published-dist/*.whl)
+          if [[ "${#wheels[@]}" -ne 1 ]]; then
+            echo "Release $tag must contain exactly one wheel asset; found ${#wheels[@]}." >&2
+            exit 1
+          fi
+          printf '%s\n' "${wheels[0]}" > "$RUNNER_TEMP/artifact-path"
+
+      - name: Install and exercise the published wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact="$(cat "$RUNNER_TEMP/artifact-path")"
+          python scripts/smoke_distribution.py \
+            --artifact "$artifact" \
+            --venv "$RUNNER_TEMP/adaf-published-smoke"

@@ -1,17 +1,31 @@
-# ADAF-ATTACK v0.10.0
+# ADAF-ATTACK 0.10.0 release notes
 
-## Tier A — close attack loops
+## Operator capabilities
 
-- **pkinit-auth** — PKINIT TGT from shadow-cred key/cert (certipy when available; PFX + playbook always). Requires --force.
-- **cert-request** — Real ESC1 enroll via certipy req; seeds template/CA from adcs-enum. Requires --force.
-- **gmsa-laps-enum** — Secret read with --include-secrets (gMSA ManagedPassword blob parse + LAPS attrs).
-- **gpo-sysvol** — SYSVOL reachability/write probe; optional stage with --force --gpo --payload.
+- PKINIT, certificate request, gMSA/LAPS, and SYSVOL workflows include explicit
+  force gates and evidence handling.
+- Offline analysis, reporting, engagement packaging, and rollback contracts are
+  exercised in CI.
 
-## CLI
+## Installation and lifecycle
 
-- --sam, --key, --cert, --pfx (pkinit)
-- --gpo, --payload or @file (sysvol stage)
+- Supported runtime: Python 3.11-3.13.
+- `full` is now an operator bundle (`tui`, `kerberos`, and `reports`) and no
+  longer installs contributor-only test/lint/type-check tools.
+- Built wheels are smoked on Ubuntu, Windows, and macOS; the sdist is smoked on
+  Ubuntu. Windows PowerShell 5.1/7 and Kali installer paths have lifecycle jobs.
+- Windows and Kali uninstall preserve workspaces by default. Data deletion
+  requires an explicit option.
+- Published packages are private GitHub release assets, not PyPI packages.
 
-## Tests
+## Upgrade note
 
-56 unit tests (gMSA blob parser, PFX roundtrip, prior suite).
+Existing source environments that relied on `full` for pytest, Ruff, or mypy
+must install `adaf-attack[dev,operator]`. Operator environments can continue to
+use `adaf-attack[full]`.
+
+## Known limitations
+
+See [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md). In particular, hosted
+CI does not prove live AD behavior, organization-specific endpoint policy, or a
+published artifact before a release asset exists.

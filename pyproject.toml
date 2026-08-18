@@ -64,8 +64,11 @@ certipy = ["certipy-ad>=4.8.0"]
 kerberos = [
     "impacket>=0.12.0",
 ]
+operator = [
+    "adaf-attack[tui,kerberos,reports]",
+]
 full = [
-    "adaf-attack[dev,tui,kerberos,reports]",
+    "adaf-attack[operator]",
 ]
 reports = ["reportlab>=4.0", "pypdf>=5.0"]
 

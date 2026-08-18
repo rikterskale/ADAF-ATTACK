@@ -6,24 +6,26 @@ XDG data locations, so session artifacts default to
 
 ## Install
 
-Clone the repository, then run the installer from the repository root:
+Clone/extract the matching source release, place the approved wheel in `dist`,
+then run the installer from the repository root:
 
 ```bash
-bash scripts/install-kali.sh
+bash scripts/install-kali.sh --package dist/adaf_attack-0.10.0-py3-none-any.whl
 source .venv/bin/activate
 adaf-attack doctor
 ```
 
 The installer installs the build and Python prerequisites through `apt`, then
-creates a project-local `.venv` and installs the `full` extra set. To use
+creates a project-local `.venv` and installs the production `full` extra set. To use
 already-provisioned packages, omit the `apt` step:
 
 ```bash
 bash scripts/install-kali.sh --skip-system-deps
 ```
 
-Select a smaller dependency set with `--extras dev`, `--extras tui`, or
-`--extras kerberos`.
+Select a smaller dependency set with `--extras base`, `--extras tui`, or
+`--extras kerberos`. Omitting `--package` installs the authorized source
+checkout.
 
 ## Verify
 
@@ -40,6 +42,21 @@ Kali. You can override the artifact location without changing the installer:
 export ADAF_ATTACK_WORKSPACE="$HOME/adaf-workspaces"
 ```
 
+## Upgrade and uninstall
+
+Rerun the installer with a newer or older approved artifact to change versions.
+The default uninstall removes only the venv and preserves workspace evidence:
+
+```bash
+bash scripts/install-kali.sh --uninstall
+```
+
+Delete workspace data only after retention approval:
+
+```bash
+bash scripts/install-kali.sh --uninstall --remove-workspace
+```
+
 ## Notes
 
 - Use the virtual environment rather than Kali's system Python; this avoids
@@ -47,3 +64,5 @@ export ADAF_ATTACK_WORKSPACE="$HOME/adaf-workspaces"
 - The installer requires `sudo` only for the optional prerequisite packages.
 - The project does not require root after installation. Run it only in an
   authorized assessment scope.
+- Hosted CI performs a real artifact install in a Kali rolling container, but it
+  cannot prove your endpoint policy or live AD environment.
