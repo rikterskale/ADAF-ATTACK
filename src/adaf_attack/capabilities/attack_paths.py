@@ -14,12 +14,24 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
+from adaf_attack.core.command_templates import build_exploit_commands
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import register_capability
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 console = Console()
+
+
+def _enrich_exploit_chains(
+    exploit_chains: list[dict[str, Any]], target: Target
+) -> list[dict[str, Any]]:
+    """Attach parameterized example_commands to each ranked exploit chain."""
+    for chain in exploit_chains:
+        chain["example_commands"] = build_exploit_commands(
+            chain, target, operator_user=target.username
+        )
+    return exploit_chains
 
 
 @register_capability(
@@ -96,6 +108,8 @@ class AttackPaths:
             limit=limit,
             per_start=8 if start else 4,
         )
+        # Attach operator-facing example commands (ranking stays evidence-only)
+        exploit_chains = _enrich_exploit_chains(exploit_chains, target)
 
         table = Table(title="Top ranked attack paths", show_header=True, header_style="bold")
         table.add_column("#", style="dim", width=4)
@@ -117,6 +131,34 @@ class AttackPaths:
             console.print(
                 "[yellow]No paths found — expand enum coverage or raise max_depth[/yellow]"
             )
+
+        # Second table: exploit chains with primary example command
+        if exploit_chains:
+            xtable = Table(
+                title="Top exploit chains (with example commands)",
+                show_header=True,
+                header_style="bold",
+            )
+            xtable.add_column("#", style="dim", width=4)
+            xtable.add_column("Score", justify="right")
+            xtable.add_column("Len", justify="right")
+            xtable.add_column("Terminal", max_width=26)
+            xtable.add_column("Example", max_width=72)
+
+            for i, chain in enumerate(exploit_chains[:15], 1):
+                examples = chain.get("example_commands") or []
+                cmd = examples[0]["command"] if examples else ""
+                # Truncate long commands for the table
+                if len(cmd) > 70:
+                    cmd = cmd[:69] + "…"
+                xtable.add_row(
+                    str(i),
+                    f"{chain.get('score', 0):.1f}",
+                    str(chain.get("length", 1)),
+                    str(chain.get("terminal_relation") or "-"),
+                    cmd,
+                )
+            console.print(xtable)
 
         result: dict[str, Any] = {
             "domain": target.domain,

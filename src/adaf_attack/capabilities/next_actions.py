@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from adaf_attack.core.command_templates import build_exploit_commands
 from adaf_attack.core.confidence import score_chain
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import register_capability
@@ -178,6 +179,17 @@ class NextActions:
                 edge_kinds=list(chain.get("edges") or []),
             )
 
+            examples = build_exploit_commands(
+                chain, target, operator_user=target.username
+            )
+            primary = examples[0] if examples else None
+
+            # Prefer template risk/approval when available; fall back to ACTION_MAP
+            if primary:
+                capability = primary["capability"]
+                risk = primary["risk"]
+                approval = primary["approval_required"]
+
             seen.add(capability)
             actions.append(
                 {
@@ -190,9 +202,14 @@ class NextActions:
                     "score": chain.get("score"),
                     "confidence": conf["confidence"],
                     "confidence_rank": conf["confidence_rank"],
-                    "command": (
+                    "command": primary["command"]
+                    if primary
+                    else (
                         f"adaf-attack plan {capability} -d {target.domain} --dc-ip {target.dc_ip}"
                     ),
+                    "example_commands": examples,
+                    "path": chain.get("path"),
+                    "terminal_relation": relation,
                 }
             )
 
