@@ -421,12 +421,65 @@ PLANNED_CAPABILITIES: tuple[tuple[str, str, bool, str, tuple[str, ...], str, tup
 )
 
 
+# First implementation PR — ldap3 + existing runners. Tag: next-pr
+NEXT_PR_IDS: frozenset[str] = frozenset(
+    {
+        "add-member",
+        "add-self",
+        "write-spn",
+        "targeted-kerberoast",
+        "maq-add-computer",
+        "maq-rbcd-workflow",
+        "gmsa-read",
+        "badsuccessor",
+        "dcsync-grant-workflow",
+        "pre2k-spray",
+        "unconstrained-delegation",
+    }
+)
+
+# Follow-on implementations that fit the current stack. Tag: wave-2
+WAVE2_IDS: frozenset[str] = frozenset(
+    {
+        "force-change-password",
+        "acl-abuse",
+        "adminsdholder-persist",
+        "timeroast",
+        "adidns-wpad",
+        "constrained-delegation",
+        "trustedtoauth",
+        "dpapi-domain-backup",
+        "azureadssoacc-roast",
+        "aadconnect-dcsync",
+        "esc8-relay-workflow",
+        "dmsa-ouroboros",
+    }
+)
+
+
 def planned_ids() -> tuple[str, ...]:
     return tuple(item[0] for item in PLANNED_CAPABILITIES)
 
 
 def planned_destructive_ids() -> tuple[str, ...]:
     return tuple(item[0] for item in PLANNED_CAPABILITIES if item[2])
+
+
+def next_pr_ids() -> tuple[str, ...]:
+    return tuple(sorted(NEXT_PR_IDS))
+
+
+def wave2_ids() -> tuple[str, ...]:
+    return tuple(sorted(WAVE2_IDS))
+
+
+def _queue_tags(capability_id: str) -> tuple[str, ...]:
+    extra: tuple[str, ...] = ()
+    if capability_id in NEXT_PR_IDS:
+        extra += ("next-pr",)
+    if capability_id in WAVE2_IDS:
+        extra += ("wave-2",)
+    return extra
 
 
 def _tracking_payload(capability_id: str, summary: str, target: Target, force: bool) -> dict[str, Any]:
@@ -487,5 +540,5 @@ for (
         summary=summary,
         destructive=destructive,
         category=category,
-        tags=(*tags, "experimental", "tracking"),
+        tags=(*tags, "experimental", "tracking", *_queue_tags(cap_id)),
     )(_attach(cap_id, summary))

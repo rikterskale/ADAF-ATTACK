@@ -8,9 +8,13 @@ from pathlib import Path
 import adaf_attack.capabilities  # noqa: F401
 from adaf_attack.capabilities import planned_offensive
 from adaf_attack.capabilities.planned_offensive import (
+    NEXT_PR_IDS,
     PLANNED_CAPABILITIES,
+    WAVE2_IDS,
+    next_pr_ids,
     planned_destructive_ids,
     planned_ids,
+    wave2_ids,
 )
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import capability_registry
@@ -53,3 +57,21 @@ def test_destructive_flags_match_tuple() -> None:
         assert cap.destructive is is_destructive
         if is_destructive:
             assert cap_id in destructive
+
+
+def test_next_pr_ids_are_registered_and_tagged() -> None:
+    assert len(NEXT_PR_IDS) == 11
+    assert not (NEXT_PR_IDS & WAVE2_IDS)
+    for cap_id in next_pr_ids():
+        cap = capability_registry.get(cap_id)
+        assert cap is not None, cap_id
+        assert "next-pr" in cap.tags
+        assert "experimental" in cap.tags
+
+
+def test_wave2_ids_are_registered_and_tagged() -> None:
+    assert len(WAVE2_IDS) == 12
+    for cap_id in wave2_ids():
+        cap = capability_registry.get(cap_id)
+        assert cap is not None, cap_id
+        assert "wave-2" in cap.tags

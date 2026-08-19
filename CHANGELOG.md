@@ -7,6 +7,9 @@ declared in `pyproject.toml`.
 
 ### Added
 
+- Tagged implementation queues on experimental capabilities: `next-pr`
+  (11 LDAP/Impacket runners for the next PR) and `wave-2` (12 follow-ons).
+  Search with `adaf-attack search next-pr`.
 - Registered 40 experimental offensive capabilities for roadmap tracking
   (`planned_offensive`): ACL primitives (`add-member`, `acl-abuse`,
   `write-spn`, …), Server 2025 dMSA (`badsuccessor`, `dmsa-ouroboros`),
