@@ -303,15 +303,15 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
 
         self._capabilities = capability_registry.list()
         needle = query.strip().lower()
-        visible = [
-            cap
-            for cap in self._capabilities
-            if (
-                not needle
-                or needle in f"{cap.id} {cap.category} {cap.summary} {' '.join(cap.tags)}".lower()
-            )
-            and (not self._green_only or safety_summary(cap)["level"] == "GREEN")
-        ]
+
+        def _matches(cap: Capability) -> bool:
+            if needle and needle not in (
+                f"{cap.id} {cap.category} {cap.summary} {' '.join(cap.tags)}".lower()
+            ):
+                return False
+            return not (self._green_only and safety_summary(cap)["level"] != "GREEN")
+
+        visible = [cap for cap in self._capabilities if _matches(cap)]
         list_view = self.query_one("#cap-list", ListView)
         list_view.clear()
         visible_ids = {cap.id for cap in visible}

@@ -1318,9 +1318,12 @@ def _interactive_run_prompts(
             if str(answer).strip().upper() == "YES":
                 collected["--force"] = True
             else:
-                raise typer.Exit(
-                    code=error_for("USER_ABORTED", message="Force not confirmed").exit_code
+                error = error_for(
+                    "USER_ABORTED",
+                    message="Destructive-force confirmation declined.",
                 )
+                _emit_error(ctx, error)
+                raise typer.Exit(code=error.exit_code)
             continue
 
         if prompt["is_param"]:
@@ -2566,8 +2569,7 @@ def init_cmd(
     from adaf_attack.core.user_config import allowed_keys, load_user_config, set_key  # noqa: F401
 
     non_interactive = ctx.ensure_object(dict).get("non_interactive")
-    tty = sys.stdin.isatty() and sys.stdout.isatty()
-    prompt_ok = tty and not non_interactive and not _json_mode(ctx)
+    prompt_ok = not non_interactive and not _json_mode(ctx)
 
     console_obj = _console(ctx)
     doctor_payload = _doctor_payload("offline")

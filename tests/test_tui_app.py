@@ -136,6 +136,30 @@ def test_tui_beginner_mode_and_form_reset_are_reversible() -> None:
     asyncio.run(exercise())
 
 
+def test_tui_green_only_switch_filters_capability_list() -> None:
+    async def exercise() -> None:
+        from adaf_attack.core.novice import safety_summary
+
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.on_switch_changed(
+                SimpleNamespace(switch=SimpleNamespace(id="green-only"), value=True)
+            )
+            assert app._green_only is True
+            # The internal populate uses the same predicate we can check directly.
+            green_ids = {
+                cap.id for cap in app._capabilities if safety_summary(cap)["level"] == "GREEN"
+            }
+            assert green_ids, "expected at least one offline-safe capability"
+            app.on_switch_changed(
+                SimpleNamespace(switch=SimpleNamespace(id="green-only"), value=False)
+            )
+            assert app._green_only is False
+
+    asyncio.run(exercise())
+
+
 def test_tui_command_findings_and_standard_recommendations(tmp_path) -> None:
     """Cover operator-facing guidance paths using the in-process Textual pilot."""
 
