@@ -77,6 +77,32 @@ def test_write_rbcd_placeholders():
     assert "--impersonate DC01$" in cmd
 
 
+def test_unknown_placeholder_falls_back_to_raw_command(monkeypatch):
+    """A template placeholder missing from the context yields the raw cmd."""
+    raw = "run --thing {unresolved_placeholder}"
+    monkeypatch.setitem(
+        COMMAND_TEMPLATES,
+        "BogusRel",
+        [
+            {
+                "capability": "bogus",
+                "risk": "low",
+                "approval_required": "false",
+                "cmd": raw,
+            }
+        ],
+    )
+    target = Target(domain="corp.local", dc_ip="10.0.0.1", username="op")
+    chain = {
+        "terminal_relation": "BogusRel",
+        "start": "USER@alice@CORP.LOCAL",
+        "end": "USER@bob@CORP.LOCAL",
+    }
+    examples = build_exploit_commands(chain, target)
+    assert len(examples) == 1
+    assert examples[0]["command"] == raw
+
+
 @pytest.mark.parametrize(
     "relation,capability,needs_force",
     [
