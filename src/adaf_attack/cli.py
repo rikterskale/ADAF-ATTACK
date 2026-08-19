@@ -571,6 +571,16 @@ def list_capabilities(
     by_phase: bool = typer.Option(
         False, "--by-phase", help="Group capabilities by kill-chain phase."
     ),
+    novice: bool = typer.Option(
+        False,
+        "--novice",
+        help="Beginner view grouped by phase with a GREEN/YELLOW/RED safety tag and Offline column.",
+    ),
+    safe_only: bool = typer.Option(
+        False,
+        "--safe-only",
+        help="Show only offline-safe (GREEN) capabilities. Useful for a first session.",
+    ),
 ) -> None:
     """List registered capabilities."""
     import adaf_attack.capabilities  # noqa: F401
@@ -581,7 +591,79 @@ def list_capabilities(
         _emit(ctx, {"ok": True, "capabilities": [], "count": 0}, "No capabilities registered yet.")
         return
 
+    from adaf_attack.core.novice import safety_summary
     from adaf_attack.core.ux import capability_phase, group_capabilities_by_phase, phase_label
+
+    palette = {"GREEN": "green", "YELLOW": "yellow", "RED": "red"}
+
+    if safe_only:
+        caps = [c for c in caps if safety_summary(c)["level"] == "GREEN"]
+        if not caps:
+            _emit(
+                ctx,
+                {"ok": True, "capabilities": [], "count": 0, "filter": "safe-only"},
+                Panel("No offline-safe capabilities match the current filter.", title="Empty"),
+            )
+            return
+
+    if novice:
+        table = Table(
+            title="Capabilities (beginner view)",
+            show_header=True,
+            header_style="bold",
+            caption="GREEN offline-safe · YELLOW reads a live target · RED can modify a target",
+        )
+        table.add_column("Phase", style="bold")
+        table.add_column("ID", style="cyan")
+        table.add_column("Safety")
+        table.add_column("Offline?")
+        table.add_column("What it does")
+        by_phase_groups = group_capabilities_by_phase()
+        if safe_only:
+            wanted = {c.id for c in caps}
+            by_phase_groups = {
+                phase: [cap for cap in group if cap.id in wanted]
+                for phase, group in by_phase_groups.items()
+            }
+        display_caps: list[Any] = []
+        current_phase: str | None = None
+        for phase, group in by_phase_groups.items():
+            if not group:
+                continue
+            for cap in group:
+                safety = safety_summary(cap)
+                color = palette.get(str(safety["level"]), "white")
+                shown_phase = "" if phase == current_phase else phase_label(phase)
+                current_phase = phase
+                table.add_row(
+                    shown_phase,
+                    cap.id,
+                    f"[{color}]{safety['level']}[/{color}]",
+                    "yes" if not safety["network"] else "no",
+                    cap.summary,
+                )
+                display_caps.append(cap)
+        _emit(
+            ctx,
+            {
+                "ok": True,
+                "view": "novice",
+                "safe_only": safe_only,
+                "capabilities": [_capability_payload(cap) for cap in display_caps],
+                "legend": {
+                    "GREEN": "Works from saved evidence and does not contact a target.",
+                    "YELLOW": "Reads information from an authorized target and contacts the network.",
+                    "RED": "Can change a target when its write options are used.",
+                },
+                "count": len(display_caps),
+                "next_step": (
+                    "Start with a GREEN capability, or run "
+                    "`adaf-attack run <id> --interactive` for a guided prompt."
+                ),
+            },
+            table,
+        )
+        return
 
     table = Table(title="Registered Capabilities", show_header=True, header_style="bold")
     table.add_column("ID", style="cyan")
@@ -1177,6 +1259,143 @@ def _parse_extra_params(params: list[str] | None) -> dict[str, str]:
     return result
 
 
+def _interactive_run_prompts(
+    ctx: typer.Context,
+    capability_id: str,
+    *,
+    provided: dict[str, Any],
+    force_already: bool,
+) -> dict[str, Any]:
+    """Guided prompt loop for `run --interactive`.
+
+    Resolves the capability, prompts for every required option not already
+    supplied on the command line, previews the assembled command with the
+    plain-language safety summary, and requires confirmation before returning.
+    Raises typer.Exit on user abort.
+    """
+    import adaf_attack.capabilities  # noqa: F401
+    from adaf_attack.core.novice import (
+        glossary_definition,
+        plain_description,
+        required_prompts,
+        safety_summary,
+    )
+    from adaf_attack.core.registry import capability_registry
+    from adaf_attack.core.ux import build_ready_command
+
+    cap = capability_registry.get(capability_id)
+    if cap is None:
+        error = error_for(
+            "UNKNOWN_CAPABILITY",
+            message=f"Unknown capability: {capability_id}",
+            details={"capability": capability_id},
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+
+    console_obj = _console(ctx)
+    safety = safety_summary(cap)
+    palette = {"GREEN": "green", "YELLOW": "yellow", "RED": "red"}
+    color = palette.get(str(safety["level"]), "white")
+    console_obj.print(
+        Panel(
+            f"[bold]{cap.id}[/bold]  [{color}]{safety['level']}[/{color}]\n"
+            f"{plain_description(cap)}\n"
+            f"Network contact: {'yes' if safety['network'] else 'no'}",
+            title="Interactive run",
+        )
+    )
+
+    collected: dict[str, Any] = {}
+    extra_params: list[str] = []
+    for prompt in required_prompts(cap):
+        option = prompt["option"]
+        # Only ask for --force explicitly for destructive capabilities.
+        if option == "--force":
+            if force_already:
+                continue
+            answer = typer.prompt(prompt["label"], default="NO")
+            if str(answer).strip().upper() == "YES":
+                collected["--force"] = True
+            else:
+                raise typer.Exit(
+                    code=error_for("USER_ABORTED", message="Force not confirmed").exit_code
+                )
+            continue
+
+        if prompt["is_param"]:
+            key = prompt["param_key"]
+            existing = None
+            for entry in provided.get("__param_list__") or []:
+                if isinstance(entry, str) and entry.startswith(f"{key}="):
+                    existing = entry.split("=", 1)[1]
+                    break
+            hint = f"  [dim]{prompt['help']}[/dim]"
+            console_obj.print(hint)
+            answer = typer.prompt(prompt["label"], default=existing or "")
+            if answer:
+                extra_params.append(f"{key}={answer}")
+            continue
+
+        current = provided.get(option)
+        if current:
+            console_obj.print(f"[dim]{option} already provided: {current}[/dim]")
+            continue
+
+        glossary = glossary_definition(option.replace("-", "").lower()) or glossary_definition(
+            cap.id
+        )
+        console_obj.print(f"  [dim]{prompt['help']}[/dim]")
+        if glossary:
+            console_obj.print(f"  [dim]Glossary: {glossary}[/dim]")
+        hidden = option == "--password"
+        answer = typer.prompt(prompt["label"], default="", hide_input=hidden, show_default=False)
+        if answer:
+            collected[option] = answer
+
+    if extra_params:
+        collected["__extra_params__"] = extra_params
+
+    # Build the ready command preview using the collected + provided values.
+    def _pick(key: str) -> str | None:
+        val = collected.get(key)
+        if val is None:
+            val = provided.get(key)
+        if isinstance(val, str) and val:
+            return val
+        return None
+
+    preview_extra: dict[str, str] = {}
+    for entry in extra_params:
+        key, _, value = entry.partition("=")
+        if key and value:
+            preview_extra[key] = value
+    ready = build_ready_command(
+        cap.id,
+        domain=_pick("--domain"),
+        dc_ip=_pick("--dc-ip"),
+        username=_pick("--username"),
+        force=force_already or bool(collected.get("--force")),
+        extra=preview_extra or None,
+    )
+    console_obj.print(
+        Panel(
+            f"[bold]About to run[/bold]\n{ready}\n\nReview the command above. Nothing has run yet.",
+            title="Confirm",
+            border_style=color,
+        )
+    )
+    if not typer.confirm("Execute this command now?", default=False):
+        error = ActionableError(
+            "USER_ABORTED",
+            "User declined the interactive run confirmation.",
+            "Re-run without --interactive when you have prepared the flags.",
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    return collected
+
+
 @app.command("run")
 def run_capability(
     ctx: typer.Context,
@@ -1199,6 +1418,12 @@ def run_capability(
     force: bool = typer.Option(False, "--force", help="Required for destructive capabilities"),
     yes: bool = typer.Option(
         False, "--yes", "-y", help="Skip the interactive destructive-run confirmation."
+    ),
+    interactive: bool = typer.Option(
+        False,
+        "--interactive",
+        "-i",
+        help="Guided run: prompt for required options in plain language and preview the command.",
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Preview the plan and exit without contacting a target."
@@ -1265,6 +1490,67 @@ def run_capability(
         use_kerberos = bool(defaults.get("target.kerberos"))
     if not ldaps and defaults.get("target.ldaps"):
         ldaps = bool(defaults.get("target.ldaps"))
+
+    if interactive:
+        non_interactive_ctx = ctx.ensure_object(dict).get("non_interactive")
+        if non_interactive_ctx or _json_mode(ctx):
+            error = ActionableError(
+                "INTERACTIVE_MODE_DISABLED",
+                "--interactive cannot combine with --format json or --non-interactive.",
+                "Remove --interactive, or drop --non-interactive / --format json.",
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+        collected = _interactive_run_prompts(
+            ctx,
+            capability,
+            provided={
+                "--domain": domain,
+                "--dc-ip": dc_ip,
+                "--username": username,
+                "--password": password,
+                "--hashes": hashes,
+                "--ccache": ccache,
+                "--sam": sam,
+                "--template": template,
+                "--ca": ca,
+                "--alt-name": alt_name,
+                "--write-target": write_target,
+                "--descriptor-hex": descriptor_hex,
+                "--set-on": set_on,
+                "--set-from": set_from,
+                "--gpo": gpo,
+                "--payload": payload,
+                "--operation": operation,
+            },
+            force_already=force,
+        )
+        # Overwrite fields the user supplied at the prompt.
+        domain = collected.get("--domain", domain)
+        dc_ip = collected.get("--dc-ip", dc_ip)
+        username = collected.get("--username", username)
+        password = collected.get("--password", password)
+        hashes = collected.get("--hashes", hashes)
+        ccache = collected.get("--ccache", ccache)
+        sam = collected.get("--sam", sam)
+        template = collected.get("--template", template)
+        ca = collected.get("--ca", ca)
+        alt_name = collected.get("--alt-name", alt_name)
+        write_target = collected.get("--write-target", write_target)
+        descriptor_hex = collected.get("--descriptor-hex", descriptor_hex)
+        set_on = collected.get("--set-on", set_on)
+        set_from = collected.get("--set-from", set_from)
+        gpo = collected.get("--gpo", gpo)
+        payload = collected.get("--payload", payload)
+        operation = collected.get("--operation", operation)
+        if collected.get("--force"):
+            force = True
+        # -P style params captured during the prompt are appended.
+        extra_params = collected.get("__extra_params__") or []
+        if extra_params:
+            merged = list(param or [])
+            merged.extend(extra_params)
+            param = merged
 
     if not domain or not dc_ip:
         raise typer.BadParameter(
@@ -2248,6 +2534,135 @@ def path_rank_alias(
         limit=limit,
         output=output,
     )
+
+
+@app.command("init")
+def init_cmd(
+    ctx: typer.Context,
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        help="Preferred workspace directory to save as the default (skipped when not provided).",
+    ),
+    domain: str | None = typer.Option(
+        None, "--domain", help="Default authorized domain to save (skipped when not provided)."
+    ),
+    dc_ip: str | None = typer.Option(
+        None, "--dc-ip", help="Default DC IP or hostname to save (skipped when not provided)."
+    ),
+    username: str | None = typer.Option(
+        None, "--username", help="Default username to save (skipped when not provided)."
+    ),
+    skip_quickstart: bool = typer.Option(
+        False, "--skip-quickstart", help="Do not print the quickstart follow-up command."
+    ),
+) -> None:
+    """First-run onboarding: check the environment, save defaults, point at quickstart.
+
+    Interactive when run on a TTY without --format json; otherwise the flags
+    above act as the sole input (safe for scripts and CI). Nothing is written
+    unless a value is supplied or accepted at the prompt.
+    """
+    from adaf_attack.core.user_config import allowed_keys, load_user_config, set_key  # noqa: F401
+
+    non_interactive = ctx.ensure_object(dict).get("non_interactive")
+    tty = sys.stdin.isatty() and sys.stdout.isatty()
+    prompt_ok = tty and not non_interactive and not _json_mode(ctx)
+
+    console_obj = _console(ctx)
+    doctor_payload = _doctor_payload("offline")
+
+    saved: dict[str, Any] = {}
+    errors: list[dict[str, str]] = []
+
+    def _persist(key: str, value: str) -> None:
+        try:
+            set_key(key, value)
+            saved[key] = value
+        except (OSError, PermissionError, ValueError) as exc:
+            errors.append({"key": key, "error": str(exc)})
+
+    def _ask(key: str, label: str, current: str | None, flag_value: str | None) -> None:
+        if flag_value is not None:
+            _persist(key, flag_value)
+            return
+        if not prompt_ok:
+            return
+        default = current or ""
+        answer = typer.prompt(label, default=default, show_default=bool(default))
+        if answer and answer != current:
+            _persist(key, str(answer))
+
+    if not _json_mode(ctx):
+        status = "[green]OK[/green]" if doctor_payload["ok"] else "[yellow]NEEDS ATTENTION[/yellow]"
+        console_obj.print(
+            Panel(
+                f"Doctor (offline): {status}\n"
+                f"Version: {__version__}\n\n"
+                "This will save defaults so you can skip flags on future runs. "
+                "Leave blank to skip a field. Nothing is sent anywhere.",
+                title="ADAF-ATTACK init",
+            )
+        )
+    existing = load_user_config()
+
+    _ask(
+        "workspace",
+        "Default workspace directory",
+        existing.get("workspace"),
+        str(workspace) if workspace else None,
+    )
+    _ask(
+        "target.domain",
+        "Default authorized domain (blank to skip)",
+        existing.get("target.domain"),
+        domain,
+    )
+    _ask(
+        "target.dc_ip",
+        "Default DC IP or hostname (blank to skip)",
+        existing.get("target.dc_ip"),
+        dc_ip,
+    )
+    _ask(
+        "target.username",
+        "Default username (blank to skip)",
+        existing.get("target.username"),
+        username,
+    )
+
+    next_steps = [
+        "adaf-attack list-capabilities --novice",
+        "adaf-attack list-capabilities --novice --safe-only",
+    ]
+    if not skip_quickstart:
+        next_steps.append("adaf-attack quickstart")
+    next_steps.append("adaf-attack tour")
+
+    payload = {
+        "ok": doctor_payload["ok"] and not errors,
+        "doctor_ok": doctor_payload["ok"],
+        "saved": saved,
+        "errors": errors,
+        "next_steps": next_steps,
+    }
+    if _json_mode(ctx):
+        _emit(ctx, payload, "")
+        return
+
+    if saved:
+        console_obj.print("[bold]Saved defaults:[/bold]")
+        for key, value in saved.items():
+            console_obj.print(f"  {key} = {value}")
+    else:
+        console_obj.print("[dim]No defaults saved.[/dim]")
+    if errors:
+        console_obj.print("[yellow]Some values could not be saved:[/yellow]")
+        for entry in errors:
+            console_obj.print(f"  {entry['key']}: {entry['error']}")
+    console_obj.print("\n[bold]Next:[/bold]")
+    for step in next_steps:
+        console_obj.print(f"  {step}")
 
 
 @app.command("start")

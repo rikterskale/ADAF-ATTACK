@@ -268,12 +268,18 @@ in [LIVE_AD_LAB_VALIDATION.md](docs/LIVE_AD_LAB_VALIDATION.md).
 
 ### Recommended first 30 minutes
 
-1. Run `adaf-attack quickstart --workspace ./quickstart`.
-2. Inspect the generated session with `adaf-attack sessions show --session ./quickstart/demo-session`.
-3. Generate a report with `adaf-attack engagement report --session ./quickstart/demo-session --engagement-id QUICKSTART-2026-001`.
-4. Read the capability prerequisites with `adaf-attack capability-help`.
-5. Create and validate a scoped plan with `adaf-attack engagement init --output engagement.yaml` and `adaf-attack engagement validate engagement.yaml`.
-6. Before any target interaction, read the authorized lab and engagement guidance.
+1. Run `adaf-attack init` to save default domain / DC / workspace and see the
+   suggested next steps (skip fields with blank input).
+2. Browse the beginner catalog: `adaf-attack list-capabilities --novice`
+   (or `--novice --safe-only` for the offline-safe subset).
+3. Run `adaf-attack quickstart --workspace ./quickstart`.
+4. Inspect the generated session with `adaf-attack sessions show --session ./quickstart/demo-session`.
+5. Generate a report with `adaf-attack engagement report --session ./quickstart/demo-session --engagement-id QUICKSTART-2026-001`.
+6. Try a guided run: `adaf-attack run ldap-enum --interactive` (prompts for
+   each required option in plain language and previews the command before it
+   executes).
+7. Create and validate a scoped plan with `adaf-attack engagement init --output engagement.yaml` and `adaf-attack engagement validate engagement.yaml`.
+8. Before any target interaction, read the authorized lab and engagement guidance.
 
 ### What works without an AD lab?
 

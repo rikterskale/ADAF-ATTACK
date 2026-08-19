@@ -129,6 +129,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._reviewed_cap: str | None = None
         self._active_stage: str | None = None
         self._safe_mode = bool(load_user_config().get("novice.safe_mode", True))
+        self._green_only = False
         self._advanced_credentials_visible = False
         self._form_snapshot: dict[str, Any] | None = None
         self._wizard_step = 0
@@ -146,6 +147,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             yield Button("Quickstart", id="quickstart-btn")
             yield Switch(value=self._safe_mode, id="beginner-mode")
             yield Label("Beginner mode")
+            yield Switch(value=self._green_only, id="green-only")
+            yield Label("Offline-safe only")
             yield Button("Reset form", id="reset-form-btn")
             yield Button("Undo reset", id="undo-reset-btn", disabled=True)
             yield Button("Sessions", id="sessions-btn")
@@ -178,6 +181,12 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         with Horizontal():
             with Vertical(id="sidebar"):
                 yield Static("[bold]Capabilities[/bold]", id="sidebar-title")
+                yield Static(
+                    "[green]GREEN[/green] offline-safe  ·  "
+                    "[yellow]YELLOW[/yellow] reads live target  ·  "
+                    "[red]RED[/red] can modify target",
+                    id="safety-legend",
+                )
                 yield ListView(id="cap-list")
                 yield Static("Select one to see prerequisites and risk.", id="help-panel")
             with Vertical(id="main"):
@@ -297,8 +306,11 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         visible = [
             cap
             for cap in self._capabilities
-            if not needle
-            or needle in f"{cap.id} {cap.category} {cap.summary} {' '.join(cap.tags)}".lower()
+            if (
+                not needle
+                or needle in f"{cap.id} {cap.category} {cap.summary} {' '.join(cap.tags)}".lower()
+            )
+            and (not self._green_only or safety_summary(cap)["level"] == "GREEN")
         ]
         list_view = self.query_one("#cap-list", ListView)
         list_view.clear()
@@ -335,6 +347,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._update_run_gate()
         elif event.switch.id == "beginner-mode":
             self._apply_beginner_mode(event.value)
+        elif event.switch.id == "green-only":
+            self._green_only = bool(event.value)
+            self._populate_capabilities(self.query_one("#search", Input).value)
         self._update_readiness()
 
     def on_checkbox_changed(self, _event: Checkbox.Changed) -> None:
