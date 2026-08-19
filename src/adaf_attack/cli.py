@@ -1328,14 +1328,8 @@ def _interactive_run_prompts(
 
         if prompt["is_param"]:
             key = prompt["param_key"]
-            existing = None
-            for entry in provided.get("__param_list__") or []:
-                if isinstance(entry, str) and entry.startswith(f"{key}="):
-                    existing = entry.split("=", 1)[1]
-                    break
-            hint = f"  [dim]{prompt['help']}[/dim]"
-            console_obj.print(hint)
-            answer = typer.prompt(prompt["label"], default=existing or "")
+            console_obj.print(f"  [dim]{prompt['help']}[/dim]")
+            answer = typer.prompt(prompt["label"], default="")
             if answer:
                 extra_params.append(f"{key}={answer}")
             continue

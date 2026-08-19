@@ -328,3 +328,74 @@ def test_init_human_no_saved_defaults_message(tmp_path: Path, monkeypatch) -> No
     result = runner.invoke(app, ["--non-interactive", "init", "--skip-quickstart"])
     assert result.exit_code == 0, result.output
     assert "No defaults saved" in result.output
+
+
+def test_interactive_run_force_already_skips_prompt_and_forwards(monkeypatch) -> None:
+    # --force already provided → the helper skips the destructive prompt and
+    # execute_capability is invoked with force=True after confirmation.
+    import adaf_attack.cli as cli_module
+
+    captured: dict[str, object] = {}
+
+    def fake_execute(capability: str, target, **kwargs):
+        captured["capability"] = capability
+        captured["force"] = kwargs.get("force")
+        return {"session_path": "/tmp/s", "session_id": "s"}
+
+    monkeypatch.setattr(cli_module, "execute_capability", fake_execute)
+
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "shadow-creds",
+            "--interactive",
+            "--force",
+            "-d",
+            "corp.lab",
+            "--dc-ip",
+            "10.0.0.10",
+        ],
+        # --sam prompt (short value), final confirmation (yes)
+        input="alice\ny\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["capability"] == "shadow-creds"
+    assert captured["force"] is True
+
+
+def test_interactive_run_yes_force_sets_flag_and_merges_params(monkeypatch) -> None:
+    # Destructive cap without --force flag: user types YES at the force
+    # prompt, confirming with yes at the end. execute_capability sees
+    # force=True and any -P params captured during the interactive session.
+    import adaf_attack.cli as cli_module
+
+    captured: dict[str, object] = {}
+
+    def fake_execute(capability: str, target, **kwargs):
+        captured["capability"] = capability
+        captured["force"] = kwargs.get("force")
+        # -P style params land in **kwargs by their key.
+        captured["template"] = kwargs.get("template")
+        return {"session_path": "/tmp/s", "session_id": "s"}
+
+    monkeypatch.setattr(cli_module, "execute_capability", fake_execute)
+
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "template-mod",
+            "--interactive",
+            "-d",
+            "corp.lab",
+            "--dc-ip",
+            "10.0.0.10",
+        ],
+        # template-mod requires -P template=<name> and --force. Order of
+        # prompts: template (-P), then --force, then confirm.
+        input="User\nYES\ny\n",
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["force"] is True
+    assert captured["template"] == "User"
