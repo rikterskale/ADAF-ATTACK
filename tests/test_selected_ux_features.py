@@ -135,6 +135,7 @@ def test_ack_helper_interactive_confirmation(monkeypatch, tmp_path: Path) -> Non
     monkeypatch.setattr(cli.typer, "prompt", lambda *a, **k: "shadow-creds")
     cli._require_destructive_ack(ctx, "shadow-creds", tmp_path, explicit=False, interactive=True)
     assert (tmp_path / ".adaf-attack-destructive-ack.json").is_file()
+    cli._require_destructive_ack(ctx, "shadow-creds", tmp_path, explicit=False, interactive=False)
 
 
 def test_ack_helper_rejects_wrong_name_and_handles_bad_marker(monkeypatch, tmp_path: Path) -> None:
