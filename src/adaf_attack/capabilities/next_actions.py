@@ -179,9 +179,7 @@ class NextActions:
                 edge_kinds=list(chain.get("edges") or []),
             )
 
-            examples = build_exploit_commands(
-                chain, target, operator_user=target.username
-            )
+            examples = build_exploit_commands(chain, target, operator_user=target.username)
             primary = examples[0] if examples else None
 
             # Prefer template risk/approval when available; fall back to ACTION_MAP

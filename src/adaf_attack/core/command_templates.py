@@ -9,7 +9,6 @@ from typing import Any
 
 from adaf_attack.core.target import Target
 
-
 # terminal_relation → list of command templates
 # Placeholders: {domain} {dc_ip} {sam} {target} {spn} {start} {end} {user}
 COMMAND_TEMPLATES: dict[str, list[dict[str, str]]] = {

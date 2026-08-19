@@ -6,8 +6,8 @@ import pytest
 
 from adaf_attack.core.command_templates import (
     COMMAND_TEMPLATES,
-    build_exploit_commands,
     _sam_from_node_id,
+    build_exploit_commands,
 )
 from adaf_attack.core.target import Target
 
