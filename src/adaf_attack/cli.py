@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import os
 import platform as host_platform
@@ -42,6 +43,101 @@ from adaf_attack.core.paths import (
 from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.target import Target
 from adaf_attack.core.user_config import load_user_config
+
+
+def _closest_capabilities(value: str, limit: int = 3) -> list[str]:
+    """Return useful typo suggestions without guessing at execution."""
+    import adaf_attack.capabilities  # noqa: F401
+    from adaf_attack.core.registry import capability_registry
+
+    return difflib.get_close_matches(value, capability_registry.ids(), n=limit, cutoff=0.60)
+
+
+def _unknown_capability_error(value: str) -> ActionableError:
+    suggestions = _closest_capabilities(value)
+    hint = "Run `adaf-attack capability-help` to see supported capability IDs."
+    if suggestions:
+        hint = "Did you mean: " + ", ".join(f"`{item}`" for item in suggestions) + "?"
+    return ActionableError(
+        "UNKNOWN_CAPABILITY",
+        f"Unknown capability: {value}",
+        hint,
+        details={"capability": value, "suggestions": suggestions},
+        suggested_command=(
+            f"adaf-attack plan {suggestions[0]}" if suggestions else "adaf-attack capability-help"
+        ),
+    )
+
+
+def _destructive_ack_path(root: Path) -> Path:
+    return root.expanduser().resolve() / ".adaf-attack-destructive-ack.json"
+
+
+def _require_destructive_ack(
+    ctx: typer.Context,
+    capability: str,
+    root: Path,
+    *,
+    explicit: bool,
+    interactive: bool,
+) -> None:
+    """Require a one-time, workspace-local acknowledgement for destructive use."""
+    marker = _destructive_ack_path(root)
+    try:
+        acknowledged = json.loads(marker.read_text(encoding="utf-8")) if marker.is_file() else {}
+    except (OSError, json.JSONDecodeError):
+        acknowledged = {}
+    if capability in acknowledged.get("capabilities", []):
+        return
+    if not explicit:
+        if not interactive:
+            error = ActionableError(
+                "FIRST_DESTRUCTIVE_USE_CONFIRMATION_REQUIRED",
+                f"First destructive use of '{capability}' in this workspace requires acknowledgement.",
+                f"Run `adaf-attack plan {capability} ...` first, then re-run with --i-understand.",
+                suggested_command=f"adaf-attack plan {capability} --domain <domain> --dc-ip <dc>",
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+        answer = typer.prompt(
+            f"Type the capability name '{capability}' to confirm first destructive use",
+            default="",
+            show_default=False,
+        )
+        if answer.strip() != capability:
+            error = error_for(
+                "USER_ABORTED", message="Destructive capability name was not confirmed."
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        acknowledged.setdefault("capabilities", [])
+        if capability not in acknowledged["capabilities"]:
+            acknowledged["capabilities"].append(capability)
+        marker.write_text(json.dumps(acknowledged, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        # The acknowledgement still protects this invocation. A read-only
+        # workspace must not turn an already explicit approval into a crash.
+        if not _json_mode(ctx):
+            _console(ctx).print(
+                "[yellow]Could not persist the workspace acknowledgement; it will be requested again next time.[/yellow]"
+            )
+
+
+def _why_text(cap: Any) -> str:
+    network = (
+        "contacts the authorized target over the network"
+        if cap.category not in {"analysis", "export"}
+        else "does not contact a target"
+    )
+    mutation = (
+        "It may modify target state when write options are used."
+        if cap.destructive
+        else "It is read-only with respect to target state."
+    )
+    evidence = f"Evidence is written to the session as {cap.id}.json plus the session event log."
+    return f"{cap.summary}. This command {network}. {mutation} {evidence}"
 
 
 def _workspace_is_empty(root: Path) -> bool:
@@ -156,6 +252,7 @@ app = typer.Typer(
     no_args_is_help=True,
     invoke_without_command=True,
     rich_markup_mode="rich",
+    suggest_commands=True,
 )
 engagement_app = typer.Typer(help="Scoped engagement plans, execution, and report bundles.")
 app.add_typer(engagement_app, name="engagement")
@@ -817,6 +914,25 @@ def _replace_support_identifiers(value: Any, identifiers: tuple[str, ...]) -> An
     return value
 
 
+def _redaction_changes(raw: Any, safe: Any, path: str = "$") -> list[dict[str, str]]:
+    """Describe redactions by location/type without exposing the raw value."""
+    changes: list[dict[str, str]] = []
+    if isinstance(raw, dict) and isinstance(safe, dict):
+        for key, value in raw.items():
+            child = f"{path}.{key}"
+            if key not in safe:
+                continue
+            if isinstance(value, (dict, list)) and isinstance(safe[key], type(value)):
+                changes.extend(_redaction_changes(value, safe[key], child))
+            elif value != safe[key]:
+                replacement = "<redacted>" if "redact" in str(safe[key]).lower() else "<normalized>"
+                changes.append({"path": child, "action": "redacted", "replacement": replacement})
+    elif isinstance(raw, list) and isinstance(safe, list):
+        for index, (before, after) in enumerate(zip(raw, safe, strict=True)):
+            changes.extend(_redaction_changes(before, after, f"{path}[{index}]"))
+    return changes
+
+
 @app.command("support-bundle")
 def support_bundle(
     ctx: typer.Context,
@@ -829,9 +945,16 @@ def support_bundle(
         None, "--dc-ip", help="Authorized DC address for live-ad preflight."
     ),
     timeout: float = typer.Option(3.0, "--timeout", help="Per-network-probe timeout in seconds."),
+    preview: bool = typer.Option(
+        False, "--preview", help="Show what would be redacted without writing or sharing a bundle."
+    ),
 ) -> None:
     """Write a redacted diagnostic bundle safe to attach to support requests."""
     payload = _doctor_payload(profile, domain=domain, dc_ip=dc_ip, timeout=timeout)
+    raw_doctor = payload
+    safe_doctor = _replace_support_identifiers(
+        _sanitize_support_value(payload), tuple(item for item in (domain, dc_ip) if item)
+    )
     bundle = {
         "schema": 1,
         "type": "adaf-attack-support-bundle",
@@ -847,10 +970,30 @@ def support_bundle(
             "release": host_platform.release(),
         },
         "environment": _support_environment(),
-        "doctor": _replace_support_identifiers(
-            _sanitize_support_value(payload), tuple(item for item in (domain, dc_ip) if item)
-        ),
+        "doctor": safe_doctor,
     }
+    changes = _redaction_changes(raw_doctor, safe_doctor, "$.doctor")
+    if preview:
+        preview_payload = {
+            "ok": True,
+            "preview": True,
+            "would_write": str(output.expanduser().resolve()),
+            "redactions": changes,
+            "redaction_count": len(changes),
+        }
+        _emit(
+            ctx,
+            preview_payload,
+            Panel(
+                f"No file written. {len(changes)} field(s) would be redacted or normalized.\n"
+                + (
+                    "\n".join(f"{item['path']} → {item['replacement']}" for item in changes)
+                    or "No redactions detected."
+                ),
+                title="Support bundle redaction preview",
+            ),
+        )
+        return
     destination = output.expanduser().resolve()
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -918,11 +1061,7 @@ def capability_help(
     if capability:
         cap = capability_registry.get(capability)
         if cap is None:
-            error = error_for(
-                "UNKNOWN_CAPABILITY",
-                message=f"Unknown capability: {capability}",
-                details={"capability": capability},
-            )
+            error = _unknown_capability_error(capability)
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code)
         from adaf_attack.core.user_config import record_recent_capability
@@ -1285,11 +1424,7 @@ def _interactive_run_prompts(
 
     cap = capability_registry.get(capability_id)
     if cap is None:
-        error = error_for(
-            "UNKNOWN_CAPABILITY",
-            message=f"Unknown capability: {capability_id}",
-            details={"capability": capability_id},
-        )
+        error = _unknown_capability_error(capability_id)
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
 
@@ -1424,6 +1559,14 @@ def run_capability(
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Preview the plan and exit without contacting a target."
+    ),
+    why: bool = typer.Option(
+        False,
+        "--why",
+        help="Explain purpose, network contact, mutation risk, and evidence before running.",
+    ),
+    i_understand: bool = typer.Option(
+        False, "--i-understand", help="Acknowledge first destructive use in this workspace."
     ),
     include_secrets: bool = typer.Option(
         False, "--include-secrets", help="Do not redact tickets/hashes in output"
@@ -1569,9 +1712,12 @@ def run_capability(
 
     cap = capability_registry.get(capability)
 
+    guided_mode = bool(interactive)
     non_interactive = ctx.ensure_object(dict).get("non_interactive")
     interactive = (not non_interactive) and sys.stdout.isatty() and not _json_mode(ctx)
 
+    if cap is not None and why and not _json_mode(ctx):
+        _console(ctx).print(Panel(_why_text(cap), title=f"Why: {capability}"))
     if cap is not None and cap.destructive and force and interactive and not yes:
         _console(ctx).print(
             Panel(
@@ -1588,6 +1734,18 @@ def run_capability(
             )
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code)
+
+    if cap is not None and cap.destructive and force:
+        # The existing interactive "Continue?" confirmation is itself an
+        # explicit acknowledgement; --yes bypasses it and therefore requires
+        # the stronger capability-name acknowledgement.
+        _require_destructive_ack(
+            ctx,
+            capability,
+            workspace or default_workspace_dir(),
+            explicit=i_understand or (guided_mode and not yes),
+            interactive=interactive or guided_mode,
+        )
 
     if not _json_mode(ctx):
         _console(ctx).print(
@@ -1676,7 +1834,9 @@ def run_capability(
         text = str(exc)
         code = classify_run_error(text)
         if text.startswith("Unknown capability:"):
-            code = "UNKNOWN_CAPABILITY"
+            error = _unknown_capability_error(capability)
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
         elif "DESTRUCTIVE" in text and "--force" in text:
             code = "DESTRUCTIVE_CONFIRMATION_REQUIRED"
         elif "no runner implemented" in text:
@@ -1892,9 +2052,63 @@ def engagement_package(
     session: Path = typer.Option(..., "--session"),
     output: Path = typer.Option(Path("engagement-package.zip"), "--output", "-o"),
     profile: str = typer.Option("client", "--profile", help="operator, purple, or client"),
+    preview: bool = typer.Option(
+        False, "--preview", help="Preview excluded/redacted files without creating an archive."
+    ),
 ) -> None:
     """Create a redacted evidence archive without including the session vault."""
     from adaf_attack.core.control_plane import package_evidence
+
+    if preview:
+        from adaf_attack.core.redaction import redact
+
+        if not session.is_dir():
+            raise typer.BadParameter("Session directory does not exist", param_hint="--session")
+        excluded: list[str] = []
+        redactions: list[str] = []
+        for path in sorted(session.rglob("*")):
+            if not path.is_file() or "vault" in path.parts:
+                continue
+            if path.suffix.lower() in {
+                ".ccache",
+                ".kirbi",
+                ".key",
+                ".pfx",
+                ".pem",
+                ".pvk",
+                ".secrets",
+            } or path.name.lower() in {
+                "asrep-roast.hashes.txt",
+                "kerberoast.hashes.txt",
+                "ntlm.hashes.txt",
+            }:
+                excluded.append(str(path.relative_to(session)))
+            elif path.suffix.lower() == ".json":
+                try:
+                    raw = json.loads(path.read_text(encoding="utf-8"))
+                    safe = redact(raw, profile=profile)
+                    redactions.extend(
+                        item["path"]
+                        for item in _redaction_changes(raw, safe, str(path.relative_to(session)))
+                    )
+                except (OSError, json.JSONDecodeError, ValueError):
+                    excluded.append(str(path.relative_to(session)))
+        preview_payload = {
+            "ok": True,
+            "preview": True,
+            "output": str(output.resolve()),
+            "excluded_files": excluded,
+            "redacted_fields": redactions,
+        }
+        _emit(
+            ctx,
+            preview_payload,
+            Panel(
+                f"No archive written. Excluded files: {len(excluded)}\nRedacted fields: {len(redactions)}",
+                title="Evidence sharing preview",
+            ),
+        )
+        return
 
     try:
         result = package_evidence(session, output, profile=profile)
@@ -2339,6 +2553,38 @@ def show_errors(
     table.add_column("Remediation")
     for key, entry in catalog.items():
         table.add_row(key, entry[0], entry[1])
+    _emit(ctx, payload, table)
+
+
+@app.command("glossary")
+def glossary_cmd(
+    ctx: typer.Context,
+    term: str | None = typer.Argument(None, help="Term to explain; omit to list all terms."),
+) -> None:
+    """Explain Active Directory and operator terms in plain language."""
+    from adaf_attack.core.novice import glossary_definition, glossary_items
+
+    items = glossary_items()
+    if term:
+        definition = glossary_definition(term)
+        if definition is None:
+            error = ActionableError(
+                "UNKNOWN_GLOSSARY_TERM",
+                f"Unknown glossary term: {term}",
+                "Run `adaf-attack glossary` to list available terms.",
+                suggested_command="adaf-attack glossary",
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+        payload = {"ok": True, "term": term.lower(), "definition": definition}
+        _emit(ctx, payload, Panel(f"{term.upper()}: {definition}", title="Glossary"))
+        return
+    payload = {"ok": True, "count": len(items), "terms": items}
+    table = Table(title="ADAF-ATTACK glossary", show_header=True)
+    table.add_column("Term", style="cyan")
+    table.add_column("Plain meaning")
+    for key, definition in items.items():
+        table.add_row(key.upper(), definition)
     _emit(ctx, payload, table)
 
 

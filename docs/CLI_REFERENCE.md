@@ -38,6 +38,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack engagement validate` | Validate an engagement plan |
 | `adaf-attack errors` | List error codes and remediation |
 | `adaf-attack forest-campaign` | Compose a forest-aware campaign |
+| `adaf-attack glossary` | Explain Active Directory and operator terms |
 | `adaf-attack gpo-impact-plan` | Plan GPO impact validation |
 | `adaf-attack init` | First-run onboarding: check environment and save defaults |
 | `adaf-attack list-capabilities` | List registered capabilities |

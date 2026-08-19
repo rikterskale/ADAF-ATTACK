@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import shutil
@@ -33,6 +34,7 @@ from adaf_attack.core.control_plane import package_evidence
 from adaf_attack.core.novice import (
     beginner_next_actions,
     explain_finding,
+    glossary_definition,
     plain_description,
     safety_summary,
 )
@@ -115,6 +117,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         Binding("ctrl+k", "focus_search", "Search", priority=True),
         Binding("e", "jump_to_error", "Last error"),
         Binding("u", "undo_form_reset", "Undo reset"),
+        Binding("?", "show_cheat_sheet", "Key help"),
     ]
 
     def __init__(self) -> None:
@@ -528,11 +531,29 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     def _validate_target_inline(self) -> None:
         domain = self.query_one("#domain", Input).value.strip()
         dc_ip = self.query_one("#dc_ip", Input).value.strip()
-        message = (
-            "Target looks ready."
-            if domain and dc_ip
-            else "Enter both the authorized domain and DC IP / hostname."
-        )
+        if not domain:
+            message = "Domain is required: enter the authorized AD DNS name, such as corp.example."
+        elif any(char.isspace() for char in domain) or "/" in domain:
+            message = "Domain looks invalid: use a DNS name without spaces or a URL path."
+        elif not dc_ip:
+            message = "DC address is required: enter an IP address or resolvable DC hostname."
+        elif any(char.isspace() for char in dc_ip) or "/" in dc_ip:
+            message = "DC address looks invalid: use an IP or hostname, not a URL."
+        else:
+            try:
+                ipaddress.ip_address(dc_ip)
+                message = (
+                    "Target format looks ready. Reachability will be checked during doctor/run."
+                )
+            except ValueError:
+                if "." not in dc_ip and dc_ip.lower() not in {"localhost", "dc"}:
+                    message = (
+                        "DC address looks unusual: use a dotted IP or fully qualified hostname."
+                    )
+                else:
+                    message = (
+                        "Target format looks ready. Reachability will be checked during doctor/run."
+                    )
         self.query_one("#target-validation", Static).update(message)
 
     def _show_recommendations(self) -> None:
@@ -762,11 +783,22 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         required = ", ".join(spec.required) or "none (offline/session input)"
         optional = ", ".join(spec.optional[:6]) or "none"
         notes = f"\n[italic]{spec.notes}[/]" if spec.notes else ""
+        glossary = glossary_definition(cap.id)
+        glossary_line = f"\nGlossary: {glossary}" if glossary else ""
         recent = ", ".join(recent_capabilities()) or "none yet"
         self.query_one("#help-panel", Static).update(
             f"[bold]{cap.id}[/]\n{cap.summary}\nCategory: {cap.category}\n"
             f"Safety: {safety_summary(cap)['level']} — {plain_description(cap)}\n"
-            f"Required: {required}\nOptional: {optional}{notes}\nRecent: {recent}"
+            f"Required: {required}\nOptional: {optional}{notes}{glossary_line}\nRecent: {recent}"
+        )
+
+    def action_show_cheat_sheet(self) -> None:
+        self.notify(
+            "Keys: r run · v review · d dry run · l refresh · s sessions · e last error\n"
+            "p show/hide password · u undo reset · Ctrl-K search · q quit",
+            title="Keybinding cheat sheet",
+            severity="information",
+            timeout=8,
         )
 
     def _update_status(self) -> None:

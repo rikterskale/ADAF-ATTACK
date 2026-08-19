@@ -13,6 +13,9 @@ _GLOSSARY = {
     "rbcd": "A delegation setting that can let one computer act on behalf of a user to another service.",
     "spn": "A service name in Active Directory that tells Kerberos where a service is running.",
     "tgt": "A Kerberos Ticket Granting Ticket, used to request service tickets.",
+    "opsec": "Operational security: reducing unnecessary noise, exposure, and detectable activity.",
+    "s4u": "A Kerberos protocol extension used to request a service ticket on behalf of another user.",
+    "esc": "An AD CS escalation path caused by certificate-template or CA configuration weaknesses.",
 }
 
 
@@ -58,6 +61,11 @@ def explain_finding(finding: dict[str, Any]) -> str:
 
 def glossary_definition(term: str) -> str | None:
     return _GLOSSARY.get(term.strip().lower())
+
+
+def glossary_items() -> dict[str, str]:
+    """Return the shared glossary for CLI and TUI presentation."""
+    return dict(sorted(_GLOSSARY.items()))
 
 
 # Plain-language prompts for the interactive `run` mode. Keys are the option
