@@ -7,6 +7,13 @@ declared in `pyproject.toml`.
 
 ### Added
 
+- Registered 40 experimental offensive capabilities for roadmap tracking
+  (`planned_offensive`): ACL primitives (`add-member`, `acl-abuse`,
+  `write-spn`, …), Server 2025 dMSA (`badsuccessor`, `dmsa-ouroboros`),
+  ESC9–ESC16, Kerberos relay, golden cert, DPAPI backup key, SCCM, hybrid
+  follow-ups, and joined workflows (`maq-rbcd-workflow`, `targeted-kerberoast`,
+  `esc8-relay-workflow`, …). Runners are inert tracking stubs (`status:
+  experimental`); they do not change targets.
 - `adaf-attack workflow` command group: a CLI and agent-driven surface for the
   finding-driven guided workflow engine, sharing the durable workflow state the
   TUI drives (status, next, snapshot, inject, import-session, decide, transition,

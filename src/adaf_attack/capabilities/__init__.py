@@ -36,6 +36,7 @@ from adaf_attack.capabilities import (  # noqa: F401
     ntlm_relay,
     password_spray,
     pkinit_auth,
+    planned_offensive,
     rbcd,
     report,
     rodc_delegation,

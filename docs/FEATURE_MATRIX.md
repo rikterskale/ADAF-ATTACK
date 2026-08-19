@@ -15,6 +15,7 @@ external operator tools are available.
 | TUI | `[tui]` / `[full]` | Interactive terminal | No | No | CI/source tests |
 | AD CS enrollment | `[certipy]` | Certipy on PATH, test CA | Yes | Depends on capability | Manual lab |
 | Relay, coercion, destructive workflows | Base plus capability dependencies | Approval token, rollback, disposable lab | Yes | Yes | Manual lab sign-off |
+| Experimental registry IDs (`planned_offensive`) | Base | None | No | No | CI (inert stubs) |
 
 ## Release status vocabulary
 
