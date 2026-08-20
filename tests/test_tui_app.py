@@ -11,6 +11,7 @@ from unittest.mock import Mock
 import pytest
 from textual.widgets import Input, ListView, Static
 
+from adaf_attack.core import user_config
 from adaf_attack.core.workflow_engine import WorkflowEngine
 from adaf_attack.tui import app as tui_app
 from adaf_attack.tui.app import ADAFAttackApp
@@ -76,6 +77,30 @@ def test_tui_engagement_dashboard_reflects_target_review_and_session_state(tmp_p
             app._last_session = tmp_path
             app._update_engagement_dashboard()
             assert "Last session ready" in str(dashboard.render())
+
+    asyncio.run(exercise())
+
+
+def test_tui_pins_capabilities_and_restores_non_secret_target(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(user_config, "config_path", lambda: tmp_path / "config.json")
+
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.selected_cap = "ldap-enum"
+            app._refresh_pin_button()
+            app._toggle_selected_favorite()
+            assert "Unpin" in str(app.query_one("#pin-selected-btn", tui_app.Button).label)
+
+            user_config.record_recent_target("corp.test", "192.0.2.10", "domain")
+            app._restore_latest_target()
+            assert app.query_one("#domain", Input).value == "corp.test"
+            assert app.query_one("#dc_ip", Input).value == "192.0.2.10"
+            assert app.query_one("#scope", Input).value == "domain"
+            assert "password" not in (tmp_path / "config.json").read_text(encoding="utf-8").lower()
 
     asyncio.run(exercise())
 

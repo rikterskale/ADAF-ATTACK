@@ -1206,6 +1206,46 @@ def tour(ctx: typer.Context) -> None:
     _emit(ctx, {"ok": True, **payload}, human)
 
 
+@app.command("check")
+def check(
+    ctx: typer.Context,
+    domain: str | None = typer.Option(None, "--domain", "-d"),
+    dc_ip: str | None = typer.Option(None, "--dc-ip"),
+    timeout: float = typer.Option(3.0, "--timeout"),
+) -> None:
+    """Check local setup, or preflight an authorized target when both target options are supplied."""
+    if bool(domain) != bool(dc_ip):
+        raise typer.BadParameter(
+            "Provide both --domain and --dc-ip for a target preflight, or neither for setup checks."
+        )
+    doctor(
+        ctx,
+        explain=True,
+        profile="live-ad" if domain else "user-readiness",
+        domain=domain,
+        dc_ip=dc_ip,
+        timeout=timeout,
+    )
+
+
+@app.command("review")
+def review(
+    ctx: typer.Context,
+    capability: str = typer.Argument(...),
+    domain: str = typer.Option(..., "--domain", "-d"),
+    dc_ip: str = typer.Option(..., "--dc-ip"),
+    force: bool = typer.Option(False, "--force"),
+) -> None:
+    """Preview a capability before running it."""
+    plan(ctx, capability=capability, domain=domain, dc_ip=dc_ip, force=force, export=None)
+
+
+@app.command("help-me")
+def help_me(ctx: typer.Context) -> None:
+    """Show the guided tour for new operators."""
+    tour(ctx)
+
+
 @app.command("recent")
 def recent(ctx: typer.Context) -> None:
     """Show recently viewed capabilities (stored locally, never targets or credentials)."""
@@ -1226,6 +1266,81 @@ def recent(ctx: typer.Context) -> None:
         title="Recently viewed capabilities",
     )
     _emit(ctx, payload, human)
+
+
+favorites_app = typer.Typer(help="Pin frequently used capabilities.")
+app.add_typer(favorites_app, name="favorites")
+
+
+@favorites_app.command("list")
+def favorites_list(ctx: typer.Context) -> None:
+    """List pinned capabilities."""
+    from adaf_attack.core.registry import capability_registry
+    from adaf_attack.core.user_config import favorite_capabilities
+
+    ids = favorite_capabilities()
+    caps = [capability_registry.get(capability_id) for capability_id in ids]
+    resolved = [cap for cap in caps if cap is not None]
+    payload = {
+        "ok": True,
+        "capabilities": [_capability_payload(cap) for cap in resolved],
+        "count": len(resolved),
+    }
+    human = Panel(
+        "\n".join(f"{cap.id}: {cap.summary}" for cap in resolved)
+        or "No pinned capabilities. Add one with `adaf-attack favorites add <id>`.",
+        title="Pinned capabilities",
+    )
+    _emit(ctx, payload, human)
+
+
+@favorites_app.command("add")
+def favorites_add(ctx: typer.Context, capability: str = typer.Argument(...)) -> None:
+    """Pin a capability for quick recall."""
+    from adaf_attack.core.registry import capability_registry
+    from adaf_attack.core.user_config import set_favorite_capability
+
+    cap = capability_registry.get(capability)
+    if cap is None:
+        error = _unknown_capability_error(capability)
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    pinned = set_favorite_capability(cap.id, favorite=True)
+    _emit(ctx, {"ok": True, "capability": cap.id, "favorites": pinned}, Panel(
+        f"Pinned {cap.id}.", title="Pinned capabilities"
+    ))
+
+
+@favorites_app.command("remove")
+def favorites_remove(ctx: typer.Context, capability: str = typer.Argument(...)) -> None:
+    """Unpin a capability."""
+    from adaf_attack.core.user_config import set_favorite_capability
+
+    pinned = set_favorite_capability(capability, favorite=False)
+    _emit(ctx, {"ok": True, "capability": capability, "favorites": pinned}, Panel(
+        f"Unpinned {capability}.", title="Pinned capabilities"
+    ))
+
+
+@app.command("targets")
+def targets(ctx: typer.Context) -> None:
+    """List recently used non-secret target identifiers."""
+    from adaf_attack.core.user_config import recent_targets
+
+    entries = recent_targets()
+    lines = [
+        f"{item['domain']} @ {item['dc_ip']}  scope={item['scope']}"
+        for item in entries
+    ]
+    _emit(
+        ctx,
+        {"ok": True, "targets": entries, "count": len(entries)},
+        Panel(
+            "\n".join(lines)
+            or "No saved targets. Target identifiers are recorded when a TUI or CLI run starts; credentials are never saved here.",
+            title="Recent targets",
+        ),
+    )
 
 
 @app.command("search")
@@ -1696,6 +1811,10 @@ def run_capability(
         raise typer.BadParameter(
             "--domain and --dc-ip are required (or set via `adaf-attack config set`)"
         )
+
+    from adaf_attack.core.user_config import record_recent_target
+
+    record_recent_target(domain, dc_ip, scope)
 
     if dry_run:
         return plan(

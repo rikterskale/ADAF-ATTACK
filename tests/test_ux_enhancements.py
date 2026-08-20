@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 import adaf_attack.capabilities  # noqa: F401
 from adaf_attack.cli import app
+from adaf_attack.core import user_config
 from adaf_attack.core.profiles import delete_profile, get_profile, list_profiles, set_profile
 from adaf_attack.core.registry import capability_registry
 from adaf_attack.core.ux import (
@@ -137,6 +138,44 @@ def test_cli_tour_and_search() -> None:
     result = runner.invoke(app, ["search", "ldap-enum"])
     assert result.exit_code == 0
     assert "ldap-enum" in result.stdout
+
+
+def test_cli_favorites_and_recent_targets_are_non_secret(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(user_config, "config_path", lambda: tmp_path / "config.json")
+
+    added = runner.invoke(app, ["--format", "json", "favorites", "add", "ldap-enum"])
+    assert added.exit_code == 0, added.output
+    listed = runner.invoke(app, ["--format", "json", "favorites", "list"])
+    assert listed.exit_code == 0, listed.output
+    assert json.loads(listed.output)["capabilities"][0]["id"] == "ldap-enum"
+
+    user_config.record_recent_target("corp.example", "10.0.0.10", "high-value")
+    targets = runner.invoke(app, ["--format", "json", "targets"])
+    assert targets.exit_code == 0, targets.output
+    payload = json.loads(targets.output)
+    assert payload["targets"] == [
+        {"domain": "corp.example", "dc_ip": "10.0.0.10", "scope": "high-value"}
+    ]
+    assert "password" not in (tmp_path / "config.json").read_text(encoding="utf-8").lower()
+
+
+def test_cli_novice_journey_aliases(tmp_path: Path) -> None:
+    review = runner.invoke(
+        app,
+        ["--format", "json", "review", "ldap-enum", "-d", "corp.example", "--dc-ip", "10.0.0.10"],
+    )
+    assert review.exit_code == 0, review.output
+    assert json.loads(review.output)["mode"] == "preview"
+
+    help_result = runner.invoke(app, ["--format", "json", "help-me"])
+    assert help_result.exit_code == 0, help_result.output
+    assert json.loads(help_result.output)["steps"]
+
+    demo = runner.invoke(
+        app, ["--format", "json", "start-demo", "--workspace", str(tmp_path)]
+    )
+    assert demo.exit_code == 0, demo.output
+    assert json.loads(demo.output)["mode"] == "offline-demo"
 
 
 def test_cli_plan_shows_opsec_and_copy() -> None:

@@ -45,10 +45,14 @@ from adaf_attack.core.reporting import generate_report_bundle
 from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.target import Target
 from adaf_attack.core.user_config import (
+    favorite_capabilities,
     load_user_config,
     recent_capabilities,
+    recent_targets,
     record_recent_capability,
+    record_recent_target,
     save_user_config,
+    set_favorite_capability,
 )
 from adaf_attack.core.ux import (
     build_ready_command,
@@ -159,6 +163,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             yield Button("Copy findings", id="copy-btn")
             yield Button("Copy ready command", id="copy-command-btn")
             yield Button("Command only", id="command-only-btn")
+            yield Button("Pin selected", id="pin-selected-btn", disabled=True)
+            yield Button("Use latest target", id="use-latest-target-btn")
         yield Static(
             "[bold]Engagement dashboard[/bold]\nLoading current engagement state.",
             id="engagement-dashboard",
@@ -273,6 +279,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     def on_mount(self) -> None:
         self._populate_capabilities()
         self._refresh_profile_hint()
+        self._refresh_pin_button()
         self._update_credential_strip()
         self._set_advanced_credentials_visible(False)
         self._apply_beginner_mode(self._safe_mode)
@@ -280,6 +287,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._load_wizard_resume()
         self._update_readiness()
         self._update_engagement_dashboard()
+        self._refresh_pin_button()
         self._workflow = WorkflowEngine(default_workspace_dir())
         self._refresh_workflow_panel()
         self._update_engagement_dashboard()
@@ -796,11 +804,51 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         glossary = glossary_definition(cap.id)
         glossary_line = f"\nGlossary: {glossary}" if glossary else ""
         recent = ", ".join(recent_capabilities()) or "none yet"
+        pinned = ", ".join(favorite_capabilities()) or "none"
         self.query_one("#help-panel", Static).update(
             f"[bold]{cap.id}[/]\n{cap.summary}\nCategory: {cap.category}\n"
             f"Safety: {safety_summary(cap)['level']} — {plain_description(cap)}\n"
-            f"Required: {required}\nOptional: {optional}{notes}{glossary_line}\nRecent: {recent}"
+            f"Required: {required}\nOptional: {optional}{notes}{glossary_line}\n"
+            f"Recent: {recent}\nPinned: {pinned}"
         )
+
+    def _refresh_pin_button(self) -> None:
+        button = self.query_one("#pin-selected-btn", Button)
+        button.disabled = self.selected_cap is None
+        button.label = (
+            "Unpin selected"
+            if self.selected_cap and self.selected_cap in favorite_capabilities()
+            else "Pin selected"
+        )
+
+    def _toggle_selected_favorite(self) -> None:
+        if not self.selected_cap:
+            self.notify("Select a capability first.", severity="warning")
+            return
+        try:
+            pinned = self.selected_cap not in favorite_capabilities()
+            set_favorite_capability(self.selected_cap, favorite=pinned)
+        except OSError as exc:
+            self.notify(f"Could not save pinned capabilities: {exc}", severity="error")
+            return
+        self._refresh_pin_button()
+        self._update_help()
+        self.notify(f"{'Pinned' if pinned else 'Unpinned'} {self.selected_cap}.")
+
+    def _restore_latest_target(self) -> None:
+        targets = recent_targets(limit=1)
+        if not targets:
+            self.notify("No saved non-secret targets yet.", severity="information")
+            return
+        target = targets[0]
+        self.query_one("#domain", Input).value = target["domain"]
+        self.query_one("#dc_ip", Input).value = target["dc_ip"]
+        self.query_one("#scope", Input).value = target["scope"]
+        self._update_status()
+        self._update_readiness()
+        self._validate_target_inline()
+        self._update_engagement_dashboard()
+        self.notify("Restored the most recent target. Credentials were not stored.")
 
     def action_show_cheat_sheet(self) -> None:
         self.notify(
@@ -1161,6 +1209,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         ccache = self.query_one("#ccache", Input).value.strip() or None
         creds_file = self.query_one("#creds_file", Input).value.strip() or None
         scope = self.query_one("#scope", Input).value.strip() or "high-value"
+        record_recent_target(domain, dc_ip, scope)
         start = self.query_one("#start", Input).value.strip() or None
         include_secrets = self.query_one("#include_secrets", Switch).value
         force = self.query_one("#force", Switch).value
@@ -1440,6 +1489,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             ),
             "copy-btn": self._copy_findings,
             "copy-command-btn": self._copy_ready_command,
+            "pin-selected-btn": self._toggle_selected_favorite,
+            "use-latest-target-btn": self._restore_latest_target,
             "ack-review-btn": self._acknowledge_review,
             "load-profile-btn": self._apply_profile,
             "save-profile-btn": self._save_profile,

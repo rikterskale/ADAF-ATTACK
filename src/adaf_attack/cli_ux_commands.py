@@ -389,6 +389,16 @@ def register_ux_commands(
         )
         _emit(ctx, payload, human)
 
+    @app.command("start-demo")
+    def start_demo_cmd(
+        ctx: typer.Context,
+        workspace: Path | None = typer.Option(
+            None, "--workspace", help="Where to materialize the demo session."
+        ),
+    ) -> None:
+        """Start the safe offline demo."""
+        demo_cmd(ctx, workspace)
+
     @app.command("completions")
     def completions_cmd(
         ctx: typer.Context,

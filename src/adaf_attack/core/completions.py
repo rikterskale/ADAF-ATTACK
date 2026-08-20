@@ -22,8 +22,8 @@ def generate_completion(shell: str) -> str:
         raise ValueError(f"Unsupported shell: {shell}. Choose from: {', '.join(SUPPORTED_SHELLS)}")
     caps = " ".join(_capability_ids())
     top_commands = (
-        "doctor list-capabilities paths capability-help plan tour search sessions cleanup "
-        "run rank-paths start engagement config capability session path profile demo "
+        "doctor check list-capabilities paths capability-help plan review tour help-me search sessions cleanup "
+        "run rank-paths start engagement config capability session path profile demo start-demo favorites targets "
         "errors completions credential-exposure bloodhound-reconcile trust-correlation "
         "delegation-validation adcs-validation campaign-compose forest-campaign campaign-run "
         "purple-handoff gpo-impact-plan coercion-fixtures workflow-profiles"

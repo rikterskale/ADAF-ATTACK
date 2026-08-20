@@ -24,6 +24,8 @@ _ALLOWED_KEYS = {
     "profile.default",
     "novice.safe_mode",
     "ui.recent_capabilities",
+    "ui.favorite_capabilities",
+    "ui.recent_targets",
     "ui.command_complete",
 }
 
@@ -104,3 +106,57 @@ def recent_capabilities(*, limit: int = 5) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value if isinstance(item, str)][:limit]
+
+
+def favorite_capabilities() -> list[str]:
+    """Return capability IDs pinned by the user."""
+    value = load_user_config().get("ui.favorite_capabilities", [])
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if isinstance(item, str)]
+
+
+def set_favorite_capability(capability_id: str, *, favorite: bool) -> list[str]:
+    """Pin or unpin a capability without persisting target or credential data."""
+    current = favorite_capabilities()
+    updated = [item for item in current if item != capability_id]
+    if favorite:
+        updated.append(capability_id)
+    data = load_user_config()
+    data["ui.favorite_capabilities"] = updated
+    save_user_config(data)
+    return updated
+
+
+def record_recent_target(
+    domain: str, dc_ip: str, scope: str, *, limit: int = 5
+) -> list[dict[str, str]]:
+    """Store a short, non-secret target history for form recall."""
+    entry = {"domain": domain.strip(), "dc_ip": dc_ip.strip(), "scope": scope.strip()}
+    if not entry["domain"] or not entry["dc_ip"]:
+        return recent_targets(limit=limit)
+    existing = recent_targets(limit=limit)
+    updated = [item for item in existing if item != entry]
+    updated.insert(0, entry)
+    data = load_user_config()
+    data["ui.recent_targets"] = updated[:limit]
+    with suppress(OSError):
+        save_user_config(data)
+    return updated[:limit]
+
+
+def recent_targets(*, limit: int = 5) -> list[dict[str, str]]:
+    """Return recently used non-secret target identifiers, newest first."""
+    value = load_user_config().get("ui.recent_targets", [])
+    if not isinstance(value, list):
+        return []
+    targets: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        domain = item.get("domain")
+        dc_ip = item.get("dc_ip")
+        scope = item.get("scope", "high-value")
+        if isinstance(domain, str) and isinstance(dc_ip, str) and isinstance(scope, str):
+            targets.append({"domain": domain, "dc_ip": dc_ip, "scope": scope})
+    return targets[:limit]
