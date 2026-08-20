@@ -159,7 +159,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             yield Button("Copy findings", id="copy-btn")
             yield Button("Copy ready command", id="copy-command-btn")
             yield Button("Command only", id="command-only-btn")
-        yield Static("[bold]Engagement dashboard[/bold]\nLoading current engagement state.", id="engagement-dashboard")
+        yield Static(
+            "[bold]Engagement dashboard[/bold]\nLoading current engagement state.",
+            id="engagement-dashboard",
+        )
         with Vertical(id="wizard-panel"):
             yield Static("Guided workflow", id="wizard-step")
             yield Static("", id="wizard-guide")
