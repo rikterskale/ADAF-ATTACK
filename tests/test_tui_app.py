@@ -105,6 +105,38 @@ def test_tui_pins_capabilities_and_restores_non_secret_target(
     asyncio.run(exercise())
 
 
+def test_tui_resume_recovers_from_invalid_saved_wizard_step(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(user_config, "config_path", lambda: tmp_path / "config.json")
+    (tmp_path / "config.json").write_text(
+        json.dumps(
+            {
+                "ui.wizard_state": {
+                    "domain": "corp.test",
+                    "dc_ip": "192.0.2.10",
+                    "selected_cap": "ldap-enum",
+                    "step": "corrupted",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            notices = Mock()
+            app.notify = notices  # type: ignore[method-assign]
+            app._resume_wizard()
+            assert app._wizard_step == 0
+            assert app.query_one("#domain", Input).value == "corp.test"
+            assert any("invalid" in str(call.args[0]).lower() for call in notices.call_args_list)
+
+    asyncio.run(exercise())
+
+
 def test_tui_refresh_action_preserves_a_populated_capability_list() -> None:
     async def exercise() -> None:
         app = ADAFAttackApp()

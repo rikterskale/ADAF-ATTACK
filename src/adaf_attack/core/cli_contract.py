@@ -38,6 +38,11 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Review `adaf-attack plan <capability> ...`, then re-run with --force if authorized.",
         "adaf-attack plan <capability> -d <domain> --dc-ip <dc>",
     ),
+    "FIRST_DESTRUCTIVE_USE_CONFIRMATION_REQUIRED": (
+        "The first destructive use of this capability in the workspace needs acknowledgement.",
+        "Review the plan, then re-run with --i-understand when authorized.",
+        "adaf-attack plan <capability> -d <domain> --dc-ip <dc>",
+    ),
     "CAPABILITY_UNAVAILABLE": (
         "The capability is registered but has no runnable implementation.",
         "Choose another capability or install the release that provides this implementation.",
@@ -162,6 +167,11 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Run `adaf-attack profile list` to see saved profiles.",
         "adaf-attack profile list",
     ),
+    "INVALID_PROFILE": (
+        "The supplied profile fields are invalid.",
+        "Correct the profile fields and try again.",
+        "adaf-attack profile list",
+    ),
     "INVALID_OPSEC_PROFILE": (
         "The opsec profile value is not recognized.",
         "Choose stealth, balanced, or loud.",
@@ -171,6 +181,21 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Demo session fixtures are not available in this install.",
         "Run from a source checkout or reinstall with fixtures present.",
         "adaf-attack doctor",
+    ),
+    "QUICKSTART_WORKSPACE_EXISTS": (
+        "The selected quickstart workspace already contains a demo session.",
+        "Choose an empty workspace path; quickstart will not overwrite an existing session.",
+        "adaf-attack quickstart --workspace ./quickstart-2",
+    ),
+    "QUICKSTART_WRITE_FAILED": (
+        "The quickstart demo session could not be created.",
+        "Choose a writable workspace and rerun quickstart.",
+        "adaf-attack paths",
+    ),
+    "UNKNOWN_ERROR_CODE": (
+        "The requested error code is not in the catalog.",
+        "Run `adaf-attack errors` to list supported error codes.",
+        "adaf-attack errors",
     ),
     "UNSUPPORTED_SHELL": (
         "The requested shell is not supported for completions.",

@@ -1306,9 +1306,11 @@ def favorites_add(ctx: typer.Context, capability: str = typer.Argument(...)) -> 
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
     pinned = set_favorite_capability(cap.id, favorite=True)
-    _emit(ctx, {"ok": True, "capability": cap.id, "favorites": pinned}, Panel(
-        f"Pinned {cap.id}.", title="Pinned capabilities"
-    ))
+    _emit(
+        ctx,
+        {"ok": True, "capability": cap.id, "favorites": pinned},
+        Panel(f"Pinned {cap.id}.", title="Pinned capabilities"),
+    )
 
 
 @favorites_app.command("remove")
@@ -1317,9 +1319,11 @@ def favorites_remove(ctx: typer.Context, capability: str = typer.Argument(...)) 
     from adaf_attack.core.user_config import set_favorite_capability
 
     pinned = set_favorite_capability(capability, favorite=False)
-    _emit(ctx, {"ok": True, "capability": capability, "favorites": pinned}, Panel(
-        f"Unpinned {capability}.", title="Pinned capabilities"
-    ))
+    _emit(
+        ctx,
+        {"ok": True, "capability": capability, "favorites": pinned},
+        Panel(f"Unpinned {capability}.", title="Pinned capabilities"),
+    )
 
 
 @app.command("targets")
@@ -1328,10 +1332,7 @@ def targets(ctx: typer.Context) -> None:
     from adaf_attack.core.user_config import recent_targets
 
     entries = recent_targets()
-    lines = [
-        f"{item['domain']} @ {item['dc_ip']}  scope={item['scope']}"
-        for item in entries
-    ]
+    lines = [f"{item['domain']} @ {item['dc_ip']}  scope={item['scope']}" for item in entries]
     _emit(
         ctx,
         {"ok": True, "targets": entries, "count": len(entries)},

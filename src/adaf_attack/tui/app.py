@@ -283,7 +283,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._update_credential_strip()
         self._set_advanced_credentials_visible(False)
         self._apply_beginner_mode(self._safe_mode)
-        self._set_wizard_step(0)
+        self._set_wizard_step(0, persist=False)
         self._load_wizard_resume()
         self._update_readiness()
         self._update_engagement_dashboard()
@@ -413,7 +413,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             else "Advanced Mode: optional credentials and targeting controls are available."
         )
 
-    def _set_wizard_step(self, step: int) -> None:
+    def _set_wizard_step(self, step: int, *, persist: bool = True) -> None:
         """Move the operator through one predictable, review-first workflow."""
         self._wizard_step = max(0, min(step, 5))
         steps = (
@@ -463,7 +463,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             else "Start another"
         )
         self.query_one("#wizard-start-over", Button).disabled = self._capability_running
-        self._save_wizard_state()
+        if persist:
+            self._save_wizard_state()
 
     def _save_wizard_state(self) -> None:
         """Persist non-secret wizard state so an interrupted workflow can resume."""
@@ -508,7 +509,15 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if selected and capability_registry.get(selected):
             self.selected_cap = selected
             self._update_help()
-        self._set_wizard_step(int(state.get("step", 0)))
+        try:
+            step = int(state.get("step", 0))
+        except (TypeError, ValueError):
+            step = 0
+            self.notify(
+                "Saved workflow step was invalid; restarted at the first step.",
+                severity="warning",
+            )
+        self._set_wizard_step(step)
         self._update_readiness()
         self.notify(
             "Saved workflow restored. Review the target and continue when ready.",

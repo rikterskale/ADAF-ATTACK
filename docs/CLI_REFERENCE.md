@@ -18,6 +18,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack capability list` | List capabilities through the command group |
 | `adaf-attack capability show` | Show capability details |
 | `adaf-attack capability-help` | Show generated capability help |
+| `adaf-attack check` | Check beginner setup or preflight an authorized target |
 | `adaf-attack cleanup` | Execute recorded cleanup with explicit force |
 | `adaf-attack coercion-fixtures` | Validate authorized coercion fixtures |
 | `adaf-attack completions` | Print shell completions |
@@ -37,9 +38,14 @@ for current options, defaults, validation, and examples.
 | `adaf-attack engagement run` | Run an authorized engagement plan |
 | `adaf-attack engagement validate` | Validate an engagement plan |
 | `adaf-attack errors` | List error codes and remediation |
+| `adaf-attack favorites` | Pinned capability command group |
+| `adaf-attack favorites add` | Pin a capability for quick recall |
+| `adaf-attack favorites list` | List pinned capabilities |
+| `adaf-attack favorites remove` | Unpin a capability |
 | `adaf-attack forest-campaign` | Compose a forest-aware campaign |
 | `adaf-attack glossary` | Explain Active Directory and operator terms |
 | `adaf-attack gpo-impact-plan` | Plan GPO impact validation |
+| `adaf-attack help-me` | Show the guided novice tour |
 | `adaf-attack init` | First-run onboarding: check environment and save defaults |
 | `adaf-attack list-capabilities` | List registered capabilities |
 | `adaf-attack path` | Attack-path command group |
@@ -57,6 +63,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack quickstart` | Run the safe first-install flow |
 | `adaf-attack rank-paths` | Rank paths from a saved graph |
 | `adaf-attack recent` | Show recently viewed capabilities |
+| `adaf-attack review` | Preview a capability before running it |
 | `adaf-attack run` | Run a capability against a target |
 | `adaf-attack search` | Search registered capabilities |
 | `adaf-attack session` | Session command group |
@@ -65,7 +72,9 @@ for current options, defaults, validation, and examples.
 | `adaf-attack session show` | Inspect a session |
 | `adaf-attack sessions` | Navigate persisted sessions |
 | `adaf-attack start` | Launch the Textual TUI |
+| `adaf-attack start-demo` | Start the safe offline demo |
 | `adaf-attack support-bundle` | Write a redacted diagnostic bundle |
+| `adaf-attack targets` | List recent non-secret target identifiers |
 | `adaf-attack tour` | Show the guided operator tour |
 | `adaf-attack trust-correlation` | Correlate trust evidence |
 | `adaf-attack workflow` | Finding-driven guided workflow command group |

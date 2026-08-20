@@ -32,6 +32,19 @@ def test_errors_single_code_shows_detail() -> None:
     assert payload["errors"][0]["code"] == "UNKNOWN_CAPABILITY"
 
 
+def test_errors_catalog_covers_all_emitted_user_facing_codes() -> None:
+    from adaf_attack.core.cli_contract import ERROR_CATALOG
+
+    emitted_codes = {
+        "FIRST_DESTRUCTIVE_USE_CONFIRMATION_REQUIRED",
+        "INVALID_PROFILE",
+        "QUICKSTART_WORKSPACE_EXISTS",
+        "QUICKSTART_WRITE_FAILED",
+        "UNKNOWN_ERROR_CODE",
+    }
+    assert emitted_codes <= ERROR_CATALOG.keys()
+
+
 def test_paths_reports_existence_and_writability(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path / "ws"))
 

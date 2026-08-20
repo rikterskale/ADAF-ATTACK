@@ -171,9 +171,7 @@ def test_cli_novice_journey_aliases(tmp_path: Path) -> None:
     assert help_result.exit_code == 0, help_result.output
     assert json.loads(help_result.output)["steps"]
 
-    demo = runner.invoke(
-        app, ["--format", "json", "start-demo", "--workspace", str(tmp_path)]
-    )
+    demo = runner.invoke(app, ["--format", "json", "start-demo", "--workspace", str(tmp_path)])
     assert demo.exit_code == 0, demo.output
     assert json.loads(demo.output)["mode"] == "offline-demo"
 
