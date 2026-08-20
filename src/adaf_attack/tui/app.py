@@ -90,7 +90,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     #target-form { height: auto; padding: 1; border-bottom: solid $accent; }
     #log-panel { height: 1fr; }
     #status, #progress, #credential-strip { height: auto; border-top: solid $accent; padding: 0 1; }
-    #help-panel, #review-panel, #session-panel { height: auto; padding: 1; border-bottom: solid $accent; }
+    #help-panel, #review-panel, #session-panel, #engagement-dashboard { height: auto; padding: 1; border-bottom: solid $accent; }
     #wizard-panel { height: auto; padding: 1; border: solid $success; margin-bottom: 1; }
     #wizard-step { color: $success; text-style: bold; }
     #wizard-actions { height: auto; margin-top: 1; }
@@ -159,6 +159,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             yield Button("Copy findings", id="copy-btn")
             yield Button("Copy ready command", id="copy-command-btn")
             yield Button("Command only", id="command-only-btn")
+        yield Static(
+            "[bold]Engagement dashboard[/bold]\nLoading current engagement state.",
+            id="engagement-dashboard",
+        )
         with Vertical(id="wizard-panel"):
             yield Static("Guided workflow", id="wizard-step")
             yield Static("", id="wizard-guide")
@@ -275,8 +279,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._set_wizard_step(0)
         self._load_wizard_resume()
         self._update_readiness()
+        self._update_engagement_dashboard()
         self._workflow = WorkflowEngine(default_workspace_dir())
         self._refresh_workflow_panel()
+        self._update_engagement_dashboard()
         self._show_log("[bold green]ADAF-ATTACK[/] ready. Use Quickstart or search capabilities.")
         if not self.query_one("#domain", Input).value:
             self.notify(
@@ -336,10 +342,11 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._populate_capabilities(event.value)
         elif event.input.id == "log-filter":
             self._refresh_log()
-        elif event.input.id in {"domain", "dc_ip"}:
+        elif event.input.id in {"domain", "dc_ip", "scope"}:
             self._update_status()
             self._update_readiness()
             self._validate_target_inline()
+            self._update_engagement_dashboard()
         elif event.input.id in {"username", "password", "hashes", "aes_key", "ccache"}:
             self._update_credential_strip()
             self._update_readiness()
@@ -368,6 +375,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._update_help()
             self._update_run_gate()
             self._update_readiness()
+            self._update_engagement_dashboard()
             if self._wizard_step < 2:
                 self._set_wizard_step(2)
 
@@ -742,6 +750,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._reviewed_cap = None
         self._update_status()
         self._update_run_gate()
+        self._update_engagement_dashboard()
         self.notify("Form reset. Undo is available until the next reset.", severity="information")
 
     def action_undo_form_reset(self) -> None:
@@ -770,6 +779,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self.query_one("#undo-reset-btn", Button).disabled = True
         self._update_status()
         self._update_run_gate()
+        self._update_engagement_dashboard()
         self.notify("Form restored.", severity="information")
 
     def _selected(self) -> Capability | None:
@@ -819,6 +829,35 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"{str(workspace)[-32:]} ({free} GB free, {vault})"
         )
 
+    def _update_engagement_dashboard(self) -> None:
+        """Render a compact, non-secret view of the active engagement state."""
+        domain = self.query_one("#domain", Input).value.strip()
+        dc_ip = self.query_one("#dc_ip", Input).value.strip()
+        target = f"{domain} @ {dc_ip}" if domain and dc_ip else "Target details required"
+        scope = self.query_one("#scope", Input).value.strip() or "high-value"
+        cap = self._selected()
+        if not cap:
+            authorization = "No capability selected"
+        elif cap.destructive and self._reviewed_cap != cap.id:
+            authorization = "Review acknowledgement required"
+        elif cap.destructive:
+            authorization = "Reviewed for selected capability"
+        else:
+            authorization = "Read-only capability selected"
+        if self._capability_running:
+            health = f"Running · {self._active_stage or 'preparing'}"
+        elif self._last_session and self._last_session.is_dir():
+            health = f"Last session ready · {self._last_session.name}"
+        elif domain and dc_ip:
+            health = "Ready to review"
+        else:
+            health = "Awaiting target details"
+        self.query_one("#engagement-dashboard", Static).update(
+            "[bold]Engagement dashboard[/bold]\n"
+            f"Target: {target} · Scope: {scope} · OPSEC: {active_opsec().upper()}\n"
+            f"Authorization: {authorization} · Session health: {health}"
+        )
+
     def _update_credential_strip(self) -> None:
         labels = []
         for widget_id, label in (
@@ -857,6 +896,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             if profile.get(key) is not None:
                 self.query_one(f"#{widget_id}", Switch).value = bool(profile[key])
         self._update_status()
+        self._update_engagement_dashboard()
         self.notify(f"Loaded profile: {name}")
 
     def _save_profile(self, *, make_default: bool = False) -> None:
@@ -1051,6 +1091,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._reviewed_cap = cap.id
         self._update_run_gate()
         self._update_readiness()
+        self._update_engagement_dashboard()
         self.notify("Review acknowledged. Run is enabled when permitted.")
 
     def _ready_command(self, capability_id: str | None = None) -> str:
@@ -1151,6 +1192,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self.query_one("#package-btn", Button).disabled = True
         self._update_status()
         self._update_progress()
+        self._update_engagement_dashboard()
 
         def worker() -> None:
             def log_fn(msg: str) -> None:
@@ -1182,6 +1224,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     **extra,
                 )
                 self._last_session = Path(out["session_path"])
+                self.call_from_thread(self._update_engagement_dashboard)
                 summary = out.get("graph_summary") or {}
                 self._write_run_log(
                     f"[green]Done[/] session={out['session_id']}  nodes={summary.get('nodes', 0)} edges={summary.get('edges', 0)}"
@@ -1221,6 +1264,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 self.call_from_thread(self._update_status)
                 self.call_from_thread(self._update_progress)
                 self.call_from_thread(self._update_run_gate)
+                self.call_from_thread(self._update_engagement_dashboard)
 
         threading.Thread(target=worker, daemon=True).start()
 

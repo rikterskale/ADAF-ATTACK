@@ -54,6 +54,32 @@ def test_tui_starts_populates_capabilities_and_updates_status() -> None:
     asyncio.run(exercise())
 
 
+def test_tui_engagement_dashboard_reflects_target_review_and_session_state(tmp_path) -> None:
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            dashboard = app.query_one("#engagement-dashboard", Static)
+            assert "Awaiting target details" in str(dashboard.render())
+
+            app.query_one("#domain", Input).value = "corp.test"
+            app.query_one("#dc_ip", Input).value = "192.0.2.10"
+            app.query_one("#scope", Input).value = "domain"
+            app.selected_cap = "ldap-enum"
+            app._update_engagement_dashboard()
+            rendered = str(dashboard.render())
+            assert "corp.test @ 192.0.2.10" in rendered
+            assert "Scope: domain" in rendered
+            assert "Read-only capability selected" in rendered
+            assert "Ready to review" in rendered
+
+            app._last_session = tmp_path
+            app._update_engagement_dashboard()
+            assert "Last session ready" in str(dashboard.render())
+
+    asyncio.run(exercise())
+
+
 def test_tui_refresh_action_preserves_a_populated_capability_list() -> None:
     async def exercise() -> None:
         app = ADAFAttackApp()
