@@ -61,7 +61,7 @@ ci = [
 tui = [
     "textual==8.2.8",
 ]
-certipy = ["certipy-ad==4.8.0"]
+certipy = ["certipy-ad==4.8.2"]
 kerberos = [
     "impacket==0.13.1",
 ]

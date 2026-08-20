@@ -7,4 +7,4 @@ pypdf==6.16.1
 
 # Certipy remains a separate dependency boundary because of cryptography
 # compatibility constraints. Install it in a dedicated environment when needed.
-certipy-ad==4.8.0
+certipy-ad==4.8.2
