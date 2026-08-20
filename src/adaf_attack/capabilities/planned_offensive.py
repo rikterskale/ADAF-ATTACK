@@ -17,7 +17,9 @@ from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 # id, summary, destructive, category, tags, environment, tools, fixture
-PLANNED_CAPABILITIES: tuple[tuple[str, str, bool, str, tuple[str, ...], str, tuple[str, ...], str], ...] = (
+PLANNED_CAPABILITIES: tuple[
+    tuple[str, str, bool, str, tuple[str, ...], str, tuple[str, ...], str], ...
+] = (
     (
         "add-member",
         "Add a principal to a group (AddMember / GenericAll on group)",
@@ -482,7 +484,9 @@ def _queue_tags(capability_id: str) -> tuple[str, ...]:
     return extra
 
 
-def _tracking_payload(capability_id: str, summary: str, target: Target, force: bool) -> dict[str, Any]:
+def _tracking_payload(
+    capability_id: str, summary: str, target: Target, force: bool
+) -> dict[str, Any]:
     return {
         "ok": False,
         "implemented": False,
