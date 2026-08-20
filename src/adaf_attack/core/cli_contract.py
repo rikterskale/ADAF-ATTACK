@@ -78,6 +78,11 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Pass an existing session directory created by a prior authorized run.",
         "adaf-attack sessions --limit 10",
     ),
+    "UNKNOWN_FINDING": (
+        "The requested finding was not found in the session.",
+        "Run `adaf-attack session show --session <dir>` to list finding IDs.",
+        "adaf-attack session show --session <dir>",
+    ),
     "BLOODHOUND_FILE_NOT_FOUND": (
         "The BloodHound JSON file does not exist.",
         "Pass a valid JSON export with --bloodhound.",

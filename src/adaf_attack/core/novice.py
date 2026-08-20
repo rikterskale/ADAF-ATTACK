@@ -53,10 +53,141 @@ def beginner_next_actions(cap: Capability) -> list[dict[str, str]]:
     return actions
 
 
+def capability_difficulty(cap: Capability) -> dict[str, str]:
+    """Classify a capability with labels a first-time operator can use."""
+    spec = capability_option_spec(cap.id, cap.destructive)
+    required_count = len(spec.required)
+    if cap.destructive or required_count >= 5:
+        level = "Advanced"
+        reason = "Requires extra approval, exact target values, or target-state changes."
+    elif cap.category in {"credential-access", "privilege-escalation", "lateral-movement"}:
+        level = "Intermediate"
+        reason = "Uses live-target context or security concepts worth reviewing first."
+    elif cap.category in {"analysis", "export"}:
+        level = "Beginner"
+        reason = "Works mostly from saved evidence and is safe to explore."
+    else:
+        level = "Beginner"
+        reason = "Has a short option set and is suitable after target preflight."
+    return {"level": level, "reason": reason}
+
+
+def home_actions(*, first_run: bool) -> list[dict[str, str]]:
+    """Plain-language starting points for users who do not know the command names."""
+    actions = [
+        {
+            "goal": "Check my installation",
+            "command": "adaf-attack doctor --profile user-readiness --explain",
+            "why": "Verifies Python, paths, and packaged demo files without touching a network.",
+        },
+        {
+            "goal": "Try the safe offline demo",
+            "command": "adaf-attack quickstart",
+            "why": "Creates a disposable demo session and findings dashboard.",
+        },
+        {
+            "goal": "Choose a beginner capability",
+            "command": "adaf-attack list-capabilities --novice --safe-only",
+            "why": "Shows only GREEN capabilities that do not contact a target.",
+        },
+        {
+            "goal": "Review an authorized target",
+            "command": "adaf-attack check --domain <domain> --dc-ip <dc>",
+            "why": "Runs an explicit target preflight before any capability execution.",
+        },
+        {
+            "goal": "Understand a finding",
+            "command": "adaf-attack finding explain --session <session> --id <finding-id>",
+            "why": "Explains the finding, evidence, severity, and next remediation step.",
+        },
+        {
+            "goal": "Continue where I left off",
+            "command": "adaf-attack sessions --limit 5",
+            "why": "Shows recent sessions and their saved evidence status.",
+        },
+    ]
+    if not first_run:
+        actions.insert(
+            2,
+            {
+                "goal": "Resume my workflow",
+                "command": "adaf-attack session list --limit 5",
+                "why": "Finds prior sessions before generating reports or next actions.",
+            },
+        )
+    return actions
+
+
+def command_option_explanations(cap: Capability) -> list[dict[str, str]]:
+    """Explain every option shown in the beginner command builder."""
+    spec = capability_option_spec(cap.id, cap.destructive)
+    explanations: list[dict[str, str]] = []
+    for option in list(spec.required) + list(spec.optional):
+        prompt = prompt_spec_for_option(option)
+        explanations.append(
+            {
+                "option": option,
+                "label": prompt["label"],
+                "help": prompt["help"],
+                "required": "true" if option in spec.required else "false",
+            }
+        )
+    return explanations
+
+
 def explain_finding(finding: dict[str, Any]) -> str:
     title = str(finding.get("title") or finding.get("id") or "This finding")
     severity = str(finding.get("severity") or "unknown").lower()
     return f"{title} is rated {severity}. Review its evidence and remediation before making any change."
+
+
+def explain_finding_payload(finding: dict[str, Any]) -> dict[str, Any]:
+    """Return a structured, plain-English finding explanation."""
+    finding_id = str(finding.get("id") or finding.get("finding_id") or "finding")
+    title = str(finding.get("title") or finding.get("name") or finding_id)
+    severity = str(finding.get("severity") or "unknown").lower()
+    evidence = finding.get("evidence") or finding.get("evidence_refs") or []
+    if isinstance(evidence, str):
+        evidence = [evidence]
+    if not isinstance(evidence, list):
+        evidence = []
+    why = {
+        "critical": "A critical issue usually means direct or broad compromise is plausible.",
+        "high": "A high issue can materially improve an attack path or expose sensitive access.",
+        "medium": "A medium issue is worth tracking because it can combine with other weaknesses.",
+        "low": "A low issue is usually a control gap or hardening opportunity.",
+        "info": "An informational item adds context for reporting or later validation.",
+    }.get(severity, "Severity was not recognized; review the evidence before acting.")
+    return {
+        "id": finding_id,
+        "title": title,
+        "severity": severity,
+        "meaning": f"{title} is rated {severity}.",
+        "why_it_matters": why,
+        "evidence": evidence[:10],
+        "recommended_next_step": "Validate the evidence, assign an owner, document the fix, then re-test.",
+        "glossary": {
+            term: definition
+            for term, definition in glossary_items().items()
+            if term in f"{finding_id} {title}".lower()
+        },
+    }
+
+
+def remediation_checklist(finding: dict[str, Any]) -> dict[str, Any]:
+    """Turn a finding into a beginner-friendly remediation checklist."""
+    explained = explain_finding_payload(finding)
+    return {
+        "finding": explained,
+        "steps": [
+            {"id": "validate", "label": "Confirm the evidence is from the authorized scope."},
+            {"id": "assign", "label": "Assign an owner who can change the affected control."},
+            {"id": "fix", "label": "Apply the remediation or compensating control."},
+            {"id": "document", "label": "Record the change, exception, or accepted risk."},
+            {"id": "retest", "label": "Re-run the relevant validation and attach evidence."},
+        ],
+        "status": "not-started",
+    }
 
 
 def glossary_definition(term: str) -> str | None:

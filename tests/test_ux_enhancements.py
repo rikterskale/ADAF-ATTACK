@@ -201,3 +201,108 @@ def test_cli_session_diff(tmp_path: Path) -> None:
         )
     result = runner.invoke(app, ["session", "diff", str(a), str(b)])
     assert result.exit_code == 0
+
+
+def test_capability_payload_has_beginner_metadata() -> None:
+    result = runner.invoke(app, ["--format", "json", "capability-help", "ldap-enum"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    cap = payload["capability"]
+    assert cap["difficulty"]["level"] in {"Beginner", "Intermediate", "Advanced"}
+    assert cap["preflight_checklist"]["items"]
+    assert cap["stages"]
+
+
+def test_plan_contains_preflight_and_stages() -> None:
+    result = runner.invoke(
+        app,
+        ["--format", "json", "plan", "ldap-enum", "-d", "corp.lab", "--dc-ip", "10.0.0.10"],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["preflight_checklist"]["id"] == "ldap-enum"
+    assert payload["stages"]["stages"]
+
+
+def test_home_and_command_builder_json() -> None:
+    home = runner.invoke(app, ["--format", "json", "home"])
+    assert home.exit_code == 0, home.output
+    assert json.loads(home.output)["actions"]
+
+    command = runner.invoke(
+        app,
+        [
+            "--format",
+            "json",
+            "command",
+            "ldap-enum",
+            "-d",
+            "corp.lab",
+            "--dc-ip",
+            "10.0.0.10",
+        ],
+    )
+    assert command.exit_code == 0, command.output
+    payload = json.loads(command.output)
+    assert payload["command"].startswith("adaf-attack run ldap-enum")
+    assert payload["option_explanations"]
+
+
+def test_beginner_and_summary_output_modes_are_distinct() -> None:
+    beginner = runner.invoke(app, ["--format", "beginner", "capability-help", "ldap-enum"])
+    assert beginner.exit_code == 0, beginner.output
+    assert "Beginner summary" in beginner.output
+    assert "Difficulty" in beginner.output
+
+    summary = runner.invoke(app, ["--format", "summary", "home"])
+    assert summary.exit_code == 0, summary.output
+    assert "ok: True" in summary.output
+
+
+def test_finding_explain_and_remediate(tmp_path: Path) -> None:
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "findings.json").write_text(
+        json.dumps(
+            {
+                "findings": [
+                    {
+                        "id": "F-1",
+                        "title": "Kerberoastable account",
+                        "severity": "high",
+                        "evidence": ["kerberoast.json"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    explain = runner.invoke(
+        app, ["--format", "json", "finding", "explain", "--session", str(session), "--id", "F-1"]
+    )
+    assert explain.exit_code == 0, explain.output
+    assert json.loads(explain.output)["finding"]["severity"] == "high"
+
+    remediate = runner.invoke(
+        app,
+        ["--format", "json", "finding", "remediate", "--session", str(session), "--id", "F-1"],
+    )
+    assert remediate.exit_code == 0, remediate.output
+    assert [step["id"] for step in json.loads(remediate.output)["steps"]][-1] == "retest"
+
+
+def test_session_show_includes_timeline_and_resume(tmp_path: Path) -> None:
+    session = tmp_path / "s1"
+    session.mkdir()
+    (session / "session.json").write_text(json.dumps({"session_id": "s1"}), encoding="utf-8")
+    (session / "findings.json").write_text(json.dumps({"findings": []}), encoding="utf-8")
+    (session / "events.jsonl").write_text(
+        json.dumps({"time": "2026-08-20T00:00:00Z", "event": "run", "capability": "ldap-enum"})
+        + "\n",
+        encoding="utf-8",
+    )
+    result = runner.invoke(app, ["--format", "json", "session", "show", "--session", str(session)])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["timeline"][0]["capability"] == "ldap-enum"
+    assert "session show" in payload["resume_command"]

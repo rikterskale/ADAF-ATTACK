@@ -448,6 +448,8 @@ def register_ux_commands(
         limit: int = typer.Option(50, "--limit"),
     ) -> None:
         """Show a richer findings dashboard for one session."""
+        import json
+
         from adaf_attack.core.ux import session_findings_dashboard
 
         if not session.is_dir():
@@ -455,12 +457,37 @@ def register_ux_commands(
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code)
         dashboard = session_findings_dashboard(session, severity=severity, limit=limit)
-        payload = {"ok": True, **dashboard}
+        timeline: list[dict[str, Any]] = []
+        events = session / "events.jsonl"
+        if events.is_file():
+            try:
+                for line in events.read_text(encoding="utf-8").splitlines()[-25:]:
+                    try:
+                        item = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(item, dict):
+                        timeline.append(
+                            {
+                                "time": item.get("time") or item.get("timestamp"),
+                                "event": item.get("event") or item.get("type") or "event",
+                                "capability": item.get("capability"),
+                            }
+                        )
+            except OSError:
+                timeline = []
+        payload = {
+            "ok": True,
+            **dashboard,
+            "timeline": timeline,
+            "resume_command": f"adaf-attack session show --session {session}",
+        }
         lines = [
             f"Session: {dashboard.get('session_id')}",
             f"Created: {dashboard.get('created_at') or 'unknown'}",
             f"Findings: {dashboard.get('finding_count', 0)}  Severity: {dashboard.get('severity') or {}}",
             f"Graph: {dashboard.get('graph', {}).get('nodes', 0)} nodes / {dashboard.get('graph', {}).get('edges', 0)} edges",
+            f"Resume: adaf-attack session show --session {session}",
         ]
         titles = dashboard.get("titles") or []
         if titles:
@@ -475,5 +502,11 @@ def register_ux_commands(
                     nodes = path_item.get("path") or []
                     short = " -> ".join(str(x).split("@")[0] for x in nodes[:6])
                     lines.append(f"  score={path_item.get('score', '?')}  {short}")
+        if timeline:
+            lines.append("Timeline:")
+            for item in timeline[-5:]:
+                label = item.get("event") or "event"
+                cap = f" ({item['capability']})" if item.get("capability") else ""
+                lines.append(f"  - {item.get('time') or 'unknown'}: {label}{cap}")
         human = Panel("\n".join(lines), title="Session findings dashboard")
         _emit(ctx, payload, human)

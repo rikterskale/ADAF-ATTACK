@@ -33,8 +33,10 @@ from adaf_attack.core.capability_help_data import capability_option_spec
 from adaf_attack.core.control_plane import package_evidence
 from adaf_attack.core.novice import (
     beginner_next_actions,
+    capability_difficulty,
     explain_finding,
     glossary_definition,
+    home_actions,
     plain_description,
     safety_summary,
 )
@@ -56,6 +58,7 @@ from adaf_attack.core.user_config import (
 )
 from adaf_attack.core.ux import (
     build_ready_command,
+    format_stages_progress,
     group_capabilities_by_phase,
     risk_checklist,
     suggested_next_actions,
@@ -94,7 +97,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     #target-form { height: auto; padding: 1; border-bottom: solid $accent; }
     #log-panel { height: 1fr; }
     #status, #progress, #credential-strip { height: auto; border-top: solid $accent; padding: 0 1; }
-    #help-panel, #review-panel, #session-panel, #engagement-dashboard { height: auto; padding: 1; border-bottom: solid $accent; }
+    #help-panel, #review-panel, #session-panel, #engagement-dashboard, #first-launch-panel { height: auto; padding: 1; border-bottom: solid $accent; }
     #wizard-panel { height: auto; padding: 1; border: solid $success; margin-bottom: 1; }
     #wizard-step { color: $success; text-style: bold; }
     #wizard-actions { height: auto; margin-top: 1; }
@@ -152,6 +155,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 placeholder="Search capabilities by name, category, or keyword", id="search"
             )
             yield Button("Quickstart", id="quickstart-btn")
+            yield Button("What should I do?", id="home-btn")
+            yield Button("Setup", id="setup-btn")
             yield Switch(value=self._safe_mode, id="beginner-mode")
             yield Label("Beginner mode")
             yield Switch(value=self._green_only, id="green-only")
@@ -169,6 +174,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "[bold]Engagement dashboard[/bold]\nLoading current engagement state.",
             id="engagement-dashboard",
         )
+        yield Static("[bold]First-launch setup[/bold]\nChecking local defaults.", id="first-launch-panel")
         with Vertical(id="wizard-panel"):
             yield Static("Guided workflow", id="wizard-step")
             yield Static("", id="wizard-guide")
@@ -286,6 +292,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._set_wizard_step(0, persist=False)
         self._load_wizard_resume()
         self._update_readiness()
+        self._refresh_first_launch_panel()
         self._update_engagement_dashboard()
         self._refresh_pin_button()
         self._workflow = WorkflowEngine(default_workspace_dir())
@@ -355,9 +362,11 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._update_readiness()
             self._validate_target_inline()
             self._update_engagement_dashboard()
+            self._refresh_first_launch_panel()
         elif event.input.id in {"username", "password", "hashes", "aes_key", "ccache"}:
             self._update_credential_strip()
             self._update_readiness()
+            self._refresh_first_launch_panel()
 
     def on_switch_changed(self, event: Switch.Changed) -> None:
         if event.switch.id == "force":
@@ -580,6 +589,51 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                         "Target format looks ready. Reachability will be checked during doctor/run."
                     )
         self.query_one("#target-validation", Static).update(message)
+
+    def _refresh_first_launch_panel(self) -> None:
+        domain = bool(self.query_one("#domain", Input).value.strip())
+        dc_ip = bool(self.query_one("#dc_ip", Input).value.strip())
+        access = bool(
+            self.query_one("#username", Input).value.strip()
+            or self.query_one("#ccache", Input).value.strip()
+            or self.query_one("#password", Input).value
+        )
+        profile_count = len(list_profiles())
+        checklist = [
+            ("workspace", default_workspace_dir().exists()),
+            ("target", domain and dc_ip),
+            ("access", access),
+            ("profile", profile_count > 0),
+            ("quickstart", self._last_session is not None),
+        ]
+        done = sum(1 for _label, ok in checklist if ok)
+        next_item = next((label for label, ok in checklist if not ok), "review")
+        lines = [
+            f"Setup readiness: {done}/{len(checklist)}",
+            f"Next: {next_item}",
+            "Use Setup for first-run defaults or What should I do? for goal-based commands.",
+        ]
+        self.query_one("#first-launch-panel", Static).update(
+            "[bold]First-launch setup[/bold]\n" + "\n".join(lines)
+        )
+
+    def _show_home(self) -> None:
+        first_run = self._last_session is None and not list_profiles()
+        actions = home_actions(first_run=first_run)
+        lines = [f"{item['goal']}: {item['command']}" for item in actions[:6]]
+        self.query_one("#first-launch-panel", Static).update(
+            "[bold]What should I do?[/bold]\n" + "\n".join(lines)
+        )
+        self.notify("Goal-based starting points are shown above.", severity="information")
+
+    def _show_setup_wizard(self) -> None:
+        self._set_wizard_step(0)
+        self.query_one("#domain", Input).focus()
+        self._refresh_first_launch_panel()
+        self.notify(
+            "Setup starts with workspace, target, access, profile, then quickstart.",
+            severity="information",
+        )
 
     def _show_recommendations(self) -> None:
         cap = self._selected()
@@ -814,8 +868,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         glossary_line = f"\nGlossary: {glossary}" if glossary else ""
         recent = ", ".join(recent_capabilities()) or "none yet"
         pinned = ", ".join(favorite_capabilities()) or "none"
+        difficulty = capability_difficulty(cap)
         self.query_one("#help-panel", Static).update(
             f"[bold]{cap.id}[/]\n{cap.summary}\nCategory: {cap.category}\n"
+            f"Difficulty: {difficulty['level']} — {difficulty['reason']}\n"
             f"Safety: {safety_summary(cap)['level']} — {plain_description(cap)}\n"
             f"Required: {required}\nOptional: {optional}{notes}{glossary_line}\n"
             f"Recent: {recent}\nPinned: {pinned}"
@@ -1323,6 +1379,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 self.call_from_thread(self._update_progress)
                 self.call_from_thread(self._update_run_gate)
                 self.call_from_thread(self._update_engagement_dashboard)
+                self.call_from_thread(self._refresh_first_launch_panel)
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -1421,10 +1478,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         cap = self._selected()
         if not cap:
             return
-        stages = ["prepare", "connect", "execute"]
-        if cap.category in {"credential-access", "privilege-escalation"}:
-            stages.append("harvest")
-        stages.extend(["analyze", "next-actions"])
+        stages = [item["id"] for item in format_stages_progress(cap)["stages"]]
         current = self._active_stage
         rendered = " → ".join(f"[bold cyan]{s}[/]" if s == current else s for s in stages)
         self.query_one("#progress", Static).update(f"Stages: {rendered}")
@@ -1488,6 +1542,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "dry-run-btn": self._dry_run,
             "cancel-btn": self._cancel,
             "quickstart-btn": self._quickstart,
+            "home-btn": self._show_home,
+            "setup-btn": self._show_setup_wizard,
             "reset-form-btn": self._reset_form,
             "undo-reset-btn": self._undo_form_reset,
             "sessions-btn": self._show_sessions,

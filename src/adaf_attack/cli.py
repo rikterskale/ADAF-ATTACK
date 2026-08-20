@@ -269,9 +269,59 @@ def _json_mode(ctx: typer.Context) -> bool:
     return ctx.ensure_object(dict).get("output_format") == "json"
 
 
+def _output_format(ctx: typer.Context) -> str:
+    return str(ctx.ensure_object(dict).get("output_format") or "human")
+
+
+def _summary_lines(payload: dict[str, Any]) -> list[str]:
+    lines = [f"ok: {payload.get('ok')}"]
+    for key in ("count", "stage", "mode", "session_path", "command", "next_step"):
+        if payload.get(key) is not None:
+            lines.append(f"{key}: {payload[key]}")
+    capability = payload.get("capability")
+    if isinstance(capability, dict):
+        lines.append(f"capability: {capability.get('id')}")
+        if capability.get("summary"):
+            lines.append(f"summary: {capability['summary']}")
+    if payload.get("next_steps"):
+        lines.append("next_steps:")
+        lines.extend(f"- {step}" for step in payload["next_steps"])
+    return lines
+
+
+def _beginner_lines(payload: dict[str, Any]) -> list[str]:
+    if isinstance(payload.get("actions"), list):
+        return [
+            f"{item.get('goal')}: {item.get('command')}"
+            for item in payload["actions"]
+            if isinstance(item, dict)
+        ]
+    capability = payload.get("capability")
+    if isinstance(capability, dict):
+        difficulty = capability.get("difficulty") or {}
+        return [
+            f"{capability.get('id')}: {capability.get('summary')}",
+            f"Difficulty: {difficulty.get('level', 'unknown')}",
+            f"Example: {capability.get('example')}",
+            f"Next: {capability.get('next_step')}",
+        ]
+    finding = payload.get("finding")
+    if isinstance(finding, dict):
+        return [
+            f"{finding.get('title')} is rated {finding.get('severity')}.",
+            str(finding.get("why_it_matters")),
+            f"Next: {finding.get('recommended_next_step')}",
+        ]
+    return _summary_lines(payload)
+
+
 def _emit(ctx: typer.Context, payload: dict[str, Any], human: Any) -> None:
     if _json_mode(ctx):
         typer.echo(json.dumps(payload, indent=2, sort_keys=True, default=str))
+    elif _output_format(ctx) == "summary":
+        _console(ctx).print("\n".join(_summary_lines(payload)))
+    elif _output_format(ctx) == "beginner":
+        _console(ctx).print(Panel("\n".join(_beginner_lines(payload)), title="Beginner summary"))
     else:
         _console(ctx).print(human)
 
@@ -292,14 +342,19 @@ console = Console()
 def main(
     ctx: typer.Context,
     version: bool = typer.Option(False, "--version", "-V", help="Show version and exit."),
-    output_format: str = typer.Option("human", "--format", help="Output format: human or json."),
+    output_format: str = typer.Option(
+        "human", "--format", help="Output format: human, json, summary, table, or beginner."
+    ),
     no_color: bool = typer.Option(False, "--no-color", help="Disable terminal color and styling."),
     non_interactive: bool = typer.Option(
         False, "--non-interactive", help="Never prompt; suitable for scripts and CI."
     ),
 ) -> None:
-    if output_format not in {"human", "json"}:
-        raise typer.BadParameter("must be 'human' or 'json'", param_hint="--format")
+    if output_format not in {"human", "json", "summary", "table", "beginner"}:
+        raise typer.BadParameter(
+            "must be 'human', 'json', 'summary', 'table', or 'beginner'",
+            param_hint="--format",
+        )
     ctx.ensure_object(dict).update(
         output_format=output_format,
         no_color=no_color or output_format == "json",
@@ -688,7 +743,7 @@ def list_capabilities(
         _emit(ctx, {"ok": True, "capabilities": [], "count": 0}, "No capabilities registered yet.")
         return
 
-    from adaf_attack.core.novice import safety_summary
+    from adaf_attack.core.novice import capability_difficulty, safety_summary
     from adaf_attack.core.ux import capability_phase, group_capabilities_by_phase, phase_label
 
     palette = {"GREEN": "green", "YELLOW": "yellow", "RED": "red"}
@@ -713,6 +768,7 @@ def list_capabilities(
         table.add_column("Phase", style="bold")
         table.add_column("ID", style="cyan")
         table.add_column("Safety")
+        table.add_column("Difficulty")
         table.add_column("Offline?")
         table.add_column("What it does")
         by_phase_groups = group_capabilities_by_phase()
@@ -729,6 +785,7 @@ def list_capabilities(
                 continue
             for cap in group:
                 safety = safety_summary(cap)
+                difficulty = capability_difficulty(cap)
                 color = palette.get(str(safety["level"]), "white")
                 shown_phase = "" if phase == current_phase else phase_label(phase)
                 current_phase = phase
@@ -736,6 +793,7 @@ def list_capabilities(
                     shown_phase,
                     cap.id,
                     f"[{color}]{safety['level']}[/{color}]",
+                    difficulty["level"],
                     "yes" if not safety["network"] else "no",
                     cap.summary,
                 )
@@ -767,6 +825,7 @@ def list_capabilities(
     if by_phase:
         table.add_column("Phase")
     table.add_column("Category")
+    table.add_column("Difficulty")
     table.add_column("Summary")
     table.add_column("Flags")
 
@@ -780,7 +839,14 @@ def list_capabilities(
         row = [cap.id]
         if by_phase:
             row.append(phase_label(capability_phase(cap)))
-        row.extend([cap.category, cap.summary, " ".join(flags) or "-"])
+        row.extend(
+            [
+                cap.category,
+                capability_difficulty(cap)["level"],
+                cap.summary,
+                " ".join(flags) or "-",
+            ]
+        )
         table.add_row(*row)
 
     _emit(
@@ -1026,18 +1092,27 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
         example += " --domain corp.example --dc-ip 10.0.0.10"
     if cap.destructive:
         example += " --force"
-    from adaf_attack.core.ux import capability_prerequisites, format_next_actions_block
+    from adaf_attack.core.novice import capability_difficulty
+    from adaf_attack.core.ux import (
+        capability_prerequisites,
+        format_next_actions_block,
+        format_stages_progress,
+        risk_checklist,
+    )
 
     return {
         "id": cap.id,
         "category": cap.category,
         "summary": cap.summary,
         "destructive": cap.destructive,
+        "difficulty": capability_difficulty(cap),
         "tags": list(cap.tags),
         "required_options": list(spec.required),
         "optional_options": list(spec.optional),
         "notes": spec.notes,
         "example": example,
+        "preflight_checklist": risk_checklist(cap),
+        "stages": format_stages_progress(cap)["stages"],
         "next_step": (
             f"Run `adaf-attack plan {cap.id}"
             + (" --domain <domain> --dc-ip <host>" if "--domain" in spec.required else "")
@@ -1137,9 +1212,10 @@ def plan(
         raise typer.Exit(code=error.exit_code)
     risk = "high" if cap.destructive else "moderate"
     requires_force = cap.destructive
-    from adaf_attack.core.ux import build_ready_command, risk_checklist
+    from adaf_attack.core.ux import build_ready_command, format_stages_progress, risk_checklist
 
     checklist = risk_checklist(cap)
+    stages = format_stages_progress(cap)
     next_step = f"adaf-attack run {cap.id} --domain {domain} --dc-ip {dc_ip}" + (
         " --force" if requires_force else ""
     )
@@ -1156,6 +1232,8 @@ def plan(
         "capability": _capability_payload(cap),
         "target": {"domain": domain, "dc_ip": dc_ip},
         "risk": risk_payload,
+        "preflight_checklist": checklist,
+        "stages": stages,
         "next_step": next_step,
     }
     if export is not None:
@@ -1184,6 +1262,11 @@ def plan(
                 f"Risk: {risk}; {'may modify target state' if cap.destructive else 'performs network/offline analysis only'}",
                 f"--force: {'provided' if force else 'not provided'}",
                 f"Opsec: {checklist['opsec_hint']}",
+                "Preflight: "
+                + ", ".join(
+                    item["label"] for item in checklist["items"] if item["required"]
+                ),
+                "Stages: " + " -> ".join(item["id"] for item in stages["stages"]),
                 f"Copy-ready: {build_ready_command(cap.id, domain=domain, dc_ip=dc_ip, force=requires_force)}",
                 f"Next step: {next_step}",
             ]
@@ -1868,6 +1951,27 @@ def run_capability(
         )
 
     if not _json_mode(ctx):
+        if cap is not None:
+            from adaf_attack.core.novice import capability_difficulty
+            from adaf_attack.core.ux import format_stages_progress, risk_checklist
+
+            checklist = risk_checklist(cap)
+            stages = format_stages_progress(cap)
+            required_items = [
+                item["label"] for item in checklist["items"] if item["required"]
+            ]
+            _console(ctx).print(
+                Panel(
+                    "\n".join(
+                        [
+                            f"Difficulty: {capability_difficulty(cap)['level']}",
+                            "Preflight: " + ", ".join(required_items),
+                            "Stages: " + " -> ".join(item["id"] for item in stages["stages"]),
+                        ]
+                    ),
+                    title="Preflight checklist",
+                )
+            )
         _console(ctx).print(
             Panel(
                 f"[bold]{capability}[/bold]\n\n"
@@ -1978,6 +2082,16 @@ def _execute_with_spinner(
 ) -> dict[str, Any]:
     """Run a capability inside a Rich spinner, threading log messages into the status."""
     console_obj = _console(ctx)
+    stage_hint = capability
+    try:
+        from adaf_attack.core.registry import capability_registry
+        from adaf_attack.core.ux import format_stages_progress
+
+        cap = capability_registry.get(capability)
+        if cap is not None:
+            stage_hint = " -> ".join(item["id"] for item in format_stages_progress(cap)["stages"])
+    except Exception:  # noqa: BLE001
+        stage_hint = capability
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -1985,7 +2099,7 @@ def _execute_with_spinner(
         console=console_obj,
         transient=True,
     ) as progress:
-        task_id = progress.add_task(f"Running {capability}", total=None)
+        task_id = progress.add_task(f"Running {capability}: {stage_hint}", total=None)
 
         def _log(message: str) -> None:
             progress.update(task_id, description=f"{capability}: {message[:80]}")
@@ -2706,6 +2820,149 @@ def glossary_cmd(
     for key, definition in items.items():
         table.add_row(key.upper(), definition)
     _emit(ctx, payload, table)
+
+
+@app.command("home")
+def home_cmd(ctx: typer.Context) -> None:
+    """Show plain-language goals for users who do not know the command names."""
+    from adaf_attack.core.novice import home_actions
+
+    doctor_payload = _doctor_payload("offline")
+    actions = home_actions(first_run=bool(doctor_payload["first_run"]))
+    payload = {
+        "ok": True,
+        "first_run": doctor_payload["first_run"],
+        "actions": actions,
+        "next_step": actions[0]["command"],
+    }
+    table = Table(title="What should I do?", show_header=True)
+    table.add_column("Goal", style="cyan")
+    table.add_column("Command")
+    table.add_column("Why")
+    for action in actions:
+        table.add_row(action["goal"], action["command"], action["why"])
+    _emit(ctx, payload, table)
+
+
+@app.command("command")
+def command_builder_cmd(
+    ctx: typer.Context,
+    capability: str = typer.Argument(..., help="Capability ID to build a command for."),
+    domain: str | None = typer.Option(None, "--domain", "-d"),
+    dc_ip: str | None = typer.Option(None, "--dc-ip"),
+    username: str | None = typer.Option(None, "--username", "-u"),
+    force: bool = typer.Option(False, "--force"),
+) -> None:
+    """Generate a copy-ready command and explain each option in plain language."""
+    import adaf_attack.capabilities  # noqa: F401
+    from adaf_attack.core.novice import command_option_explanations
+    from adaf_attack.core.registry import capability_registry
+    from adaf_attack.core.ux import build_ready_command
+
+    cap = capability_registry.get(capability)
+    if cap is None:
+        error = _unknown_capability_error(capability)
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    ready = build_ready_command(
+        cap.id,
+        domain=domain or "<domain>",
+        dc_ip=dc_ip or "<dc-ip>",
+        username=username,
+        force=force or cap.destructive,
+    )
+    explanations = command_option_explanations(cap)
+    payload = {
+        "ok": True,
+        "capability": cap.id,
+        "command": ready,
+        "option_explanations": explanations,
+        "next_step": "Review scope, then run the command only against an authorized target.",
+    }
+    lines = [ready, "", "Options:"]
+    for item in explanations:
+        required = "required" if item["required"] == "true" else "optional"
+        lines.append(f"{item['option']}: {item['label']} ({required})")
+    _emit(ctx, payload, Panel("\n".join(lines), title=f"Command builder: {cap.id}"))
+
+
+finding_app = typer.Typer(help="Explain findings and build remediation checklists.")
+app.add_typer(finding_app, name="finding")
+
+
+def _load_session_finding(session: Path, finding_id: str) -> dict[str, Any]:
+    try:
+        payload = json.loads((session / "findings.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ActionableError(
+            "SESSION_NOT_FOUND",
+            "Could not read findings.json from the session.",
+            "Pass a completed session directory with --session.",
+            details={"session": str(session), "error": str(exc)},
+        ) from exc
+    findings = payload.get("findings") if isinstance(payload, dict) else payload
+    if not isinstance(findings, list):
+        findings = []
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        aliases = {
+            str(finding.get("id") or ""),
+            str(finding.get("finding_id") or ""),
+            str(finding.get("title") or ""),
+        }
+        if finding_id in aliases:
+            return finding
+    raise ActionableError(
+        "UNKNOWN_FINDING",
+        f"Finding not found: {finding_id}",
+        "Run `adaf-attack session show --session <dir>` to list finding IDs.",
+        details={"session": str(session), "finding": finding_id},
+    )
+
+
+@finding_app.command("explain")
+def finding_explain_cmd(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session"),
+    finding_id: str = typer.Option(..., "--id", help="Finding ID or exact title."),
+) -> None:
+    """Explain a saved finding in plain English."""
+    from adaf_attack.core.novice import explain_finding_payload
+
+    try:
+        explanation = explain_finding_payload(_load_session_finding(session, finding_id))
+    except ActionableError as error:
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from error
+    payload = {"ok": True, "finding": explanation}
+    lines = [
+        f"{explanation['id']}: {explanation['title']}",
+        f"Severity: {explanation['severity']}",
+        f"Meaning: {explanation['meaning']}",
+        f"Why it matters: {explanation['why_it_matters']}",
+        f"Next: {explanation['recommended_next_step']}",
+    ]
+    _emit(ctx, payload, Panel("\n".join(lines), title="Finding explainer"))
+
+
+@finding_app.command("remediate")
+def finding_remediate_cmd(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session"),
+    finding_id: str = typer.Option(..., "--id", help="Finding ID or exact title."),
+) -> None:
+    """Turn a saved finding into a remediation checklist."""
+    from adaf_attack.core.novice import remediation_checklist
+
+    try:
+        checklist = remediation_checklist(_load_session_finding(session, finding_id))
+    except ActionableError as error:
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from error
+    payload = {"ok": True, **checklist}
+    lines = [f"{step['id']}: {step['label']}" for step in checklist["steps"]]
+    _emit(ctx, payload, Panel("\n".join(lines), title="Remediation checklist"))
 
 
 config_app = typer.Typer(help="Persistent per-user defaults for CLI and TUI.")

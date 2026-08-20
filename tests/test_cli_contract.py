@@ -111,7 +111,8 @@ def test_invalid_output_format_is_rejected() -> None:
     result = runner.invoke(app, ["--format", "yaml", "doctor"])
 
     assert result.exit_code != 0
-    assert "must be 'human' or 'json'" in result.output
+    assert "summary" in result.output
+    assert "beginner" in result.output
 
 
 def test_run_json_forwards_capability_options_to_runner(monkeypatch: Any, tmp_path: Path) -> None:

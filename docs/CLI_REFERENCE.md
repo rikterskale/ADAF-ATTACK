@@ -21,6 +21,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack check` | Check beginner setup or preflight an authorized target |
 | `adaf-attack cleanup` | Execute recorded cleanup with explicit force |
 | `adaf-attack coercion-fixtures` | Validate authorized coercion fixtures |
+| `adaf-attack command` | Build a copy-ready command with option explanations |
 | `adaf-attack completions` | Print shell completions |
 | `adaf-attack config` | Persistent configuration command group |
 | `adaf-attack config keys` | List supported configuration keys |
@@ -42,10 +43,14 @@ for current options, defaults, validation, and examples.
 | `adaf-attack favorites add` | Pin a capability for quick recall |
 | `adaf-attack favorites list` | List pinned capabilities |
 | `adaf-attack favorites remove` | Unpin a capability |
+| `adaf-attack finding` | Finding explanation and remediation command group |
+| `adaf-attack finding explain` | Explain a saved finding in plain language |
+| `adaf-attack finding remediate` | Build a remediation checklist for a finding |
 | `adaf-attack forest-campaign` | Compose a forest-aware campaign |
 | `adaf-attack glossary` | Explain Active Directory and operator terms |
 | `adaf-attack gpo-impact-plan` | Plan GPO impact validation |
 | `adaf-attack help-me` | Show the guided novice tour |
+| `adaf-attack home` | Show goal-based starting points |
 | `adaf-attack init` | First-run onboarding: check environment and save defaults |
 | `adaf-attack list-capabilities` | List registered capabilities |
 | `adaf-attack path` | Attack-path command group |

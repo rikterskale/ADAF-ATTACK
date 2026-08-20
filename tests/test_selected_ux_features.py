@@ -186,3 +186,18 @@ def test_tui_validation_help_and_cheat_sheet() -> None:
             assert tui.notify.called
 
     asyncio.run(exercise())
+
+
+def test_tui_first_launch_home_and_setup_panel() -> None:
+    async def exercise() -> None:
+        tui = ADAFAttackApp()
+        async with tui.run_test() as pilot:
+            await pilot.pause()
+            tui._show_home()
+            panel_text = str(tui.query_one("#first-launch-panel").render())
+            assert "What should I do" in panel_text
+            tui._show_setup_wizard()
+            setup_text = str(tui.query_one("#first-launch-panel").render())
+            assert "First-launch setup" in setup_text
+
+    asyncio.run(exercise())

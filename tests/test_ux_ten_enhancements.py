@@ -72,6 +72,8 @@ def test_profile_set_list_use_delete(tmp_path: Path, monkeypatch) -> None:
 def test_completions_bash() -> None:
     script = generate_completion("bash")
     assert "complete -F" in script
+    assert "beginner" in script
+    assert "command" in script
     result = runner.invoke(app, ["--format", "json", "completions", "bash"])
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
