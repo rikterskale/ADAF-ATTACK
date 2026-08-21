@@ -1306,6 +1306,11 @@ def plan(
         "stages": stages,
         "next_step": next_step,
     }
+    from adaf_attack.core.engagement_dashboard import capability_review
+
+    payload["pre_execution_review"] = capability_review(
+        cap, target={"domain": domain, "dc_ip": dc_ip}
+    )
     if export is not None:
         from adaf_attack.core.ux import capability_prerequisites, export_plan_markdown
 
@@ -3245,7 +3250,7 @@ register_ux_commands(
 )
 
 register_tool_commands(app, emit=_emit, emit_error=_emit_error)
-register_product_commands(app, emit=_emit, emit_error=_emit_error)
+register_product_commands(app, emit=_emit, emit_error=_emit_error, engagement_group=engagement_app)
 
 # Finding-driven guided workflow surface: the CLI/agent client of the same
 # durable engine the TUI drives (src/adaf_attack/core/workflow_engine.py).
@@ -3376,6 +3381,37 @@ def path_rank_alias(
         max_depth=max_depth,
         limit=limit,
         output=output,
+    )
+
+
+@path_app.command("inspect")
+def path_inspect(
+    ctx: typer.Context,
+    graph: Path = typer.Option(..., "--graph", "-g"),
+    index: int | None = typer.Option(None, "--index", help="Zero-based edge index."),
+    source: str | None = typer.Option(None, "--source"),
+    target: str | None = typer.Option(None, "--target"),
+    relation: str | None = typer.Option(None, "--relation"),
+) -> None:
+    """Inspect graph-edge evidence, risk, prerequisites, telemetry, and remediation."""
+    from adaf_attack.core.engagement_dashboard import inspect_edge as inspect_graph_edge
+
+    try:
+        payload = inspect_graph_edge(
+            graph, index=index, source=source, target=target, relation=relation
+        )
+    except (OSError, KeyError, TypeError, ValueError) as exc:
+        error = error_for("GRAPH_NOT_FOUND", message=str(exc), details={"graph": str(graph)})
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+    lines = [
+        f"{edge['source']} --{edge['relation']}--> {edge['target']}  risk={edge['risk']}"
+        for edge in payload["edges"]
+    ]
+    _emit(
+        ctx,
+        payload,
+        Panel("\n".join(lines) or "No matching graph edges.", title="Graph edge inspection"),
     )
 
 

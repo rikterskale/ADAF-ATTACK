@@ -35,6 +35,9 @@ for current options, defaults, validation, and examples.
 | `adaf-attack engagement` | Engagement command group |
 | `adaf-attack engagement init` | Create an engagement template |
 | `adaf-attack engagement package` | Create a redacted evidence archive |
+| `adaf-attack engagement dashboard` | Show the unified engagement dashboard |
+| `adaf-attack engagement missions` | List goal-first guided missions |
+| `adaf-attack engagement mission` | Show a deterministic mission workflow |
 | `adaf-attack engagement report` | Generate engagement reports |
 | `adaf-attack engagement run` | Run an authorized engagement plan |
 | `adaf-attack engagement validate` | Validate an engagement plan |
@@ -55,6 +58,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack list-capabilities` | List registered capabilities |
 | `adaf-attack path` | Attack-path command group |
 | `adaf-attack path rank` | Rank attack paths |
+| `adaf-attack path inspect` | Inspect graph-edge evidence and risk |
 | `adaf-attack paths` | Show or repair local paths |
 | `adaf-attack plan` | Preview a capability run |
 | `adaf-attack profile` | Target and opsec profile command group |

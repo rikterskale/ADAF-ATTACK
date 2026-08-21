@@ -13,7 +13,11 @@ from adaf_attack.core.cli_contract import ActionableError
 
 
 def register_product_commands(
-    app: typer.Typer, *, emit: Callable[..., None], emit_error: Callable[..., None]
+    app: typer.Typer,
+    *,
+    emit: Callable[..., None],
+    emit_error: Callable[..., None],
+    engagement_group: typer.Typer | None = None,
 ) -> None:
     """Register product surfaces while leaving collaboration/profile features untouched."""
 
@@ -35,6 +39,87 @@ def register_product_commands(
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from exc
         emit(ctx, payload, Panel(human(payload), title=name))
+
+    engagement_app = engagement_group
+    if engagement_app is None:
+        engagement_app = typer.Typer(help="Goal-first engagement views and mission workflows.")
+        app.add_typer(engagement_app, name="engagement")
+
+    @engagement_app.command("dashboard")
+    def engagement_dashboard_cmd(
+        ctx: typer.Context,
+        session: Path = typer.Option(..., "--session"),
+        objective: str | None = typer.Option(None, "--objective"),
+        mode: str = typer.Option("OBSERVE", "--mode", help="OBSERVE, VALIDATE, or EMULATE."),
+    ) -> None:
+        """Show the unified scope, access, findings, paths, and next-actions view."""
+        from adaf_attack.core.engagement_dashboard import dashboard as engagement_dashboard
+
+        def human(payload: dict[str, Any]) -> str:
+            engagement = payload["engagement"]
+            health = payload["health"]
+            objective_data = payload["objective"]
+            actions = payload["recommended_next_actions"]
+            return (
+                f"Engagement: {engagement['id']}  Mode: {engagement['mode']}\n"
+                f"Objective: {objective_data['title']} ({objective_data['progress']}% complete)\n"
+                f"Scope: {health['scope']}  Evidence: {health['evidence']}  Reports: {'ready' if health['report_ready'] else 'blocked'}\n"
+                f"Findings: {payload['findings']['count']}  Attack paths: {payload['attack_paths']['edges']} edges\n\n"
+                "Recommended next actions:\n"
+                + "\n".join(
+                    f"{i}. {item['action']} [{item['risk']}] — {item['why']}"
+                    for i, item in enumerate(actions[:5], 1)
+                )
+            )
+
+        _run(
+            ctx,
+            "Engagement dashboard",
+            session,
+            lambda p: engagement_dashboard(p, objective=objective, mode=mode),
+            human,
+        )
+
+    @engagement_app.command("missions")
+    def engagement_missions(ctx: typer.Context) -> None:
+        """List goal-first guided mission workflows."""
+        from adaf_attack.core.engagement_dashboard import missions as mission_workflows
+
+        missions = mission_workflows()
+        emit(
+            ctx,
+            {"ok": True, "missions": missions, "count": len(missions)},
+            Panel(
+                "\n".join(
+                    f"{item['id']}: {item['title']}\n  Goal-first workflow" for item in missions
+                ),
+                title="Guided missions",
+            ),
+        )
+
+    @engagement_app.command("mission")
+    def engagement_mission(ctx: typer.Context, mission_id: str = typer.Argument(...)) -> None:
+        """Show the deterministic capability sequence for one mission."""
+        from adaf_attack.core.engagement_dashboard import mission as find_mission
+
+        mission = find_mission(mission_id)
+        if mission is None:
+            error = ActionableError(
+                "UNKNOWN_MISSION",
+                f"Unknown mission: {mission_id}",
+                "Run `adaf-attack engagement missions` to list available missions.",
+            )
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+        emit(
+            ctx,
+            {"ok": True, "mission": mission},
+            Panel(
+                f"{mission['title']}\n\n{mission['objective']}\n\nSequence:\n"
+                + "\n".join(f"{i}. {item}" for i, item in enumerate(mission["capabilities"], 1)),
+                title="Mission workflow",
+            ),
+        )
 
     @app.command("command-center")
     def command_center(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
