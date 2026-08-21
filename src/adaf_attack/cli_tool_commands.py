@@ -1,0 +1,156 @@
+"""Unified operator-tool command group for offline evidence workflows."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+import typer
+from rich.panel import Panel
+
+from adaf_attack.core.cli_contract import ActionableError
+
+
+def register_tool_commands(
+    app: typer.Typer,
+    *,
+    emit: Callable[..., None],
+    emit_error: Callable[..., None],
+) -> None:
+    """Register tool-oriented aliases without changing execution safeguards."""
+    tool_app = typer.Typer(help="Offline graph, evidence, scope, detection, and lab tools.")
+    app.add_typer(tool_app, name="tool")
+
+    @tool_app.command("graph")
+    def tool_graph(
+        ctx: typer.Context,
+        graph: Path = typer.Argument(..., help="Saved graph.json file."),
+        start: str | None = typer.Option(None, "--start", "-s"),
+        limit: int = typer.Option(25, "--limit"),
+    ) -> None:
+        """Explore a saved graph and rank evidence-backed paths offline."""
+        from adaf_attack.core.tooling import graph_explorer
+
+        try:
+            if not graph.is_file():
+                raise FileNotFoundError(str(graph))
+            payload = graph_explorer(graph, start=start, limit=limit)
+        except (OSError, ValueError, KeyError) as exc:
+            error = ActionableError("GRAPH_NOT_FOUND", str(exc), "Pass a valid saved graph.json file.")
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        emit(ctx, {"ok": True, **payload}, Panel(
+            f"Nodes: {payload['summary'].get('nodes', 0)}\n"
+            f"Edges: {payload['summary'].get('edges', 0)}\n"
+            f"Ranked paths: {payload['path_count']}\nOffline: yes",
+            title="Graph explorer",
+        ))
+
+    @tool_app.command("evidence-import")
+    def tool_evidence_import(
+        ctx: typer.Context,
+        session: Path = typer.Option(..., "--session"),
+        source: Path = typer.Option(..., "--source"),
+        overwrite: bool = typer.Option(False, "--overwrite"),
+    ) -> None:
+        """Import a validated JSON artifact into a session without contacting a target."""
+        from adaf_attack.core.tooling import import_evidence
+
+        try:
+            payload = import_evidence(session, source, overwrite=overwrite)
+        except (OSError, ValueError) as exc:
+            error = ActionableError("INPUT_FILE_INVALID", str(exc), "Check the session, source path, and JSON format.")
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        emit(ctx, payload, Panel(f"Imported: {source.name}\nDestination: {payload['destination']}", title="Evidence import"))
+
+    @tool_app.command("scope")
+    def tool_scope(ctx: typer.Context, plan: Path = typer.Argument(..., help="YAML scope or engagement plan.")) -> None:
+        """Inspect authorized scope, capabilities, and OPSEC settings without execution."""
+        from adaf_attack.core.tooling import scope_summary
+
+        try:
+            payload = scope_summary(plan)
+        except (OSError, ValueError) as exc:
+            error = ActionableError("ENGAGEMENT_PLAN_INVALID", str(exc), "Correct the YAML scope document and retry.")
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        emit(ctx, {"ok": True, **payload}, Panel(
+            f"Engagement: {payload.get('engagement_id') or '-'}\n"
+            f"Target: {payload['target']}\nCapabilities: {len(payload['allowed_capabilities'])}\n"
+            f"Allowed targets: {len(payload['allowed_targets'])}\nOPSEC: {payload['opsec_profile']}\n"
+            "Execution: inspection-only",
+            title="Scope manager",
+        ))
+
+    @tool_app.command("verify")
+    def tool_verify(
+        ctx: typer.Context,
+        session: Path = typer.Option(..., "--session"),
+        finding_id: str = typer.Option(..., "--id"),
+        evidence: list[str] = typer.Option([], "--evidence", help="Evidence reference; repeat as needed."),
+    ) -> None:
+        """Verify remediation evidence and close one finding."""
+        from adaf_attack.core.tooling import verify_finding
+
+        try:
+            payload = verify_finding(session, finding_id, evidence=evidence)
+        except (OSError, ValueError, KeyError) as exc:
+            error = ActionableError("UNKNOWN_FINDING", str(exc), "Pass a writable session and a valid finding ID.")
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        emit(ctx, payload, Panel(
+            f"Finding: {finding_id}\nStatus: remediated\nVerification evidence: {len(evidence)}",
+            title="Remediation verification",
+        ))
+
+    @tool_app.command("detect")
+    def tool_detect(ctx: typer.Context, session: Path = typer.Option(..., "--session"), output: Path | None = typer.Option(None, "--output")) -> None:
+        """Export evidence-backed detection hypotheses for defender review."""
+        from adaf_attack.core.tooling import detection_export
+
+        try:
+            payload = detection_export(session)
+            if output:
+                output.parent.mkdir(parents=True, exist_ok=True)
+                import json
+
+                output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+                payload["output"] = str(output)
+        except (OSError, ValueError) as exc:
+            error = ActionableError("INPUT_FILE_INVALID", str(exc), "Pass a completed session directory.")
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        emit(ctx, payload, Panel(f"Detection hypotheses: {payload['count']}\nStatus: review required", title="Detection export"))
+
+    @tool_app.command("lab")
+    def tool_lab(ctx: typer.Context, manifest: Path = typer.Argument(..., help="Disposable lab manifest JSON.")) -> None:
+        """Inspect a disposable lab manifest without network access."""
+        from adaf_attack.core.tooling import lab_manifest_summary
+
+        try:
+            payload = lab_manifest_summary(manifest)
+        except (OSError, ValueError) as exc:
+            error = ActionableError("INPUT_FILE_INVALID", str(exc), "Pass a valid disposable lab manifest JSON file.")
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        emit(ctx, {"ok": True, **payload}, Panel(
+            f"Domain: {payload['domain']}\nReserved domain: {'yes' if payload['reserved_domain'] else 'no'}\n"
+            f"Snapshot: {payload.get('snapshot') or '-'}\nFixtures: {len(payload['fixtures'])}\n"
+            f"Ready for review: {'yes' if payload['ready_for_review'] else 'no'}",
+            title="Disposable lab manager",
+        ))
+
+    @app.command("credential-inventory")
+    def credential_inventory(ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")) -> None:
+        """Inventory credential-exposure artifacts without revealing secret values."""
+        from adaf_attack.core.workflows import credential_exposure
+
+        missing = [str(path) for path in session if not path.is_dir()]
+        if missing:
+            error = ActionableError("SESSION_NOT_FOUND", "One or more sessions do not exist.", "Pass completed session directories.", details={"missing": missing})
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+        payload = credential_exposure(session)
+        emit(ctx, {"ok": True, **payload}, Panel(f"Exposure artifacts: {payload['count']}\nSecret values: redacted", title="Credential inventory"))

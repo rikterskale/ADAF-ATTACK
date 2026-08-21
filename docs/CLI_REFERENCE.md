@@ -85,8 +85,16 @@ for current options, defaults, validation, and examples.
 | `adaf-attack start-demo` | Start the safe offline demo |
 | `adaf-attack support-bundle` | Write a redacted diagnostic bundle |
 | `adaf-attack targets` | List recent non-secret target identifiers |
+| `adaf-attack tool` | Offline graph, evidence, scope, detection, and lab tools |
 | `adaf-attack tour` | Show the guided operator tour |
 | `adaf-attack trust-correlation` | Correlate trust evidence |
+| `adaf-attack credential-inventory` | Inventory credential-exposure artifacts without revealing secrets |
+| `adaf-attack tool graph` | Explore a saved graph offline |
+| `adaf-attack tool evidence-import` | Import JSON evidence into a session |
+| `adaf-attack tool scope` | Inspect an engagement scope without executing it |
+| `adaf-attack tool verify` | Verify remediation evidence for a finding |
+| `adaf-attack tool detect` | Export evidence-backed detection hypotheses |
+| `adaf-attack tool lab` | Inspect a disposable lab manifest offline |
 | `adaf-attack workflow` | Finding-driven guided workflow command group |
 | `adaf-attack workflow actions` | List derived workflow actions |
 | `adaf-attack workflow audit` | Show the append-only audit history |
