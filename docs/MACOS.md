@@ -32,7 +32,8 @@ python -m pip check
 
 ```bash
 adaf-attack --version
-adaf-attack doctor --explain
+adaf-attack --format json doctor --profile user-readiness --explain
+adaf-attack quickstart --workspace ./quickstart
 adaf-attack list-capabilities
 adaf-attack paths
 ```

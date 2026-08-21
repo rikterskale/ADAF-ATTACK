@@ -95,7 +95,7 @@ def register_ux_commands(
             "session_path": str(dest),
             "dashboard": dashboard,
             "next_steps": [
-                f"adaf-attack sessions show --session {dest}",
+                f"adaf-attack session show --session {dest}",
                 f"adaf-attack engagement report --session {dest} --engagement-id QUICKSTART-2026-001",
                 "Read docs/USER_READINESS.md before connecting to an authorized AD lab.",
             ],
@@ -107,7 +107,7 @@ def register_ux_commands(
                 "Installation and offline demo passed.\n"
                 f"Session: {dest}\n"
                 f"Findings: {dashboard.get('finding_count', 0)}\n"
-                f"Next: adaf-attack sessions show --session {dest}",
+                f"Next: adaf-attack session show --session {dest}",
                 title="ADAF-ATTACK quickstart",
             ),
         )
@@ -480,7 +480,7 @@ def register_ux_commands(
             "mode": "offline-demo",
             "session_path": str(dest),
             "dashboard": dashboard,
-            "next_step": f"adaf-attack sessions show --session {dest}",
+            "next_step": f"adaf-attack session show --session {dest}",
         }
         human = Panel(
             "\n".join(
@@ -489,7 +489,7 @@ def register_ux_commands(
                     f"Session: {dest}",
                     f"Findings: {dashboard.get('finding_count', 0)}",
                     f"Graph nodes/edges: {dashboard.get('graph', {}).get('nodes', 0)} / {dashboard.get('graph', {}).get('edges', 0)}",
-                    f"Next: adaf-attack sessions show --session {dest}",
+                    f"Next: adaf-attack session show --session {dest}",
                     "Or open the TUI: adaf-attack start",
                 ]
             ),

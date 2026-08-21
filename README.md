@@ -49,6 +49,8 @@ Discovery / enumeration:
 | `asreq-userhunt` | Validate usernames via AS-REQ without lockout impact |
 | `ad-cve-scan` | Non-exploiting Zerologon/noPAC/Certifried/signing posture |
 | `rodc-delegation` | RODC KRBTGT and delegation exposure |
+| `bloodhound-import` | Import BloodHound identity evidence for offline analysis |
+| `hybrid-signals` | Correlate hybrid identity signals |
 
 Credential access:
 
@@ -71,6 +73,7 @@ Kerberos operations:
 | `ticket-forge` | Golden / silver / sapphire ticket forgery |
 | `s4u-abuse` | Full S4U2Self + S4U2Proxy chain (constrained delegation / RBCD) |
 | `ticket-lifecycle` | CCache/PFX import, export, PEM<->PFX conversion |
+| `shadow-pkinit-workflow`, `rbcd-ticket-workflow` | Guided Kerberos workflow wrappers |
 
 Privilege escalation / lateral movement:
 
@@ -85,6 +88,7 @@ Privilege escalation / lateral movement:
 | `impacket-exec` | wmiexec / smbexec / dcomexec / atexec |
 | `coerce` | PetitPotam / PrinterBug / DFSCoerce / ShadowCoerce triggers |
 | `ntlm-relay` | Managed ntlmrelayx run with fixed target allowlist |
+| `rollback` | Apply an approved recorded rollback operation |
 
 Analysis / reporting:
 
@@ -94,6 +98,9 @@ Analysis / reporting:
 | `attack-paths`, `blast-radius` | Ranking and reachable-impact analysis |
 | `next-actions` | Ranked, review-first plans with risk tags |
 | `report` | Canonical findings + evidence bundle |
+| `credential-inventory` | Inventory credential-exposure evidence without revealing secrets |
+| `campaign-run` | Execute an ordered authorized campaign |
+| `purple-feedback` | Capture purple-team validation feedback |
 
 ## Prerequisites
 
@@ -273,7 +280,7 @@ in [LIVE_AD_LAB_VALIDATION.md](docs/LIVE_AD_LAB_VALIDATION.md).
 2. Browse the beginner catalog: `adaf-attack list-capabilities --novice`
    (or `--novice --safe-only` for the offline-safe subset).
 3. Run `adaf-attack quickstart --workspace ./quickstart`.
-4. Inspect the generated session with `adaf-attack sessions show --session ./quickstart/demo-session`.
+4. Inspect the generated session with `adaf-attack session show --session ./quickstart/demo-session`.
 5. Generate a report with `adaf-attack engagement report --session ./quickstart/demo-session --engagement-id QUICKSTART-2026-001`.
 6. Try a guided run: `adaf-attack run ldap-enum --interactive` (prompts for
    each required option in plain language and previews the command before it

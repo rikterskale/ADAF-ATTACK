@@ -32,9 +32,10 @@ $env:ADAF_ATTACK_WORKSPACE = 'D:\assessment\adaf-workspaces'
 
 ## Global options and output
 
-Every command accepts `--format human|json`, `--no-color`, and
-`--non-interactive`. Use JSON for automation and save it outside the session
-workspace when it is a pipeline input.
+Global options apply to every command, but must appear before the command:
+`--format human|json`, `--no-color`, and `--non-interactive`. Use JSON for
+automation and save it outside the session workspace when it is a pipeline
+input.
 
 ```powershell
 adaf-attack --format json doctor --explain
@@ -50,7 +51,13 @@ All target-interacting capabilities use the following common shape:
 ```powershell
 adaf-attack run <capability> -d <domain> --dc-ip <dc-or-host> `
   [-u <user> -p <password> | --hashes <lm:nt-or-nt> | -k --ccache <path>] `
-  [--aes-key <hex>] [--ldaps] [--workspace <directory>] [--format json]
+  [--aes-key <hex>] [--ldaps] [--workspace <directory>]
+```
+
+For JSON output, put the global option before `run`, for example:
+
+```powershell
+adaf-attack --format json run <capability> -d <domain> --dc-ip <dc-or-host>
 ```
 
 `-k`/`--kerberos` selects ticket authentication. `--ccache` sets `KRB5CCNAME`.

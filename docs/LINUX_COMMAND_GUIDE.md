@@ -36,8 +36,8 @@ ADAF_ATTACK_WORKSPACE=/evidence/adaf adaf-attack paths
 
 ## Global options and target command shape
 
-Every command accepts `--format human|json`, `--no-color`, and
-`--non-interactive`.
+Global options apply to every command, but must appear before the command:
+`--format human|json`, `--no-color`, and `--non-interactive`.
 
 ```bash
 adaf-attack --format json doctor --explain
@@ -46,8 +46,9 @@ adaf-attack capability-help ldap-enum
 
 adaf-attack run <capability> -d <domain> --dc-ip <dc-or-host> \
   [-u <user> -p '<password>' | --hashes <lm:nt-or-nt> | -k --ccache <path>] \
-  [--aes-key <hex>] [--ldaps] [--workspace <directory>] [--format json]
+  [--aes-key <hex>] [--ldaps] [--workspace <directory>]
 
+adaf-attack --format json run <capability> -d <domain> --dc-ip <dc-or-host>
 adaf-attack plan <capability> -d <domain> --dc-ip <dc-or-host>
 ```
 

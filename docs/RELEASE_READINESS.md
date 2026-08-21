@@ -36,8 +36,9 @@ also proven by the full source matrix.
       `--version`, `doctor --explain`, `list-capabilities`, and `paths`.
       **[CI: artifact-smoke]**
 - [ ] From the same wheel-only environment, run `doctor --profile
-      user-readiness`, `demo`, and the evidence package workflow. **[CI:
-      artifact-smoke; release-readiness]**
+      user-readiness`, `quickstart`, and `demo`. Full/operator artifact rows
+      additionally exercise the evidence report and package workflow.
+      **[CI: artifact-smoke; release-readiness]**
 - [ ] PowerShell installer consumes the downloaded wheel, validates Python
       3.11-3.14, and proves its user PATH shim/environment ownership plus upgrade,
       uninstall-preserves-data, and explicit data deletion. **[CI:
