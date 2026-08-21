@@ -15,6 +15,7 @@ from adaf_attack.core.completions import generate_completion
 from adaf_attack.core.ux import (
     capability_prerequisites,
     diff_sessions,
+    evaluate_prerequisites,
     export_plan_markdown,
     format_next_actions_block,
     format_stages_progress,
@@ -205,6 +206,18 @@ def test_ux_helpers_prereqs_and_stages() -> None:
         prerequisites=prereqs,
     )
     assert "shadow-creds" in md
+
+
+def test_prerequisite_evaluation_distinguishes_unverified_and_missing(tmp_path: Path) -> None:
+    assert evaluate_prerequisites("shadow-creds")["status"] == "unverified"
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "events.jsonl").write_text(
+        json.dumps({"capability": "acl-enum"}) + "\n", encoding="utf-8"
+    )
+    evaluated = evaluate_prerequisites("shadow-creds", session=session)
+    assert evaluated["status"] == "satisfied"
+    assert evaluated["satisfied"] == ["acl-enum"]
 
 
 def test_errors_command_shows_suggested() -> None:

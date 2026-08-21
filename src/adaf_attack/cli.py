@@ -1162,6 +1162,7 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
         example += " --domain corp.example --dc-ip 10.0.0.10"
     if cap.destructive:
         example += " --force"
+    from adaf_attack.core.engagement_dashboard import capability_review
     from adaf_attack.core.novice import capability_difficulty
     from adaf_attack.core.ux import (
         capability_prerequisites,
@@ -1190,6 +1191,7 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
         ),
         "prerequisites": capability_prerequisites(cap.id),
         "suggested_next": format_next_actions_block(cap)["suggestions"],
+        "pre_execution_review": capability_review(cap),
     }
 
 
@@ -1265,6 +1267,9 @@ def plan(
     force: bool = typer.Option(
         False, "--force", help="Indicate that execution would be authorized."
     ),
+    session: Path | None = typer.Option(
+        None, "--session", help="Use saved evidence to evaluate prerequisites."
+    ),
     export: Path | None = typer.Option(None, "--export", help="Write the plan as Markdown."),
 ) -> None:
     """Preview the target, effects, and risk of a proposed capability run."""
@@ -1309,7 +1314,7 @@ def plan(
     from adaf_attack.core.engagement_dashboard import capability_review
 
     payload["pre_execution_review"] = capability_review(
-        cap, target={"domain": domain, "dc_ip": dc_ip}
+        cap, target={"domain": domain, "dc_ip": dc_ip}, session=session
     )
     if export is not None:
         from adaf_attack.core.ux import capability_prerequisites, export_plan_markdown
@@ -1339,6 +1344,8 @@ def plan(
                 f"Opsec: {checklist['opsec_hint']}",
                 "Preflight: "
                 + ", ".join(item["label"] for item in checklist["items"] if item["required"]),
+                "Prerequisites: "
+                + payload["pre_execution_review"]["feasibility"]["prerequisites"]["status"],
                 "Stages: " + " -> ".join(item["id"] for item in stages["stages"]),
                 f"Copy-ready: {build_ready_command(cap.id, domain=domain, dc_ip=dc_ip, force=requires_force)}",
                 f"Next step: {next_step}",

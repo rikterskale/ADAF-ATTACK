@@ -50,6 +50,50 @@ def capability_prerequisites(cap_id: str) -> dict[str, list[str]]:
     }
 
 
+def evaluate_prerequisites(cap_id: str, *, session: Path | None = None) -> dict[str, Any]:
+    """Evaluate prerequisite evidence without contacting a target.
+
+    A missing session means prerequisites are unverified rather than blocked;
+    this keeps planning useful before the first capability in an engagement.
+    """
+    # Use the declarative dependency map here even when this helper is called
+    # before capability modules have completed import-time registration.
+    required = sorted(set(_PREREQUISITES.get(cap_id, [])))
+    seen: set[str] = set()
+    if session is not None and Path(session).is_dir():
+        events = Path(session) / "events.jsonl"
+        if events.is_file():
+            for line in events.read_text(encoding="utf-8").splitlines():
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(event, dict) and event.get("capability"):
+                    seen.add(str(event["capability"]))
+        for producer in required:
+            if (Path(session) / f"{producer}.json").is_file():
+                seen.add(producer)
+    satisfied = sorted(set(required) & seen)
+    missing = sorted(set(required) - seen)
+    if not required:
+        status = "not-required"
+    elif session is None:
+        status = "unverified"
+    elif missing:
+        status = "missing"
+    else:
+        status = "satisfied"
+    return {
+        "required": required,
+        "satisfied": satisfied,
+        "missing": missing,
+        "status": status,
+        "remediation": [
+            f"Run `{item}` first to produce prerequisite evidence." for item in missing
+        ],
+    }
+
+
 def format_next_actions_block(
     cap: Capability, *, domain: str | None = None, dc_ip: str | None = None
 ) -> dict[str, Any]:

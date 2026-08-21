@@ -11,6 +11,7 @@ from adaf_attack.core.registry import Capability
 from adaf_attack.core.ux import (
     capability_phase,
     capability_prerequisites,
+    evaluate_prerequisites,
     session_findings_dashboard,
 )
 
@@ -45,11 +46,18 @@ def _load(path: Path, default: Any) -> Any:
         return default
 
 
-def capability_review(cap: Capability, *, target: dict[str, Any] | None = None) -> dict[str, Any]:
+def capability_review(
+    cap: Capability,
+    *,
+    target: dict[str, Any] | None = None,
+    session: Path | None = None,
+) -> dict[str, Any]:
     """Common pre-execution review contract, including success and telemetry."""
     phase = capability_phase(cap)
     destructive = bool(cap.destructive)
+    feasibility = evaluate_prerequisites(cap.id, session=session)
     prereqs = capability_prerequisites(cap.id)
+    prereqs["best_run_after"] = feasibility["required"]
     return {
         "id": cap.id,
         "summary": cap.summary,
@@ -67,8 +75,10 @@ def capability_review(cap: Capability, *, target: dict[str, Any] | None = None) 
         "feasibility": {
             "available": True,
             "applicable": True,
-            "prerequisite_complete": not prereqs["best_run_after"],
-            "currently_executable": True,
+            "prerequisite_complete": feasibility["status"]
+            in {"not-required", "satisfied", "unverified"},
+            "currently_executable": feasibility["status"] != "missing",
+            "prerequisites": feasibility,
         },
         "success_criteria": [
             "Capability completes without an unclassified error",
