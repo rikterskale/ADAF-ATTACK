@@ -144,12 +144,32 @@ class DcShadow:
                 register_object_rollback(
                     session, target_dn=ntds_dn, rollback="Delete the rogue nTDSDSA object."
                 )
+            playbook = session.path("dcshadow-push.playbook.txt")
+            playbook.write_text(
+                "# DCShadow DRSUAPI push playbook\n"
+                f"# Server object: {server_dn}\n"
+                f"# nTDSDSA object: {ntds_dn}\n"
+                "# 1. Register the SPNs (DRSUAPI/GUID and GC/GUID) on the planted server "
+                "object's computer account.\n"
+                "# 2. From an approved external tool, perform the DRSUAPI push "
+                "(IDL_DRSAddEntry) against a domain controller.\n",
+                encoding="utf-8",
+            )
             result = {
                 "ok": bool(server_ok or ntds_ok),
                 "server_dn": server_dn,
                 "ntds_dn": ntds_dn,
                 "server_ok": server_ok,
                 "ntds_ok": ntds_ok,
+                "replication_push": {
+                    "performed": False,
+                    "note": (
+                        "DCShadow DRSUAPI push (IDL_DRSAddEntry) is not performed by this "
+                        "runner; trigger it from an approved external tool using the planted "
+                        "server object."
+                    ),
+                },
+                "playbook": str(playbook),
                 "ldap_result": str(conn.result),
             }
             console.print(f"[green]dcshadow[/green] server={server_ok} ntds={ntds_ok}")

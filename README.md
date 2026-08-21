@@ -81,7 +81,7 @@ Privilege escalation / lateral movement:
 | `cert-request` | Enroll certificate (ESC1-style with alt-name) |
 | `rbcd` | Read / write RBCD `msDS-AllowedToActOnBehalfOfOtherIdentity` |
 | `template-mod` | Flip AD CS template to ESC1-vulnerable with rollback |
-| `esc-chain` | Automated ESC1-ESC8 exploit chain |
+| `esc-chain` | Guided ESC1-ESC8 chain; ends in generated playbooks/handoff (external provider required) |
 | `computer-takeover` | Full computer-object takeover recipe |
 | `impacket-exec` | wmiexec / smbexec / dcomexec / atexec |
 | `coerce` | PetitPotam / PrinterBug / DFSCoerce / ShadowCoerce triggers |
@@ -540,9 +540,10 @@ and converts PEM key/certificate pairs to PFX for approved follow-on use.
 
 The force-gated `shadow-pkinit-workflow` joins an approved Shadow Credentials
 write with PKINIT TGT acquisition. `rbcd-ticket-workflow` joins an approved
-RBCD write with a scoped S4U ticket-request handoff; a configured provider and
-controlled-computer credential are still required before a ticket request is
-made. Both workflows log their artifacts and decisions in the session.
+RBCD write with a scoped S4U ticket-request handoff; the workflow itself ends
+in a generated playbook — a configured provider and controlled-computer
+credential are still required before an actual ticket request is made. Both
+workflows log their artifacts and decisions in the session.
 
 `campaign-run` executes an ordered set of independently scoped engagement plans. A Kerberos cache may be handed to a subsequent plan only by an explicit `credential_handoff.allow: true` declaration; it is loaded from the encrypted source-session vault and is never copied into the manifest or output.
 

@@ -432,6 +432,12 @@ class SidHistoryInject:
                 "previous": previous,
                 "ldap_result": str(conn.result),
             }
+            if not ok:
+                result["error_note"] = (
+                    "Domain controllers reject direct LDAP writes to sIDHistory; "
+                    "injection requires DRSUAPI DsAddSidHistory (MS-DRSR) with "
+                    "cross-domain migration privileges."
+                )
             if ok:
                 graph.add_edge(
                     f"USER@{sam.upper()}@{target.domain.upper()}",

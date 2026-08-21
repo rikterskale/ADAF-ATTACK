@@ -217,19 +217,28 @@ class SccmClientPush:
             target=host,
             rollback="Remove unauthorized SCCM client-push accounts and staged client installs.",
         )
+        playbook = session.path("sccm-client-push.playbook.txt")
+        playbook.write_text(
+            "# SCCM client-push execution playbook\n"
+            f"# Target host: {host}\n"
+            f"# Site code: {site_code}\n"
+            "# Connect to the SMS Provider WMI namespace root\\sms\\site_"
+            f"{site_code} on the site server.\n"
+            "# Invoke the client-push against the target using the site server's "
+            "client-push account.\n",
+            encoding="utf-8",
+        )
         result = {
-            "ok": True,
+            "ok": False,
+            "requested": False,
             "host": host,
             "site_code": site_code,
-            "method": "wmi-sms-client-operation",
-            "note": (
-                f"Trigger SMS client-push against {host} via the SMS Provider "
-                f"(root\\sms\\site_{site_code}) using the site server's client-push account."
-            ),
+            "playbook": str(playbook),
+            "note": "Client push execution requires a configured SMS Provider session; see playbook.",
         }
         graph.add_edge(
             f"SCCM@{host.upper()}@{target.domain.upper()}",
             f"COMPUTER@{host.upper()}@{target.domain.upper()}",
             "SccmClientPush",
         )
-        return finish(session, graph, "sccm-client-push", result, ok=True)
+        return finish(session, graph, "sccm-client-push", result, ok=False)

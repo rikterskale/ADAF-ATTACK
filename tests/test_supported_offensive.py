@@ -415,65 +415,57 @@ def test_dpapi_domain_backup(monkeypatch: Any, tmp_path: Path) -> None:
             _target(password=None, username=None), session, graph
         )
 
-    class _Smb:
-        def kerberosLogin(self, *args: Any, **kwargs: Any) -> None:
-            return None
+    from tests.gate_helpers import install_dpapi_lsarpc_mocks
 
-        def login(self, *args: Any, **kwargs: Any) -> None:
-            return None
-
-    class _Remote:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            return None
-
-        def getDPAPI_DOMAIN_BACKUP_KEY(self) -> bytes:
-            return b"key"
-
-        def finish(self) -> None:
-            return None
-
-    import sys
-    import types
-
-    secretsdump = types.ModuleType("impacket.examples.secretsdump")
-    secretsdump.RemoteOperations = _Remote  # type: ignore[attr-defined]
-    smbmod = types.ModuleType("impacket.smbconnection")
-    smbmod.SMBConnection = lambda *a, **k: _Smb()  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "impacket.examples.secretsdump", secretsdump)
-    monkeypatch.setitem(sys.modules, "impacket.smbconnection", smbmod)
+    # Preferred-key (v2) success over kerberos, secrets included.
+    install_dpapi_lsarpc_mocks(monkeypatch)
     result = credential_ops.DpapiDomainBackup().run(
         _target(use_kerberos=True), session, graph, include_secrets=True
     )
     assert result["ok"] is True
-    result2 = credential_ops.DpapiDomainBackup().run(_target(hashes="aad3:nt"), session, graph)
-    assert result2["ok"] is True
-    result3 = credential_ops.DpapiDomainBackup().run(_target(), session, graph)
-    assert result3["ok"] is True
+    assert bytes.fromhex(result["backup_keys"][0]).endswith(b"KEY!")
 
-    class _RemoteMiss:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            return None
+    # Legacy (v1) key over NT-hash login, no secrets echoed.
+    install_dpapi_lsarpc_mocks(monkeypatch, version=1)
+    legacy = credential_ops.DpapiDomainBackup().run(
+        _target(hashes="aad3b435:31d6cfe0"), session, graph
+    )
+    assert legacy["ok"] is True
+    assert legacy["backup_keys_present"] is True
 
-        def finish(self) -> None:
-            raise RuntimeError("late")
+    # Unsupported key version.
+    install_dpapi_lsarpc_mocks(monkeypatch, version=9)
+    bad_version = credential_ops.DpapiDomainBackup().run(_target(), session, graph)
+    assert bad_version["ok"] is False
+    assert "version 9" in bad_version["error"]
 
-    secretsdump.RemoteOperations = _RemoteMiss  # type: ignore[attr-defined]
-    miss = credential_ops.DpapiDomainBackup().run(_target(), session, graph)
-    assert miss["ok"] is False
+    # Missing rights maps to a stable privileges error.
+    install_dpapi_lsarpc_mocks(monkeypatch, fail_at="preferred")
+    denied = credential_ops.DpapiDomainBackup().run(_target(), session, graph)
+    assert denied["ok"] is False
+    assert "replication/backup-key privileges" in denied["error"]
 
-    class _RemoteBoom:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            return None
+    # LSA bind failure surfaces the underlying error verbatim.
+    install_dpapi_lsarpc_mocks(monkeypatch, fail_at="bind", error_text="connection refused")
+    refused = credential_ops.DpapiDomainBackup().run(_target(), session, graph)
+    assert refused["ok"] is False
+    assert refused["error"] == "connection refused"
 
-        def getDPAPI_DOMAIN_BACKUP_KEY(self) -> bytes:
-            raise RuntimeError("nope")
+    # OpenPolicy failure also lands in the generic branch.
+    install_dpapi_lsarpc_mocks(monkeypatch, fail_at="open", error_text="policy failed")
+    policy_fail = credential_ops.DpapiDomainBackup().run(_target(), session, graph)
+    assert policy_fail["error"] == "policy failed"
 
-        def finish(self) -> None:
-            return None
+    # Failure retrieving the backup key itself.
+    install_dpapi_lsarpc_mocks(monkeypatch, fail_at="key")
+    key_fail = credential_ops.DpapiDomainBackup().run(_target(), session, graph)
+    assert key_fail["ok"] is False
+    assert key_fail["error"]
 
-    secretsdump.RemoteOperations = _RemoteBoom  # type: ignore[attr-defined]
-    boom = credential_ops.DpapiDomainBackup().run(_target(), session, graph)
-    assert boom["error"]
+    # Connect failure before bind.
+    install_dpapi_lsarpc_mocks(monkeypatch, fail_at="connect", error_text="no pipe")
+    connect_fail = credential_ops.DpapiDomainBackup().run(_target(), session, graph)
+    assert connect_fail["error"] == "no pipe"
 
 
 def test_dns_ops(monkeypatch: Any, tmp_path: Path) -> None:
@@ -647,7 +639,8 @@ def test_sccm_and_relay(monkeypatch: Any, tmp_path: Path) -> None:
     take = sccm_ops.SccmTakeover().run(_target(), session, graph, force=True, site_db="sql01")
     assert take["ok"] is True
     push = sccm_ops.SccmClientPush().run(_target(), session, graph, force=True, host="ws01")
-    assert push["ok"] is True
+    assert push["ok"] is False and push["requested"] is False
+    assert (session.path("sccm-client-push.playbook.txt")).exists()
 
     _patch_ldap(monkeypatch, relay_ops, conn)
     with pytest.raises(RuntimeError, match="relay_targets"):
@@ -697,6 +690,8 @@ def test_sccm_and_relay(monkeypatch: Any, tmp_path: Path) -> None:
     conn.by_filter["ROGUE"] = [dc]
     shadow = relay_ops.DcShadow().run(_target(), session, graph, force=True, computer="ROGUE$")
     assert shadow["ok"] is True
+    assert shadow["replication_push"]["performed"] is False
+    assert (session.path("dcshadow-push.playbook.txt")).exists()
     conn.by_filter["ROGUE"] = []
     with pytest.raises(RuntimeError, match="not found"):
         relay_ops.DcShadow().run(_target(), session, graph, force=True, computer="ROGUE$")

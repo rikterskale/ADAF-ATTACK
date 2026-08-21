@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import json
 import struct
-import sys
-import types
 from pathlib import Path
 from typing import Any
 
@@ -317,30 +315,9 @@ def _(mr: Any) -> dict[str, Any]:
 @_setup("dpapi-domain-backup")
 def _(mr: Any) -> dict[str, Any]:
     mr.monkeypatch.setattr(credential_ops, "require_impacket", lambda *_a, **_k: None)
+    from tests.gate_helpers import install_dpapi_lsarpc_mocks
 
-    class _Smb:
-        def kerberosLogin(self, *args: Any, **kwargs: Any) -> None:
-            return None
-
-        def login(self, *args: Any, **kwargs: Any) -> None:
-            return None
-
-    class _Remote:
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            return None
-
-        def getDPAPI_DOMAIN_BACKUP_KEY(self) -> bytes:
-            return b"key"
-
-        def finish(self) -> None:
-            return None
-
-    secretsdump = types.ModuleType("impacket.examples.secretsdump")
-    secretsdump.RemoteOperations = _Remote  # type: ignore[attr-defined]
-    smbmod = types.ModuleType("impacket.smbconnection")
-    smbmod.SMBConnection = lambda *a, **k: _Smb()  # type: ignore[attr-defined]
-    mr.monkeypatch.setitem(sys.modules, "impacket.examples.secretsdump", secretsdump)
-    mr.monkeypatch.setitem(sys.modules, "impacket.smbconnection", smbmod)
+    install_dpapi_lsarpc_mocks(mr.monkeypatch)
     return {}
 
 
@@ -573,7 +550,15 @@ def test_catalog_capability_runs(cap_id: str, monkeypatch: Any, tmp_path: Path) 
     )
     assert isinstance(result, dict), cap_id
     # Read-only enumerators report a count instead of an explicit ok flag.
-    assert result.get("ok", "count" in result) is True, f"{cap_id} failed: {result}"
+    # sccm-client-push honestly reports it did not execute the push (ok=False).
+    expected_ok = cap_id != "sccm-client-push"
+    assert result.get("ok", "count" in result) is expected_ok, f"{cap_id} failed: {result}"
+    if cap_id == "sccm-client-push":
+        assert result["requested"] is False
+        assert (mr.session.path("sccm-client-push.playbook.txt")).exists()
+    if cap_id.startswith("esc") and cap_id[3:].isdigit():
+        assert result["conditions"] == adcs_esc.ESC_CONDITIONS[cap_id]
+        assert mr.session.path(f"{cap_id}.conditions.txt").is_file()
     assert not any(k in result for k in ("password",)), f"{cap_id} leaked secrets"
 
 

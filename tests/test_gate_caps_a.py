@@ -88,6 +88,7 @@ def test_acl_primitives_failure_branches(monkeypatch: Any, tmp_path: Any) -> Non
         target(), session, graph, force=True, sam="bob", sid="S-1-5-21-99"
     )
     assert sidhist["ok"] is False
+    assert "DRSUAPI" in sidhist["error_note"]
 
 
 def test_force_change_password_without_secrets(monkeypatch: Any, tmp_path: Any) -> None:

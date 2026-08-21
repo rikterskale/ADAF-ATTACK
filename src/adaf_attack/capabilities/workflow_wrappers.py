@@ -107,8 +107,15 @@ class RbcdTicketWorkflow:
                 "playbook": str(playbook),
                 "note": "S4U execution requires a configured provider and controlled-computer credential.",
             }
+            result["handoff_complete"] = True
         session.path("rbcd-ticket-workflow.json").write_text(
             json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8"
         )
-        session.log("rbcd-ticket-workflow.complete", ok=False, set_on=set_on, set_from=set_from)
+        session.log(
+            "rbcd-ticket-workflow.complete",
+            ok=False,
+            handoff_complete=result.get("handoff_complete", False),
+            set_on=set_on,
+            set_from=set_from,
+        )
         return result

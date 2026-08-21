@@ -28,6 +28,42 @@ ESC_EXTRA: dict[str, tuple[str, ...]] = {
     "esc16": (),
 }
 
+# What makes each ESC exploitable on a given template/CA. These are
+# verification conditions for the operator; the certipy invocation is the same.
+ESC_CONDITIONS: dict[str, dict[str, str]] = {
+    "esc9": {
+        "template_ssic": "Verify the template flag CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT is NOT set and that the Security Extension (msPKI-Enrollment-Flag SSIC / 1.3.6.1.4.1.311.20.2) is present.",
+        "ca_security_extension": "Confirm whether the CA has the security extension disabled (KDC/CA config); ESC9 requires re-issued certificates without the security extension to bypass mapping checks.",
+        "mapping_reissue": "The certificate must be re-enrolled after the template change so the old cert's authentication fails mapping validation.",
+    },
+    "esc10": {
+        "registry_mapping": "Check HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\Kerberos\\Parameters on the DC for StrongCertificateBindingEnforcement=0 (or CertificateMappingMethods including UPN).",
+        "weak_mapping": "ESC10 exploitation depends on weak certificate mapping being enabled via registry, not on template flags.",
+    },
+    "esc13": {
+        "issuance_policy": "Verify the template's msPKI-Certificate-Policy points to an issuance policy OID whose group-link maps to a privileged group (e.g. Domain Admins).",
+        "group_link": "Confirm the OID group-link in CN=OID,CN=Public Key Services,CN=Services grants membership in the target group on certificate presentation.",
+    },
+    "esc14": {
+        "alt_security_identity": "Verify the template or CA supports explicit altSecurityIdentity mappings (certificate mapping via the altSecurityIdentity attribute).",
+        "explicit_mapping": "ESC14 requires an existing or writable altSecurityIdentityClass entry binding a certificate to the victim account.",
+    },
+    "esc15": {
+        "application_policies": "Verify the template defines application policies (msPKI-App-Policies) and accepts enrollee-supplied application policy OIDs, allowing EKU reuse via the API/policy extension.",
+        "schema_v1": "The template should be schema v1 so the supplied --application-policies flag is honored during enrollment.",
+    },
+    "esc16": {
+        "ca_security_extension_disabled": "Verify the CA itself was installed with the security extension disabled (CertUtil -getreg ca\\DisableExtensionList includes the SZOID_SECURITY_EXTENSION).",
+        "state_check": "With the security extension disabled at the CA, all issued certificates skip Kerberos certificate-mapping hardening checks.",
+    },
+}
+
+
+def _conditions_text(cap_id: str) -> str:
+    lines = [f"# {cap_id.upper()} verification conditions"]
+    lines += [f"- {k}: {v}" for k, v in ESC_CONDITIONS[cap_id].items()]
+    return "\n".join(lines) + "\n"
+
 
 def _load_adcs(session: Session) -> dict[str, Any] | None:
     path = session.path("adcs-enum.json")
@@ -133,6 +169,7 @@ def _enroll(
         argv.extend(["-upn", str(alt_name)])
     argv.extend(extra)
     enrolled = _run_certipy(argv, session)
+    session.path(f"{cap_id}.conditions.txt").write_text(_conditions_text(cap_id), encoding="utf-8")
     register_advisory_rollback(
         session,
         kind="cert-enroll",
@@ -144,6 +181,7 @@ def _enroll(
         "template": template,
         "ca": ca,
         "alt_name": alt_name,
+        "conditions": ESC_CONDITIONS[cap_id],
         **enrolled,
     }
     if result["ok"]:

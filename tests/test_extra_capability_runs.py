@@ -195,6 +195,7 @@ def test_rbcd_ticket_workflow_requires_inputs_and_writes_playbook(
     )
 
     assert result["ticket"]["requested"] is False
+    assert result["handoff_complete"] is True
     assert Path(result["ticket"]["playbook"]).is_file()
 
 
@@ -248,4 +249,5 @@ def test_rbcd_ticket_workflow_records_failed_rbcd_write(monkeypatch: Any, tmp_pa
     )
 
     assert result["ticket"] == {"skipped": "rbcd_set_failed"}
+    assert "handoff_complete" not in result
     assert session.path("rbcd-ticket-workflow.json").is_file()
