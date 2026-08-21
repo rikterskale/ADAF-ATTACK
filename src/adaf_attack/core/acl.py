@@ -184,3 +184,110 @@ def fetch_sd(conn: Any, dn: str) -> bytes | None:
         return None
     raw = entry.nTSecurityDescriptor.raw_values[0]
     return bytes(raw) if isinstance(raw, bytes | bytearray) else None
+
+
+def sid_string_to_bytes(canonical: str) -> bytes:
+    parts = canonical.split("-")
+    if len(parts) < 4 or parts[0] != "S":
+        raise ValueError(f"Invalid SID: {canonical}")
+    rev = int(parts[1])
+    auth = int(parts[2])
+    subs = [int(x) for x in parts[3:]]
+    out = bytes([rev, len(subs)]) + auth.to_bytes(6, "big")
+    for sub in subs:
+        out += sub.to_bytes(4, "little")
+    return out
+
+
+def guid_str_to_bytes(guid: str) -> bytes:
+    parts = guid.split("-")
+    if len(parts) != 5:
+        raise ValueError(f"Invalid GUID: {guid}")
+    return (
+        int(parts[0], 16).to_bytes(4, "little")
+        + int(parts[1], 16).to_bytes(2, "little")
+        + int(parts[2], 16).to_bytes(2, "little")
+        + bytes.fromhex(parts[3] + parts[4])
+    )
+
+
+def build_allowed_ace(sid: str, mask: int = GENERIC_ALL, object_guid: str | None = None) -> bytes:
+    sid_bytes = sid_string_to_bytes(sid)
+    if object_guid:
+        flags = 0x01  # ACE_OBJECT_TYPE_PRESENT
+        body = (
+            mask.to_bytes(4, "little")
+            + flags.to_bytes(4, "little")
+            + guid_str_to_bytes(object_guid)
+            + sid_bytes
+        )
+        header = bytes([0x05, 0x00]) + (4 + len(body)).to_bytes(2, "little")
+        return header + body
+    body = mask.to_bytes(4, "little") + sid_bytes
+    header = bytes([0x00, 0x00]) + (4 + len(body)).to_bytes(2, "little")
+    return header + body
+
+
+def _build_sd(aces: list[bytes], owner_sid: str | None = None) -> bytes:
+    acl_body = b"".join(aces)
+    acl_size = 8 + len(acl_body)
+    acl = (
+        bytes([0x02, 0x00])
+        + acl_size.to_bytes(2, "little")
+        + len(aces).to_bytes(2, "little")
+        + (0).to_bytes(2, "little")
+        + acl_body
+    )
+    owner = sid_string_to_bytes(owner_sid) if owner_sid else b""
+    control = 0x8004  # SE_DACL_PRESENT | SE_SELF_RELATIVE
+    owner_off = 20 if owner else 0
+    dacl_off = 20 + len(owner)
+    header = (
+        bytes([0x01, 0x00])
+        + control.to_bytes(2, "little")
+        + owner_off.to_bytes(4, "little")
+        + (0).to_bytes(4, "little")
+        + (0).to_bytes(4, "little")
+        + dacl_off.to_bytes(4, "little")
+    )
+    return header + owner + acl
+
+
+def append_ace_to_sd(sd_bytes: bytes | None, ace: bytes) -> bytes:
+    if not sd_bytes or len(sd_bytes) < 20:
+        return _build_sd([ace])
+    dacl_offset = int.from_bytes(sd_bytes[16:20], "little")
+    if dacl_offset == 0 or dacl_offset + 8 > len(sd_bytes):
+        return sd_bytes + _build_sd([ace])[20:]
+    acl_size = int.from_bytes(sd_bytes[dacl_offset + 2 : dacl_offset + 4], "little")
+    ace_count = int.from_bytes(sd_bytes[dacl_offset + 4 : dacl_offset + 6], "little")
+    end = dacl_offset + acl_size
+    if end > len(sd_bytes):
+        end = len(sd_bytes)
+    new_acl_size = acl_size + len(ace)
+    acl_header = (
+        sd_bytes[dacl_offset : dacl_offset + 2]
+        + new_acl_size.to_bytes(2, "little")
+        + (ace_count + 1).to_bytes(2, "little")
+        + sd_bytes[dacl_offset + 6 : dacl_offset + 8]
+    )
+    existing = sd_bytes[dacl_offset + 8 : end]
+    return sd_bytes[:dacl_offset] + acl_header + existing + ace + sd_bytes[end:]
+
+
+def sd_set_owner(sd_bytes: bytes | None, owner_sid: str) -> bytes:
+    owner = sid_string_to_bytes(owner_sid)
+    if not sd_bytes or len(sd_bytes) < 20:
+        return _build_sd([], owner_sid=owner_sid)
+    dacl_offset = int.from_bytes(sd_bytes[16:20], "little")
+    dacl = sd_bytes[dacl_offset:] if dacl_offset and dacl_offset < len(sd_bytes) else b""
+    control = int.from_bytes(sd_bytes[2:4], "little") | 0x8004
+    header = (
+        bytes([sd_bytes[0], sd_bytes[1]])
+        + control.to_bytes(2, "little")
+        + (20).to_bytes(4, "little")
+        + (0).to_bytes(4, "little")
+        + (0).to_bytes(4, "little")
+        + (20 + len(owner)).to_bytes(4, "little")
+    )
+    return header + owner + dacl

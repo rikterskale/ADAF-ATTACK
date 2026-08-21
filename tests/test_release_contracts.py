@@ -21,13 +21,19 @@ import json
 from typer.testing import CliRunner
 
 import adaf_attack.capabilities  # noqa: F401  # registers every capability
-from adaf_attack.capabilities.planned_offensive import planned_destructive_ids
 from adaf_attack.cli import app
 from adaf_attack.core.registry import capability_registry
 
 runner = CliRunner()
 
-_ROLLBACK_PRIMITIVES = ("register_cleanup", "record_pre_state")
+_ROLLBACK_PRIMITIVES = (
+    "register_cleanup",
+    "record_pre_state",
+    "register_attr_rollback",
+    "register_add_value_rollback",
+    "register_object_rollback",
+    "register_advisory_rollback",
+)
 
 # Destructive capabilities that legitimately record no target rollback, each
 # with the reason. Adding an id here is a reviewable, deliberate exception; the
@@ -41,12 +47,6 @@ _ROLLBACK_EXEMPT: dict[str, str] = {
     "rbcd-ticket-workflow": "composite delegating to rbcd, which records the rollback",
     "shadow-pkinit-workflow": "composite delegating to shadow-creds, which records the rollback",
 }
-_ROLLBACK_EXEMPT.update(
-    {
-        cap_id: "experimental tracking stub; no target mutation until implemented"
-        for cap_id in planned_destructive_ids()
-    }
-)
 
 
 def test_every_capability_is_reachable() -> None:

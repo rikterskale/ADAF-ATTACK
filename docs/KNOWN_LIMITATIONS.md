@@ -23,4 +23,7 @@
   behavior requires host integration.
 - Destructive capabilities require explicit safeguards, but release sign-off
   still needs a disposable authorized AD lab to prove target-side cleanup.
-- Capabilities tagged `experimental` / `tracking` (see `planned_offensive`) are registry placeholders for roadmap work. They appear in `list-capabilities` and the live matrix with `status: experimental`. Running them writes a tracking evidence file and makes no directory changes. They are not a release claim.
+- Hosted CI still cannot prove live Active Directory behavior for the 40
+  catalog capabilities promoted from tracking stubs (`planned_offensive`).
+  Runners now perform real LDAP / Impacket / Certipy work, but live-AD sign-off
+  remains the disposable-lab procedure in LIVE_AD_LAB_VALIDATION.md.

@@ -31,7 +31,14 @@ import adaf_attack.core.cleanup as cleanup
 from adaf_attack.core.registry import capability_registry
 from adaf_attack.core.target import Target
 
-_ROLLBACK_PRIMITIVES = ("register_cleanup", "record_pre_state")
+_ROLLBACK_PRIMITIVES = (
+    "register_cleanup",
+    "record_pre_state",
+    "register_attr_rollback",
+    "register_add_value_rollback",
+    "register_object_rollback",
+    "register_advisory_rollback",
+)
 
 # Destructive capability -> (rollback kind it records, classification).
 #   revertable: execute_cleanup restores prior target state.
@@ -46,6 +53,36 @@ _CAPABILITY_ROLLBACK: dict[str, tuple[str, str]] = {
     "shadow-creds": ("shadow-creds", "revertable"),
     "impacket-exec": ("remote-exec", "advisory"),
     "ntlm-relay": ("ntlm-relay", "advisory"),
+    "add-member": ("ldap-add-value", "revertable"),
+    "add-self": ("ldap-add-value", "revertable"),
+    "force-change-password": ("password-reset", "advisory"),
+    "acl-abuse": ("acl", "revertable"),
+    "write-spn": ("ldap-attribute", "revertable"),
+    "constrained-delegation": ("ldap-attribute", "revertable"),
+    "badsuccessor": ("ldap-object", "revertable"),
+    "dmsa-ouroboros": ("ldap-object", "revertable"),
+    "esc9": ("cert-enroll", "advisory"),
+    "esc10": ("cert-enroll", "advisory"),
+    "esc13": ("cert-enroll", "advisory"),
+    "esc14": ("cert-enroll", "advisory"),
+    "esc15": ("cert-enroll", "advisory"),
+    "esc16": ("cert-enroll", "advisory"),
+    "golden-cert": ("cert-enroll", "advisory"),
+    "esc8-relay-workflow": ("ntlm-relay", "advisory"),
+    "krb-relay": ("krb-relay", "advisory"),
+    "maq-add-computer": ("ldap-object", "revertable"),
+    "maq-rbcd-workflow": ("ldap-object", "revertable"),
+    "targeted-kerberoast": ("ldap-attribute", "revertable"),
+    "dcsync-grant-workflow": ("acl", "revertable"),
+    "nopac-workflow": ("ldap-attribute", "revertable"),
+    "unconst-tgtdump-workflow": ("coercion", "advisory"),
+    "adminsdholder-persist": ("acl", "revertable"),
+    "sidhistory-inject": ("ldap-add-value", "revertable"),
+    "dcshadow": ("ldap-object", "revertable"),
+    "adidns-wpad": ("ldap-object", "revertable"),
+    "dnsadmin-srv": ("ldap-object", "revertable"),
+    "sccm-takeover": ("ntlm-relay", "advisory"),
+    "sccm-client-push": ("sccm-push", "advisory"),
 }
 
 
@@ -53,9 +90,14 @@ class _Conn:
     def __init__(self) -> None:
         self.result = "success"
         self.modifies: list[tuple[str, Any]] = []
+        self.deletes: list[str] = []
 
     def modify(self, dn: str, changes: Any) -> bool:
         self.modifies.append((dn, changes))
+        return True
+
+    def delete(self, dn: str) -> bool:
+        self.deletes.append(dn)
         return True
 
     def unbind(self) -> None:
@@ -106,10 +148,32 @@ def _ldap_revertable_entries(tmp_path: Path) -> dict[str, dict[str, Any]]:
             "target": "CN=B,DC=corp,DC=test",
             "artifact": str(keycred),
         },
+        "ldap-attribute": {
+            "kind": "ldap-attribute",
+            "status": "pending",
+            "target": "CN=U,DC=corp,DC=test",
+            "attribute": "servicePrincipalName",
+            "previous": ["HOST/old"],
+        },
+        "ldap-add-value": {
+            "kind": "ldap-add-value",
+            "status": "pending",
+            "target": "CN=G,DC=corp,DC=test",
+            "attribute": "member",
+            "values": ["CN=Alice,DC=corp,DC=test"],
+        },
+        "ldap-object": {
+            "kind": "ldap-object",
+            "status": "pending",
+            "target": "CN=NEW,CN=Computers,DC=corp,DC=test",
+        },
     }
 
 
-@pytest.mark.parametrize("kind", ["acl", "gpo-link", "rbcd", "template-mod", "shadow-creds"])
+@pytest.mark.parametrize(
+    "kind",
+    ["acl", "gpo-link", "rbcd", "template-mod", "shadow-creds", "ldap-attribute", "ldap-add-value"],
+)
 def test_execute_cleanup_reverts_ldap_kind(
     kind: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -119,6 +183,49 @@ def test_execute_cleanup_reverts_ldap_kind(
     result = cleanup.execute_cleanup(tmp_path, _target())
     assert result["completed"] == 1, result
     assert conn.modifies, f"{kind}: no reversal LDAP modify was issued"
+
+
+def test_execute_cleanup_ldap_hex_encoding(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    conn = _Conn()
+    monkeypatch.setattr(cleanup, "ldap_connect", lambda target: (conn, "DC=corp,DC=test", None))
+    _write_cleanup(
+        tmp_path,
+        {
+            "kind": "ldap-attribute",
+            "status": "pending",
+            "target": "CN=U,DC=corp,DC=test",
+            "attribute": "objectSid",
+            "previous": ["0102"],
+            "encoding": "hex",
+        },
+    )
+    result = cleanup.execute_cleanup(tmp_path, _target())
+    assert result["completed"] == 1
+    assert conn.modifies[0][1]["objectSid"][0][1] == [b"\x01\x02"]
+    _write_cleanup(
+        tmp_path,
+        {
+            "kind": "ldap-add-value",
+            "status": "pending",
+            "target": "CN=G,DC=corp,DC=test",
+            "attribute": "sIDHistory",
+            "value": "0102",
+            "encoding": "hex",
+        },
+    )
+    result = cleanup.execute_cleanup(tmp_path, _target())
+    assert result["completed"] == 1
+
+
+def test_execute_cleanup_reverts_ldap_object(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = _Conn()
+    monkeypatch.setattr(cleanup, "ldap_connect", lambda target: (conn, "DC=corp,DC=test", None))
+    _write_cleanup(tmp_path, _ldap_revertable_entries(tmp_path)["ldap-object"])
+    result = cleanup.execute_cleanup(tmp_path, _target())
+    assert result["completed"] == 1, result
+    assert conn.deletes == ["CN=NEW,CN=Computers,DC=corp,DC=test"]
 
 
 def test_execute_cleanup_reverts_gpo_sysvol(
@@ -166,7 +273,16 @@ def test_advisory_kinds_are_not_auto_reverted(
 
 def test_revertable_classifications_match_engine() -> None:
     """Every 'revertable' capability kind must actually be reverted by the engine."""
-    tested_ldap = {"acl", "gpo-link", "rbcd", "template-mod", "shadow-creds"}
+    tested_ldap = {
+        "acl",
+        "gpo-link",
+        "rbcd",
+        "template-mod",
+        "shadow-creds",
+        "ldap-attribute",
+        "ldap-add-value",
+        "ldap-object",
+    }
     revertable = {kind for kind, cls in _CAPABILITY_ROLLBACK.values() if cls == "revertable"}
     # gpo-sysvol is proven in its own SMB-backed test above.
     assert revertable == tested_ldap | {"gpo-sysvol"}, revertable

@@ -15,7 +15,7 @@ external operator tools are available.
 | TUI | `[tui]` / `[full]` | Interactive terminal | No | No | CI/source tests |
 | AD CS enrollment | `[certipy]` | Certipy on PATH, test CA | Yes | Depends on capability | Manual lab |
 | Relay, coercion, destructive workflows | Base plus capability dependencies | Approval token, rollback, disposable lab | Yes | Yes | Manual lab sign-off |
-| Experimental registry IDs (`planned_offensive`) | Base | None | No | No | CI (inert stubs) |
+| Promoted offensive IDs (`planned_offensive` catalog) | Base plus capability tools | Authorized account / lab fixtures | Usually | Depends on capability | Manual lab |
 
 ## Release status vocabulary
 
@@ -23,7 +23,8 @@ external operator tools are available.
 - **Manual lab**: requires an authorized disposable AD environment and retained
   sanitized evidence.
 - **Experimental**: not currently a release claim; document the limitation in
-  the release record before use.
+  the release record before use. The 40 catalog IDs that were previously
+  experimental tracking stubs are now `supported` in the live matrix.
 
 ## Offline 10-minute acceptance path
 

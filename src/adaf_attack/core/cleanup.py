@@ -64,6 +64,32 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
                     for key, value in attrs.items()
                 }
                 ok = conn.modify(item["target"], changes) if changes else False
+            elif kind == "ldap-attribute":
+                previous = list(item.get("previous") or [])
+                if item.get("encoding") == "hex":
+                    previous = [
+                        bytes.fromhex(value) if isinstance(value, str) else value
+                        for value in previous
+                    ]
+                ok = conn.modify(
+                    item["target"],
+                    {item["attribute"]: [(MODIFY_REPLACE, previous)]},
+                )
+            elif kind == "ldap-add-value":
+                values = list(item.get("values") or [])
+                if item.get("value") is not None and not values:
+                    values = [item["value"]]
+                if item.get("encoding") == "hex":
+                    values = [
+                        bytes.fromhex(value) if isinstance(value, str) else value
+                        for value in values
+                    ]
+                ok = conn.modify(
+                    item["target"],
+                    {item["attribute"]: [(MODIFY_DELETE, values)]},
+                )
+            elif kind == "ldap-object":
+                ok = bool(conn.delete(item["target"]))
             elif kind == "gpo-sysvol":
                 relative_path = str(item.get("target", "")).replace("/", "\\")
                 normalized_path = relative_path.lower()

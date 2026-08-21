@@ -1,20 +1,15 @@
-"""Experimental offensive capabilities registered for tracking only.
+"""Catalog of the 40 offensive capabilities promoted from tracking stubs.
 
-These IDs appear in `list-capabilities`, the live matrix, and path templates.
-Runners do not touch the target; they write a tracking evidence file so
-operators can plan work. Status in LIVE_CAPABILITY_MATRIX.json is
-``experimental`` until a real implementation replaces the stub.
+Metadata (id, summary, destructive, category, tags, environment, tools,
+fixture) lives here. Concrete runners register from sibling modules using
+``register_from_catalog``.
 """
 
 from __future__ import annotations
 
-import json
-from typing import Any
+from collections.abc import Callable
 
-from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import register_capability
-from adaf_attack.core.session import Session
-from adaf_attack.core.target import Target
 
 # id, summary, destructive, category, tags, environment, tools, fixture
 PLANNED_CAPABILITIES: tuple[
@@ -423,42 +418,6 @@ PLANNED_CAPABILITIES: tuple[
 )
 
 
-# First implementation PR — ldap3 + existing runners. Tag: next-pr
-NEXT_PR_IDS: frozenset[str] = frozenset(
-    {
-        "add-member",
-        "add-self",
-        "write-spn",
-        "targeted-kerberoast",
-        "maq-add-computer",
-        "maq-rbcd-workflow",
-        "gmsa-read",
-        "badsuccessor",
-        "dcsync-grant-workflow",
-        "pre2k-spray",
-        "unconstrained-delegation",
-    }
-)
-
-# Follow-on implementations that fit the current stack. Tag: wave-2
-WAVE2_IDS: frozenset[str] = frozenset(
-    {
-        "force-change-password",
-        "acl-abuse",
-        "adminsdholder-persist",
-        "timeroast",
-        "adidns-wpad",
-        "constrained-delegation",
-        "trustedtoauth",
-        "dpapi-domain-backup",
-        "azureadssoacc-roast",
-        "aadconnect-dcsync",
-        "esc8-relay-workflow",
-        "dmsa-ouroboros",
-    }
-)
-
-
 def planned_ids() -> tuple[str, ...]:
     return tuple(item[0] for item in PLANNED_CAPABILITIES)
 
@@ -467,82 +426,21 @@ def planned_destructive_ids() -> tuple[str, ...]:
     return tuple(item[0] for item in PLANNED_CAPABILITIES if item[2])
 
 
-def next_pr_ids() -> tuple[str, ...]:
-    return tuple(sorted(NEXT_PR_IDS))
+def catalog_entry(
+    capability_id: str,
+) -> tuple[str, str, bool, str, tuple[str, ...], str, tuple[str, ...], str]:
+    for item in PLANNED_CAPABILITIES:
+        if item[0] == capability_id:
+            return item
+    raise KeyError(capability_id)
 
 
-def wave2_ids() -> tuple[str, ...]:
-    return tuple(sorted(WAVE2_IDS))
-
-
-def _queue_tags(capability_id: str) -> tuple[str, ...]:
-    extra: tuple[str, ...] = ()
-    if capability_id in NEXT_PR_IDS:
-        extra += ("next-pr",)
-    if capability_id in WAVE2_IDS:
-        extra += ("wave-2",)
-    return extra
-
-
-def _tracking_payload(
-    capability_id: str, summary: str, target: Target, force: bool
-) -> dict[str, Any]:
-    return {
-        "ok": False,
-        "implemented": False,
-        "status": "experimental",
-        "capability": capability_id,
-        "summary": summary,
-        "force": force,
-        "domain": target.domain,
-        "message": (
-            "Registered for tracking only. This capability has no live "
-            "implementation yet and made no changes to the target."
-        ),
-    }
-
-
-def _attach(capability_id: str, summary: str) -> type:
-    class PlannedOffensive:
-        def run(
-            self,
-            target: Target,
-            session: Session,
-            graph: AttackGraph,
-            *,
-            force: bool = False,
-            include_secrets: bool = False,
-            **kwargs: Any,
-        ) -> dict[str, Any]:
-            result = _tracking_payload(capability_id, summary, target, force)
-            session.path(f"{capability_id}.json").write_text(
-                json.dumps(result, indent=2) + "\n",
-                encoding="utf-8",
-            )
-            session.log(f"{capability_id}.tracking", implemented=False)
-            return result
-
-    class_name = "".join(part.title() for part in capability_id.split("-")) + "Tracking"
-    PlannedOffensive.__name__ = class_name
-    PlannedOffensive.__qualname__ = class_name
-    PlannedOffensive.__doc__ = summary
-    return PlannedOffensive
-
-
-for (
-    cap_id,
-    summary,
-    destructive,
-    category,
-    tags,
-    _environment,
-    _tools,
-    _fixture,
-) in PLANNED_CAPABILITIES:
-    register_capability(
-        id=cap_id,
-        summary=summary,
-        destructive=destructive,
-        category=category,
-        tags=(*tags, "experimental", "tracking", *_queue_tags(cap_id)),
-    )(_attach(cap_id, summary))
+def register_from_catalog(cap_id: str, extra_tags: tuple[str, ...] = ()) -> Callable[[type], type]:
+    item = catalog_entry(cap_id)
+    return register_capability(
+        id=item[0],
+        summary=item[1],
+        destructive=item[2],
+        category=item[3],
+        tags=(*item[4], *extra_tags),
+    )

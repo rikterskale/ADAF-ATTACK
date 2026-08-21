@@ -46,9 +46,9 @@ def test_capability_option_spec_present(cap_id: str) -> None:
 
 
 @pytest.mark.parametrize("cap_id", TRACKING_IDS)
-def test_tracking_capability_is_registered(cap_id: str) -> None:
+def test_promoted_capability_is_registered(cap_id: str) -> None:
     cap = capability_registry.get(cap_id)
-    assert cap is not None, f"Missing tracking capability: {cap_id}"
+    assert cap is not None, f"Missing capability: {cap_id}"
     assert cap.runner is not None, f"Capability {cap_id} has no runner"
-    assert "experimental" in cap.tags
-    assert "tracking" in cap.tags
+    assert "experimental" not in cap.tags
+    assert "tracking" not in cap.tags

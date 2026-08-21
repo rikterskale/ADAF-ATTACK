@@ -234,6 +234,160 @@ _SPEC: dict[str, OptionSpec] = {
         _UNIVERSAL_OPTIONAL,
         notes="Read-only posture assessment; produces ad-cve-scan.json.",
     ),
+    "add-member": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P group=<sam>", "-P member=<sam>", "--force"),
+        _UNIVERSAL_OPTIONAL,
+        notes="Destructive; --force required.",
+    ),
+    "add-self": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P group=<sam>", "--force"),
+        _UNIVERSAL_OPTIONAL,
+        notes="Adds --username to the group. Destructive; --force required.",
+    ),
+    "force-change-password": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P sam=<user>", "-P new_password=<pwd>", "--force"),
+        _UNIVERSAL_OPTIONAL,
+        notes="Requires LDAPS for unicodePwd. Previous password is not recoverable.",
+    ),
+    "acl-abuse": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P sam=<target>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P rights=GenericAll|WriteDacl|WriteOwner|GetChangesAll",),
+        notes="Writes nTSecurityDescriptor; rollback restores the prior SD.",
+    ),
+    "write-spn": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P sam=<user>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P spn=<service/host>", "-P clear=true"),
+        notes="Destructive; --force required.",
+    ),
+    "unconstrained-delegation": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
+    "constrained-delegation": OptionSpec(
+        _UNIVERSAL_REQUIRED,
+        _UNIVERSAL_OPTIONAL + ("-P sam=<account>", "-P spn=<service/host>", "--force"),
+        notes="Enum is read-only; set path requires --force.",
+    ),
+    "trustedtoauth": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
+    "badsuccessor": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P preceded_by=<sam>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P name=<dmsa>",),
+        notes="Creates a dMSA linked to preceded_by. Destructive; --force required.",
+    ),
+    "dmsa-ouroboros": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("--force",),
+        _UNIVERSAL_OPTIONAL + ("-P sam=<dmsa>", "-P preceded_by=<sam>"),
+        notes="Reads or creates a dMSA and attempts msDS-ManagedPassword recovery.",
+    ),
+    "esc9": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("--force",),
+        _UNIVERSAL_OPTIONAL + ("-P template=<name>", "-P ca=<name>", "-P alt_name=<upn>"),
+    ),
+    "esc10": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("--force",),
+        _UNIVERSAL_OPTIONAL + ("-P template=<name>", "-P ca=<name>", "-P alt_name=<upn>"),
+    ),
+    "esc13": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("--force",),
+        _UNIVERSAL_OPTIONAL + ("-P template=<name>", "-P ca=<name>", "-P alt_name=<upn>"),
+    ),
+    "esc14": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("--force",),
+        _UNIVERSAL_OPTIONAL + ("-P template=<name>", "-P ca=<name>", "-P alt_name=<upn>"),
+    ),
+    "esc15": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("--force",),
+        _UNIVERSAL_OPTIONAL + ("-P template=<name>", "-P ca=<name>", "-P alt_name=<upn>"),
+    ),
+    "esc16": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("--force",),
+        _UNIVERSAL_OPTIONAL + ("-P template=<name>", "-P ca=<name>", "-P alt_name=<upn>"),
+    ),
+    "golden-cert": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P ca_pfx=<stolen-ca.pfx>", "-P upn=<user@domain>", "--force"),
+        _UNIVERSAL_OPTIONAL,
+    ),
+    "esc8-relay-workflow": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P ca=<web-enrollment-host>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P coerce_host=<host>", "-P listener=<ip>"),
+    ),
+    "krb-relay": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P relay_targets=<ldap://host>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P duration_seconds=60",),
+    ),
+    "maq-add-computer": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("--force",),
+        _UNIVERSAL_OPTIONAL + ("-P computer=<name>", "-P password=<pwd>"),
+    ),
+    "maq-rbcd-workflow": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P set_on=<computer>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P impersonate=<user>", "-P spn=<service/host>"),
+    ),
+    "targeted-kerberoast": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P sam=<user>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P spn=<service/host>",),
+    ),
+    "dcsync-grant-workflow": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("--force",),
+        _UNIVERSAL_OPTIONAL + ("-P principal_sid=<SID>", "-P dcsync_sam=krbtgt"),
+    ),
+    "nopac-workflow": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P dc=<DC$>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P name=<machine>",),
+    ),
+    "unconst-tgtdump-workflow": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("--force",),
+        _UNIVERSAL_OPTIONAL + ("-P host=<unconstrained>", "-P listener=<ip>"),
+    ),
+    "adminsdholder-persist": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("--force",),
+        _UNIVERSAL_OPTIONAL + ("-P principal_sid=<SID>",),
+    ),
+    "sidhistory-inject": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P sam=<user>", "-P sid=<S-1-5-...>", "--force"),
+        _UNIVERSAL_OPTIONAL,
+    ),
+    "pre2k-spray": OptionSpec(
+        _UNIVERSAL_REQUIRED,
+        _UNIVERSAL_OPTIONAL + ("-P max_attempts=50",),
+    ),
+    "timeroast": OptionSpec(
+        _UNIVERSAL_REQUIRED,
+        _UNIVERSAL_OPTIONAL + ("-P rid_start=1000", "-P rid_end=1032"),
+    ),
+    "gmsa-read": OptionSpec(
+        _UNIVERSAL_REQUIRED,
+        _UNIVERSAL_OPTIONAL + ("-P sam=<gmsa>",),
+        notes="Use --include-secrets to return current gMSA password material.",
+    ),
+    "dcshadow": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P computer=<sam>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P site=Default-First-Site-Name",),
+    ),
+    "adidns-wpad": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P ip=<attacker-ip>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P name=wpad", "-P cname=<host>"),
+    ),
+    "dnsadmin-srv": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P host=<attacker-fqdn>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P name=_ldap._tcp", "-P port=389"),
+    ),
+    "sccm-enum": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
+    "sccm-naa": OptionSpec(
+        _UNIVERSAL_REQUIRED,
+        _UNIVERSAL_OPTIONAL + ("-P mp=<management-point>",),
+    ),
+    "sccm-takeover": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P site_db=<sql-host>", "--force"),
+        _UNIVERSAL_OPTIONAL,
+    ),
+    "sccm-client-push": OptionSpec(
+        _UNIVERSAL_REQUIRED + ("-P host=<target>", "--force"),
+        _UNIVERSAL_OPTIONAL + ("-P site_code=P01",),
+    ),
+    "azureadssoacc-roast": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
+    "aadconnect-dcsync": OptionSpec(
+        _UNIVERSAL_REQUIRED,
+        _UNIVERSAL_OPTIONAL + ("-P sam=MSOL_...",),
+    ),
+    "dpapi-domain-backup": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
 }
 
 

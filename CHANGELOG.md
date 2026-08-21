@@ -7,16 +7,11 @@ declared in `pyproject.toml`.
 
 ### Added
 
-- Tagged implementation queues on experimental capabilities: `next-pr`
-  (11 LDAP/Impacket runners for the next PR) and `wave-2` (12 follow-ons).
-  Search with `adaf-attack search next-pr`.
-- Registered 40 experimental offensive capabilities for roadmap tracking
-  (`planned_offensive`): ACL primitives (`add-member`, `acl-abuse`,
-  `write-spn`, …), Server 2025 dMSA (`badsuccessor`, `dmsa-ouroboros`),
-  ESC9–ESC16, Kerberos relay, golden cert, DPAPI backup key, SCCM, hybrid
-  follow-ups, and joined workflows (`maq-rbcd-workflow`, `targeted-kerberoast`,
-  `esc8-relay-workflow`, …). Runners are inert tracking stubs (`status:
-  experimental`); they do not change targets.
+- Registered 40 offensive capabilities in the `planned_offensive` catalog:
+  ACL primitives (`add-member`, `acl-abuse`, `write-spn`, …), Server 2025 dMSA
+  (`badsuccessor`, `dmsa-ouroboros`), ESC9–ESC16, Kerberos relay, golden cert,
+  DPAPI backup key, SCCM, hybrid follow-ups, and joined workflows
+  (`maq-rbcd-workflow`, `targeted-kerberoast`, `esc8-relay-workflow`, …).
 - `adaf-attack workflow` command group: a CLI and agent-driven surface for the
   finding-driven guided workflow engine, sharing the durable workflow state the
   TUI drives (status, next, snapshot, inject, import-session, decide, transition,
@@ -31,6 +26,10 @@ declared in `pyproject.toml`.
 
 ### Changed
 
+- Promoted the 40 `planned_offensive` catalog capabilities from experimental
+  tracking stubs to supported runners (ACL primitives, dMSA, ESC9–ESC16,
+  Kerberos relay, golden cert, DPAPI backup key, SCCM, hybrid follow-ups, and
+  joined workflows). Destructive paths require `--force` and record rollback.
 - `full` now contains production operator extras (`tui`, `kerberos`, and
   `reports`) without contributor-only pytest, Ruff, or mypy dependencies.
 - Contributor tooling remains available through `dev`; `operator` names the
