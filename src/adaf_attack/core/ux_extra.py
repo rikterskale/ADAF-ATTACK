@@ -109,10 +109,15 @@ def session_findings_dashboard(
         findings_list = []
 
     filtered: list[dict[str, Any]] = []
+    severity_counts: dict[str, int] = {}
+    triage_counts: dict[str, int] = {}
     for item in findings_list:
         if not isinstance(item, dict):
             continue
         sev = str(item.get("severity", "unknown")).lower()
+        severity_counts[sev] = severity_counts.get(sev, 0) + 1
+        triage = str(item.get("status", "open")).lower()
+        triage_counts[triage] = triage_counts.get(triage, 0) + 1
         if severity and sev != severity.lower():
             continue
         filtered.append(
@@ -133,6 +138,8 @@ def session_findings_dashboard(
     return {
         **summary,
         "findings": filtered,
+        "severity_counts": severity_counts,
+        "triage_counts": triage_counts,
         "top_paths": top_paths[:10],
         "filter": {"severity": severity, "limit": limit},
     }

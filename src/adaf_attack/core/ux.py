@@ -219,9 +219,33 @@ def session_findings_summary(session_dir: Path) -> dict[str, Any]:
 
 
 def diff_sessions(a: Path, b: Path) -> dict[str, Any]:
-    """Compare two sessions (findings count + graph size)."""
+    """Compare two sessions, including finding identity and severity changes."""
     sa = session_findings_summary(a)
     sb = session_findings_summary(b)
+
+    def _finding_map(path: Path) -> dict[str, dict[str, Any]]:
+        payload = _load_json(Path(path) / "findings.json")
+        values = payload.get("findings") if isinstance(payload, dict) else []
+        if not isinstance(values, list):
+            return {}
+        result: dict[str, dict[str, Any]] = {}
+        for value in values:
+            if not isinstance(value, dict):
+                continue
+            key = str(value.get("id") or value.get("finding_id") or value.get("title") or "")
+            if key:
+                result[key] = value
+        return result
+
+    findings_a = _finding_map(a)
+    findings_b = _finding_map(b)
+    added = sorted(set(findings_b) - set(findings_a))
+    removed = sorted(set(findings_a) - set(findings_b))
+    severity_delta: dict[str, int] = {}
+    for values, sign in ((findings_b.values(), 1), (findings_a.values(), -1)):
+        for value in values:
+            severity = str(value.get("severity", "unknown")).lower()
+            severity_delta[severity] = severity_delta.get(severity, 0) + sign
     return {
         "a": {
             "session_id": sa["session_id"],
@@ -236,6 +260,9 @@ def diff_sessions(a: Path, b: Path) -> dict[str, Any]:
         "finding_delta": sb["finding_count"] - sa["finding_count"],
         "node_delta": sb["graph"]["nodes"] - sa["graph"]["nodes"],
         "edge_delta": sb["graph"]["edges"] - sa["graph"]["edges"],
+        "findings_added": added,
+        "findings_removed": removed,
+        "severity_delta": {key: value for key, value in sorted(severity_delta.items()) if value},
     }
 
 

@@ -61,6 +61,7 @@ from adaf_attack.core.ux import (
     format_stages_progress,
     group_capabilities_by_phase,
     risk_checklist,
+    session_findings_dashboard,
     suggested_next_actions,
 )
 from adaf_attack.core.workflow_engine import WorkflowEngine, finding_from_document
@@ -1500,21 +1501,11 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self.notify("Clipboard is unavailable in this terminal.", severity="warning")
 
     def _load_findings(self, session: Path) -> None:
-        interesting = self._read_json(session / "interesting.json")
-        graph = self._read_json(session / "graph.json")
-        findings = self._read_json(session / "findings.json")
-        top_paths = interesting.get("top_paths") or []
-        severity_counts: dict[str, int] = {}
-        for item in (
-            findings.get("findings", []) if isinstance(findings.get("findings"), list) else []
-        ):
-            severity = (
-                str(item.get("severity", "unknown")).lower()
-                if isinstance(item, dict)
-                else "unknown"
-            )
-            severity_counts[severity] = severity_counts.get(severity, 0) + 1
-        summary = graph.get("summary", graph) if isinstance(graph, dict) else {}
+        dashboard = session_findings_dashboard(session)
+        top_paths = dashboard.get("top_paths") or []
+        severity_counts = dashboard.get("severity_counts") or {}
+        triage_counts = dashboard.get("triage_counts") or {}
+        summary = dashboard.get("graph") or {}
         path_lines = [
             "  " + " → ".join(str(x).split("@")[0] for x in path.get("path", [])[:5])
             for path in top_paths[:3]
@@ -1523,7 +1514,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self.query_one("#session-panel", Static).update(
             f"[bold]Findings dashboard[/bold]  {session.name}\n"
             f"Nodes: {summary.get('nodes', 0)}  Edges: {summary.get('edges', 0)}  "
-            f"Findings: {sum(severity_counts.values())}  Severity: {severity_counts or 'none'}\n"
+            f"Findings: {dashboard.get('finding_count', 0)}  Severity: {severity_counts or 'none'}\n"
+            f"Triage: {triage_counts or {'open': 0}}\n"
             + ("Top paths:\n" + "\n".join(path_lines) if path_lines else "No top paths recorded.")
         )
 

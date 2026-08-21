@@ -97,6 +97,10 @@ _adaf_attack_completion() {{
       COMPREPLY=( $(compgen -W \"bash zsh fish powershell\" -- \"${{cur}}\") )
       return 0
       ;;
+    session)
+      COMPREPLY=( $(compgen -W \"list show diff resume\" -- \"${{cur}}\") )
+      return 0
+      ;;
     profile)
       COMPREPLY=( $(compgen -W \"list show set use delete default\" -- \"${{cur}}\") )
       return 0
@@ -106,7 +110,7 @@ _adaf_attack_completion() {{
       return 0
       ;;
     finding)
-      COMPREPLY=( $(compgen -W \"explain remediate\" -- \"${{cur}}\") )
+      COMPREPLY=( $(compgen -W \"explain remediate triage\" -- \"${{cur}}\") )
       return 0
       ;;
   esac

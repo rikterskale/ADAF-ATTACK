@@ -13,6 +13,7 @@ from adaf_attack.core import user_config
 from adaf_attack.core.cli_contract import error_for
 from adaf_attack.core.completions import generate_completion
 from adaf_attack.core.ux import (
+    diff_sessions,
     capability_prerequisites,
     export_plan_markdown,
     format_next_actions_block,
@@ -184,3 +185,41 @@ def test_errors_command_shows_suggested() -> None:
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["errors"][0].get("suggested_command")
+
+
+def test_session_diff_reports_finding_identity_and_severity(tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    for session in (first, second):
+        session.mkdir()
+        (session / "session.json").write_text(json.dumps({"session_id": session.name}), encoding="utf-8")
+        (session / "graph.json").write_text(json.dumps({"summary": {"nodes": 1, "edges": 0}}), encoding="utf-8")
+    (first / "findings.json").write_text(json.dumps({"findings": [{"id": "old", "severity": "low"}]}), encoding="utf-8")
+    (second / "findings.json").write_text(json.dumps({"findings": [{"id": "new", "severity": "high"}]}), encoding="utf-8")
+
+    result = diff_sessions(first, second)
+
+    assert result["findings_added"] == ["new"]
+    assert result["findings_removed"] == ["old"]
+    assert result["severity_delta"] == {"high": 1, "low": -1}
+
+
+def test_finding_triage_persists_status_tag_and_note(tmp_path: Path) -> None:
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "findings.json").write_text(
+        json.dumps({"findings": [{"id": "F-1", "title": "Open share", "severity": "medium"}]}),
+        encoding="utf-8",
+    )
+    result = runner.invoke(
+        app,
+        [
+            "--format", "json", "finding", "triage", "--session", str(session), "--id", "F-1",
+            "--status", "acknowledged", "--tag", "review", "--note", "Owner assigned",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    finding = json.loads((session / "findings.json").read_text(encoding="utf-8"))["findings"][0]
+    assert finding["status"] == "acknowledged"
+    assert finding["tags"] == ["review"]
+    assert finding["triage_note"] == "Owner assigned"

@@ -2965,6 +2965,75 @@ def finding_remediate_cmd(
     _emit(ctx, payload, Panel("\n".join(lines), title="Remediation checklist"))
 
 
+@finding_app.command("triage")
+def finding_triage_cmd(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session"),
+    finding_id: str = typer.Option(..., "--id", help="Finding ID or exact title."),
+    status: str | None = typer.Option(None, "--status", help="open | acknowledged | remediated | accepted-risk"),
+    tag: str | None = typer.Option(None, "--tag", help="Add an operator tag."),
+    note: str | None = typer.Option(None, "--note", help="Replace the operator triage note."),
+) -> None:
+    """View or update the durable triage state for one finding."""
+    allowed = {"open", "acknowledged", "remediated", "accepted-risk"}
+    try:
+        finding = _load_session_finding(session, finding_id)
+    except ActionableError as error:
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from error
+    changed = False
+    if status is not None:
+        if status not in allowed:
+            error = ActionableError(
+                "INVALID_FINDING_STATUS", f"Invalid finding status: {status}",
+                f"Choose one of: {', '.join(sorted(allowed))}.",
+                suggested_command=f"adaf-attack finding triage --session {session} --id {finding_id} --status acknowledged",
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+        finding["status"] = status
+        changed = True
+    if tag is not None:
+        tags = finding.get("tags") if isinstance(finding.get("tags"), list) else []
+        if tag not in tags:
+            tags.append(tag)
+        finding["tags"] = tags
+        changed = True
+    if note is not None:
+        finding["triage_note"] = note
+        changed = True
+    if changed:
+        try:
+            path = session / "findings.json"
+            document = json.loads(path.read_text(encoding="utf-8"))
+            values = document.get("findings") if isinstance(document, dict) else None
+            if not isinstance(values, list):
+                raise ValueError("findings.json does not contain a findings list")
+            target_key = str(finding.get("id") or finding.get("finding_id") or finding.get("title") or "")
+            for index, value in enumerate(values):
+                value_key = str(value.get("id") or value.get("finding_id") or value.get("title") or "") if isinstance(value, dict) else ""
+                if value_key == target_key:
+                    values[index] = finding
+                    break
+            else:
+                raise ValueError("finding disappeared while updating findings.json")
+            path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            error = ActionableError(
+                "FINDING_TRIAGE_WRITE_FAILED", f"Could not update finding triage state: {exc}",
+                "Check that the session is writable and rerun the command.",
+                suggested_command=f"adaf-attack finding explain --session {session} --id {finding_id}",
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+    payload = {"ok": True, "updated": changed, "session": str(session), "finding": finding, "allowed_statuses": sorted(allowed)}
+    _emit(ctx, payload, Panel(
+        f"{finding.get('id') or finding.get('title')}\nStatus: {finding.get('status', 'open')}\n"
+        f"Tags: {', '.join(finding.get('tags') or []) or '-'}\nNote: {finding.get('triage_note') or '-'}",
+        title="Finding triage",
+    ))
+
+
 config_app = typer.Typer(help="Persistent per-user defaults for CLI and TUI.")
 app.add_typer(config_app, name="config")
 
@@ -3129,11 +3198,56 @@ def session_diff(
                 f"Findings delta: {payload['finding_delta']}",
                 f"Nodes delta: {payload['node_delta']}",
                 f"Edges delta: {payload['edge_delta']}",
+                f"Added findings: {', '.join(payload['findings_added']) or '-'}",
+                f"Removed findings: {', '.join(payload['findings_removed']) or '-'}",
             ]
         ),
         title="Session diff",
     )
     _emit(ctx, {"ok": True, **payload}, human)
+
+
+@session_app.command("resume")
+def session_resume(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session", help="Session directory to resume or inspect."),
+) -> None:
+    """Show a safe resume package for a prior session without executing anything."""
+    from adaf_attack.core.ux import session_findings_dashboard
+
+    if not session.is_dir() or not (session / "session.json").is_file():
+        error = error_for("SESSION_NOT_FOUND", details={"session": str(session)})
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    dashboard = session_findings_dashboard(session)
+    capabilities: list[str] = []
+    events = session / "events.jsonl"
+    if events.is_file():
+        for line in events.read_text(encoding="utf-8").splitlines():
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(item, dict) and item.get("capability"):
+                value = str(item["capability"])
+                if value not in capabilities:
+                    capabilities.append(value)
+    payload = {
+        "ok": True, "session": str(session), "dashboard": dashboard,
+        "capabilities_seen": capabilities,
+        "commands": {
+            "inspect": f"adaf-attack session show --session {session}",
+            "triage": f"adaf-attack finding triage --session {session} --id <finding-id>",
+            "report": f"adaf-attack engagement report --session {session}",
+        },
+        "execution": "not-started",
+    }
+    _emit(ctx, payload, Panel(
+        f"Session: {dashboard.get('session_id') or session.name}\nFindings: {dashboard.get('finding_count', 0)}\n"
+        f"Inspect: adaf-attack session show --session {session}\n"
+        "No capability was executed; review the plan before continuing.",
+        title="Session resume",
+    ))
 
 
 @path_app.command("rank")
