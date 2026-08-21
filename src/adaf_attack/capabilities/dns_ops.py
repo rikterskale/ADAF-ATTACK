@@ -8,7 +8,7 @@ from typing import Any
 from ldap3 import SUBTREE
 from rich.console import Console
 
-from adaf_attack.capabilities.planned_offensive import register_from_catalog
+from adaf_attack.capabilities.capability_catalog import register_from_catalog
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_ops import finish, register_object_rollback, require_force, require_param
 from adaf_attack.core.ldap_util import ldap_connect

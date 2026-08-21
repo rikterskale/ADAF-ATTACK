@@ -1,6 +1,6 @@
 """Execute all 40 catalog capabilities' run() against mocked harnesses.
 
-Each planned capability is driven through its registered runner with the
+Each catalog capability is driven through its registered runner with the
 same mock patterns used by the per-capability offline suites, proving that
 every catalog entry is functionally operational end to end.
 """
@@ -18,19 +18,19 @@ import pytest
 
 import adaf_attack.capabilities.acl_primitives as acl_primitives
 import adaf_attack.capabilities.adcs_esc as adcs_esc
+import adaf_attack.capabilities.capability_catalog as capability_catalog
 import adaf_attack.capabilities.credential_ops as credential_ops
 import adaf_attack.capabilities.delegation_ops as delegation_ops
 import adaf_attack.capabilities.dmsa_ops as dmsa_ops
 import adaf_attack.capabilities.dns_ops as dns_ops
 import adaf_attack.capabilities.joined_workflows as joined_workflows
 import adaf_attack.capabilities.maq_ops as maq_ops
-import adaf_attack.capabilities.planned_offensive as planned_offensive
 import adaf_attack.capabilities.relay_ops as relay_ops
 import adaf_attack.capabilities.sccm_ops as sccm_ops
-from adaf_attack.capabilities.planned_offensive import (
+from adaf_attack.capabilities.capability_catalog import (
+    catalog_destructive_ids,
     catalog_entry,
-    planned_destructive_ids,
-    planned_ids,
+    catalog_ids,
 )
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.rbcd_sd import build_allowed_to_act_sd
@@ -551,11 +551,11 @@ def _(mr: Any) -> dict[str, Any]:
     return {"host": "ws01.corp.test"}
 
 
-ALL_IDS = planned_ids()
+ALL_IDS = catalog_ids()
 
 
 @pytest.mark.parametrize("cap_id", ALL_IDS)
-def test_planned_capability_runs(cap_id: str, monkeypatch: Any, tmp_path: Path) -> None:
+def test_catalog_capability_runs(cap_id: str, monkeypatch: Any, tmp_path: Path) -> None:
     cap = capability_registry.get(cap_id)
     assert cap is not None and cap.runner is not None, cap_id
     setup = SETUP.get(cap_id)
@@ -577,7 +577,7 @@ def test_planned_capability_runs(cap_id: str, monkeypatch: Any, tmp_path: Path) 
     assert not any(k in result for k in ("password",)), f"{cap_id} leaked secrets"
 
 
-@pytest.mark.parametrize("cap_id", planned_destructive_ids())
+@pytest.mark.parametrize("cap_id", catalog_destructive_ids())
 def test_destructive_capabilities_are_force_gated(
     cap_id: str, monkeypatch: Any, tmp_path: Path
 ) -> None:
@@ -604,13 +604,13 @@ def test_destructive_capabilities_are_force_gated(
 
 
 def test_catalog_has_forty_entries_with_setups() -> None:
-    assert len(planned_ids()) == 40
-    missing = set(planned_ids()) - set(SETUP)
+    assert len(catalog_ids()) == 40
+    missing = set(catalog_ids()) - set(SETUP)
     assert not missing, sorted(missing)
 
 
 def test_catalog_entry_lookup_roundtrip() -> None:
-    for cap_id in planned_ids():
+    for cap_id in catalog_ids():
         entry = catalog_entry(cap_id)
         assert entry[0] == cap_id
-        assert planned_offensive.PLANNED_CAPABILITIES is not None
+        assert capability_catalog.CAPABILITY_CATALOG is not None

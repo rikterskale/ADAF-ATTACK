@@ -265,7 +265,7 @@ adaf-attack --format json paths
 Exit code `0` and JSON containing `"ok": true` confirm the install. `paths`
 shows where future session evidence will be stored.
 
-Without an AD lab, the supported offline functionality includes diagnostics,
+Without an authorized target, the supported offline functionality includes diagnostics,
 capability discovery, planning, evidence correlation, engagement reporting,
 and package generation. LDAP reconnaissance, Kerberos, AD CS, relay/coercion,
 and destructive capabilities additionally require an authorized target and the
@@ -285,9 +285,9 @@ state that `adaf-attack rollback` can reverse.
    each required option in plain language and previews the command before it
    executes).
 7. Create and validate a scoped plan with `adaf-attack engagement init --output engagement.yaml` and `adaf-attack engagement validate engagement.yaml`.
-8. Before any target interaction, read the authorized lab and engagement guidance.
+8. Before any target interaction, read the authorized-target and engagement guidance.
 
-### What works without an AD lab?
+### What works offline?
 
 | Surface | Works offline? | Additional setup |
 |---|---:|---|
@@ -297,7 +297,7 @@ state that `adaf-attack rollback` can reverse.
 | LDAP and AD reconnaissance | No | Authorized account, DNS, DC reachability |
 | Kerberos and Impacket adapters | No | `[kerberos]`, DNS, synchronized clocks |
 | AD CS workflows | No | Separate `[certipy]` environment and test CA |
-| Relay, coercion, and destructive operations | No | Authorized disposable lab and rollback evidence |
+| Relay, coercion, and destructive operations | No | Authorized target and rollback state |
 
 ## Offline and air-gapped installation
 
@@ -447,7 +447,7 @@ adaf-attack --format json sessions
 | LDAP/AD reconnaissance | Authorized account, DNS, network path to the DC |
 | Kerberos/Impacket | `[kerberos]`, correct DNS and synchronized clocks |
 | AD CS workflows | Separate `[certipy]` environment and test CA |
-| Relay/coercion/destructive operations | Disposable lab, explicit authorization, rollback evidence |
+| Relay/coercion/destructive operations | Explicit authorization, rollback state |
 
 ## Offline correlation workflows
 

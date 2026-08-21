@@ -12,7 +12,7 @@ from collections.abc import Callable
 from adaf_attack.core.registry import register_capability
 
 # id, summary, destructive, category, tags, environment, tools, fixture
-PLANNED_CAPABILITIES: tuple[
+CAPABILITY_CATALOG: tuple[
     tuple[str, str, bool, str, tuple[str, ...], str, tuple[str, ...], str], ...
 ] = (
     (
@@ -418,18 +418,18 @@ PLANNED_CAPABILITIES: tuple[
 )
 
 
-def planned_ids() -> tuple[str, ...]:
-    return tuple(item[0] for item in PLANNED_CAPABILITIES)
+def catalog_ids() -> tuple[str, ...]:
+    return tuple(item[0] for item in CAPABILITY_CATALOG)
 
 
-def planned_destructive_ids() -> tuple[str, ...]:
-    return tuple(item[0] for item in PLANNED_CAPABILITIES if item[2])
+def catalog_destructive_ids() -> tuple[str, ...]:
+    return tuple(item[0] for item in CAPABILITY_CATALOG if item[2])
 
 
 def catalog_entry(
     capability_id: str,
 ) -> tuple[str, str, bool, str, tuple[str, ...], str, tuple[str, ...], str]:
-    for item in PLANNED_CAPABILITIES:
+    for item in CAPABILITY_CATALOG:
         if item[0] == capability_id:
             return item
     raise KeyError(capability_id)

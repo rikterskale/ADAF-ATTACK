@@ -7,7 +7,7 @@ from typing import Any
 from ldap3 import MODIFY_REPLACE, SUBTREE
 from rich.console import Console
 
-from adaf_attack.capabilities.planned_offensive import register_from_catalog
+from adaf_attack.capabilities.capability_catalog import register_from_catalog
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_ops import (
     attr_strings,

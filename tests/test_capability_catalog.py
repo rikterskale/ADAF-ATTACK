@@ -4,25 +4,25 @@ from __future__ import annotations
 
 import pytest
 
-from adaf_attack.capabilities.planned_offensive import (
-    PLANNED_CAPABILITIES,
+from adaf_attack.capabilities.capability_catalog import (
+    CAPABILITY_CATALOG,
+    catalog_destructive_ids,
     catalog_entry,
-    planned_destructive_ids,
-    planned_ids,
+    catalog_ids,
     register_from_catalog,
 )
 from adaf_attack.core.registry import capability_registry
 
 
-def test_planned_ids_are_unique() -> None:
-    ids = planned_ids()
+def test_catalog_ids_are_unique() -> None:
+    ids = catalog_ids()
     assert len(ids) == len(set(ids))
     assert len(ids) == 40
 
 
 def test_destructive_flags_match_tuple() -> None:
-    destructive = set(planned_destructive_ids())
-    for cap_id, _summary, is_destructive, *_rest in PLANNED_CAPABILITIES:
+    destructive = set(catalog_destructive_ids())
+    for cap_id, _summary, is_destructive, *_rest in CAPABILITY_CATALOG:
         cap = capability_registry.get(cap_id)
         assert cap is not None
         assert cap.destructive is is_destructive
@@ -31,7 +31,7 @@ def test_destructive_flags_match_tuple() -> None:
 
 
 def test_promoted_capabilities_are_supported_not_experimental() -> None:
-    for cap_id in planned_ids():
+    for cap_id in catalog_ids():
         cap = capability_registry.get(cap_id)
         assert cap is not None, cap_id
         assert cap.runner is not None, cap_id

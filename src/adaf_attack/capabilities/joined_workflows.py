@@ -8,12 +8,12 @@ from ldap3 import MODIFY_REPLACE
 from rich.console import Console
 
 from adaf_attack.capabilities.acl_primitives import WriteSpn
+from adaf_attack.capabilities.capability_catalog import register_from_catalog
 from adaf_attack.capabilities.coerce import Coerce
 from adaf_attack.capabilities.dcsync import Dcsync
 from adaf_attack.capabilities.delegation_ops import UnconstrainedDelegation
 from adaf_attack.capabilities.kerberoast import Kerberoast
 from adaf_attack.capabilities.maq_ops import MaqAddComputer
-from adaf_attack.capabilities.planned_offensive import register_from_catalog
 from adaf_attack.core.acl import (
     GUID_DS_REPLICATION_GET_CHANGES,
     GUID_DS_REPLICATION_GET_CHANGES_ALL,

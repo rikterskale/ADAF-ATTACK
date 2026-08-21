@@ -9,9 +9,9 @@ from typing import Any
 
 from rich.console import Console
 
+from adaf_attack.capabilities.capability_catalog import register_from_catalog
 from adaf_attack.capabilities.coerce import Coerce
 from adaf_attack.capabilities.ntlm_relay import NtlmRelay
-from adaf_attack.capabilities.planned_offensive import register_from_catalog
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_ops import finish, register_advisory_rollback, require_force
 from adaf_attack.core.session import Session

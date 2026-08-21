@@ -97,7 +97,7 @@ def register_ux_commands(
             "next_steps": [
                 f"adaf-attack session show --session {dest}",
                 f"adaf-attack engagement report --session {dest} --engagement-id QUICKSTART-2026-001",
-                "Read docs/USER_READINESS.md before connecting to an authorized AD lab.",
+                "Read docs/USER_READINESS.md before connecting to an authorized target.",
             ],
         }
         _emit(

@@ -15,7 +15,7 @@ external operator tools are available.
 | TUI | `[tui]` / `[full]` | Interactive terminal | No | No | CI/source tests |
 | AD CS enrollment | `[certipy]` | Certipy on PATH, test CA | Yes | Depends on capability | Operator-verified |
 | Relay, coercion, destructive workflows | Base plus capability dependencies | Approval token, rollback, authorized target | Yes | Yes | Operator-verified |
-| Promoted offensive IDs (`planned_offensive` catalog) | Base plus capability tools | Authorized account / lab fixtures | Usually | Depends on capability | Operator-verified |
+| Promoted offensive IDs (capability catalog) | Base plus capability tools | Authorized account / test fixtures | Usually | Depends on capability | Operator-verified |
 
 ## Release status vocabulary
 

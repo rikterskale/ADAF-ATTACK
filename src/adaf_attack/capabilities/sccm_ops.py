@@ -9,8 +9,8 @@ import httpx
 from ldap3 import SUBTREE
 from rich.console import Console
 
+from adaf_attack.capabilities.capability_catalog import register_from_catalog
 from adaf_attack.capabilities.ntlm_relay import NtlmRelay
-from adaf_attack.capabilities.planned_offensive import register_from_catalog
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_ops import (
     attr_value,

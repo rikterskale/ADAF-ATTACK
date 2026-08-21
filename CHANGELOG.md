@@ -7,7 +7,7 @@ declared in `pyproject.toml`.
 
 ### Added
 
-- Registered 40 offensive capabilities in the `planned_offensive` catalog:
+- Registered 40 offensive capabilities in the offensive capability catalog:
   ACL primitives (`add-member`, `acl-abuse`, `write-spn`, …), Server 2025 dMSA
   (`badsuccessor`, `dmsa-ouroboros`), ESC9–ESC16, Kerberos relay, golden cert,
   DPAPI backup key, SCCM, hybrid follow-ups, and joined workflows
@@ -26,7 +26,7 @@ declared in `pyproject.toml`.
 
 ### Changed
 
-- Promoted the 40 `planned_offensive` catalog capabilities from experimental
+- Promoted the 40 offensive capability catalog capabilities from experimental
   tracking stubs to supported runners (ACL primitives, dMSA, ESC9–ESC16,
   Kerberos relay, golden cert, DPAPI backup key, SCCM, hybrid follow-ups, and
   joined workflows). Destructive paths require `--force` and record rollback.

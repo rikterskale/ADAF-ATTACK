@@ -7,7 +7,7 @@ from typing import Any
 from ldap3 import MODIFY_ADD, MODIFY_REPLACE
 from rich.console import Console
 
-from adaf_attack.capabilities.planned_offensive import register_from_catalog
+from adaf_attack.capabilities.capability_catalog import register_from_catalog
 from adaf_attack.core.acl import (
     GENERIC_ALL,
     GUID_DS_REPLICATION_GET_CHANGES,

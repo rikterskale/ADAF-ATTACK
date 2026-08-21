@@ -10,10 +10,10 @@ from typing import Any
 from ldap3 import SUBTREE
 from rich.console import Console
 
+from adaf_attack.capabilities.capability_catalog import register_from_catalog
 from adaf_attack.capabilities.dcsync import Dcsync
 from adaf_attack.capabilities.gmsa_laps_enum import _parse_managed_password_blob
 from adaf_attack.capabilities.kerberoast import Kerberoast
-from adaf_attack.capabilities.planned_offensive import register_from_catalog
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.impacket_helper import require_impacket
 from adaf_attack.core.ldap_ops import attr_value, finish, lookup_sam, try_ntlm_bind
