@@ -325,3 +325,12 @@ def test_recent_capabilities_are_local_and_ordered(tmp_path: Path, monkeypatch) 
         "kerberoast",
         "ldap-enum",
     ]
+
+
+def test_what_next_without_context_is_dependency_light() -> None:
+    result = runner.invoke(app, ["--format", "json", "what-next"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["context"] == "new-user"
+    assert payload["suggestions"]

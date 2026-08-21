@@ -157,6 +157,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             )
             yield Button("Quickstart", id="quickstart-btn")
             yield Button("What should I do?", id="home-btn")
+            yield Button("Explain selected", id="explain-selected-btn")
+            yield Button("What next?", id="what-next-btn")
             yield Button("Setup", id="setup-btn")
             yield Switch(value=self._safe_mode, id="beginner-mode")
             yield Label("Beginner mode")
@@ -1492,6 +1494,25 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 "[bold]Findings dashboard[/bold]\nRun a capability or select a session first."
             )
 
+    def _explain_selected(self) -> None:
+        """Show the selected capability in novice-friendly language."""
+        if not self.selected_cap:
+            self.notify("Select a capability first.", severity="information")
+            return
+        self._update_help()
+        self.query_one("#review-panel", Static).update(
+            "[bold]Plain-language explanation[/bold]\n"
+            + str(self.query_one("#help-panel", Static).render())
+            + "\n\nUse Review to see the exact command, risk, and pre-flight checklist."
+        )
+
+    def _show_what_next(self) -> None:
+        """Show the next safe action for the current selection or session."""
+        if self.selected_cap:
+            self._show_next_actions(self.selected_cap)
+        else:
+            self._show_home()
+
     def _copy_findings(self) -> None:
         text = str(self.query_one("#session-panel", Static).render())
         try:
@@ -1535,6 +1556,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "cancel-btn": self._cancel,
             "quickstart-btn": self._quickstart,
             "home-btn": self._show_home,
+            "explain-selected-btn": self._explain_selected,
+            "what-next-btn": self._show_what_next,
             "setup-btn": self._show_setup_wizard,
             "reset-form-btn": self._reset_form,
             "undo-reset-btn": self._undo_form_reset,

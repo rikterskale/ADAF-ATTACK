@@ -112,6 +112,114 @@ def register_ux_commands(
             ),
         )
 
+    @app.command("start-here")
+    def start_here_cmd(
+        ctx: typer.Context,
+        workspace: Path | None = typer.Option(
+            None, "--workspace", help="Where to create the disposable offline demo session."
+        ),
+    ) -> None:
+        """Beginner-friendly alias for the safe first-install flow."""
+        quickstart_cmd(ctx, workspace)
+
+    @app.command("explain")
+    def explain_cmd(
+        ctx: typer.Context,
+        capability: str = typer.Argument(..., help="Capability ID to explain in plain language."),
+    ) -> None:
+        """Explain what a capability does, its safety level, and what to do first."""
+        import adaf_attack.capabilities  # noqa: F401
+        from adaf_attack.core.capability_help_data import capability_option_spec
+        from adaf_attack.core.novice import capability_difficulty, plain_description, safety_summary
+        from adaf_attack.core.registry import capability_registry
+        from adaf_attack.core.ux import build_ready_command, capability_prerequisites
+
+        cap = capability_registry.get(capability)
+        if cap is None:
+            error = ActionableError(
+                "UNKNOWN_CAPABILITY", f"Unknown capability: {capability}",
+                "Run `adaf-attack list-capabilities --novice` to browse beginner-friendly capabilities.",
+                suggested_command="adaf-attack list-capabilities --novice --safe-only",
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+        safety = safety_summary(cap)
+        difficulty = capability_difficulty(cap)
+        spec = capability_option_spec(cap.id, cap.destructive)
+        prerequisites = capability_prerequisites(cap.id)
+        payload = {
+            "ok": True,
+            "capability": {
+                "id": cap.id,
+                "summary": cap.summary,
+                "plain_description": plain_description(cap),
+                "category": cap.category,
+                "safety": safety,
+                "difficulty": difficulty,
+                "required_options": list(spec.required),
+                "optional_options": list(spec.optional),
+                "prerequisites": prerequisites,
+                "next_command": build_ready_command(cap.id),
+            },
+        }
+        human = Panel(
+            f"{plain_description(cap)}\n\n"
+            f"Safety: {safety['level']} — {safety['plain']}\n"
+            f"Difficulty: {difficulty['level']} — {difficulty['reason']}\n"
+            f"Required information: {', '.join(spec.required) or 'none'}\n"
+            f"Best run after: {', '.join(prerequisites['best_run_after']) or 'none'}\n\n"
+            "Next: review the plan with `adaf-attack plan <id> -d <domain> --dc-ip <dc>`.",
+            title=f"Plain-language explanation: {cap.id}",
+        )
+        _emit(ctx, payload, human)
+
+    @app.command("what-next")
+    def what_next_cmd(
+        ctx: typer.Context,
+        capability: str | None = typer.Argument(None, help="Capability just completed, if known."),
+        safe_only: bool = typer.Option(True, "--safe-only/--include-advanced", help="Prefer beginner-safe suggestions."),
+    ) -> None:
+        """Recommend the next beginner-friendly action."""
+        from adaf_attack.core.novice import beginner_next_actions, home_actions
+
+        if capability is None:
+            actions = home_actions(first_run=True)
+            payload = {"ok": True, "context": "new-user", "suggestions": actions}
+            human = Panel(
+                "\n".join(f"{i + 1}. {item['goal']}\n   {item['command']}\n   {item['why']}" for i, item in enumerate(actions)),
+                title="What should I do next?",
+            )
+            _emit(ctx, payload, human)
+            return
+        import adaf_attack.capabilities  # noqa: F401
+        from adaf_attack.core.registry import capability_registry
+
+        cap = capability_registry.get(capability)
+        if cap is None:
+            error = ActionableError(
+                "UNKNOWN_CAPABILITY", f"Unknown capability: {capability}",
+                "Run `adaf-attack list-capabilities --novice` to find a valid capability.",
+                suggested_command="adaf-attack list-capabilities --novice",
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+        suggestions = beginner_next_actions(cap)
+        if safe_only:
+            from adaf_attack.core.novice import safety_summary
+
+            suggestions = [
+                item for item in suggestions
+                if (follow := capability_registry.get(item["id"])) is not None
+                and safety_summary(follow)["level"] != "RED"
+            ]
+        payload = {"ok": True, "context": capability, "suggestions": suggestions}
+        human = Panel(
+            "\n".join(f"{i + 1}. {item['id']} — {item['message']}" for i, item in enumerate(suggestions))
+            or "No follow-up is recommended yet. Review the session findings first.",
+            title=f"What next after {capability}?",
+        )
+        _emit(ctx, payload, human)
+
     # --- Profile management (named target + opsec profiles) --------------------
     profile_app = typer.Typer(help="Named target and opsec profiles.")
     app.add_typer(profile_app, name="profile")
