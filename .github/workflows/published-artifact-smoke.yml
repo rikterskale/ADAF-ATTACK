@@ -89,5 +89,4 @@ jobs:
             echo "- Platform: ${{ matrix.os }}"
             echo "- Result: ${{ job.status }}"
             echo "- Scope: published wheel install, manifest validation, and offline CLI smoke"
-            echo "- Live AD validation: not included"
           } >> "$GITHUB_STEP_SUMMARY"

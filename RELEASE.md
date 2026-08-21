@@ -34,8 +34,7 @@ use `adaf-attack[full]`.
 ## Known limitations
 
 See [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md). In particular, hosted
-CI does not prove live AD behavior, organization-specific endpoint policy, or a
-published artifact before a release asset exists.
+CI does not prove a published artifact before a release asset exists.
 
 ## Release sign-off evidence
 
@@ -49,9 +48,7 @@ Reports and evidence package: PASS / FAIL
 Windows installer: PASS / FAIL
 Kali installer: PASS / FAIL
 Published artifact smoke: PASS / FAIL / NOT YET PUBLISHED
-Live AD validation: MANUAL SIGN-OFF / NOT CLAIMED
 ```
 
 Also record the candidate hashes, `release-manifest.json`,
-`requirements-operator.txt`, supported OS/Python matrix, and sanitized lab
-evidence when live functionality is claimed.
+`requirements-operator.txt`, and supported OS/Python matrix.

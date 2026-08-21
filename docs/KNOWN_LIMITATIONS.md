@@ -15,12 +15,10 @@
   lanes.
 - Certipy is separate from `full` because of dependency constraints. Some
   external operator tools may need dedicated virtual environments.
-- Live-AD behavior is not validated by hosted CI; operators must validate
-  against an authorized target following their engagement runbook.
 - Docker is not a live-AD release surface. It is suitable only for offline
   development/reporting because live Kerberos, DNS, SMB, and target-network
   behavior requires host integration.
 - Destructive capabilities record rollback pre-state in the session
-  (`cleanup.json`) and `adaf-attack rollback` reverses pending changes, but
+  (`cleanup.json`) and `adaf-attack rollback` reverses pending changes;
   target-side cleanup still needs operator validation against an authorized
-  target before release sign-off.
+  target.

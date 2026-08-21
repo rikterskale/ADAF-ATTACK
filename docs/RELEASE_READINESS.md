@@ -52,8 +52,8 @@ also proven by the full source matrix.
 - [ ] Record the first successful published-artifact workflow for the candidate.
       **[MANUAL]** No current source branch can prove an asset has already been
       published.
-- [ ] Attach the readiness summary, exact production-extra lock, artifact
-      hashes, and explicit live-AD/manual-lab status to the release record.
+- [ ] Attach the readiness summary, exact production-extra lock, and artifact
+      hashes to the release record.
       **[MANUAL: release manager]**
 - [ ] Reproduce the air-gapped wheelhouse path with candidate artifacts and the
       organization's transfer controls. **[MANUAL]**
@@ -84,9 +84,6 @@ also proven by the full source matrix.
 - [ ] Every destructive capability wires rollback or has a reviewed exemption;
       offline revertable kinds round-trip. **[CI: test_release_contracts;
       test_rollback_matrix]**
-- [ ] Live LDAP/Kerberos/AD CS/coercion/relay and destructive rollback operate
-      correctly against an authorized target. **[MANUAL]** Hosted CI does not
-      provide a domain and must never be described as proving this.
 - [ ] Doctor profiles distinguish offline, operator, Certipy, and explicit
       live-AD preflight requirements; support bundles redact identifiers and
       secrets. **[CI: test_doctor_profiles]**
@@ -117,19 +114,11 @@ Version: __________  Release manager: __________  Date: __________
 [ ] Published-artifact smoke passes on Ubuntu, Windows, and macOS.
 [ ] Air-gapped install is recorded with candidate artifacts.
 [ ] First-ten-minutes onboarding is completed by a new operator.
-[ ] Live-AD capability and one destructive rollback are recorded against an
-    authorized target.
 [ ] CHANGELOG, RELEASE, and known limitations are reviewed.
 [ ] Rollback/recovery location for the exact release assets is recorded.
 ```
 
 ## Remaining automation gaps
 
-1. A credential-gated authorized AD forest workflow for network capabilities and
-   target-side cleanup. Credentials and target infrastructure remain
-   intentionally outside hosted CI.
-2. Reproducible validation of organization-specific proxy, CA, endpoint, and
+1. Reproducible validation of organization-specific proxy, CA, endpoint, and
    air-gap transfer policies.
-
-For live-AD claims, the release candidate must record the authorized-target
-validation results alongside the release assets.

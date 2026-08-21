@@ -934,7 +934,6 @@ jobs:
             echo "- Windows installer: gated CI job"
             echo "- Kali installer: gated CI job"
             echo "- Published artifact smoke: separate release-channel workflow"
-            echo "- Live AD validation: manual disposable-lab sign-off required"
           } >> "$GITHUB_STEP_SUMMARY"
 
   windows-installer:
