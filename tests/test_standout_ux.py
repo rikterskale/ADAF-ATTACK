@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.standout_ux import (
     collaboration_summary,
@@ -81,8 +83,6 @@ def test_what_if_does_not_modify_source_graph(tmp_path: Path) -> None:
 def test_what_if_graph_error_and_malformed_edges(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import pytest
-
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps({"nodes": []}), encoding="utf-8")
     with pytest.raises(ValueError, match="edges list"):
@@ -111,10 +111,7 @@ def test_session_timeline_skips_malformed_lines(tmp_path: Path) -> None:
     session = _session(tmp_path)
     events = session / "events.jsonl"
     events.write_text(
-        "not-json\n"
-        + json.dumps({"time": "t2", "event": "x", "error": "boom"})
-        + "\n"
-        + "[1]\n",
+        "not-json\n" + json.dumps({"time": "t2", "event": "x", "error": "boom"}) + "\n" + "[1]\n",
         encoding="utf-8",
     )
     timeline = session_timeline(session, limit=5)

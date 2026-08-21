@@ -88,12 +88,10 @@ def test_session_store_search_filters_and_limit(tmp_path: Path) -> None:
 def test_json_log_formatter_includes_structured_fields() -> None:
     import logging
 
-    from adaf_attack.core.engineering import JsonLogFormatter, configure_logging
+    from adaf_attack.core.engineering import JsonLogFormatter
 
     formatter = JsonLogFormatter()
-    record = logging.LogRecord(
-        "adaf_attack.test", logging.INFO, __file__, 1, "hello", None, None
-    )
+    record = logging.LogRecord("adaf_attack.test", logging.INFO, __file__, 1, "hello", None, None)
     record.event = "cap.complete"  # type: ignore[attr-defined]
     record.capability = "ldap-enum"  # type: ignore[attr-defined]
     payload = json.loads(formatter.format(record))
