@@ -36,7 +36,7 @@ use `adaf-attack[full]`.
 See [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md). In particular, hosted
 CI does not prove a published artifact before a release asset exists.
 
-## Release sign-off evidence
+## Release evidence
 
 Every release candidate must attach this summary to the private release record:
 

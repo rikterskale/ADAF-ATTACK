@@ -1,8 +1,7 @@
 # Supported platforms and architectures
 
 The package contract is intentionally narrower than “any Python 3.11-3.14 host.”
-Only the rows marked CI-tested are release-supported without additional
-sign-off.
+Only the rows marked CI-tested are release-supported.
 
 | Platform | Architecture | Python | Status |
 |---|---|---|---|
@@ -11,7 +10,7 @@ sign-off.
 | macOS 14 | arm64 runner | 3.11–3.14 | CI-tested source path; wheel path tested through 3.13 |
 | Kali rolling | x86_64 | 3.11–3.14 | CI-tested pinned container and installer |
 | Other Linux distributions | x86_64 or arm64 | 3.11–3.14 | Package contract; manual validation required |
-| Windows on ARM | arm64 | 3.11–3.14 | Not release-tested; use emulation only with sign-off |
+| Windows on ARM | arm64 | 3.11–3.14 | Not release-tested; emulation only |
 | Linux ARM64 | arm64 | 3.11–3.14 | Not release-tested; native dependency availability may vary |
 
 No GPU is required. Live Kerberos and LDAP workflows require working DNS,

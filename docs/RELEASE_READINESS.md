@@ -2,7 +2,7 @@
 
 Coverage alone does not prove that a new operator can install, diagnose, use,
 upgrade, or safely remove ADAF-ATTACK. This document distinguishes exactly what
-automation proves from what requires release sign-off.
+automation proves from what requires manual follow-up.
 
 - **[CI]** is enforced by a named workflow/job or test today.
 - **[MANUAL]** requires evidence for each release because hosted CI cannot
@@ -104,7 +104,7 @@ also proven by the full source matrix.
 - [ ] Dependency audit, SAST, secret scan, and SBOM succeed. **[CI: security;
       codeql]**
 
-## Release sign-off checklist
+## Release checklist
 
 ```text
 Version: __________  Release manager: __________  Date: __________

@@ -140,4 +140,4 @@ sanitized diagnostics.
 Hosted CI installs wheels and sdists on Ubuntu and performs a real wheel
 installation in a Kali rolling container. Other distributions follow the same
 Python contract but are not individually hosted. Live AD behavior and local
-security policy remain release-sign-off tasks.
+security policy depend on your target environment.
