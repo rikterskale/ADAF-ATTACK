@@ -545,6 +545,14 @@ in a generated playbook — a configured provider and controlled-computer
 credential are still required before an actual ticket request is made. Both
 workflows log their artifacts and decisions in the session.
 
+The force-gated `unconst-tgtdump-workflow` (Kerberos section) hunts
+unconstrained-delegation hosts and coerces a machine authentication. With
+`-P capture=true` it also runs an in-process AP-REQ listener that harvests the
+coerced machine's TGT into `<session>/captured/*.kirbi` (tune with
+`capture_port`, `capture_timeout`, `capture_count`); captured tickets are
+encrypted to the machine account, so decryption for S4U reuse still requires
+the computer-account key offline (krbrelayx-style).
+
 `campaign-run` executes an ordered set of independently scoped engagement plans. A Kerberos cache may be handed to a subsequent plan only by an explicit `credential_handoff.allow: true` declaration; it is loaded from the encrypted source-session vault and is never copied into the manifest or output.
 
 ```yaml

@@ -213,3 +213,142 @@ def install_dpapi_lsarpc_mocks(
         monkeypatch.setattr(parent, "lsad", lsad_mod, raising=False)
         monkeypatch.setattr(parent, "transport", transport_mod, raising=False)
     return calls
+
+
+def install_drsuapi_mocks(
+    monkeypatch: Any,
+    *,
+    fail_at: str | None = None,
+    error_code: int = 0,
+) -> dict[str, int]:
+    """Stub the MS-DRSR drsuapi surface used by core.drs_sidhistory.
+
+    fail_at: None | "connect" | "bind" | "bind_call" | "add_call".
+    Returns a call-counter dict for assertions.
+    """
+    import sys
+    import types
+
+    calls = {"connect": 0, "iface_bind": 0, "requests": 0}
+
+    class _FakeNdr:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            self._fields: dict[Any, Any] = {}
+
+        def __setitem__(self, key: Any, value: Any) -> None:
+            self._fields[key] = value
+
+        def __getitem__(self, key: Any) -> Any:
+            if key not in self._fields:
+                self._fields[key] = _FakeNdr()
+            return self._fields[key]
+
+        def __len__(self) -> int:
+            return 8
+
+    class _Resp(_FakeNdr):
+        def __init__(self, items: dict[Any, Any] | None = None) -> None:
+            super().__init__()
+            if items:
+                self._fields.update(items)
+
+    class _Dce:
+        def connect(self) -> None:
+            calls["connect"] += 1
+            if fail_at == "connect":
+                raise RuntimeError("connection refused")
+
+        def bind(self, _uuid: Any) -> None:
+            calls["iface_bind"] += 1
+            if fail_at == "bind":
+                raise RuntimeError("access denied")
+
+        def request(self, obj: Any) -> _Resp:
+            calls["requests"] += 1
+            if type(obj).__name__ == "DRSUnbind":
+                raise RuntimeError("unbind boom")
+            if type(obj).__name__ == "DRSBind":
+                if fail_at == "bind_call":
+                    raise RuntimeError("rpc_s_access_denied")
+                if fail_at == "bind_response":
+                    return _Resp({"ErrorCode": 8453, "phDrs": b"drs-handle"})
+                return _Resp({"ErrorCode": 0, "phDrs": b"drs-handle"})
+            if fail_at == "add_call":
+                rpcrt = sys.modules["impacket.dcerpc.v5.rpcrt"]
+                raise rpcrt.DCERPCException("unwillingToPerform")
+            return _Resp({"ErrorCode": error_code})
+
+    class _Rpc:
+        def get_dce_rpc(self) -> _Dce:
+            return _Dce()
+
+        def set_credentials(self, *args: Any, **kwargs: Any) -> None:
+            return None
+
+    class _Transport:
+        def __new__(cls, *args: Any, **kwargs: Any) -> _Rpc:
+            return _Rpc()
+
+    ndr_mod = types.ModuleType("impacket.dcerpc.v5.ndr")
+    ndr_mod.NDRSTRUCT = _FakeNdr
+    ndr_mod.NDRUNION = _FakeNdr
+    ndr_mod.NDRCALL = _FakeNdr
+    ndr_mod.DWORD = int
+    dtypes_mod = types.ModuleType("impacket.dcerpc.v5.dtypes")
+    dtypes_mod.DWORD = int
+    dtypes_mod.GUID = _FakeNdr
+    dtypes_mod.LPWSTR = str
+    drsuapi_mod = types.ModuleType("impacket.dcerpc.v5.drsuapi")
+    drsuapi_mod.MSRPC_UUID_DRSUAPI = b"drsuapi-uuid"
+    drsuapi_mod.NULL = None
+    drsuapi_mod.DRS_HANDLE = bytes
+    drsuapi_mod.NT4SID = bytes
+    drsuapi_mod.DRSBind = type("DRSBind", (_FakeNdr,), {})
+    drsuapi_mod.DRSUnbind = type("DRSUnbind", (_FakeNdr,), {})
+    transport_mod = types.ModuleType("impacket.dcerpc.v5.transport")
+    transport_mod.SMBTransport = _Transport
+    rpcrt_mod = types.ModuleType("impacket.dcerpc.v5.rpcrt")
+
+    class DCERPCException(Exception):
+        pass
+
+    rpcrt_mod.DCERPCException = DCERPCException
+
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.ndr", ndr_mod)
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.dtypes", dtypes_mod)
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.drsuapi", drsuapi_mod)
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.transport", transport_mod)
+    monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.rpcrt", rpcrt_mod)
+    parent = sys.modules.get("impacket.dcerpc.v5")
+    if parent is not None:
+        monkeypatch.setattr(parent, "ndr", ndr_mod, raising=False)
+        monkeypatch.setattr(parent, "dtypes", dtypes_mod, raising=False)
+        monkeypatch.setattr(parent, "drsuapi", drsuapi_mod, raising=False)
+        monkeypatch.setattr(parent, "transport", transport_mod, raising=False)
+        monkeypatch.setattr(parent, "rpcrt", rpcrt_mod, raising=False)
+    return calls
+
+
+class NoImpacketFinder:
+    """Meta-path finder that makes `import impacket` raise ImportError."""
+
+    def find_spec(self, fullname: str, path: Any = None, target: Any = None) -> Any:
+        if fullname == "impacket" or fullname.startswith("impacket."):
+            raise ImportError(f"no impacket ({fullname})")
+        return None
+
+
+def hide_impacket(monkeypatch: Any) -> None:
+    """Force `import impacket` to fail for the duration of the test."""
+    import builtins
+    import sys
+
+    real_import = builtins.__import__
+
+    def fake_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "impacket" or name.startswith("impacket."):
+            raise ImportError("no impacket")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(sys, "meta_path", [NoImpacketFinder()], raising=False)

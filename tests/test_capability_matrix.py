@@ -34,7 +34,7 @@ from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.rbcd_sd import build_allowed_to_act_sd
 from adaf_attack.core.registry import capability_registry
 from adaf_attack.core.session import Session
-from tests.gate_helpers import Conn, Entry, patch_ldap, sid_entry, target
+from tests.gate_helpers import Conn, Entry, install_drsuapi_mocks, patch_ldap, sid_entry, target
 from tests.gate_helpers import session as make_session
 
 
@@ -212,6 +212,7 @@ def _(mr: Any) -> dict[str, Any]:
 def _(mr: Any) -> dict[str, Any]:
     conn, _user = _acl_conn()
     patch_ldap(mr.monkeypatch, acl_primitives, conn)
+    install_drsuapi_mocks(mr.monkeypatch)
     return {"sam": "bob", "sid": "S-1-5-21-99"}
 
 

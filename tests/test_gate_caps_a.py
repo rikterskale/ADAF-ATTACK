@@ -7,10 +7,13 @@ import sys
 from types import ModuleType, SimpleNamespace
 from typing import Any
 
+import pytest
 from gate_helpers import (
     Conn,
     Entry,
     FailModifyConn,
+    hide_impacket,
+    install_drsuapi_mocks,
     patch_ldap,
     sid_entry,
     target,
@@ -85,10 +88,140 @@ def test_acl_primitives_failure_branches(monkeypatch: Any, tmp_path: Any) -> Non
     assert holder["ok"] is False
 
     sidhist = acl_primitives.SidHistoryInject().run(
-        target(), session, graph, force=True, sam="bob", sid="S-1-5-21-99"
+        target(), session, graph, force=True, sam="bob", sid="S-1-5-21-99", method="ldap"
     )
     assert sidhist["ok"] is False
     assert "DRSUAPI" in sidhist["error_note"]
+
+
+def test_sidhistory_drsuapi_success(monkeypatch: Any, tmp_path: Any) -> None:
+    bob = sid_entry("bob", "CN=Bob,DC=corp,DC=test")
+    conn = Conn({"bob": [bob]})
+    patch_ldap(monkeypatch, acl_primitives, conn)
+    calls = install_drsuapi_mocks(monkeypatch)
+    session = Session(tmp_path)
+    result = acl_primitives.SidHistoryInject().run(
+        target(), session, AttackGraph(), force=True, sam="bob", sid="S-1-5-21-99"
+    )
+    assert result["ok"] is True
+    assert result["method"] == "drsuapi"
+    assert result["error_code"] == 0
+    assert calls["requests"] >= 2
+    cleanup_files = list(tmp_path.rglob("cleanup.json"))
+    assert cleanup_files, "no rollback entry was registered"
+    pending = [
+        entry
+        for entry in json.loads(cleanup_files[0].read_text(encoding="utf-8"))
+        if entry.get("kind") == "ldap-add-value"
+    ]
+    assert pending and pending[0]["values"] == ["S-1-5-21-99"]
+
+
+def test_sidhistory_drsuapi_rpc_rejection(monkeypatch: Any, tmp_path: Any) -> None:
+    bob = sid_entry("bob", "CN=Bob,DC=corp,DC=test")
+    conn = Conn({"bob": [bob]})
+    patch_ldap(monkeypatch, acl_primitives, conn)
+    install_drsuapi_mocks(monkeypatch, error_code=0x2103)
+    result = acl_primitives.SidHistoryInject().run(
+        target(), Session(tmp_path), AttackGraph(), force=True, sam="bob", sid="S-1-5-21-99"
+    )
+    assert result["ok"] is False
+    assert result["method"] == "drsuapi"
+    assert "0x00002103" in result["error"]
+    assert "DRSUAPI" in result["error_note"]
+
+
+def test_sidhistory_missing_impacket_falls_back_to_ldap(monkeypatch: Any, tmp_path: Any) -> None:
+    bob = sid_entry("bob", "CN=Bob,DC=corp,DC=test")
+    conn = Conn({"bob": [bob]})
+    patch_ldap(monkeypatch, acl_primitives, conn)
+    hide_impacket(monkeypatch)
+    result = acl_primitives.SidHistoryInject().run(
+        target(), Session(tmp_path), AttackGraph(), force=True, sam="bob", sid="S-1-5-21-99"
+    )
+    assert result["ok"] is True
+    assert result["method"] == "ldap"
+    assert result["fallback"] is True
+    explicit = acl_primitives.SidHistoryInject().run(
+        target(),
+        Session(tmp_path),
+        AttackGraph(),
+        force=True,
+        sam="bob",
+        sid="S-1-5-21-99",
+        method="drsuapi",
+    )
+    assert explicit["ok"] is True and explicit.get("fallback") is True
+
+
+def test_sidhistory_explicit_ldap_success(monkeypatch: Any, tmp_path: Any) -> None:
+    bob = sid_entry("bob", "CN=Bob,DC=corp,DC=test")
+    conn = Conn({"bob": [bob]})
+    patch_ldap(monkeypatch, acl_primitives, conn)
+    result = acl_primitives.SidHistoryInject().run(
+        target(),
+        Session(tmp_path),
+        AttackGraph(),
+        force=True,
+        sam="bob",
+        sid="S-1-5-21-99",
+        method="ldap",
+    )
+    assert result["ok"] is True and result["method"] == "ldap"
+
+
+def test_sidhistory_unknown_method_rejected(tmp_path: Any) -> None:
+    with pytest.raises(RuntimeError, match="Unsupported sIDHistory"):
+        acl_primitives.SidHistoryInject().run(
+            target(),
+            Session(tmp_path),
+            AttackGraph(),
+            force=True,
+            sam="bob",
+            sid="S-1-5-21-99",
+            method="carrier-pigeon",
+        )
+
+
+def test_drs_add_sid_history_outcomes(monkeypatch: Any) -> None:
+    from adaf_attack.core import drs_sidhistory
+
+    kwargs = {
+        "dst_dn": "CN=Bob,DC=corp,DC=test",
+        "dst_sid": "S-1-5-21-1-2-3-1104",
+        "extra_sid": "S-1-5-21-99",
+        "source_domain": "DC=corp,DC=test",
+    }
+    install_drsuapi_mocks(monkeypatch)
+    ok = drs_sidhistory.add_sid_history(target(), **kwargs)
+    assert ok["ok"] is True
+
+    ok_cached = drs_sidhistory.add_sid_history(target(), **kwargs)
+    assert ok_cached["ok"] is True  # structures cache hit path
+
+    install_drsuapi_mocks(monkeypatch, error_code=8453)
+    denied = drs_sidhistory.add_sid_history(target(), **kwargs)
+    assert denied["ok"] is False and denied["error_code"] == 8453
+
+    install_drsuapi_mocks(monkeypatch, fail_at="add_call")
+    rejected = drs_sidhistory.add_sid_history(target(), **kwargs)
+    assert rejected["ok"] is False and rejected["stage"] == "add"
+
+    install_drsuapi_mocks(monkeypatch, fail_at="connect")
+    refused = drs_sidhistory.add_sid_history(target(), **kwargs)
+    assert refused["ok"] is False and "refused" in refused["error"]
+
+    install_drsuapi_mocks(monkeypatch, fail_at="bind_call")
+    bind_denied = drs_sidhistory.add_sid_history(target(), **kwargs)
+    assert bind_denied["ok"] is False and "access denied" in bind_denied["error"]
+
+    install_drsuapi_mocks(monkeypatch, fail_at="bind_response")
+    bind_rejected = drs_sidhistory.add_sid_history(target(), **kwargs)
+    assert bind_rejected["ok"] is False and bind_rejected["stage"] == "bind"
+
+    install_drsuapi_mocks(monkeypatch, fail_at="bind")
+    iface_denied = drs_sidhistory.add_sid_history(target(), **kwargs)
+    assert iface_denied["ok"] is False and iface_denied["stage"] == "connect"
 
 
 def test_force_change_password_without_secrets(monkeypatch: Any, tmp_path: Any) -> None:

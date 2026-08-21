@@ -218,7 +218,7 @@ def test_password_spn_acl_sidhistory(monkeypatch: Any, tmp_path: Path) -> None:
     )
     assert holder["ok"] is True
     sid = acl_primitives.SidHistoryInject().run(
-        _target(), session, graph, force=True, sam="bob", sid="S-1-5-21-99"
+        _target(), session, graph, force=True, sam="bob", sid="S-1-5-21-99", method="ldap"
     )
     assert sid["ok"] is True
     conn.by_filter = {"bob": [user]}

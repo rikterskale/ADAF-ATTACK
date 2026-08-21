@@ -334,7 +334,20 @@ _SPEC: dict[str, OptionSpec] = {
     ),
     "unconst-tgtdump-workflow": OptionSpec(
         _UNIVERSAL_REQUIRED + ("--force",),
-        _UNIVERSAL_OPTIONAL + ("-P host=<unconstrained>", "-P listener=<ip>"),
+        _UNIVERSAL_OPTIONAL
+        + (
+            "-P host=<unconstrained>",
+            "-P listener=<ip>",
+            "-P capture=true",
+            "-P capture_port=4450",
+            "-P capture_timeout=15",
+            "-P capture_count=1",
+        ),
+        notes=(
+            "With capture=true an in-process AP-REQ listener harvests the coerced "
+            "machine's TGT into <session>/captured/*.kirbi; decryption still requires "
+            "the machine-account key offline (krbrelayx-style)."
+        ),
     ),
     "adminsdholder-persist": OptionSpec(
         _UNIVERSAL_REQUIRED + ("--force",),
@@ -342,7 +355,12 @@ _SPEC: dict[str, OptionSpec] = {
     ),
     "sidhistory-inject": OptionSpec(
         _UNIVERSAL_REQUIRED + ("-P sam=<user>", "-P sid=<S-1-5-...>", "--force"),
-        _UNIVERSAL_OPTIONAL,
+        _UNIVERSAL_OPTIONAL + ("-P method=drsuapi|ldap", "-P source_domain=<NC or DNS>"),
+        notes=(
+            "Defaults to DRSUAPI DsAddSidHistory (MS-DRSR) injection with an LDAP "
+            "fallback when Impacket is unavailable; use method=ldap for the legacy "
+            "direct-LDAP write."
+        ),
     ),
     "pre2k-spray": OptionSpec(
         _UNIVERSAL_REQUIRED,
