@@ -74,6 +74,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack profile use` | Select a profile |
 | `adaf-attack purple-handoff` | Build a detection-aware handoff |
 | `adaf-attack quickstart` | Run the safe first-install flow |
+| `adaf-attack query` | Query local graph and finding evidence |
 | `adaf-attack start-here` | Beginner-friendly safe first-install alias |
 | `adaf-attack explain` | Explain a capability in plain language |
 | `adaf-attack what-next` | Recommend the next beginner-friendly action |

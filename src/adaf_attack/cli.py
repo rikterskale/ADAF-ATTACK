@@ -1524,6 +1524,40 @@ def search(
     _emit(ctx, {"ok": True, **payload}, Panel("\n".join(lines) or "No matches.", title="Search"))
 
 
+@app.command("query")
+def query_local(
+    ctx: typer.Context,
+    question: str = typer.Argument(..., help="A supported question over local evidence."),
+    session: Path = typer.Option(..., "--session"),
+    limit: int = typer.Option(25, "--limit"),
+) -> None:
+    """Query the local attack graph and findings using natural-language patterns."""
+    from adaf_attack.core.local_queries import query_local_evidence
+
+    try:
+        payload = query_local_evidence(session, question, limit=limit)
+    except (OSError, KeyError, TypeError, ValueError) as exc:
+        error = error_for("SESSION_NOT_FOUND", message=str(exc), details={"session": str(session)})
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+    if not payload.get("ok"):
+        _emit(
+            ctx, payload, Panel("\n".join(payload["supported_queries"]), title="Supported queries")
+        )
+        return
+    if payload.get("query_type") == "paths":
+        lines = [
+            f"{' -> '.join(item['path'])}  ({' -> '.join(item['edges'])})"
+            for item in payload["paths"]
+        ]
+    else:
+        lines = [
+            f"{item.get('id') or item.get('title')}: {item.get('title', 'finding')}"
+            for item in payload.get("findings", [])
+        ]
+    _emit(ctx, payload, Panel("\n".join(lines) or "No matches.", title="Local evidence query"))
+
+
 @app.command("sessions")
 def sessions(
     ctx: typer.Context,

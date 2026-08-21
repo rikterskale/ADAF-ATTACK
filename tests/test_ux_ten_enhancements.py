@@ -16,6 +16,7 @@ from adaf_attack.core.completions import generate_completion
 from adaf_attack.core.engagement_dashboard import dashboard as engagement_dashboard
 from adaf_attack.core.finding_workspace import load_finding_workspace
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.local_queries import query_local_evidence
 from adaf_attack.core.outcomes import build_post_execution_outcome, record_detection_status
 from adaf_attack.core.rollback import cleanup_dashboard
 from adaf_attack.core.ux import (
@@ -405,6 +406,41 @@ def test_session_access_context_tracks_identity_without_exposing_secrets(tmp_pat
     assert context["identities"][0]["auth_modes"] == ["Kerberos ccache"]
     assert context["credential_artifacts"][0]["kind"] == "ticket"
     assert "super-secret-ticket-material" not in json.dumps(context)
+
+
+def test_local_query_finds_paths_to_domain_admins(tmp_path: Path) -> None:
+    (tmp_path / "graph.json").write_text(
+        json.dumps(
+            {
+                "nodes": [
+                    {"id": "USER@ALICE@CORP", "kind": "User", "properties": {}},
+                    {"id": "GROUP@HELPDESK@CORP", "kind": "Group", "properties": {}},
+                    {"id": "GROUP@DOMAIN ADMINS@CORP", "kind": "Group", "properties": {}},
+                ],
+                "edges": [
+                    {
+                        "source": "USER@ALICE@CORP",
+                        "target": "GROUP@HELPDESK@CORP",
+                        "kind": "MemberOf",
+                    },
+                    {
+                        "source": "GROUP@HELPDESK@CORP",
+                        "target": "GROUP@DOMAIN ADMINS@CORP",
+                        "kind": "AddMember",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = query_local_evidence(
+        tmp_path, "show every path from compromised users to Domain Admin"
+    )
+
+    assert result["query_type"] == "paths"
+    assert result["count"] == 1
+    assert result["paths"][0]["edges"] == ["MemberOf", "AddMember"]
 
 
 def test_errors_command_shows_suggested() -> None:
