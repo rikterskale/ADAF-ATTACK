@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 from adaf_attack.cli import app
 from adaf_attack.core import profiles as profiles_mod
 from adaf_attack.core import user_config
+from adaf_attack.core.access_context import session_access_context
 from adaf_attack.core.cli_contract import error_for
 from adaf_attack.core.completions import generate_completion
 from adaf_attack.core.engagement_dashboard import dashboard as engagement_dashboard
@@ -381,6 +382,29 @@ def test_engagement_dashboard_persists_operator_breadcrumbs(tmp_path: Path) -> N
         "attack_path": None,
         "current_action": "acl-enum",
     }
+
+
+def test_session_access_context_tracks_identity_without_exposing_secrets(tmp_path: Path) -> None:
+    (tmp_path / "events.jsonl").write_text(
+        json.dumps(
+            {
+                "type": "run.start",
+                "capability": "ldap-enum",
+                "username": "analyst",
+                "auth": "Kerberos ccache",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "analyst.ccache").write_bytes(b"super-secret-ticket-material")
+
+    context = session_access_context(tmp_path)
+
+    assert context["recommended_identity"] == "analyst"
+    assert context["identities"][0]["auth_modes"] == ["Kerberos ccache"]
+    assert context["credential_artifacts"][0]["kind"] == "ticket"
+    assert "super-secret-ticket-material" not in json.dumps(context)
 
 
 def test_errors_command_shows_suggested() -> None:

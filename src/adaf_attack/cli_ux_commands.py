@@ -674,3 +674,33 @@ def register_ux_commands(
                 lines.append(f"  - {item.get('time') or 'unknown'}: {label}{cap}")
         human = Panel("\n".join(lines), title="Session findings dashboard")
         _emit(ctx, payload, human)
+
+    @session_app.command("access")
+    def session_access(
+        ctx: typer.Context,
+        session: Path = typer.Option(..., "--session", help="Session directory to inspect."),
+    ) -> None:
+        """Show safe identity, authentication, and credential-context metadata."""
+        from adaf_attack.core.access_context import session_access_context
+
+        if not session.is_dir():
+            error = error_for("SESSION_NOT_FOUND", details={"session": str(session)})
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+        payload = session_access_context(session)
+        identities = payload["identities"]
+        human = Panel(
+            "Recommended identity: "
+            + str(payload["recommended_identity"] or "not recorded")
+            + "\n\n"
+            + (
+                "\n".join(
+                    f"{item['identity']} — {', '.join(item['auth_modes']) or 'auth not recorded'}"
+                    for item in identities
+                )
+                or "No identities recorded."
+            )
+            + f"\n\nCredential artifacts: {len(payload['credential_artifacts'])}\n{payload['safety']}",
+            title="Session access context",
+        )
+        _emit(ctx, payload, human)

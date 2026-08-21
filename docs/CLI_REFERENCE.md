@@ -92,6 +92,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack search` | Search registered capabilities |
 | `adaf-attack session` | Session command group |
 | `adaf-attack session diff` | Compare sessions |
+| `adaf-attack session access` | Show safe identity and credential context |
 | `adaf-attack session resume` | Prepare a safe review/resume package |
 | `adaf-attack finding triage` | View or update finding status, tags, and notes |
 | `adaf-attack session list` | List workspace sessions |
