@@ -16,6 +16,7 @@ from adaf_attack.core.auth import describe_auth
 from adaf_attack.core.creds import CredentialSet, load_credentials_json
 from adaf_attack.core.engineering import SessionStore, execute_with_controls
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.outcomes import build_post_execution_outcome
 from adaf_attack.core.paths import default_workspace_dir, normalize_path
 from adaf_attack.core.registry import capability_registry
 from adaf_attack.core.session import Session
@@ -204,6 +205,19 @@ def execute_capability(
             newline="\n",
         )
 
+        outcome = build_post_execution_outcome(
+            session.root,
+            capability=capability_id,
+            result=result,
+            graph=graph,
+            auth=describe_auth(resolved_target),
+        )
+        session.path("outcome.json").write_text(
+            json.dumps(outcome, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
         session.log("run.complete", capability=capability_id, ok=True)
         try:
             metadata = json.loads(session.path("session.json").read_text(encoding="utf-8"))
@@ -234,6 +248,7 @@ def execute_capability(
             "auth": describe_auth(resolved_target),
             "username": resolved_target.username,
             "cred_attempts": cred_attempts,
+            "outcome": outcome,
         }
     except Exception as exc:
         session.log("run.error", capability=capability_id, error=str(exc))

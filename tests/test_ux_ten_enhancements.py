@@ -12,6 +12,8 @@ from adaf_attack.core import profiles as profiles_mod
 from adaf_attack.core import user_config
 from adaf_attack.core.cli_contract import error_for
 from adaf_attack.core.completions import generate_completion
+from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.outcomes import build_post_execution_outcome
 from adaf_attack.core.ux import (
     capability_prerequisites,
     diff_sessions,
@@ -218,6 +220,30 @@ def test_prerequisite_evaluation_distinguishes_unverified_and_missing(tmp_path: 
     evaluated = evaluate_prerequisites("shadow-creds", session=session)
     assert evaluated["status"] == "satisfied"
     assert evaluated["satisfied"] == ["acl-enum"]
+
+
+def test_post_execution_outcome_normalizes_evidence_and_rollback(tmp_path: Path) -> None:
+    (tmp_path / "finding.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "cleanup.json").write_text(
+        json.dumps([{"kind": "attribute", "status": "pending"}]), encoding="utf-8"
+    )
+    graph = AttackGraph()
+    graph.add_node("USER@A", "User")
+    graph.add_node("GROUP@DA", "Group")
+    graph.add_edge("USER@A", "GROUP@DA", "GenericAll")
+
+    outcome = build_post_execution_outcome(
+        tmp_path,
+        capability="acl-write",
+        result={"ok": True},
+        graph=graph,
+        auth="username-only",
+    )
+
+    assert outcome["status"] == "success"
+    assert outcome["rollback"]["status"] == "pending"
+    assert outcome["graph_changes"]["edges_added"] == 1
+    assert "finding.json" in outcome["evidence"]["artifacts"]
 
 
 def test_errors_command_shows_suggested() -> None:

@@ -605,6 +605,10 @@ def register_ux_commands(
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code)
         dashboard = session_findings_dashboard(session, severity=severity, limit=limit)
+        try:
+            outcome = json.loads((session / "outcome.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            outcome = None
         timeline: list[dict[str, Any]] = []
         events = session / "events.jsonl"
         if events.is_file():
@@ -628,6 +632,7 @@ def register_ux_commands(
             "ok": True,
             **dashboard,
             "timeline": timeline,
+            "outcome": outcome,
             "resume_command": f"adaf-attack session show --session {session}",
         }
         lines = [
@@ -635,6 +640,9 @@ def register_ux_commands(
             f"Created: {dashboard.get('created_at') or 'unknown'}",
             f"Findings: {dashboard.get('finding_count', 0)}  Severity: {dashboard.get('severity') or {}}",
             f"Graph: {dashboard.get('graph', {}).get('nodes', 0)} nodes / {dashboard.get('graph', {}).get('edges', 0)} edges",
+            f"Outcome: {outcome.get('status')}  Rollback: {outcome.get('rollback', {}).get('status')}"
+            if isinstance(outcome, dict)
+            else "Outcome: not recorded",
             f"Resume: adaf-attack session show --session {session}",
         ]
         titles = dashboard.get("titles") or []
