@@ -108,6 +108,19 @@ def main() -> int:
     _run([str(python), "-m", "pip", "check"])
     _run([str(python), "-m", "adaf_attack.cli", "--version"])
     _run([str(python), "-m", "adaf_attack.cli", "--format", "json", "doctor", "--explain"])
+    smoke_workspace = venv_root.parent / f"{venv_root.name}-quickstart"
+    _run(
+        [
+            str(python),
+            "-m",
+            "adaf_attack.cli",
+            "--format",
+            "json",
+            "quickstart",
+            "--workspace",
+            str(smoke_workspace),
+        ]
+    )
     _run([str(python), "-m", "adaf_attack.cli", "--format", "json", "list-capabilities"])
     _run([str(python), "-m", "adaf_attack.cli", "--format", "json", "paths"])
     print(

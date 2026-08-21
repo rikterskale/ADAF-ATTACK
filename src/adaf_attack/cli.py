@@ -376,12 +376,24 @@ _MAX_PYTHON = (3, 15)
 # Importable packages doctor probes. `optional` packages degrade a subset of
 # capabilities when missing (warning); required packages block everything.
 _MODULE_CHECKS: tuple[tuple[str, bool, str], ...] = (
+    ("typer", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
+    ("rich", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
+    ("pydantic", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
+    ("pydantic_settings", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
+    ("httpx", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
     ("ldap3", False, "Install the base package dependencies: pip install -e ."),
+    ("yaml", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
+    ("cryptography", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
     ("impacket", True, "Install Kerberos support: pip install 'adaf-attack[kerberos]'."),
     ("textual", True, "Install TUI support: pip install 'adaf-attack[tui]'."),
     ("reportlab", True, "Install PDF reporting support: pip install 'adaf-attack[reports]'."),
     ("pypdf", True, "Install PDF reporting support: pip install 'adaf-attack[reports]'."),
 )
+
+_MODULE_DISTRIBUTIONS = {
+    "pydantic_settings": "pydantic-settings",
+    "yaml": "PyYAML",
+}
 
 # External CLI tools capabilities shell out to. Each entry lists the candidate
 # executable names to resolve on PATH, matching the capability's own lookup.
@@ -524,7 +536,8 @@ def _doctor_payload(
     for package, optional, remediation in _MODULE_CHECKS:
         try:
             module = __import__(package)
-            checks.append(_doctor_check(package, "ok", _package_version(package) or "installed"))
+            distribution = _MODULE_DISTRIBUTIONS.get(package, package)
+            checks.append(_doctor_check(package, "ok", _package_version(distribution) or "installed"))
             del module
         except ImportError:
             checks.append(
@@ -649,6 +662,8 @@ def _doctor_payload(
                 )
 
     blocking = next((check for check in checks if check["status"] == "error"), None)
+    blocking_checks = [check["id"] for check in checks if check["status"] == "error"]
+    advisory_checks = [check["id"] for check in checks if check["status"] == "warning"]
     first_run = _workspace_is_empty(default_workspace_dir())
     if blocking:
         next_step = blocking["remediation"]
@@ -658,10 +673,9 @@ def _doctor_payload(
         )
     elif first_run:
         next_step = (
-            "First run detected. Try:\n"
-            "  1. adaf-attack engagement init --output engagement.yaml\n"
-            "  2. adaf-attack engagement validate engagement.yaml\n"
-            "  3. adaf-attack plan ldap-enum --domain corp.example --dc-ip 10.0.0.10"
+            "First run detected. Try `adaf-attack quickstart` for a safe, offline demo, "
+            "then run `adaf-attack list-capabilities --novice`. When you are ready for an "
+            "authorized engagement, use `adaf-attack engagement init --output engagement.yaml`."
         )
     else:
         next_step = "Run `adaf-attack capability-help` to choose a capability."
@@ -673,6 +687,14 @@ def _doctor_payload(
         "checks": checks,
         "first_run": first_run,
         "next_step": next_step,
+        "blocking_checks": blocking_checks,
+        "advisory_checks": advisory_checks,
+        "readiness": {
+            "ready": not blocking_checks,
+            "install_verification": "adaf-attack doctor --profile user-readiness --explain",
+            "safe_first_run": "adaf-attack quickstart",
+            "next_command": "adaf-attack list-capabilities --novice",
+        },
     }
 
 

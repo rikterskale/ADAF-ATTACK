@@ -78,6 +78,13 @@ def smoke(artifact: Path, venv_root: Path, extras: str | None) -> None:
             raise RuntimeError(f"{arguments[-1]} returned ok != true: {payload}")
 
     demo_root = venv_root.parent / f"{venv_root.name}-demo"
+    quickstart = _run(
+        [str(cli), "--format", "json", "quickstart", "--workspace", str(demo_root / "quickstart")],
+        capture=True,
+    )
+    quickstart_payload = json.loads(quickstart.stdout)
+    if quickstart_payload.get("ok") is not True:
+        raise RuntimeError(f"first-run quickstart failed: {quickstart_payload}")
     demo = _run([str(cli), "--format", "json", "demo", "--workspace", str(demo_root)], capture=True)
     demo_payload = json.loads(demo.stdout)
     if demo_payload.get("ok") is not True:

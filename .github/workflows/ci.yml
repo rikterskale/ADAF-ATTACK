@@ -479,6 +479,12 @@ jobs:
           --repo-root . --dist dist
           --output dist/release-manifest.json --validate
 
+      - name: Verify downloaded distribution checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum -c SHA256SUMS)
+
       - name: Install and exercise the clean distribution
         shell: bash
         run: |

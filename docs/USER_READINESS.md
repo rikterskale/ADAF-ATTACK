@@ -28,14 +28,17 @@ AD or modify a target:
 ```bash
 python -m pip check
 adaf-attack --version
-adaf-attack --format json doctor --explain
+adaf-attack --format json doctor --profile user-readiness --explain
+adaf-attack quickstart --workspace ./quickstart
 adaf-attack --format json list-capabilities
 adaf-attack --format json paths
 adaf-attack --format json workflow-profiles
 ```
 
-If every command exits with status 0 and the JSON payload has `"ok": true`,
-the base installation is usable. Optional warnings are expected when TUI,
+If every command exits with status 0 and the readiness payload reports
+`"ready": true`, the base installation is usable. The doctor checks the
+installed runtime modules, writable application directories, and packaged demo
+fixtures. Optional warnings are expected when TUI,
 Kerberos, reporting, Certipy, or Impacket command-line tools were not selected.
 
 For the shortest safe first run, use the bundled quickstart:
