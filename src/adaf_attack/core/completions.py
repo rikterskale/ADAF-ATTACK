@@ -58,7 +58,7 @@ def generate_completion(shell: str) -> str:
         "credential-exposure bloodhound-reconcile trust-correlation delegation-validation "
         "adcs-validation campaign-compose forest-campaign campaign-run purple-handoff "
         "gpo-impact-plan coercion-fixtures workflow-profiles start-here explain what-next "
-        "credential-inventory tool cockpit what-if timeline copilot collaboration"
+        "credential-inventory tool cockpit what-if timeline copilot collaboration command-center impact-map investigate story replay confidence product-templates deliverables"
     )
     if shell == "bash":
         return _bash(top_commands, caps, profiles, sessions, formats)

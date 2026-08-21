@@ -23,6 +23,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 from adaf_attack import __version__
+from adaf_attack.cli_product_commands import register_product_commands
 from adaf_attack.cli_tool_commands import register_tool_commands
 from adaf_attack.cli_ux_commands import register_ux_commands
 from adaf_attack.cli_workflow_commands import register_workflow_commands
@@ -3162,6 +3163,7 @@ register_ux_commands(
 )
 
 register_tool_commands(app, emit=_emit, emit_error=_emit_error)
+register_product_commands(app, emit=_emit, emit_error=_emit_error)
 
 # Finding-driven guided workflow surface: the CLI/agent client of the same
 # durable engine the TUI drives (src/adaf_attack/core/workflow_engine.py).

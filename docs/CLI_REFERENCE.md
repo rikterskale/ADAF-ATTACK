@@ -69,6 +69,14 @@ for current options, defaults, validation, and examples.
 | `adaf-attack start-here` | Beginner-friendly safe first-install alias |
 | `adaf-attack explain` | Explain a capability in plain language |
 | `adaf-attack what-next` | Recommend the next beginner-friendly action |
+| `adaf-attack command-center` | Mission-control overview for an engagement |
+| `adaf-attack impact-map` | Map evidence to findings, assets, and impact |
+| `adaf-attack investigate` | Read-only zero-noise evidence investigation |
+| `adaf-attack story` | Build an executive assessment narrative |
+| `adaf-attack replay` | Replay a session timeline |
+| `adaf-attack confidence` | Show evidence confidence quality |
+| `adaf-attack product-templates` | List polished assessment templates |
+| `adaf-attack deliverables` | Show client deliverables readiness |
 | `adaf-attack rank-paths` | Rank paths from a saved graph |
 | `adaf-attack recent` | Show recently viewed capabilities |
 | `adaf-attack review` | Preview a capability before running it |
