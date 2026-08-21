@@ -116,3 +116,25 @@ def test_execute_credential_resolution_failure(
     monkeypatch.setattr(runner_mod, "_resolve_target", boom)
     with pytest.raises(RunError, match="Credential resolution failed"):
         execute_capability("t-credfail", _target(), workspace=tmp_path)
+
+
+def test_execute_session_index_warning_is_logged(
+    cleanup_registry: list[str], tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from adaf_attack.core import runner as runner_mod
+
+    cleanup_registry.append("t-idxwarn")
+    _register("t-idxwarn", runner=_FakeRunner())
+
+    class _BoomStore:
+        def __init__(self, path: Any) -> None:
+            pass
+
+        def index_session(self, *args: Any, **kwargs: Any) -> None:
+            raise OSError("disk on fire")
+
+    monkeypatch.setattr(runner_mod, "SessionStore", _BoomStore)
+    logs: list[str] = []
+    out = execute_capability("t-idxwarn", _target(), workspace=tmp_path, log=logs.append)
+    assert out["ok"] is True
+    assert any("Session index warning" in line for line in logs)

@@ -469,3 +469,38 @@ def test_rodc_skips_empty_sam_and_non_delegating_entries(
     )
     assert result["count"] == 0
     assert result["delegation"] == []
+
+
+def test_completion_helper_failure_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    from adaf_attack.core import completions
+    from adaf_attack.core.registry import capability_registry
+
+    def boom(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(capability_registry, "ids", boom)
+    monkeypatch.setattr("adaf_attack.core.profiles.list_profiles", boom)
+    assert completions._capability_ids() == []
+    assert completions._profile_names() == []
+
+    monkeypatch.setattr("adaf_attack.core.paths.default_workspace_dir", boom)
+    assert completions._session_ids() == []
+
+    from pathlib import Path as _Path
+
+    monkeypatch.setattr(
+        "adaf_attack.core.paths.default_workspace_dir", lambda: _Path("/nonexistent-adaf-ws")
+    )
+    assert completions._session_ids() == []
+
+    script = completions.generate_completion("fish")
+    assert "complete -c adaf-attack" in script
+
+
+def test_fish_completion_lists_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
+    from adaf_attack.core import completions
+
+    monkeypatch.setattr(completions, "_session_ids", lambda: ["sess-1", "sess-2"])
+    script = completions.generate_completion("fish")
+    assert "-a 'sess-1'" in script
+    assert "-a 'sess-2'" in script
