@@ -120,6 +120,7 @@ jobs:
         run: >-
           python -m pytest
           --cov=adaf_attack
+          --cov-branch
           --cov-report=term-missing
           --cov-report=xml
           --cov-fail-under=100

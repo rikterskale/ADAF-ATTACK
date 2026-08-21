@@ -7,12 +7,14 @@ works is used for the capability run.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from adaf_attack.core.auth import describe_auth
 from adaf_attack.core.creds import CredentialSet, load_credentials_json
+from adaf_attack.core.engineering import SessionStore, execute_with_controls
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.paths import default_workspace_dir, normalize_path
 from adaf_attack.core.registry import capability_registry
@@ -175,14 +177,20 @@ def execute_capability(
     )
 
     try:
-        result = cap.runner.run(
-            resolved_target,
-            session,
-            graph,
-            include_secrets=include_secrets,
-            force=force,
-            **runner_kwargs,
-        )
+        timeout = runner_kwargs.pop("timeout", None)
+        retries = int(runner_kwargs.pop("retries", 0))
+
+        def _run() -> dict[str, Any]:
+            return cap.runner.run(
+                resolved_target,
+                session,
+                graph,
+                include_secrets=include_secrets,
+                force=force,
+                **runner_kwargs,
+            )
+
+        result = execute_with_controls(_run, timeout=timeout, retries=retries)
         resolved = graph.resolve_dn_edges()
         if resolved:
             graph.save(session.path("graph.json"))
@@ -196,6 +204,16 @@ def execute_capability(
         )
 
         session.log("run.complete", capability=capability_id, ok=True)
+        try:
+            metadata = json.loads(session.path("session.json").read_text(encoding="utf-8"))
+            findings_path = session.path("findings.json")
+            findings_doc = json.loads(findings_path.read_text(encoding="utf-8")) if findings_path.is_file() else {}
+            findings = findings_doc.get("findings", []) if isinstance(findings_doc, dict) else []
+            SessionStore(ws / "sessions.sqlite").index_session(
+                metadata, capability=capability_id, findings=findings if isinstance(findings, list) else []
+            )
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            _log(f"Session index warning: {exc}")
         _log(f"Session directory: {session.root}")
 
         return {

@@ -1016,6 +1016,8 @@ def support_bundle(
     ),
 ) -> None:
     """Write a redacted diagnostic bundle safe to attach to support requests."""
+    from adaf_attack.core.engineering import diagnostics_snapshot
+
     payload = _doctor_payload(profile, domain=domain, dc_ip=dc_ip, timeout=timeout)
     raw_doctor = payload
     safe_doctor = _replace_support_identifiers(
@@ -1037,6 +1039,9 @@ def support_bundle(
         },
         "environment": _support_environment(),
         "doctor": safe_doctor,
+        "engineering": diagnostics_snapshot(
+            package_version=__version__, workspace=default_workspace_dir()
+        ),
     }
     changes = _redaction_changes(raw_doctor, safe_doctor, "$.doctor")
     if preview:

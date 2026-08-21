@@ -79,6 +79,9 @@ adaf_attack = ["mappings/*.yaml", "demo_data/*.json"]
 [project.scripts]
 adaf-attack = "adaf_attack.cli:app"
 
+[project.entry-points."adaf_attack.capabilities"]
+# Third-party capabilities can register here without modifying the core package.
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

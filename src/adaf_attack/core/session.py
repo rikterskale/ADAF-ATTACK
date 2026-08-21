@@ -32,6 +32,7 @@ class Session:
 
     def _write_meta(self) -> None:
         meta = {
+            "schema_version": 2,
             "session_id": self.session_id,
             "created_at": datetime.now(UTC).isoformat(),
             "tool": "adaf-attack",
