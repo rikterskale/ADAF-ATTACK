@@ -221,7 +221,7 @@ def session_findings_summary(session_dir: Path) -> dict[str, Any]:
 
 
 def diff_sessions(a: Path, b: Path) -> dict[str, Any]:
-    """Compare two sessions, including finding identity and severity changes."""
+    """Compare findings and evidence-backed graph relationships between sessions."""
     sa = session_findings_summary(a)
     sb = session_findings_summary(b)
 
@@ -248,6 +248,47 @@ def diff_sessions(a: Path, b: Path) -> dict[str, Any]:
         for value in values:
             severity = str(value.get("severity", "unknown")).lower()
             severity_delta[severity] = severity_delta.get(severity, 0) + sign
+
+    def _graph_relationships(path: Path) -> dict[str, dict[str, Any]]:
+        raw = _load_json(Path(path) / "graph.json")
+        edges = raw.get("edges") if isinstance(raw, dict) else []
+        if not isinstance(edges, list):
+            return {}
+        result: dict[str, dict[str, Any]] = {}
+        for edge in edges:
+            if not isinstance(edge, dict):
+                continue
+            source = str(edge.get("source") or "")
+            target = str(edge.get("target") or "")
+            relation = str(edge.get("kind") or "Default")
+            if not source or not target:
+                continue
+            key = json.dumps(
+                {
+                    "source": source,
+                    "target": target,
+                    "relation": relation,
+                    "properties": edge.get("properties") or {},
+                },
+                sort_keys=True,
+                default=str,
+            )
+            result[key] = {
+                "source": source,
+                "target": target,
+                "relation": relation,
+                "properties": edge.get("properties") or {},
+            }
+        return result
+
+    relationships_a = _graph_relationships(a)
+    relationships_b = _graph_relationships(b)
+    relationships_added = [
+        relationships_b[key] for key in sorted(set(relationships_b) - set(relationships_a))
+    ]
+    relationships_removed = [
+        relationships_a[key] for key in sorted(set(relationships_a) - set(relationships_b))
+    ]
     return {
         "a": {
             "session_id": sa["session_id"],
@@ -265,6 +306,9 @@ def diff_sessions(a: Path, b: Path) -> dict[str, Any]:
         "findings_added": added,
         "findings_removed": removed,
         "severity_delta": {key: value for key, value in sorted(severity_delta.items()) if value},
+        "relationships_added": relationships_added,
+        "relationships_removed": relationships_removed,
+        "attack_paths_changed": bool(relationships_added or relationships_removed),
     }
 
 

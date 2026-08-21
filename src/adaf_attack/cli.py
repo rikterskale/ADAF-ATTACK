@@ -3378,6 +3378,8 @@ def session_diff(
                 f"Findings delta: {payload['finding_delta']}",
                 f"Nodes delta: {payload['node_delta']}",
                 f"Edges delta: {payload['edge_delta']}",
+                f"Relationships added: {len(payload['relationships_added'])}",
+                f"Relationships removed: {len(payload['relationships_removed'])}",
                 f"Added findings: {', '.join(payload['findings_added']) or '-'}",
                 f"Removed findings: {', '.join(payload['findings_removed']) or '-'}",
             ]

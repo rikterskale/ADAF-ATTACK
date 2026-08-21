@@ -340,6 +340,42 @@ def test_session_diff_reports_finding_identity_and_severity(tmp_path: Path) -> N
     assert result["severity_delta"] == {"high": 1, "low": -1}
 
 
+def test_session_diff_reports_attack_relationship_changes(tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    for session in (first, second):
+        (session / "session.json").write_text(
+            json.dumps({"session_id": session.name}), encoding="utf-8"
+        )
+        (session / "findings.json").write_text(json.dumps({"findings": []}), encoding="utf-8")
+    (first / "graph.json").write_text(
+        json.dumps(
+            {
+                "summary": {"nodes": 2, "edges": 1},
+                "edges": [{"source": "U", "target": "G", "kind": "MemberOf"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (second / "graph.json").write_text(
+        json.dumps(
+            {
+                "summary": {"nodes": 2, "edges": 1},
+                "edges": [{"source": "U", "target": "G", "kind": "GenericAll"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = diff_sessions(first, second)
+
+    assert result["attack_paths_changed"] is True
+    assert result["relationships_added"][0]["relation"] == "GenericAll"
+    assert result["relationships_removed"][0]["relation"] == "MemberOf"
+
+
 def test_finding_triage_persists_status_tag_and_note(tmp_path: Path) -> None:
     session = tmp_path / "session"
     session.mkdir()
