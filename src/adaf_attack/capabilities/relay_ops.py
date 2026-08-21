@@ -47,7 +47,9 @@ class KrbRelay:
         binary = shutil.which("impacket-krbrelayx") or shutil.which("krbrelayx.py")
         if not binary:
             raise RuntimeError(
-                "impacket-krbrelayx not on PATH; install with pip install 'adaf-attack[kerberos]'."
+                "impacket-krbrelayx not on PATH; krbrelayx is not shipped by the pinned "
+                "impacket package. Vendor it from the dirkjanm/krbrelayx project and add "
+                "its directory to PATH."
             )
         argv = [binary, "-t", str(relay_targets[0])]
         for extra in relay_targets[1:]:

@@ -203,7 +203,7 @@ def _(mr: Any) -> dict[str, Any]:
     conn, _user = _acl_conn()
     patch_ldap(mr.monkeypatch, acl_primitives, conn)
     mr.monkeypatch.setattr(
-        acl_primitives, "fetch_sd", lambda *_a, **_k: build_allowed_to_act_sd("S-1-5-21-1-2-3-9")
+        acl_primitives, "fetch_sd", lambda *_a, **_k: build_allowed_to_act_sd("S-1-5-21-1-2-3-4")
     )
     return {"principal_sid": "S-1-5-21-1-2-3-4"}
 

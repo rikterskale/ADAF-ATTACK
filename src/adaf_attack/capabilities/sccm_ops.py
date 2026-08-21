@@ -158,6 +158,12 @@ class SccmNaa:
                 "ldap_hits": ldap_hits,
                 "http_hits": http_hits,
                 "management_points": list(dict.fromkeys(str(m) for m in mps if m)),
+                "naa_decrypted": False,
+                "note": (
+                    "Reconnaissance only: an NAA signal does not expose credentials. "
+                    "Actual NAA recovery requires an SCCM client-policy fetch plus DPAPI "
+                    "decryption of the policy blob."
+                ),
             }
             return finish(
                 session, graph, "sccm-naa", result, ldap=len(ldap_hits), http=len(http_hits)

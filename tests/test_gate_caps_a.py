@@ -566,3 +566,51 @@ def test_computer_takeover_enum_and_failed_change(monkeypatch: Any, tmp_path: An
         value="ws01.evil.test",
     )
     assert failed["change"]["ok"] is False
+
+
+def test_adminsdholder_precheck_branches(monkeypatch: Any, tmp_path: Any) -> None:
+    from gate_helpers import Session as GSession
+
+    from adaf_attack.core.graph import AttackGraph
+
+    good_sd = build_allowed_to_act_sd("S-1-5-21-1-2-3-4")
+    assert acl_primitives._adminsdholder_rights_ok(good_sd, "S-1-5-21-1-2-3-4") is True
+    assert acl_primitives._adminsdholder_rights_ok(None, "S-1-5-21-1-2-3-4") is False
+    assert acl_primitives._adminsdholder_rights_ok(b"\x00", "S-1-5-21-1-2-3-4") is False
+
+    conn = Conn({"bob": [sid_entry("bob", "CN=Bob,DC=corp,DC=test")]})
+    patch_ldap(monkeypatch, acl_primitives, conn)
+    monkeypatch.setattr(
+        acl_primitives, "fetch_sd", lambda *_a, **_k: build_allowed_to_act_sd("S-1-5-21-1-2-3-9")
+    )
+    session = GSession(tmp_path)
+
+    denied = acl_primitives.AdminSdHolderPersist().run(
+        target(), session, AttackGraph(), force=True, principal_sid="S-1-5-21-1-2-3-4"
+    )
+    assert denied["ok"] is False
+    assert "Precondition failed" in denied["error_note"]
+
+    monkeypatch.setattr(acl_primitives, "_write_sd", lambda *a, **k: True)
+    override = acl_primitives.AdminSdHolderPersist().run(
+        target(),
+        session,
+        AttackGraph(),
+        force=True,
+        principal_sid="S-1-5-21-1-2-3-4",
+        assume_rights=True,
+    )
+    assert override["ok"] is True
+
+    from adaf_attack.core.acl import (
+        GENERIC_ALL as _GA,
+    )
+    from adaf_attack.core.acl import (
+        append_ace_to_sd as _append,
+    )
+    from adaf_attack.core.acl import (
+        build_allowed_ace as _ace,
+    )
+
+    universal_sd = _append(good_sd, _ace("S-1-1-0", mask=_GA))
+    assert acl_primitives._adminsdholder_rights_ok(universal_sd, "S-1-5-21-99") is True

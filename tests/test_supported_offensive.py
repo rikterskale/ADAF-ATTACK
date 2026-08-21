@@ -160,7 +160,7 @@ def test_password_spn_acl_sidhistory(monkeypatch: Any, tmp_path: Path) -> None:
     conn = _Conn({"bob": [user], "alice": [alice], "*": [user]})
     _patch_ldap(monkeypatch, acl_primitives, conn)
     monkeypatch.setattr(
-        acl_primitives, "fetch_sd", lambda *_a, **_k: build_allowed_to_act_sd("S-1-5-21-1-2-3-9")
+        acl_primitives, "fetch_sd", lambda *_a, **_k: build_allowed_to_act_sd("S-1-5-21-1-2-3-4")
     )
     session = Session(tmp_path)
     graph = AttackGraph()
