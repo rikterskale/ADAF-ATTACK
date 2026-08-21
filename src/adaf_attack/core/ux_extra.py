@@ -126,6 +126,11 @@ def session_findings_dashboard(
                 "title": item.get("title") or item.get("name") or "untitled",
                 "severity": sev,
                 "category": item.get("category") or item.get("tactic"),
+                "status": str(item.get("status", "open")).lower(),
+                "owner": item.get("owner"),
+                "tags": item.get("tags") or [],
+                "triage_note": item.get("triage_note"),
+                "comment": item.get("comment"),
             }
         )
         if len(filtered) >= limit:

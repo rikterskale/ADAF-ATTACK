@@ -154,3 +154,97 @@ def register_tool_commands(
             raise typer.Exit(code=error.exit_code)
         payload = credential_exposure(session)
         emit(ctx, {"ok": True, **payload}, Panel(f"Exposure artifacts: {payload['count']}\nSecret values: redacted", title="Credential inventory"))
+
+    @app.command("cockpit")
+    def cockpit(
+        ctx: typer.Context,
+        session: Path = typer.Option(..., "--session"),
+        start: str | None = typer.Option(None, "--start"),
+    ) -> None:
+        """Open an evidence-first cockpit for a completed session."""
+        from adaf_attack.core.standout_ux import evidence_cockpit
+
+        try:
+            payload = evidence_cockpit(session, start=start)
+        except (OSError, ValueError, KeyError) as exc:
+            error = ActionableError("SESSION_NOT_FOUND", str(exc), "Pass a completed session directory.")
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        graph = payload.get("graph") or {}
+        emit(ctx, payload, Panel(
+            f"Findings: {payload['dashboard'].get('finding_count', 0)}\n"
+            f"Graph paths: {graph.get('path_count', 0)}\n"
+            f"Priority focus: {len(payload['priority_focus'])}\n"
+            "Evidence-derived and offline",
+            title="Evidence cockpit",
+        ))
+
+    @app.command("what-if")
+    def what_if(
+        ctx: typer.Context,
+        graph: Path = typer.Option(..., "--graph"),
+        remove_relation: str | None = typer.Option(None, "--remove-relation"),
+        remove_source: str | None = typer.Option(None, "--remove-source"),
+        remove_target: str | None = typer.Option(None, "--remove-target"),
+    ) -> None:
+        """Simulate graph changes offline without modifying evidence or targets."""
+        from adaf_attack.core.standout_ux import what_if_graph
+
+        try:
+            payload = what_if_graph(graph, remove_relation=remove_relation, remove_source=remove_source, remove_target=remove_target)
+        except (OSError, ValueError, KeyError) as exc:
+            error = ActionableError("GRAPH_NOT_FOUND", str(exc), "Pass a valid graph.json and simulation filter.")
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        emit(ctx, payload, Panel(
+            f"Removed edges: {len(payload['removed_edges'])}\n"
+            f"Paths: {payload['paths_before']} → {payload['paths_after']}\n"
+            "No target or source evidence was changed.",
+            title="Offline what-if simulation",
+        ))
+
+    @app.command("timeline")
+    def timeline(ctx: typer.Context, session: Path = typer.Option(..., "--session"), limit: int = typer.Option(100, "--limit")) -> None:
+        """Show a replayable audit timeline for a session."""
+        from adaf_attack.core.standout_ux import session_timeline
+
+        try:
+            payload = session_timeline(session, limit=limit)
+        except OSError as exc:
+            error = ActionableError("SESSION_NOT_FOUND", str(exc), "Pass a completed session directory.")
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        lines = [f"{item.get('time') or '-'}  {item['type']}  {item.get('capability') or ''}" for item in payload["events"][-10:]]
+        emit(ctx, payload, Panel("\n".join(lines) or "No audit events found.", title="Engagement timeline"))
+
+    @app.command("copilot")
+    def copilot(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
+        """Recommend the next evidence-backed action without executing it."""
+        from adaf_attack.core.standout_ux import copilot_recommendations
+
+        try:
+            payload = copilot_recommendations(session)
+        except (OSError, ValueError) as exc:
+            error = ActionableError("SESSION_NOT_FOUND", str(exc), "Pass a completed session directory.")
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        emit(ctx, payload, Panel(
+            "\n".join(f"{i + 1}. {item['action']} — {item['why']}\n   {item['command']}" for i, item in enumerate(payload["recommendations"])),
+            title="Evidence copilot — suggestions only",
+        ))
+
+    @app.command("collaboration")
+    def collaboration(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
+        """Show finding ownership and collaboration state for a session."""
+        from adaf_attack.core.standout_ux import collaboration_summary
+
+        try:
+            payload = collaboration_summary(session)
+        except (OSError, ValueError) as exc:
+            error = ActionableError("SESSION_NOT_FOUND", str(exc), "Pass a completed session directory.")
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        emit(ctx, payload, Panel(
+            f"Owners: {', '.join(payload['owners']) or 'unassigned'}\nCommented findings: {payload['commented_findings']}",
+            title="Collaborative findings workspace",
+        ))

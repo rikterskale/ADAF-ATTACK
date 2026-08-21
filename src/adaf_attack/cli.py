@@ -2979,6 +2979,8 @@ def finding_triage_cmd(
     status: str | None = typer.Option(None, "--status", help="open | acknowledged | remediated | accepted-risk"),
     tag: str | None = typer.Option(None, "--tag", help="Add an operator tag."),
     note: str | None = typer.Option(None, "--note", help="Replace the operator triage note."),
+    owner: str | None = typer.Option(None, "--owner", help="Assign an owner for collaborative triage."),
+    comment: str | None = typer.Option(None, "--comment", help="Add a collaboration comment."),
 ) -> None:
     """View or update the durable triage state for one finding."""
     allowed = {"open", "acknowledged", "remediated", "accepted-risk"}
@@ -3008,6 +3010,12 @@ def finding_triage_cmd(
     if note is not None:
         finding["triage_note"] = note
         changed = True
+    if owner is not None:
+        finding["owner"] = owner
+        changed = True
+    if comment is not None:
+        finding["comment"] = comment
+        changed = True
     if changed:
         try:
             path = session / "findings.json"
@@ -3035,7 +3043,10 @@ def finding_triage_cmd(
     payload = {"ok": True, "updated": changed, "session": str(session), "finding": finding, "allowed_statuses": sorted(allowed)}
     _emit(ctx, payload, Panel(
         f"{finding.get('id') or finding.get('title')}\nStatus: {finding.get('status', 'open')}\n"
-        f"Tags: {', '.join(finding.get('tags') or []) or '-'}\nNote: {finding.get('triage_note') or '-'}",
+            f"Tags: {', '.join(finding.get('tags') or []) or '-'}\n"
+            f"Owner: {finding.get('owner') or '-'}\n"
+            f"Note: {finding.get('triage_note') or '-'}\n"
+            f"Comment: {finding.get('comment') or '-'}",
         title="Finding triage",
     ))
 

@@ -45,6 +45,7 @@ from adaf_attack.core.profiles import active_opsec, get_profile, list_profiles, 
 from adaf_attack.core.registry import Capability, capability_registry
 from adaf_attack.core.reporting import generate_report_bundle
 from adaf_attack.core.runner import RunError, execute_capability
+from adaf_attack.core.standout_ux import copilot_recommendations, evidence_cockpit, session_timeline
 from adaf_attack.core.target import Target
 from adaf_attack.core.user_config import (
     favorite_capabilities,
@@ -168,6 +169,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             yield Button("Undo reset", id="undo-reset-btn", disabled=True)
             yield Button("Sessions", id="sessions-btn")
             yield Button("Findings", id="findings-btn")
+            yield Button("Cockpit", id="cockpit-btn")
+            yield Button("Timeline", id="timeline-btn")
+            yield Button("Copilot", id="copilot-btn")
             yield Button("Copy findings", id="copy-btn")
             yield Button("Copy ready command", id="copy-command-btn")
             yield Button("Command only", id="command-only-btn")
@@ -1494,6 +1498,44 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 "[bold]Findings dashboard[/bold]\nRun a capability or select a session first."
             )
 
+    def _show_cockpit(self) -> None:
+        if not self._last_session:
+            self.notify("Complete or select a session first.", severity="information")
+            return
+        payload = evidence_cockpit(self._last_session)
+        focus = payload.get("priority_focus") or []
+        self.query_one("#session-panel", Static).update(
+            "[bold]Evidence cockpit[/bold]\n"
+            f"Findings: {payload['dashboard'].get('finding_count', 0)}\n"
+            f"Priority: " + (", ".join(str(item.get("title")) for item in focus) or "none")
+        )
+
+    def _show_timeline(self) -> None:
+        if not self._last_session:
+            self.notify("Complete or select a session first.", severity="information")
+            return
+        payload = session_timeline(self._last_session, limit=12)
+        self.query_one("#session-panel", Static).update(
+            "[bold]Engagement timeline[/bold]\n"
+            + "\n".join(
+                f"{item.get('time') or '-'}  {item['type']}  {item.get('capability') or ''}"
+                for item in payload["events"][-8:]
+            )
+        )
+
+    def _show_copilot(self) -> None:
+        if not self._last_session:
+            self.notify("Complete or select a session first.", severity="information")
+            return
+        payload = copilot_recommendations(self._last_session)
+        self.query_one("#review-panel", Static).update(
+            "[bold]Evidence copilot — suggestions only[/bold]\n"
+            + "\n".join(
+                f"• {item['action']} — {item['why']}\n  {item['command']}"
+                for item in payload["recommendations"]
+            )
+        )
+
     def _explain_selected(self) -> None:
         """Show the selected capability in novice-friendly language."""
         if not self.selected_cap:
@@ -1563,6 +1605,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "undo-reset-btn": self._undo_form_reset,
             "sessions-btn": self._show_sessions,
             "findings-btn": self._show_findings,
+            "cockpit-btn": self._show_cockpit,
+            "timeline-btn": self._show_timeline,
+            "copilot-btn": self._show_copilot,
             "command-only-btn": self._show_command_only,
             "advanced-creds-btn": lambda: self._set_advanced_credentials_visible(
                 not self._advanced_credentials_visible

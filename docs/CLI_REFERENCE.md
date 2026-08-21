@@ -95,6 +95,11 @@ for current options, defaults, validation, and examples.
 | `adaf-attack tool verify` | Verify remediation evidence for a finding |
 | `adaf-attack tool detect` | Export evidence-backed detection hypotheses |
 | `adaf-attack tool lab` | Inspect a disposable lab manifest offline |
+| `adaf-attack cockpit` | Open an evidence-first session cockpit |
+| `adaf-attack what-if` | Simulate graph changes offline |
+| `adaf-attack timeline` | Replay a session audit timeline |
+| `adaf-attack copilot` | Recommend evidence-backed next actions |
+| `adaf-attack collaboration` | Show finding ownership and comments |
 | `adaf-attack workflow` | Finding-driven guided workflow command group |
 | `adaf-attack workflow actions` | List derived workflow actions |
 | `adaf-attack workflow audit` | Show the append-only audit history |
