@@ -367,6 +367,9 @@ def inspect_edge(
                 "relation": edge.kind,
                 "evidence": edge.properties,
                 "exploitability": "high" if profile else "medium",
+                "prerequisites": edge.properties.get(
+                    "prerequisites", ["Source and target are present in saved graph evidence"]
+                ),
                 "risk": "R3"
                 if edge.kind in {"GenericAll", "WriteDacl", "WriteOwner", "WriteGPO"}
                 else "R1",

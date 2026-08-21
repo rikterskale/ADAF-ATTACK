@@ -31,6 +31,7 @@ from textual.widgets import (
 from adaf_attack import __version__
 from adaf_attack.core.capability_help_data import capability_option_spec
 from adaf_attack.core.control_plane import package_evidence
+from adaf_attack.core.engagement_dashboard import inspect_edge
 from adaf_attack.core.novice import (
     beginner_next_actions,
     capability_difficulty,
@@ -88,6 +89,20 @@ class CapabilityItem(ListItem):  # type: ignore[misc,unused-ignore]
         yield Label(
             f"[bold cyan]{self.cap_id}[/]  [dim]{self.category}[/] [{safety['level']}]{risk}\n"
             f"  {self.summary}"
+        )
+
+
+class AttackEdgeItem(ListItem):  # type: ignore[misc,unused-ignore]
+    """Selectable saved graph edge for the read-only attack-path workspace."""
+
+    def __init__(self, edge: dict[str, Any]) -> None:
+        super().__init__()
+        self.edge = edge
+
+    def compose(self) -> ComposeResult:
+        yield Label(
+            f"[bold cyan]{self.edge.get('relation', 'unknown')}[/]  "
+            f"{self.edge.get('source', '?')} → {self.edge.get('target', '?')}"
         )
 
 
@@ -288,6 +303,11 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     "[bold]Attack-path workspace[/bold]\nSelect Attack paths to inspect saved graph routes.",
                     id="attack-path-panel",
                 )
+                yield ListView(id="attack-edge-list")
+                yield Static(
+                    "Select an observed edge to inspect evidence, risk, ATT&CK mapping, and remediation.",
+                    id="attack-edge-detail",
+                )
                 with Horizontal():
                     yield Input(placeholder="Filter logs by text or severity", id="log-filter")
                 yield Log(id="log-panel", highlight=True, max_lines=2000)
@@ -410,6 +430,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._update_engagement_dashboard()
             if self._wizard_step < 2:
                 self._set_wizard_step(2)
+        elif isinstance(event.item, AttackEdgeItem):
+            self._show_attack_edge(event.item.edge)
 
     def _apply_beginner_mode(self, enabled: bool) -> None:
         """Hide optional controls; execution safety requirements remain unchanged."""
@@ -1540,6 +1562,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         """Show ranked saved paths and their observed edge details offline."""
         panel = self.query_one("#attack-path-panel", Static)
         if not self._last_session:
+            self._clear_attack_edges()
             panel.update(
                 "[bold]Attack-path workspace[/bold]\n"
                 "Complete or select a session with saved graph evidence first."
@@ -1547,6 +1570,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
         graph_path = self._last_session / "graph.json"
         if not graph_path.is_file():
+            self._clear_attack_edges()
             panel.update(
                 f"[bold]Attack-path workspace[/bold]  {self._last_session.name}\n"
                 "No graph.json evidence is available for this session."
@@ -1555,6 +1579,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         try:
             payload = graph_explorer(graph_path, limit=5)
         except (OSError, ValueError, KeyError, TypeError) as exc:
+            self._clear_attack_edges()
             panel.update(
                 "[bold]Attack-path workspace[/bold]\n"
                 f"Saved graph could not be read: {exc}"
@@ -1569,11 +1594,31 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         ]
         if not paths:
             lines.append("No ranked paths were found in the saved graph.")
+        edges: list[dict[str, Any]] = []
+        seen_edges: set[tuple[str, str, str]] = set()
         for number, path in enumerate(paths, start=1):
             if not isinstance(path, dict):
                 continue
             nodes = path.get("path") or []
             relations = path.get("edges") or []
+            for index, relation in enumerate(relations):
+                if index + 1 >= len(nodes):
+                    continue
+                key = (str(nodes[index]), str(nodes[index + 1]), str(relation))
+                if key in seen_edges:
+                    continue
+                seen_edges.add(key)
+                try:
+                    details = inspect_edge(
+                        graph_path,
+                        source=key[0],
+                        target=key[1],
+                        relation=key[2],
+                    ).get("edges", [])
+                except (OSError, ValueError, KeyError, TypeError):
+                    details = []
+                if details and isinstance(details[0], dict):
+                    edges.append(details[0])
             route = " → ".join(str(node).split("@", 1)[0] for node in nodes)
             terminal_relation = relations[-1] if relations else "-"
             lines.append(
@@ -1592,6 +1637,41 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     + f"  ({path.get('length', len(relations))} observed relation(s))"
                 )
         panel.update("\n".join(lines))
+        edge_list = self.query_one("#attack-edge-list", ListView)
+        edge_list.clear()
+        for edge in edges:
+            edge_list.append(AttackEdgeItem(edge))
+        self.query_one("#attack-edge-detail", Static).update(
+            f"{len(edges)} observed edge(s) available for review. Select one for details."
+            if edges
+            else "No selectable observed edges were found in the ranked paths."
+        )
+
+    def _clear_attack_edges(self) -> None:
+        """Clear edge selection when the active session has no graph workspace."""
+        self.query_one("#attack-edge-list", ListView).clear()
+        self.query_one("#attack-edge-detail", Static).update(
+            "Select an observed edge to inspect evidence, risk, ATT&CK mapping, and remediation."
+        )
+
+    def _show_attack_edge(self, edge: dict[str, Any]) -> None:
+        """Render the selected edge's evidence and safety context without executing it."""
+        evidence = edge.get("evidence") or {}
+        prerequisites = edge.get("prerequisites") or []
+        mapping = edge.get("attack_mapping") or []
+        telemetry = edge.get("expected_telemetry") or []
+        detail = (
+            f"[bold]Selected edge[/bold]\n"
+            f"{edge.get('source', '?')} --{edge.get('relation', 'unknown')}--> "
+            f"{edge.get('target', '?')}\n"
+            f"Exploitability: {edge.get('exploitability', 'unknown')} · Risk: {edge.get('risk', 'unknown')}\n"
+            f"Prerequisites: {', '.join(str(value) for value in prerequisites) or 'not specified'}\n"
+            f"Evidence: {evidence or 'none recorded'}\n"
+            f"ATT&CK: {', '.join(str(value) for value in mapping) or 'not mapped'}\n"
+            f"Telemetry: {', '.join(str(value) for value in telemetry) or 'not specified'}\n"
+            f"Remediation: {edge.get('remediation', 'not specified')}"
+        )
+        self.query_one("#attack-edge-detail", Static).update(detail)
 
     def _show_timeline(self) -> None:
         if not self._last_session:
