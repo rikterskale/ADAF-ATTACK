@@ -181,9 +181,39 @@ def register_ux_commands(
         safe_only: bool = typer.Option(
             True, "--safe-only/--include-advanced", help="Prefer beginner-safe suggestions."
         ),
+        session: Path | None = typer.Option(
+            None, "--session", help="Rank actions using persisted session evidence."
+        ),
+        mode: str = typer.Option(
+            "OBSERVE", "--mode", help="Operational mode: OBSERVE, VALIDATE, or EMULATE."
+        ),
     ) -> None:
-        """Recommend the next beginner-friendly action."""
+        """Recommend the next action using capability or engagement context."""
         from adaf_attack.core.novice import beginner_next_actions, home_actions
+
+        if session is not None:
+            from adaf_attack.core.engagement_dashboard import dashboard
+
+            view = dashboard(session, mode=mode)
+            actions = view["recommended_next_actions"]
+            payload = {
+                "ok": True,
+                "context": "session",
+                "session": str(session),
+                "mode": view["engagement"]["mode"],
+                "objective": view["objective"],
+                "suggestions": actions,
+            }
+            human = Panel(
+                "\n".join(
+                    f"{i}. {item['action']} [{item['risk']}]\n   {item['why']}"
+                    for i, item in enumerate(actions, 1)
+                )
+                or "No next action is recommended.",
+                title="What next for this engagement?",
+            )
+            _emit(ctx, payload, human)
+            return
 
         if capability is None:
             actions = home_actions(first_run=True)

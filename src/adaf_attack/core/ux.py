@@ -12,6 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, cast
 
+from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import Capability, capability_registry
 
 # ---------------------------------------------------------------------------
@@ -272,12 +273,16 @@ def diff_sessions(a: Path, b: Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def unified_search(query: str, *, limit: int = 25) -> dict[str, Any]:
-    """Search capabilities (and later sessions/findings) by free-text query."""
+def unified_search(query: str, *, session: Path | None = None, limit: int = 25) -> dict[str, Any]:
+    """Search capabilities and, optionally, persisted engagement evidence.
+
+    Results are ranked deterministically: exact identifiers first, then title
+    and description matches, with stable type/id tie-breakers.
+    """
     q = (query or "").strip().lower()
     caps: list[dict[str, Any]] = []
     if not q:
-        return {"query": query, "capabilities": [], "count": 0}
+        return {"query": query, "capabilities": [], "results": [], "count": 0}
 
     for cap in capability_registry.list():
         hay = " ".join(
@@ -301,7 +306,104 @@ def unified_search(query: str, *, limit: int = 25) -> dict[str, Any]:
             )
             if len(caps) >= limit:
                 break
-    return {"query": query, "capabilities": caps, "count": len(caps)}
+    results: list[dict[str, Any]] = [
+        {
+            "type": "capability",
+            "id": item["id"],
+            "title": item["id"],
+            "summary": item["summary"],
+            "score": 100 if item["id"].lower() == q else 60,
+            "data": item,
+        }
+        for item in caps
+    ]
+    if session is not None:
+        session = Path(session)
+        findings = _load_json(session / "findings.json").get("findings") or []
+        if isinstance(findings, list):
+            for item in findings:
+                if not isinstance(item, dict):
+                    continue
+                text = " ".join(
+                    str(item.get(key, ""))
+                    for key in ("id", "title", "category", "evidence", "asset")
+                )
+                if q in text.lower():
+                    results.append(
+                        {
+                            "type": "finding",
+                            "id": item.get("id") or item.get("title") or "finding",
+                            "title": item.get("title") or item.get("id") or "finding",
+                            "summary": item.get("evidence")
+                            or item.get("category")
+                            or "saved finding",
+                            "score": 90 if str(item.get("id", "")).lower() == q else 50,
+                            "data": item,
+                        }
+                    )
+        graph_path = session / "graph.json"
+        if graph_path.is_file():
+            try:
+                graph = AttackGraph.from_file(graph_path)
+            except (OSError, KeyError, TypeError, ValueError):
+                graph = None
+            if graph is not None:
+                for node in graph.nodes.values():
+                    text = " ".join(
+                        (node.id, node.kind, *(str(v) for v in node.properties.values()))
+                    )
+                    if q in text.lower():
+                        results.append(
+                            {
+                                "type": "asset"
+                                if node.kind in {"Computer", "Domain"}
+                                else "identity",
+                                "id": node.id,
+                                "title": node.properties.get("sam") or node.id,
+                                "summary": f"{node.kind} in the engagement graph",
+                                "score": 45,
+                                "data": {"kind": node.kind, "properties": node.properties},
+                            }
+                        )
+                for position, edge in enumerate(graph.edges):
+                    text = f"{edge.source} {edge.kind} {edge.target}"
+                    if q in text.lower():
+                        results.append(
+                            {
+                                "type": "attack_path",
+                                "id": f"edge-{position}",
+                                "title": f"{edge.source} --{edge.kind}--> {edge.target}",
+                                "summary": "Evidence-backed graph relationship",
+                                "score": 40,
+                                "data": {
+                                    "source": edge.source,
+                                    "target": edge.target,
+                                    "relation": edge.kind,
+                                    "properties": edge.properties,
+                                },
+                            }
+                        )
+        for artifact in sorted(path.name for path in session.iterdir() if path.is_file()):
+            if q in artifact.lower() and not any(item["id"] == artifact for item in results):
+                results.append(
+                    {
+                        "type": "evidence",
+                        "id": artifact,
+                        "title": artifact,
+                        "summary": "Persisted engagement artifact",
+                        "score": 20,
+                        "data": {"path": str(session / artifact)},
+                    }
+                )
+    results.sort(key=lambda item: (-int(item["score"]), str(item["type"]), str(item["id"])))
+    results = results[: max(1, limit)]
+    return {
+        "query": query,
+        "capabilities": [item["data"] for item in results if item["type"] == "capability"],
+        "results": results,
+        "count": len(results),
+        "session": str(session) if session is not None else None,
+    }
 
 
 # ---------------------------------------------------------------------------

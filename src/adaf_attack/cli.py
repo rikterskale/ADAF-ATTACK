@@ -1501,12 +1501,19 @@ def targets(ctx: typer.Context) -> None:
 
 
 @app.command("search")
-def search(ctx: typer.Context, query: str = typer.Argument(...)) -> None:
-    """Search registered capabilities."""
+def search(
+    ctx: typer.Context,
+    query: str = typer.Argument(...),
+    session: Path | None = typer.Option(
+        None, "--session", help="Also search findings, graph entities, and evidence artifacts."
+    ),
+    limit: int = typer.Option(25, "--limit"),
+) -> None:
+    """Search capabilities or, with --session, the local engagement evidence."""
     from adaf_attack.core.ux import unified_search
 
-    payload = unified_search(query)
-    lines = [f"{item['id']}: {item['summary']}" for item in payload["capabilities"]]
+    payload = unified_search(query, session=session, limit=limit)
+    lines = [f"{item['type']}: {item['title']} — {item['summary']}" for item in payload["results"]]
     _emit(ctx, {"ok": True, **payload}, Panel("\n".join(lines) or "No matches.", title="Search"))
 
 

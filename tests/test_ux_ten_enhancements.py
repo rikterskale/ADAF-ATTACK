@@ -18,6 +18,7 @@ from adaf_attack.core.ux import (
     export_plan_markdown,
     format_next_actions_block,
     format_stages_progress,
+    unified_search,
 )
 
 runner = CliRunner()
@@ -122,6 +123,32 @@ def test_demo_offline(tmp_path: Path) -> None:
     payload = json.loads(result.output)
     assert payload["mode"] == "offline-demo"
     assert Path(payload["session_path"]).is_dir()
+
+
+def test_unified_search_includes_session_findings_graph_and_artifacts(tmp_path: Path) -> None:
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "findings.json").write_text(
+        json.dumps(
+            {"findings": [{"id": "F-1", "title": "svc-backup exposure", "severity": "high"}]}
+        ),
+        encoding="utf-8",
+    )
+    (session / "graph.json").write_text(
+        json.dumps(
+            {
+                "nodes": [{"id": "USER@SVC-BACKUP", "kind": "User", "properties": {}}],
+                "edges": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session / "svc-backup-evidence.json").write_text("{}", encoding="utf-8")
+
+    result = unified_search("svc-backup", session=session)
+
+    assert {item["type"] for item in result["results"]} >= {"finding", "identity", "evidence"}
+    assert result["results"][0]["type"] == "finding"
 
 
 def test_session_show_dashboard(tmp_path: Path) -> None:
