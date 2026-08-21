@@ -89,7 +89,7 @@ class TgtCaptureListener:
         self,
         output_dir: Path,
         *,
-        host: str = "0.0.0.0",
+        host: str = "0.0.0.0",  # nosec B104 - default listener must accept coerced auth from any interface; caller-overridable
         port: int = _DEFAULT_PORT,
         timeout: float = 15.0,
         max_captures: int = 1,

@@ -254,7 +254,7 @@ class UnconstTgtDumpWorkflow:
         if capture_enabled and chosen:
             capture_listener = TgtCaptureListener(
                 session.path("captured"),
-                host=str(kwargs.get("capture_host") or "0.0.0.0"),
+                host=str(kwargs.get("capture_host") or "0.0.0.0"),  # nosec B104 - listener must accept coerced auth from any interface; operator-overridable
                 port=int(kwargs.get("capture_port") or 4450),
                 timeout=float(kwargs.get("capture_timeout") or 15.0),
                 max_captures=int(kwargs.get("capture_count") or 1),
