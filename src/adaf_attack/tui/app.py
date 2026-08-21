@@ -46,6 +46,7 @@ from adaf_attack.core.registry import Capability, capability_registry
 from adaf_attack.core.reporting import generate_report_bundle
 from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.standout_ux import copilot_recommendations, evidence_cockpit, session_timeline
+from adaf_attack.core.tooling import graph_explorer
 from adaf_attack.core.target import Target
 from adaf_attack.core.user_config import (
     favorite_capabilities,
@@ -99,7 +100,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     #target-form { height: auto; padding: 1; border-bottom: solid $accent; }
     #log-panel { height: 1fr; }
     #status, #progress, #credential-strip { height: auto; border-top: solid $accent; padding: 0 1; }
-    #help-panel, #review-panel, #session-panel, #engagement-dashboard, #first-launch-panel { height: auto; padding: 1; border-bottom: solid $accent; }
+    #help-panel, #review-panel, #session-panel, #attack-path-panel, #engagement-dashboard, #first-launch-panel { height: auto; padding: 1; border-bottom: solid $accent; }
     #wizard-panel { height: auto; padding: 1; border: solid $success; margin-bottom: 1; }
     #wizard-step { color: $success; text-style: bold; }
     #wizard-actions { height: auto; margin-top: 1; }
@@ -170,6 +171,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             yield Button("Sessions", id="sessions-btn")
             yield Button("Findings", id="findings-btn")
             yield Button("Cockpit", id="cockpit-btn")
+            yield Button("Attack paths", id="attack-paths-btn")
             yield Button("Timeline", id="timeline-btn")
             yield Button("Copilot", id="copilot-btn")
             yield Button("Copy findings", id="copy-btn")
@@ -282,6 +284,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                         yield Checkbox(item, id=f"check-{item}")
                     yield Button("Acknowledge review", id="ack-review-btn")
                 yield Static("No session loaded.", id="session-panel")
+                yield Static(
+                    "[bold]Attack-path workspace[/bold]\nSelect Attack paths to inspect saved graph routes.",
+                    id="attack-path-panel",
+                )
                 with Horizontal():
                     yield Input(placeholder="Filter logs by text or severity", id="log-filter")
                 yield Log(id="log-panel", highlight=True, max_lines=2000)
@@ -1530,6 +1536,63 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Priority: " + (", ".join(str(item.get("title")) for item in focus) or "none")
         )
 
+    def _show_attack_paths(self) -> None:
+        """Show ranked saved paths and their observed edge details offline."""
+        panel = self.query_one("#attack-path-panel", Static)
+        if not self._last_session:
+            panel.update(
+                "[bold]Attack-path workspace[/bold]\n"
+                "Complete or select a session with saved graph evidence first."
+            )
+            return
+        graph_path = self._last_session / "graph.json"
+        if not graph_path.is_file():
+            panel.update(
+                f"[bold]Attack-path workspace[/bold]  {self._last_session.name}\n"
+                "No graph.json evidence is available for this session."
+            )
+            return
+        try:
+            payload = graph_explorer(graph_path, limit=5)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            panel.update(
+                "[bold]Attack-path workspace[/bold]\n"
+                f"Saved graph could not be read: {exc}"
+            )
+            return
+        summary = payload.get("summary") or {}
+        paths = payload.get("paths") or []
+        lines = [
+            f"[bold]Attack-path workspace[/bold]  {self._last_session.name}",
+            f"Nodes: {summary.get('nodes', 0)} · Edges: {summary.get('edges', 0)} · "
+            f"Ranked paths: {len(paths)} · Offline inspection only",
+        ]
+        if not paths:
+            lines.append("No ranked paths were found in the saved graph.")
+        for number, path in enumerate(paths, start=1):
+            if not isinstance(path, dict):
+                continue
+            nodes = path.get("path") or []
+            relations = path.get("edges") or []
+            route = " → ".join(str(node).split("@", 1)[0] for node in nodes)
+            terminal_relation = relations[-1] if relations else "-"
+            lines.append(
+                f"{number}. {route or 'unresolved'}  "
+                f"score={path.get('score', 0)}  terminal={terminal_relation}"
+            )
+            if relations:
+                lines.append(
+                    "   Edge detail: "
+                    + " | ".join(
+                        f"{str(nodes[index]).split('@', 1)[0]}"
+                        f" --{relation}--> {str(nodes[index + 1]).split('@', 1)[0]}"
+                        for index, relation in enumerate(relations)
+                        if index + 1 < len(nodes)
+                    )
+                    + f"  ({path.get('length', len(relations))} observed relation(s))"
+                )
+        panel.update("\n".join(lines))
+
     def _show_timeline(self) -> None:
         if not self._last_session:
             self.notify("Complete or select a session first.", severity="information")
@@ -1626,6 +1689,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "sessions-btn": self._show_sessions,
             "findings-btn": self._show_findings,
             "cockpit-btn": self._show_cockpit,
+            "attack-paths-btn": self._show_attack_paths,
             "timeline-btn": self._show_timeline,
             "copilot-btn": self._show_copilot,
             "command-only-btn": self._show_command_only,
