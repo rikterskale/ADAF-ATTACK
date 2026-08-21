@@ -351,6 +351,38 @@ def test_capability_dependency_graph_focuses_on_related_chain() -> None:
     assert all(node["available"] for node in graph["nodes"])
 
 
+def test_engagement_dashboard_persists_operator_breadcrumbs(tmp_path: Path) -> None:
+    (tmp_path / "session.json").write_text(
+        json.dumps(
+            {
+                "session_id": "ENG-1",
+                "objective": "Reach Tier 0",
+                "username": "analyst",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "findings.json").write_text(
+        json.dumps({"findings": [{"id": "F-1", "title": "Open ACL", "severity": "high"}]}),
+        encoding="utf-8",
+    )
+    (tmp_path / "events.jsonl").write_text(
+        json.dumps({"type": "run.complete", "capability": "acl-enum"}) + "\n",
+        encoding="utf-8",
+    )
+
+    breadcrumbs = engagement_dashboard(tmp_path)["breadcrumbs"]
+
+    assert breadcrumbs == {
+        "engagement": "ENG-1",
+        "objective": "Reach Tier 0",
+        "identity": "analyst",
+        "finding": "F-1",
+        "attack_path": None,
+        "current_action": "acl-enum",
+    }
+
+
 def test_errors_command_shows_suggested() -> None:
     result = runner.invoke(app, ["--format", "json", "errors", "UNKNOWN_CAPABILITY"])
     assert result.exit_code == 0

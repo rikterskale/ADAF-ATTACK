@@ -71,6 +71,8 @@ def register_product_commands(
                 f"Scope: {health['scope']}  Evidence: {health['evidence']}  Reports: {'ready' if health['report_ready'] else 'blocked'}\n"
                 f"Findings: {payload['findings']['count']}  Attack paths: {payload['attack_paths']['edges']} edges\n\n"
                 f"Ranking: {payload['ranking']}\n"
+                f"Breadcrumb: {payload['breadcrumbs']['engagement']} / {payload['breadcrumbs']['objective']} / "
+                f"{payload['breadcrumbs']['finding'] or '-'} / {payload['breadcrumbs']['current_action'] or '-'}\n"
                 "Recommended next actions:\n"
                 + "\n".join(
                     f"{i}. {item['action']} [{item['risk']}] — {item['why']}"

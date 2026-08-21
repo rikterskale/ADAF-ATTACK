@@ -246,6 +246,29 @@ def dashboard(
     )
     selected_mode = mode.upper() if mode.upper() in MODES else "OBSERVE"
     selected_ranking = ranking.lower() if ranking.lower() in RANKING_MODES else "balanced"
+    events = []
+    events_path = session / "events.jsonl"
+    if events_path.is_file():
+        for line in events_path.read_text(encoding="utf-8").splitlines():
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(event, dict):
+                events.append(event)
+    open_finding = next(
+        (
+            item
+            for item in findings
+            if str(item.get("status", "open")).lower() not in {"closed", "mitigated"}
+        ),
+        {},
+    )
+    top_path = (
+        graph.rank_exploit_chains(limit=1) if graph else findings_view.get("top_paths", [])[:1]
+    )
+    path_value = top_path[0].get("path") if top_path and isinstance(top_path[0], dict) else None
+    objective_title = objective or meta.get("objective") or "Evidence-backed engagement review"
     return {
         "ok": True,
         "session": str(session),
@@ -255,7 +278,7 @@ def dashboard(
             "mode": selected_mode,
         },
         "objective": {
-            "title": objective or meta.get("objective") or "Evidence-backed engagement review",
+            "title": objective_title,
             "progress": round((len(findings) - open_count) / len(findings) * 100)
             if findings
             else 0,
@@ -284,6 +307,16 @@ def dashboard(
         },
         "recommended_next_actions": _next_actions(session, findings, edges, selected_ranking),
         "ranking": selected_ranking,
+        "breadcrumbs": {
+            "engagement": meta.get("engagement_id") or meta.get("session_id") or session.name,
+            "objective": objective_title,
+            "identity": meta.get("username") or meta.get("identity") or "not recorded",
+            "finding": open_finding.get("id") or open_finding.get("title"),
+            "attack_path": " -> ".join(str(item) for item in path_value) if path_value else None,
+            "current_action": events[-1].get("capability") or events[-1].get("type")
+            if events
+            else None,
+        },
     }
 
 

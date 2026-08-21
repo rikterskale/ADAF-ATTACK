@@ -206,6 +206,7 @@ def register_ux_commands(
                 "mode": view["engagement"]["mode"],
                 "ranking": view["ranking"],
                 "objective": view["objective"],
+                "breadcrumbs": view["breadcrumbs"],
                 "suggestions": actions,
             }
             human = Panel(
