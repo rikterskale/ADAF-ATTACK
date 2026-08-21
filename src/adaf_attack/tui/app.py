@@ -31,7 +31,7 @@ from textual.widgets import (
 from adaf_attack import __version__
 from adaf_attack.core.capability_help_data import capability_option_spec
 from adaf_attack.core.control_plane import package_evidence
-from adaf_attack.core.engagement_dashboard import inspect_edge
+from adaf_attack.core.engagement_dashboard import MODES, inspect_edge
 from adaf_attack.core.novice import (
     beginner_next_actions,
     capability_difficulty,
@@ -165,6 +165,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._wizard_resume_available = False
         self._workflow: WorkflowEngine | None = None
         self._selected_attack_edge: dict[str, Any] | None = None
+        self._operation_mode = "OBSERVE"
 
     def compose(self) -> ComposeResult:
         defaults = load_user_config()
@@ -195,6 +196,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             yield Button("Command only", id="command-only-btn")
             yield Button("Pin selected", id="pin-selected-btn", disabled=True)
             yield Button("Use latest target", id="use-latest-target-btn")
+            yield Label("Mode:", id="mode-label")
+            yield Button("OBSERVE", id="mode-observe-btn", variant="primary")
+            yield Button("VALIDATE", id="mode-validate-btn")
+            yield Button("EMULATE", id="mode-emulate-btn")
         yield Static(
             "[bold]Engagement dashboard[/bold]\nLoading current engagement state.",
             id="engagement-dashboard",
@@ -415,6 +420,18 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._green_only = bool(event.value)
             self._populate_capabilities(self.query_one("#search", Input).value)
         self._update_readiness()
+
+    def _set_operation_mode(self, mode: str) -> None:
+        """Set the operator intent label without bypassing execution safety gates."""
+        selected = mode.upper()
+        if selected not in MODES:
+            return
+        self._operation_mode = selected
+        for candidate in MODES:
+            button = self.query_one(f"#mode-{candidate.lower()}-btn", Button)
+            button.variant = "primary" if candidate == selected else "default"
+        self.query_one("#mode-label", Label).update(f"Mode: {selected}")
+        self._update_engagement_dashboard()
 
     def on_checkbox_changed(self, _event: Checkbox.Changed) -> None:
         self._reviewed_cap = None
@@ -1020,7 +1037,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self.query_one("#engagement-dashboard", Static).update(
                 "[bold]Engagement dashboard[/bold]\n"
                 f"Target: {target} · Scope: {scope} · OPSEC: {active_opsec().upper()}\n"
-                f"Authorization: {authorization} · Session health: {health}"
+                f"Mode: {self._operation_mode} · Authorization: {authorization} · Session health: {health}"
             )
         except Exception:  # noqa: BLE001
             # Test/minimal screens and transitional layouts may not mount the
@@ -1711,6 +1728,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             )
             return
         self.selected_cap = capability.id
+        self._set_operation_mode("VALIDATE")
         self._reviewed_cap = None
         self._update_help()
         self._update_status()
@@ -1834,6 +1852,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "copy-command-btn": self._copy_ready_command,
             "pin-selected-btn": self._toggle_selected_favorite,
             "use-latest-target-btn": self._restore_latest_target,
+            "mode-observe-btn": lambda: self._set_operation_mode("OBSERVE"),
+            "mode-validate-btn": lambda: self._set_operation_mode("VALIDATE"),
+            "mode-emulate-btn": lambda: self._set_operation_mode("EMULATE"),
             "ack-review-btn": self._acknowledge_review,
             "load-profile-btn": self._apply_profile,
             "save-profile-btn": self._save_profile,
