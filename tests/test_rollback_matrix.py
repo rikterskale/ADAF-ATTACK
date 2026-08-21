@@ -68,6 +68,8 @@ _CAPABILITY_ROLLBACK: dict[str, tuple[str, str]] = {
     "esc15": ("cert-enroll", "advisory"),
     "esc16": ("cert-enroll", "advisory"),
     "golden-cert": ("cert-enroll", "advisory"),
+    "cert-request": ("certificate-enroll", "advisory"),
+    "pkinit-auth": ("local-artifact", "advisory"),
     "esc8-relay-workflow": ("ntlm-relay", "advisory"),
     "krb-relay": ("krb-relay", "advisory"),
     "maq-add-computer": ("ldap-object", "revertable"),

@@ -18,6 +18,7 @@ from rich.console import Console
 
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import register_capability
+from adaf_attack.core.rollback import record_pre_state
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -166,6 +167,13 @@ class PkinitAuth:
             if proc.returncode == 0 and ccaches:
                 result["ok"] = True
                 result["ccache"] = str(ccaches[-1])
+                record_pre_state(
+                    session,
+                    kind="local-artifact",
+                    target=identity,
+                    artifact=str(ccaches[-1]),
+                    extra={"material": "ccache", "pfx": str(pfx_file)},
+                )
                 console.print(f"  [green]TGT via certipy[/green] → {ccaches[-1]}")
             elif proc.returncode == 0:
                 result["ok"] = True

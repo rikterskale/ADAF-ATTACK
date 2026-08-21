@@ -22,8 +22,8 @@
   it can verify a release manifest and all listed wheelhouse hashes.
 - `scripts/build-release-wheelhouse.py` creates the reproducible offline
   dependency bundle, including `release-manifest.json` and `SHA256SUMS`.
-- Live-AD release claims require the sanitized, machine-readable record validated
-  by `scripts/validate_live_lab_run.py --release-record`.
+- Mutating capabilities record rollback pre-state in each session
+  (`cleanup.json`); `adaf-attack rollback` reverses pending changes.
 
 ## Upgrade note
 

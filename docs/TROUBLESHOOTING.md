@@ -10,8 +10,8 @@ python -m pip --version
 python -m pip check
 ```
 
-The default doctor profile is offline and performs no network probes. For a
-disposable authorized lab, run the explicit live preflight instead:
+The default doctor profile is offline and performs no network probes. For an
+authorized target, run the explicit live preflight instead:
 
 ```bash
 adaf-attack --format json doctor --profile live-ad \

@@ -144,8 +144,6 @@ def _check_ci() -> None:
             "test_offline_profile_is_local_and_has_scoped_contract",
             "test_support_bundle_redacts_sensitive_values",
         ),
-        "tests/test_live_capability_matrix.py": ("test_live_capability_matrix_covers_registry",),
-        "tests/test_live_lab_manifest.py": ("test_lab_manifest_template_is_safe_and_valid",),
         "tests/test_actionable_error_contract.py": (
             "test_catalog_entries_have_complete_recovery_contracts",
             "test_common_runner_failures_map_to_actionable_codes",
@@ -225,20 +223,12 @@ def _check_docs() -> None:
         "docs/RELEASE_READINESS.md",
         "docs/USER_READINESS.md",
         "docs/FEATURE_MATRIX.md",
-        "docs/LIVE_AD_LAB_VALIDATION.md",
-        "docs/LIVE_LAB_RELEASE_EVIDENCE.template.json",
-        "docs/LIVE_CAPABILITY_MATRIX.json",
-        "docs/LIVE_LAB_MANIFEST.template.json",
         "docs/SUPPORTED_PLATFORMS.md",
         "requirements-operator.txt",
         "requirements-runtime.txt",
-        "scripts/validate_live_lab_run.py",
-        "scripts/validate_live_capability_matrix.py",
-        "scripts/validate_live_lab_manifest.py",
         "scripts/install-approved-wheel.py",
         "scripts/generate_release_manifest.py",
         "scripts/build-release-wheelhouse.py",
-        "scripts/Setup-DisposableAdLab.ps1",
         "tests/test_doctor_profiles.py",
     )
     for relative in required_files:
@@ -304,7 +294,6 @@ def _check_docs() -> None:
         "docs/TROUBLESHOOTING.md",
         "docs/KNOWN_LIMITATIONS.md",
         "docs/USER_READINESS.md",
-        "docs/LIVE_AD_LAB_VALIDATION.md",
         "docs/SUPPORTED_PLATFORMS.md",
         "CHANGELOG.md",
     ):

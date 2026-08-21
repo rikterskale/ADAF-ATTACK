@@ -69,22 +69,23 @@ The release wheel includes the demo fixtures. The source-only
 `scripts/render_demo_engagement.py` helper remains available for checkout
 development.
 
-For live AD, stop here and read [the disposable lab procedure](LIVE_AD_LAB_VALIDATION.md)
-or your organization's approved engagement runbook before supplying credentials.
+For live AD, stop here and follow your organization's approved engagement
+runbook before supplying credentials. Mutating capabilities record rollback
+pre-state in the session; `adaf-attack rollback` reverses pending changes.
 
 ## Feature availability
 
 | Surface | Install | External setup | Network/target required | Release status |
 |---|---|---|---|---|
 | CLI, capability help, paths, doctor | Base | None | No | CI |
-| LDAP/AD reconnaissance | Base | Authorized account and DNS | Yes | Manual lab |
+| LDAP/AD reconnaissance | Base | Authorized account and DNS | Yes | Manual sign-off |
 | TUI | `[tui]` or `[full]` | Terminal supporting Textual | No | CI smoke |
-| Kerberos, Impacket adapters | `[kerberos]` or `[full]` | DNS/time/realm and tool PATH | Usually | Manual lab |
+| Kerberos, Impacket adapters | `[kerberos]` or `[full]` | DNS/time/realm and tool PATH | Usually | Manual sign-off |
 | HTML reports | `[reports]` or `[full]` | None | No | CI |
 | PDF reports | `[reports]` or `[full]` | None | No | CI |
-| Certipy workflows | `[certipy]` | Certipy on PATH; separate dependency boundary | Yes | Manual lab |
+| Certipy workflows | `[certipy]` | Certipy on PATH; separate dependency boundary | Yes | Manual sign-off |
 | Evidence correlation and packaging | Base/full | Saved session or fixture | No | CI |
-| Destructive capabilities | Base/full | Written authorization and approval token | Yes | Manual disposable lab |
+| Destructive capabilities | Base/full | Written authorization and approval token | Yes | Authorized target |
 
 `[full]` means operator features, not every external tool or a ready-to-use AD
 environment. Experimental or target-dependent behavior is never implied by a
@@ -131,4 +132,4 @@ the repository owner; there is no public PyPI fallback.
 CI proves installation, offline workflows, packaging, and safe command
 contracts. It does not prove the behavior of a customer's AD forest, proxy,
 custom CA, endpoint security, Kerberos realm, or production rollback target.
-Those require the documented disposable lab and release sign-off evidence.
+Those require an authorized target and release sign-off evidence.

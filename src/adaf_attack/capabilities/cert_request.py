@@ -15,6 +15,7 @@ from rich.console import Console
 
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import register_capability
+from adaf_attack.core.rollback import record_pre_state
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -147,6 +148,15 @@ class CertRequest:
             pfxes = list(session.root.glob("*.pfx"))
             if proc.returncode == 0:
                 result["ok"] = True
+                rollback = record_pre_state(
+                    session,
+                    kind="certificate-enroll",
+                    target=f"{user}@{target.domain}",
+                    attribute=template,
+                    artifact=str(pfxes[-1]) if pfxes else None,
+                    extra={"ca": ca, "alt_name": alt_name},
+                )
+                result["rollback"] = rollback
                 if pfxes:
                     result["pfx"] = str(pfxes[-1])
                     console.print(f"  [green]Enrolled[/green] → {pfxes[-1]}")

@@ -15,15 +15,12 @@
   lanes.
 - Certipy is separate from `full` because of dependency constraints. Some
   external operator tools may need dedicated virtual environments.
-- Live-AD readiness requires a retained sanitized evidence record from the
-  disposable-lab procedure; hosted CI validates only offline and packaging
-  contracts.
+- Live-AD behavior is not validated by hosted CI; operators must validate
+  against an authorized target following their engagement runbook.
 - Docker is not a live-AD release surface. It is suitable only for offline
   development/reporting because live Kerberos, DNS, SMB, and target-network
   behavior requires host integration.
-- Destructive capabilities require explicit safeguards, but release sign-off
-  still needs a disposable authorized AD lab to prove target-side cleanup.
-- Hosted CI still cannot prove live Active Directory behavior for the 40
-  catalog capabilities promoted from tracking stubs (`planned_offensive`).
-  Runners now perform real LDAP / Impacket / Certipy work, but live-AD sign-off
-  remains the disposable-lab procedure in LIVE_AD_LAB_VALIDATION.md.
+- Destructive capabilities record rollback pre-state in the session
+  (`cleanup.json`) and `adaf-attack rollback` reverses pending changes, but
+  target-side cleanup still needs operator validation against an authorized
+  target before release sign-off.

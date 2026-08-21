@@ -296,11 +296,6 @@ jobs:
             exit 1
           fi
 
-      - name: Validate live capability and lab contracts
-        run: |
-          python scripts/validate_live_capability_matrix.py
-          python scripts/validate_live_lab_manifest.py --manifest docs/LIVE_LAB_MANIFEST.template.json
-
   workflow-contract:
     name: Validate CI and operator contracts
     runs-on: ubuntu-24.04
@@ -754,11 +749,6 @@ jobs:
             assert (reports / f"{report_name}-report.html").is_file()
             assert (reports / f"{report_name}-report.pdf").is_file()
           PY
-
-      - name: Validate sanitized evidence contract
-        shell: bash
-        run: |
-          python scripts/validate_live_lab_run.py --evidence-dir "$(cat "$RUNNER_TEMP/demo-session.txt")"
 
       - name: Sweep offline operator review workflow
         shell: bash

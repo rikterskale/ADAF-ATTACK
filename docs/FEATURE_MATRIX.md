@@ -10,21 +10,21 @@ external operator tools are available.
 | Packaged offline demo | Base | Writable workspace | No | No | Artifact smoke |
 | HTML/PDF reports | `[reports]` / `[full]` | None | No | No | Operator workflow |
 | Evidence correlation and packaging | Base | Session evidence | No | No | CI fixtures |
-| LDAP/AD reconnaissance | Base | Authorized account, DNS, DC access | Yes | No | Manual lab |
-| Kerberos and Impacket adapters | `[kerberos]` / `[full]` | DNS, synchronized clock, realm | Usually | Depends on capability | Manual lab |
+| LDAP/AD reconnaissance | Base | Authorized account, DNS, DC access | Yes | No | Manual sign-off |
+| Kerberos and Impacket adapters | `[kerberos]` / `[full]` | DNS, synchronized clock, realm | Usually | Depends on capability | Manual sign-off |
 | TUI | `[tui]` / `[full]` | Interactive terminal | No | No | CI/source tests |
-| AD CS enrollment | `[certipy]` | Certipy on PATH, test CA | Yes | Depends on capability | Manual lab |
-| Relay, coercion, destructive workflows | Base plus capability dependencies | Approval token, rollback, disposable lab | Yes | Yes | Manual lab sign-off |
-| Promoted offensive IDs (`planned_offensive` catalog) | Base plus capability tools | Authorized account / lab fixtures | Usually | Depends on capability | Manual lab |
+| AD CS enrollment | `[certipy]` | Certipy on PATH, test CA | Yes | Depends on capability | Manual sign-off |
+| Relay, coercion, destructive workflows | Base plus capability dependencies | Approval token, rollback, authorized target | Yes | Yes | Manual sign-off |
+| Promoted offensive IDs (`planned_offensive` catalog) | Base plus capability tools | Authorized account / lab fixtures | Usually | Depends on capability | Manual sign-off |
 
 ## Release status vocabulary
 
 - **CI**: exercised automatically in a clean environment.
-- **Manual lab**: requires an authorized disposable AD environment and retained
-  sanitized evidence.
+- **Manual sign-off**: requires an authorized target and retained sanitized
+  evidence.
 - **Experimental**: not currently a release claim; document the limitation in
   the release record before use. The 40 catalog IDs that were previously
-  experimental tracking stubs are now `supported` in the live matrix.
+  experimental tracking stubs are now `supported`.
 
 ## Offline 10-minute acceptance path
 

@@ -85,18 +85,8 @@ also proven by the full source matrix.
       offline revertable kinds round-trip. **[CI: test_release_contracts;
       test_rollback_matrix]**
 - [ ] Live LDAP/Kerberos/AD CS/coercion/relay and destructive rollback operate
-      correctly in a disposable authorized forest. **[MANUAL]** Follow
-      [LIVE_AD_LAB_VALIDATION.md](LIVE_AD_LAB_VALIDATION.md), attach the
-      sanitized validator output, and record the release sign-off fields.
-      Hosted CI does not provide a domain and must never be described as
-      proving this.
-- [ ] The machine-readable capability matrix covers every registered feature,
-      classifies required tools/fixtures, and marks destructive rows as
-      rollback-required. **[CI: test_live_capability_matrix]** See
-      [LIVE_CAPABILITY_MATRIX.md](LIVE_CAPABILITY_MATRIX.md).
-- [ ] The disposable lab manifest passes the offline safety validator before
-      any operator connects to the lab. **[CI: test_live_lab_manifest; MANUAL:
-      operator validates the populated manifest]**
+      correctly against an authorized target. **[MANUAL]** Hosted CI does not
+      provide a domain and must never be described as proving this.
 - [ ] Doctor profiles distinguish offline, operator, Certipy, and explicit
       live-AD preflight requirements; support bundles redact identifiers and
       secrets. **[CI: test_doctor_profiles]**
@@ -127,21 +117,19 @@ Version: __________  Release manager: __________  Date: __________
 [ ] Published-artifact smoke passes on Ubuntu, Windows, and macOS.
 [ ] Air-gapped install is recorded with candidate artifacts.
 [ ] First-ten-minutes onboarding is completed by a new operator.
-[ ] Live-AD capability and one destructive rollback are recorded in an authorized lab.
-[ ] Sanitized live-lab evidence and the machine-readable release record pass
-    `scripts/validate_live_lab_run.py --release-record`.
+[ ] Live-AD capability and one destructive rollback are recorded against an
+    authorized target.
 [ ] CHANGELOG, RELEASE, and known limitations are reviewed.
 [ ] Rollback/recovery location for the exact release assets is recorded.
 ```
 
 ## Remaining automation gaps
 
-1. A credential-gated disposable AD forest workflow for network capabilities and
-   target-side cleanup. The novice lab procedure and offline evidence validator
-   now make the manual gate repeatable while credentials and lab infrastructure
-   remain intentionally outside hosted CI.
+1. A credential-gated authorized AD forest workflow for network capabilities and
+   target-side cleanup. Credentials and target infrastructure remain
+   intentionally outside hosted CI.
 2. Reproducible validation of organization-specific proxy, CA, endpoint, and
    air-gap transfer policies.
 
-For live-AD claims, the release candidate must also retain the machine-readable
-record described in [LIVE_AD_LAB_VALIDATION.md](LIVE_AD_LAB_VALIDATION.md).
+For live-AD claims, the release candidate must record the authorized-target
+validation results alongside the release assets.

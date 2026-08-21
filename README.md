@@ -22,8 +22,6 @@
   [Known limitations](docs/KNOWN_LIMITATIONS.md) · [Changelog](CHANGELOG.md)
 - [New-user readiness guide](docs/USER_READINESS.md) ·
   [Feature and support matrix](docs/FEATURE_MATRIX.md) ·
-  [Disposable AD lab validation](docs/LIVE_AD_LAB_VALIDATION.md) ·
-  [Live capability matrix](docs/LIVE_CAPABILITY_MATRIX.md) ·
   [Supported platforms and architectures](docs/SUPPORTED_PLATFORMS.md)
 
 ## Philosophy
@@ -270,8 +268,9 @@ shows where future session evidence will be stored.
 Without an AD lab, the supported offline functionality includes diagnostics,
 capability discovery, planning, evidence correlation, engagement reporting,
 and package generation. LDAP reconnaissance, Kerberos, AD CS, relay/coercion,
-and destructive capabilities require the disposable authorized lab described
-in [LIVE_AD_LAB_VALIDATION.md](docs/LIVE_AD_LAB_VALIDATION.md).
+and destructive capabilities additionally require an authorized target and the
+relevant optional tooling; mutating capabilities record in-session rollback
+state that `adaf-attack rollback` can reverse.
 
 ### Recommended first 30 minutes
 

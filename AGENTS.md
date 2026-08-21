@@ -43,7 +43,8 @@ Single test: `pytest tests/test_foo.py::test_bar` (mocked harnesses mean no netw
 - **Windows pytest**: if `PermissionError` on global temp dirs, run via `.\scripts\Invoke-Tests.ps1 <args>` which redirects TEMP to repo-local folders.
 - **Optional extras are separate on purpose**: `certipy-ad` conflicts with the pinned `cryptography`, so it lives in its own extra (`[certipy]`), not in `[full]`. Kerberos needs `[kerberos]` (impacket).
 - **Reproducible builds**: CI builds with `SOURCE_DATE_EPOCH`, `PYTHONHASHSEED=0`, `TZ=UTC`, `LC_ALL=C` and verifies byte-identical rebuilds; use `--no-isolation` with pinned setuptools/wheel.
-- **Contract validators in CI**: `scripts/check_install_contracts.py`, `validate_live_capability_matrix.py`, `check_release_readiness.py` enforce operator-facing contracts — changing CLI output shape, docs, or installer scripts can trip these lanes even when tests pass.
+- **Contract validators in CI**: `scripts/check_install_contracts.py` and `check_release_readiness.py` enforce operator-facing contracts — changing CLI output shape, docs, or installer scripts can trip these lanes even when tests pass.
+- **In-module rollback**: every mutating capability records pre-state via `adaf_attack.core.rollback.record_pre_state` into the session's `cleanup.json`; `adaf-attack rollback` reverses pending changes. New destructive capabilities must record rollback in-module (add a kind to `SUPPORTED_KINDS` if needed).
 
 ## Conventions
 

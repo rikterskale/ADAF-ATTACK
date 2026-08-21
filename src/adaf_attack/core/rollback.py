@@ -24,6 +24,8 @@ SUPPORTED_KINDS = {
     "ntlm-relay",
     "rodc",
     "gmsa",
+    "certificate-enroll",
+    "local-artifact",
 }
 
 
