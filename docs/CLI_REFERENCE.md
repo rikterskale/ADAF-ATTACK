@@ -21,6 +21,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack check` | Check beginner setup or preflight an authorized target |
 | `adaf-attack cleanup` | Execute recorded cleanup with explicit force |
 | `adaf-attack cleanup-status` | Show rollback readiness and restored-state status |
+| `adaf-attack detection-status` | Record defensive detection validation |
 | `adaf-attack coercion-fixtures` | Validate authorized coercion fixtures |
 | `adaf-attack command` | Build a copy-ready command with option explanations |
 | `adaf-attack completions` | Print shell completions |

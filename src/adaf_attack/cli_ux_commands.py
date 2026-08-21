@@ -643,6 +643,9 @@ def register_ux_commands(
             f"Outcome: {outcome.get('status')}  Rollback: {outcome.get('rollback', {}).get('status')}"
             if isinstance(outcome, dict)
             else "Outcome: not recorded",
+            f"Detection: {outcome.get('detection', {}).get('status', 'not-recorded')}"
+            if isinstance(outcome, dict)
+            else "Detection: not recorded",
             f"Resume: adaf-attack session show --session {session}",
         ]
         titles = dashboard.get("titles") or []

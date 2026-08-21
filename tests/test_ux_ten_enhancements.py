@@ -13,7 +13,7 @@ from adaf_attack.core import user_config
 from adaf_attack.core.cli_contract import error_for
 from adaf_attack.core.completions import generate_completion
 from adaf_attack.core.graph import AttackGraph
-from adaf_attack.core.outcomes import build_post_execution_outcome
+from adaf_attack.core.outcomes import build_post_execution_outcome, record_detection_status
 from adaf_attack.core.rollback import cleanup_dashboard
 from adaf_attack.core.ux import (
     capability_prerequisites,
@@ -262,6 +262,25 @@ def test_cleanup_dashboard_reports_pending_and_restored_states(tmp_path: Path) -
     assert status["status"] == "blocked"
     assert status["rollback_readiness"] == "ready"
     assert status["all_changes_restored"] is False
+
+
+def test_detection_status_updates_outcome_without_changing_offensive_result(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "outcome.json").write_text(
+        json.dumps({"status": "success", "offensive_success": True}), encoding="utf-8"
+    )
+    detection = record_detection_status(
+        tmp_path,
+        status="detected",
+        notes="SIEM alert correlated",
+        telemetry=["4769", "EDR alert"],
+    )
+
+    outcome = json.loads((tmp_path / "outcome.json").read_text(encoding="utf-8"))
+    assert detection["status"] == "detected"
+    assert outcome["offensive_success"] is True
+    assert outcome["detection"]["observed_telemetry"] == ["4769", "EDR alert"]
 
 
 def test_errors_command_shows_suggested() -> None:

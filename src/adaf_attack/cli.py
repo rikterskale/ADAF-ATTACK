@@ -1649,6 +1649,40 @@ def cleanup_status_cmd(
     _emit(ctx, payload, human)
 
 
+@app.command("detection-status")
+def detection_status_cmd(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session"),
+    status: str = typer.Option(
+        ..., "--status", help="detected, not-detected, inconclusive, or not-recorded"
+    ),
+    notes: str | None = typer.Option(None, "--notes"),
+    telemetry: list[str] | None = typer.Option(
+        None, "--telemetry", help="Observed telemetry label; repeat as needed."
+    ),
+) -> None:
+    """Record defensive detection validation for a completed session."""
+    from adaf_attack.core.outcomes import record_detection_status
+
+    try:
+        detection = record_detection_status(
+            session, status=status, notes=notes, telemetry=telemetry
+        )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--status") from exc
+    payload = {"ok": True, "session": str(session), "detection": detection}
+    _emit(
+        ctx,
+        payload,
+        Panel(
+            f"Status: {detection['status']}\n"
+            f"Telemetry: {', '.join(detection['observed_telemetry']) or 'none recorded'}\n"
+            f"Notes: {detection['operator_notes'] or '-'}",
+            title="Detection validation recorded",
+        ),
+    )
+
+
 def _build_target(
     domain: str,
     dc_ip: str,
