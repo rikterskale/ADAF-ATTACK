@@ -78,12 +78,12 @@ pre-state in the session; `adaf-attack rollback` reverses pending changes.
 | Surface | Install | External setup | Network/target required | Release status |
 |---|---|---|---|---|
 | CLI, capability help, paths, doctor | Base | None | No | CI |
-| LDAP/AD reconnaissance | Base | Authorized account and DNS | Yes | Manual sign-off |
+| LDAP/AD reconnaissance | Base | Authorized account and DNS | Yes | Operator-verified |
 | TUI | `[tui]` or `[full]` | Terminal supporting Textual | No | CI smoke |
-| Kerberos, Impacket adapters | `[kerberos]` or `[full]` | DNS/time/realm and tool PATH | Usually | Manual sign-off |
+| Kerberos, Impacket adapters | `[kerberos]` or `[full]` | DNS/time/realm and tool PATH | Usually | Operator-verified |
 | HTML reports | `[reports]` or `[full]` | None | No | CI |
 | PDF reports | `[reports]` or `[full]` | None | No | CI |
-| Certipy workflows | `[certipy]` | Certipy on PATH; separate dependency boundary | Yes | Manual sign-off |
+| Certipy workflows | `[certipy]` | Certipy on PATH; separate dependency boundary | Yes | Operator-verified |
 | Evidence correlation and packaging | Base/full | Saved session or fixture | No | CI |
 | Destructive capabilities | Base/full | Written authorization and approval token | Yes | Authorized target |
 
@@ -132,4 +132,4 @@ the repository owner; there is no public PyPI fallback.
 CI proves installation, offline workflows, packaging, and safe command
 contracts. It does not prove the behavior of a customer's AD forest, proxy,
 custom CA, endpoint security, Kerberos realm, or production rollback target.
-Those require an authorized target and release sign-off evidence.
+Those require an authorized target.

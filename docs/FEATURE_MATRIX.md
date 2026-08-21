@@ -10,18 +10,18 @@ external operator tools are available.
 | Packaged offline demo | Base | Writable workspace | No | No | Artifact smoke |
 | HTML/PDF reports | `[reports]` / `[full]` | None | No | No | Operator workflow |
 | Evidence correlation and packaging | Base | Session evidence | No | No | CI fixtures |
-| LDAP/AD reconnaissance | Base | Authorized account, DNS, DC access | Yes | No | Manual sign-off |
-| Kerberos and Impacket adapters | `[kerberos]` / `[full]` | DNS, synchronized clock, realm | Usually | Depends on capability | Manual sign-off |
+| LDAP/AD reconnaissance | Base | Authorized account, DNS, DC access | Yes | No | Operator-verified |
+| Kerberos and Impacket adapters | `[kerberos]` / `[full]` | DNS, synchronized clock, realm | Usually | Depends on capability | Operator-verified |
 | TUI | `[tui]` / `[full]` | Interactive terminal | No | No | CI/source tests |
-| AD CS enrollment | `[certipy]` | Certipy on PATH, test CA | Yes | Depends on capability | Manual sign-off |
-| Relay, coercion, destructive workflows | Base plus capability dependencies | Approval token, rollback, authorized target | Yes | Yes | Manual sign-off |
-| Promoted offensive IDs (`planned_offensive` catalog) | Base plus capability tools | Authorized account / lab fixtures | Usually | Depends on capability | Manual sign-off |
+| AD CS enrollment | `[certipy]` | Certipy on PATH, test CA | Yes | Depends on capability | Operator-verified |
+| Relay, coercion, destructive workflows | Base plus capability dependencies | Approval token, rollback, authorized target | Yes | Yes | Operator-verified |
+| Promoted offensive IDs (`planned_offensive` catalog) | Base plus capability tools | Authorized account / lab fixtures | Usually | Depends on capability | Operator-verified |
 
 ## Release status vocabulary
 
 - **CI**: exercised automatically in a clean environment.
-- **Manual sign-off**: requires an authorized target and retained sanitized
-  evidence.
+- **Operator-verified**: exercised against an authorized target by the
+  operator.
 - **Experimental**: not currently a release claim; document the limitation in
   the release record before use. The 40 catalog IDs that were previously
   experimental tracking stubs are now `supported`.

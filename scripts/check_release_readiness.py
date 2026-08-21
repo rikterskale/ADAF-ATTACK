@@ -572,7 +572,7 @@ def main() -> int:
         for failure in failures:
             print(f"  - {failure}")
         return 1
-    print("AUTOMATED READINESS PASSED - complete the manual release sign-off checklist.")
+    print("AUTOMATED READINESS PASSED.")
     return 0
 
 
