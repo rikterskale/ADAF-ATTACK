@@ -1625,6 +1625,30 @@ def cleanup_cmd(
     _emit(ctx, {"ok": True, **result}, Panel(f"Completed: {result['completed']}", title="Cleanup"))
 
 
+@app.command("cleanup-status")
+def cleanup_status_cmd(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session"),
+) -> None:
+    """Show rollback readiness and all-changes-restored status read-only."""
+    from adaf_attack.core.rollback import cleanup_dashboard
+
+    payload = cleanup_dashboard(session)
+    human = Panel(
+        "\n".join(
+            [
+                f"Status: {payload['status']}",
+                f"Rollback readiness: {payload['rollback_readiness']}",
+                f"Pending: {payload['pending']}  Failed: {payload['failed']}  Completed: {payload['completed']}",
+                f"All changes restored: {'yes' if payload['all_changes_restored'] else 'no'}",
+                f"Next: {payload['next_action']}",
+            ]
+        ),
+        title="Cleanup dashboard",
+    )
+    _emit(ctx, payload, human)
+
+
 def _build_target(
     domain: str,
     dc_ip: str,

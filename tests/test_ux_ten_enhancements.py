@@ -14,6 +14,7 @@ from adaf_attack.core.cli_contract import error_for
 from adaf_attack.core.completions import generate_completion
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.outcomes import build_post_execution_outcome
+from adaf_attack.core.rollback import cleanup_dashboard
 from adaf_attack.core.ux import (
     capability_prerequisites,
     diff_sessions,
@@ -244,6 +245,23 @@ def test_post_execution_outcome_normalizes_evidence_and_rollback(tmp_path: Path)
     assert outcome["rollback"]["status"] == "pending"
     assert outcome["graph_changes"]["edges_added"] == 1
     assert "finding.json" in outcome["evidence"]["artifacts"]
+
+
+def test_cleanup_dashboard_reports_pending_and_restored_states(tmp_path: Path) -> None:
+    assert cleanup_dashboard(tmp_path)["all_changes_restored"] is True
+    (tmp_path / "cleanup.json").write_text(
+        json.dumps(
+            [
+                {"kind": "acl", "status": "pending"},
+                {"kind": "gpo", "status": "failed"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    status = cleanup_dashboard(tmp_path)
+    assert status["status"] == "blocked"
+    assert status["rollback_readiness"] == "ready"
+    assert status["all_changes_restored"] is False
 
 
 def test_errors_command_shows_suggested() -> None:

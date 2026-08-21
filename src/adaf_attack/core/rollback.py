@@ -111,3 +111,22 @@ def summarize_rollbacks(session_dir: Path) -> dict[str, Any]:
         "by_kind": by_kind,
         "entries": entries,
     }
+
+
+def cleanup_dashboard(session_dir: Path) -> dict[str, Any]:
+    """Return operator-facing cleanup readiness without contacting a target."""
+    summary = summarize_rollbacks(session_dir)
+    outstanding = summary["pending"] + summary["failed"]
+    return {
+        **summary,
+        "rollback_readiness": "ready" if summary["pending"] else "not-required",
+        "all_changes_restored": outstanding == 0,
+        "status": "restored"
+        if outstanding == 0
+        else ("blocked" if summary["failed"] else "pending"),
+        "next_action": (
+            "No cleanup is outstanding."
+            if outstanding == 0
+            else "Run `adaf-attack cleanup --session <path> ... --force`, then recheck this dashboard."
+        ),
+    }
