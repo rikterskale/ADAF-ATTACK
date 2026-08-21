@@ -17,6 +17,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack capability` | Capability command group |
 | `adaf-attack capability list` | List capabilities through the command group |
 | `adaf-attack capability show` | Show capability details |
+| `adaf-attack capability dependencies` | Show capability prerequisite relationships |
 | `adaf-attack capability-help` | Show generated capability help |
 | `adaf-attack check` | Check beginner setup or preflight an authorized target |
 | `adaf-attack cleanup` | Execute recorded cleanup with explicit force |

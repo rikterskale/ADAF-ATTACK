@@ -50,6 +50,48 @@ def capability_prerequisites(cap_id: str) -> dict[str, list[str]]:
     }
 
 
+def capability_dependency_graph(cap_id: str | None = None) -> dict[str, Any]:
+    """Return prerequisite/downstream capability relationships for navigation."""
+    allowed = set(capability_registry.ids())
+    edges = [
+        {"from": producer, "to": consumer, "relationship": "produces-evidence-for"}
+        for producer, consumers in sorted(_PRODUCERS.items())
+        for consumer in sorted(consumers)
+        if producer in allowed and consumer in allowed
+    ]
+    if cap_id:
+        related = {cap_id}
+        changed = True
+        while changed:
+            changed = False
+            for edge in edges:
+                if edge["from"] in related or edge["to"] in related:
+                    before = len(related)
+                    related.update((edge["from"], edge["to"]))
+                    changed = changed or len(related) != before
+        edges = [edge for edge in edges if edge["from"] in related and edge["to"] in related]
+    node_ids = sorted(
+        {item for edge in edges for item in (edge["from"], edge["to"])}
+        | ({cap_id} if cap_id else set())
+    )
+    nodes = []
+    for node_id in node_ids:
+        cap = capability_registry.get(node_id)
+        if cap is None:
+            nodes.append({"id": node_id, "available": False})
+        else:
+            nodes.append(
+                {
+                    "id": cap.id,
+                    "available": True,
+                    "category": cap.category,
+                    "destructive": cap.destructive,
+                    "summary": cap.summary,
+                }
+            )
+    return {"ok": True, "capability": cap_id, "nodes": nodes, "edges": edges, "count": len(edges)}
+
+
 def evaluate_prerequisites(cap_id: str, *, session: Path | None = None) -> dict[str, Any]:
     """Evaluate prerequisite evidence without contacting a target.
 

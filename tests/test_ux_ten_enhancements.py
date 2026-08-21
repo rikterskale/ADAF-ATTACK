@@ -18,6 +18,7 @@ from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.outcomes import build_post_execution_outcome, record_detection_status
 from adaf_attack.core.rollback import cleanup_dashboard
 from adaf_attack.core.ux import (
+    capability_dependency_graph,
     capability_prerequisites,
     diff_sessions,
     evaluate_prerequisites,
@@ -338,6 +339,16 @@ def test_finding_workspace_combines_evidence_validation_and_remediation(tmp_path
     assert workspace["validation_options"][0]["id"] == "repeat-source"
     assert workspace["detection_guidance"]["techniques"] == ["T1003.006"]
     assert workspace["next_actions"]
+
+
+def test_capability_dependency_graph_focuses_on_related_chain() -> None:
+    import adaf_attack.capabilities  # noqa: F401
+
+    graph = capability_dependency_graph("shadow-creds")
+
+    assert graph["nodes"]
+    assert any(edge["to"] == "shadow-creds" for edge in graph["edges"])
+    assert all(node["available"] for node in graph["nodes"])
 
 
 def test_errors_command_shows_suggested() -> None:

@@ -3380,6 +3380,31 @@ def capability_show_alias(
     capability_help(ctx, capability=capability)
 
 
+@capability_app.command("dependencies")
+def capability_dependencies_cmd(
+    ctx: typer.Context,
+    capability: str | None = typer.Argument(
+        None, help="Capability to focus on; omit for the full graph."
+    ),
+) -> None:
+    """Show capability prerequisite and downstream evidence relationships."""
+    import adaf_attack.capabilities  # noqa: F401
+    from adaf_attack.core.ux import capability_dependency_graph
+
+    payload = capability_dependency_graph(capability)
+    lines = [
+        f"{edge['from']} -> {edge['to']} ({edge['relationship']})" for edge in payload["edges"]
+    ]
+    _emit(
+        ctx,
+        payload,
+        Panel(
+            "\n".join(lines) or "No capability dependencies are registered.",
+            title="Capability dependency graph",
+        ),
+    )
+
+
 @session_app.command("list")
 def session_list_alias(
     ctx: typer.Context,

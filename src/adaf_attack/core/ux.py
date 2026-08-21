@@ -570,6 +570,7 @@ def phase_label(phase_key: str) -> str:
 
 # Re-export extended helpers (kept in ux_extra to ease incremental deploys)
 from adaf_attack.core.ux_extra import (  # noqa: E402
+    capability_dependency_graph,
     capability_prerequisites,
     evaluate_prerequisites,
     export_plan_markdown,
@@ -592,6 +593,7 @@ __all__ = [
     "guided_tour_payload",
     "phase_label",
     "capability_prerequisites",
+    "capability_dependency_graph",
     "evaluate_prerequisites",
     "format_next_actions_block",
     "format_stages_progress",
