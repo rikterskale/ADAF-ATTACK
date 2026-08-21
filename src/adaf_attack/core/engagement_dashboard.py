@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from adaf_attack.core.confidence import score_chain
 from adaf_attack.core.graph import EXPLOIT_PROFILES, AttackGraph
 from adaf_attack.core.registry import Capability
 from adaf_attack.core.ux import (
@@ -359,6 +360,18 @@ def inspect_edge(
         ):
             continue
         profile = EXPLOIT_PROFILES.get(edge.kind, {})
+        properties = edge.properties
+        confidence = score_chain(
+            terminal_relation=edge.kind,
+            path_length=1,
+            edge_kinds=[edge.kind],
+            profile=profile,
+        )
+        corroboration = properties.get("corroborating_observations") or properties.get(
+            "corroboration", []
+        )
+        if not isinstance(corroboration, list):
+            corroboration = [corroboration] if corroboration else []
         edges.append(
             {
                 "index": position,
@@ -366,6 +379,13 @@ def inspect_edge(
                 "target": edge.target,
                 "relation": edge.kind,
                 "evidence": edge.properties,
+                "evidence_source": properties.get("evidence_source", "saved graph"),
+                "evidence_freshness": properties.get(
+                    "freshness", properties.get("observed_at", "unknown")
+                ),
+                "verified": bool(properties.get("verified") or properties.get("verification")),
+                "corroboration_count": len(corroboration),
+                "confidence": confidence["confidence"],
                 "exploitability": "high" if profile else "medium",
                 "prerequisites": edge.properties.get(
                     "prerequisites", ["Source and target are present in saved graph evidence"]
