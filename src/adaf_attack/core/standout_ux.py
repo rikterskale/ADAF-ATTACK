@@ -12,9 +12,7 @@ from adaf_attack.core.tooling import graph_explorer
 from adaf_attack.core.ux import session_findings_dashboard
 
 
-def evidence_cockpit(
-    session: Path, *, start: str | None = None, limit: int = 10
-) -> dict[str, Any]:
+def evidence_cockpit(session: Path, *, start: str | None = None, limit: int = 10) -> dict[str, Any]:
     """Combine session health, findings, graph paths, and recommended focus."""
     dashboard = session_findings_dashboard(session, limit=limit)
     graph = session / "graph.json"
@@ -65,7 +63,12 @@ def what_if_graph(
     simulated = dict(raw)
     simulated["edges"] = filtered
     with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", prefix="adaf-what-if-", dir=graph_path.parent, delete=False, encoding="utf-8"
+        mode="w",
+        suffix=".json",
+        prefix="adaf-what-if-",
+        dir=graph_path.parent,
+        delete=False,
+        encoding="utf-8",
     ) as handle:
         handle.write(json.dumps(simulated))
         temp = Path(handle.name)
@@ -98,13 +101,21 @@ def session_timeline(session: Path, *, limit: int = 100) -> dict[str, Any]:
             except json.JSONDecodeError:
                 continue
             if isinstance(item, dict):
-                events.append({
-                    "time": item.get("ts") or item.get("time"),
-                    "type": item.get("type") or item.get("event") or "event",
-                    "capability": item.get("capability"),
-                    "status": "error" if "error" in item else "ok",
-                })
-    return {"ok": True, "session": str(session), "events": events[-max(1, limit):], "count": len(events), "replayable": True}
+                events.append(
+                    {
+                        "time": item.get("ts") or item.get("time"),
+                        "type": item.get("type") or item.get("event") or "event",
+                        "capability": item.get("capability"),
+                        "status": "error" if "error" in item else "ok",
+                    }
+                )
+    return {
+        "ok": True,
+        "session": str(session),
+        "events": events[-max(1, limit) :],
+        "count": len(events),
+        "replayable": True,
+    }
 
 
 def copilot_recommendations(session: Path) -> dict[str, Any]:
@@ -113,30 +124,41 @@ def copilot_recommendations(session: Path) -> dict[str, Any]:
     recommendations: list[dict[str, Any]] = []
     triage = dashboard.get("triage_counts") or {}
     if triage.get("open", 0):
-        recommendations.append({
-            "id": "triage-open-findings",
-            "action": "Review and assign open findings",
-            "why": f"{triage['open']} finding(s) remain open in the session.",
-            "confidence": "high",
-            "command": f"adaf-attack session show --session {session}",
-        })
+        recommendations.append(
+            {
+                "id": "triage-open-findings",
+                "action": "Review and assign open findings",
+                "why": f"{triage['open']} finding(s) remain open in the session.",
+                "confidence": "high",
+                "command": f"adaf-attack session show --session {session}",
+            }
+        )
     if dashboard.get("graph", {}).get("edges", 0):
-        recommendations.append({
-            "id": "rank-evidence-paths",
-            "action": "Rank evidence-backed attack paths",
-            "why": "The session contains graph relationships that can be analyzed offline.",
-            "confidence": "high",
-            "command": f"adaf-attack rank-paths --graph {session / 'graph.json'}",
-        })
+        recommendations.append(
+            {
+                "id": "rank-evidence-paths",
+                "action": "Rank evidence-backed attack paths",
+                "why": "The session contains graph relationships that can be analyzed offline.",
+                "confidence": "high",
+                "command": f"adaf-attack rank-paths --graph {session / 'graph.json'}",
+            }
+        )
     if not recommendations:
-        recommendations.append({
-            "id": "generate-report",
-            "action": "Generate the engagement report",
-            "why": "No higher-priority open finding or graph action was detected.",
-            "confidence": "medium",
-            "command": f"adaf-attack engagement report --session {session}",
-        })
-    return {"ok": True, "session": str(session), "recommendations": recommendations, "execution": "suggestions-only"}
+        recommendations.append(
+            {
+                "id": "generate-report",
+                "action": "Generate the engagement report",
+                "why": "No higher-priority open finding or graph action was detected.",
+                "confidence": "medium",
+                "command": f"adaf-attack engagement report --session {session}",
+            }
+        )
+    return {
+        "ok": True,
+        "session": str(session),
+        "recommendations": recommendations,
+        "execution": "suggestions-only",
+    }
 
 
 def collaboration_summary(session: Path) -> dict[str, Any]:
@@ -145,4 +167,10 @@ def collaboration_summary(session: Path) -> dict[str, Any]:
     findings = dashboard.get("findings") or []
     owners = Counter(str(item.get("owner")) for item in findings if item.get("owner"))
     comments = sum(1 for item in findings if item.get("comment") or item.get("triage_note"))
-    return {"ok": True, "session": str(session), "owners": dict(owners), "commented_findings": comments, "findings": findings}
+    return {
+        "ok": True,
+        "session": str(session),
+        "owners": dict(owners),
+        "commented_findings": comments,
+        "findings": findings,
+    }

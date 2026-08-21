@@ -179,8 +179,7 @@ def _fish(commands: str, caps: str, profiles: str, sessions: str, formats: str) 
     )
     lines.append(f"complete -c adaf-attack -l format -a '{formats}'")
     lines.append(
-        "complete -c adaf-attack -n '__fish_seen_subcommand_from finding' "
-        "-a 'explain remediate'"
+        "complete -c adaf-attack -n '__fish_seen_subcommand_from finding' -a 'explain remediate'"
     )
     lines.append(
         "complete -c adaf-attack -n '__fish_seen_subcommand_from profile' "

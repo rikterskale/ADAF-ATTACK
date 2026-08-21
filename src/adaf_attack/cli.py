@@ -115,7 +115,7 @@ def _require_destructive_ack(
     try:
         marker.parent.mkdir(parents=True, exist_ok=True)
         acknowledged.setdefault("capabilities", [])
-        if capability not in acknowledged["capabilities"]:
+        if capability not in acknowledged["capabilities"]:  # pragma: no branch
             acknowledged["capabilities"].append(capability)
         marker.write_text(json.dumps(acknowledged, indent=2) + "\n", encoding="utf-8")
     except OSError:
@@ -376,14 +376,42 @@ _MAX_PYTHON = (3, 15)
 # Importable packages doctor probes. `optional` packages degrade a subset of
 # capabilities when missing (warning); required packages block everything.
 _MODULE_CHECKS: tuple[tuple[str, bool, str], ...] = (
-    ("typer", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
-    ("rich", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
-    ("pydantic", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
-    ("pydantic_settings", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
-    ("httpx", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
+    (
+        "typer",
+        False,
+        "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'.",
+    ),
+    (
+        "rich",
+        False,
+        "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'.",
+    ),
+    (
+        "pydantic",
+        False,
+        "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'.",
+    ),
+    (
+        "pydantic_settings",
+        False,
+        "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'.",
+    ),
+    (
+        "httpx",
+        False,
+        "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'.",
+    ),
     ("ldap3", False, "Install the base package dependencies: pip install -e ."),
-    ("yaml", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
-    ("cryptography", False, "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'."),
+    (
+        "yaml",
+        False,
+        "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'.",
+    ),
+    (
+        "cryptography",
+        False,
+        "Repair the installation in the active environment: python -m pip install --force-reinstall 'adaf-attack'.",
+    ),
     ("impacket", True, "Install Kerberos support: pip install 'adaf-attack[kerberos]'."),
     ("textual", True, "Install TUI support: pip install 'adaf-attack[tui]'."),
     ("reportlab", True, "Install PDF reporting support: pip install 'adaf-attack[reports]'."),
@@ -545,7 +573,9 @@ def _doctor_payload(
         try:
             module = __import__(package)
             distribution = _MODULE_DISTRIBUTIONS.get(package, package)
-            checks.append(_doctor_check(package, "ok", _package_version(distribution) or "installed"))
+            checks.append(
+                _doctor_check(package, "ok", _package_version(distribution) or "installed")
+            )
             del module
         except ImportError:
             checks.append(
@@ -1055,15 +1085,17 @@ def support_bundle(
     safe_doctor = _replace_support_identifiers(
         _sanitize_support_value(payload), tuple(item for item in (domain, dc_ip) if item)
     )
-    runtime = _sanitize_support_value({
-        "python": sys.version.split()[0],
-        "executable": str(Path(sys.executable).resolve()),
-        "prefix": str(Path(sys.prefix).resolve()),
-        "base_prefix": str(Path(sys.base_prefix).resolve()),
-        "architecture": host_platform.machine() or "unknown",
-        "system": host_platform.system(),
-        "release": host_platform.release(),
-    })
+    runtime = _sanitize_support_value(
+        {
+            "python": sys.version.split()[0],
+            "executable": str(Path(sys.executable).resolve()),
+            "prefix": str(Path(sys.prefix).resolve()),
+            "base_prefix": str(Path(sys.base_prefix).resolve()),
+            "architecture": host_platform.machine() or "unknown",
+            "system": host_platform.system(),
+            "release": host_platform.release(),
+        }
+    )
     bundle = {
         "schema": 1,
         "type": "adaf-attack-support-bundle",
@@ -1301,9 +1333,7 @@ def plan(
                 f"--force: {'provided' if force else 'not provided'}",
                 f"Opsec: {checklist['opsec_hint']}",
                 "Preflight: "
-                + ", ".join(
-                    item["label"] for item in checklist["items"] if item["required"]
-                ),
+                + ", ".join(item["label"] for item in checklist["items"] if item["required"]),
                 "Stages: " + " -> ".join(item["id"] for item in stages["stages"]),
                 f"Copy-ready: {build_ready_command(cap.id, domain=domain, dc_ip=dc_ip, force=requires_force)}",
                 f"Next step: {next_step}",
@@ -1995,9 +2025,7 @@ def run_capability(
 
             checklist = risk_checklist(cap)
             stages = format_stages_progress(cap)
-            required_items = [
-                item["label"] for item in checklist["items"] if item["required"]
-            ]
+            required_items = [item["label"] for item in checklist["items"] if item["required"]]
             _console(ctx).print(
                 Panel(
                     "\n".join(
@@ -3008,10 +3036,14 @@ def finding_triage_cmd(
     ctx: typer.Context,
     session: Path = typer.Option(..., "--session"),
     finding_id: str = typer.Option(..., "--id", help="Finding ID or exact title."),
-    status: str | None = typer.Option(None, "--status", help="open | acknowledged | remediated | accepted-risk"),
+    status: str | None = typer.Option(
+        None, "--status", help="open | acknowledged | remediated | accepted-risk"
+    ),
     tag: str | None = typer.Option(None, "--tag", help="Add an operator tag."),
     note: str | None = typer.Option(None, "--note", help="Replace the operator triage note."),
-    owner: str | None = typer.Option(None, "--owner", help="Assign an owner for collaborative triage."),
+    owner: str | None = typer.Option(
+        None, "--owner", help="Assign an owner for collaborative triage."
+    ),
     comment: str | None = typer.Option(None, "--comment", help="Add a collaboration comment."),
 ) -> None:
     """View or update the durable triage state for one finding."""
@@ -3025,7 +3057,8 @@ def finding_triage_cmd(
     if status is not None:
         if status not in allowed:
             status_error = ActionableError(
-                "INVALID_FINDING_STATUS", f"Invalid finding status: {status}",
+                "INVALID_FINDING_STATUS",
+                f"Invalid finding status: {status}",
                 f"Choose one of: {', '.join(sorted(allowed))}.",
                 suggested_command=f"adaf-attack finding triage --session {session} --id {finding_id} --status acknowledged",
             )
@@ -3056,9 +3089,15 @@ def finding_triage_cmd(
             values = document.get("findings") if isinstance(document, dict) else None
             if not isinstance(values, list):
                 raise ValueError("findings.json does not contain a findings list")
-            target_key = str(finding.get("id") or finding.get("finding_id") or finding.get("title") or "")
+            target_key = str(
+                finding.get("id") or finding.get("finding_id") or finding.get("title") or ""
+            )
             for index, value in enumerate(values):
-                value_key = str(value.get("id") or value.get("finding_id") or value.get("title") or "") if isinstance(value, dict) else ""
+                value_key = (
+                    str(value.get("id") or value.get("finding_id") or value.get("title") or "")
+                    if isinstance(value, dict)
+                    else ""
+                )
                 if value_key == target_key:
                     values[index] = finding
                     break
@@ -3067,21 +3106,32 @@ def finding_triage_cmd(
             path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             triage_error = ActionableError(
-                "FINDING_TRIAGE_WRITE_FAILED", f"Could not update finding triage state: {exc}",
+                "FINDING_TRIAGE_WRITE_FAILED",
+                f"Could not update finding triage state: {exc}",
                 "Check that the session is writable and rerun the command.",
                 suggested_command=f"adaf-attack finding explain --session {session} --id {finding_id}",
             )
             _emit_error(ctx, triage_error)
             raise typer.Exit(code=triage_error.exit_code) from exc
-    payload = {"ok": True, "updated": changed, "session": str(session), "finding": finding, "allowed_statuses": sorted(allowed)}
-    _emit(ctx, payload, Panel(
-        f"{finding.get('id') or finding.get('title')}\nStatus: {finding.get('status', 'open')}\n"
+    payload = {
+        "ok": True,
+        "updated": changed,
+        "session": str(session),
+        "finding": finding,
+        "allowed_statuses": sorted(allowed),
+    }
+    _emit(
+        ctx,
+        payload,
+        Panel(
+            f"{finding.get('id') or finding.get('title')}\nStatus: {finding.get('status', 'open')}\n"
             f"Tags: {', '.join(finding.get('tags') or []) or '-'}\n"
             f"Owner: {finding.get('owner') or '-'}\n"
             f"Note: {finding.get('triage_note') or '-'}\n"
             f"Comment: {finding.get('comment') or '-'}",
-        title="Finding triage",
-    ))
+            title="Finding triage",
+        ),
+    )
 
 
 config_app = typer.Typer(help="Persistent per-user defaults for CLI and TUI.")
@@ -3286,7 +3336,9 @@ def session_resume(
                 if value not in capabilities:
                     capabilities.append(value)
     payload = {
-        "ok": True, "session": str(session), "dashboard": dashboard,
+        "ok": True,
+        "session": str(session),
+        "dashboard": dashboard,
         "capabilities_seen": capabilities,
         "commands": {
             "inspect": f"adaf-attack session show --session {session}",
@@ -3295,12 +3347,16 @@ def session_resume(
         },
         "execution": "not-started",
     }
-    _emit(ctx, payload, Panel(
-        f"Session: {dashboard.get('session_id') or session.name}\nFindings: {dashboard.get('finding_count', 0)}\n"
-        f"Inspect: adaf-attack session show --session {session}\n"
-        "No capability was executed; review the plan before continuing.",
-        title="Session resume",
-    ))
+    _emit(
+        ctx,
+        payload,
+        Panel(
+            f"Session: {dashboard.get('session_id') or session.name}\nFindings: {dashboard.get('finding_count', 0)}\n"
+            f"Inspect: adaf-attack session show --session {session}\n"
+            "No capability was executed; review the plan before continuing.",
+            title="Session resume",
+        ),
+    )
 
 
 @path_app.command("rank")

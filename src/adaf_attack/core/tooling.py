@@ -12,7 +12,9 @@ from typing import Any
 from adaf_attack.core.graph import AttackGraph
 
 
-def graph_explorer(graph_path: Path, *, start: str | None = None, limit: int = 25) -> dict[str, Any]:
+def graph_explorer(
+    graph_path: Path, *, start: str | None = None, limit: int = 25
+) -> dict[str, Any]:
     """Return a compact explorer payload for graph UIs and API clients."""
     graph = AttackGraph.from_file(graph_path)
     summary = graph.summary()
@@ -55,7 +57,9 @@ def import_evidence(session: Path, source: Path, *, overwrite: bool = False) -> 
     return {"ok": True, "source": str(source), "destination": str(destination), "record": record}
 
 
-def verify_finding(session: Path, finding_id: str, *, evidence: list[str] | None = None) -> dict[str, Any]:
+def verify_finding(
+    session: Path, finding_id: str, *, evidence: list[str] | None = None
+) -> dict[str, Any]:
     """Mark a finding as remediated only with an explicit verification record."""
     path = session / "findings.json"
     document = json.loads(path.read_text(encoding="utf-8"))
@@ -105,7 +109,11 @@ def scope_summary(path: Path) -> dict[str, Any]:
 
 def detection_export(session: Path) -> dict[str, Any]:
     """Generate detection hypotheses from evidence-backed graph relations."""
-    graph = json.loads((session / "graph.json").read_text(encoding="utf-8")) if (session / "graph.json").is_file() else {}
+    graph = (
+        json.loads((session / "graph.json").read_text(encoding="utf-8"))
+        if (session / "graph.json").is_file()
+        else {}
+    )
     edges = graph.get("edges", []) if isinstance(graph, dict) else []
     mapping = {
         "DCSync": ("directory-replication-access", [4662]),
@@ -122,16 +130,24 @@ def detection_export(session: Path) -> dict[str, Any]:
         kind = str(edge.get("kind", ""))
         if kind in mapping and kind not in seen:
             title, event_ids = mapping[kind]
-            rules.append({
-                "id": f"ADAF-{kind.upper()}",
-                "title": title,
-                "source_relation": kind,
-                "logsource": {"product": "windows", "service": "security"},
-                "event_ids": event_ids,
-                "status": "hypothesis-review-required",
-            })
+            rules.append(
+                {
+                    "id": f"ADAF-{kind.upper()}",
+                    "title": title,
+                    "source_relation": kind,
+                    "logsource": {"product": "windows", "service": "security"},
+                    "event_ids": event_ids,
+                    "status": "hypothesis-review-required",
+                }
+            )
             seen.add(kind)
-    return {"ok": True, "session": str(session), "rules": rules, "count": len(rules), "offline": True}
+    return {
+        "ok": True,
+        "session": str(session),
+        "rules": rules,
+        "count": len(rules),
+        "offline": True,
+    }
 
 
 def lab_manifest_summary(path: Path) -> dict[str, Any]:
@@ -147,7 +163,9 @@ def lab_manifest_summary(path: Path) -> dict[str, Any]:
         "reserved_domain": reserved,
         "snapshot": document.get("snapshot"),
         "fixtures": document.get("fixtures", []),
-        "allowlist_count": len(document.get("allowlist", [])) if isinstance(document.get("allowlist"), list) else 0,
+        "allowlist_count": len(document.get("allowlist", []))
+        if isinstance(document.get("allowlist"), list)
+        else 0,
         "network_contact": False,
         "ready_for_review": bool(domain and reserved and document.get("snapshot")),
     }

@@ -20,10 +20,25 @@ def make_session(tmp_path: Path) -> Path:
     session = tmp_path / "session"
     session.mkdir()
     (session / "session.json").write_text(json.dumps({"session_id": "s1"}), encoding="utf-8")
-    (session / "findings.json").write_text(json.dumps({"findings": [
-        {"id": "F-1", "title": "Critical path", "severity": "critical", "confidence": "high", "evidence": ["acl.json"]},
-    ]}), encoding="utf-8")
-    (session / "graph.json").write_text(json.dumps({"nodes": [{"id": "USER@alice"}], "edges": []}), encoding="utf-8")
+    (session / "findings.json").write_text(
+        json.dumps(
+            {
+                "findings": [
+                    {
+                        "id": "F-1",
+                        "title": "Critical path",
+                        "severity": "critical",
+                        "confidence": "high",
+                        "evidence": ["acl.json"],
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (session / "graph.json").write_text(
+        json.dumps({"nodes": [{"id": "USER@alice"}], "edges": []}), encoding="utf-8"
+    )
     return session
 
 

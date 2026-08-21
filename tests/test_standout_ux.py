@@ -20,10 +20,29 @@ def _session(tmp_path: Path) -> Path:
     session.mkdir()
     (session / "session.json").write_text(json.dumps({"session_id": "s1"}), encoding="utf-8")
     (session / "findings.json").write_text(
-        json.dumps({"findings": [{"id": "F-1", "title": "Issue", "severity": "high", "status": "open", "owner": "alice", "triage_note": "review"}]}),
+        json.dumps(
+            {
+                "findings": [
+                    {
+                        "id": "F-1",
+                        "title": "Issue",
+                        "severity": "high",
+                        "status": "open",
+                        "owner": "alice",
+                        "triage_note": "review",
+                    }
+                ]
+            }
+        ),
         encoding="utf-8",
     )
-    (session / "events.jsonl").write_text(json.dumps({"ts": "2026-01-01T00:00:00Z", "type": "run.complete", "capability": "ldap-enum"}) + "\n", encoding="utf-8")
+    (session / "events.jsonl").write_text(
+        json.dumps(
+            {"ts": "2026-01-01T00:00:00Z", "type": "run.complete", "capability": "ldap-enum"}
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     graph = AttackGraph()
     graph.add_node("USER@alice", "user")
     graph.add_node("GROUP@admins", "group")

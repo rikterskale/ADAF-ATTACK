@@ -36,7 +36,10 @@ def test_import_evidence_and_verify_finding(tmp_path: Path) -> None:
     source = tmp_path / "ldap.json"
     source.write_text(json.dumps({"objects": []}), encoding="utf-8")
     findings = session / "findings.json"
-    findings.write_text(json.dumps({"findings": [{"id": "F-1", "title": "Issue", "severity": "high"}]}), encoding="utf-8")
+    findings.write_text(
+        json.dumps({"findings": [{"id": "F-1", "title": "Issue", "severity": "high"}]}),
+        encoding="utf-8",
+    )
 
     imported = import_evidence(session, source)
     verified = verify_finding(session, "F-1", evidence=["ldap.json"])

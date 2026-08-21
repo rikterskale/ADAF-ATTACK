@@ -67,7 +67,9 @@ def validate_session(document: Mapping[str, Any]) -> SessionContract:
 def validate_finding(document: Mapping[str, Any]) -> FindingContract:
     """Validate and normalize one finding document."""
     normalized = dict(document)
-    normalized.setdefault("id", normalized.get("finding_id") or normalized.get("title") or "finding")
+    normalized.setdefault(
+        "id", normalized.get("finding_id") or normalized.get("title") or "finding"
+    )
     normalized.setdefault("title", normalized.get("name") or normalized["id"])
     return FindingContract.model_validate(normalized)
 
@@ -140,16 +142,31 @@ class SessionStore:
         with self._lock, self._connect() as db:
             db.execute(
                 "INSERT OR REPLACE INTO sessions VALUES (?, ?, ?, ?, ?)",
-                (session.session_id, session.root or "", session.created_at, capability, session.schema_version),
+                (
+                    session.session_id,
+                    session.root or "",
+                    session.created_at,
+                    capability,
+                    session.schema_version,
+                ),
             )
             for raw in findings:
                 finding = validate_finding(migrate_document(raw, kind="finding"))
                 db.execute(
                     "INSERT OR REPLACE INTO findings VALUES (?, ?, ?, ?, ?, ?)",
-                    (session.session_id, finding.id, finding.title, finding.severity, finding.status, finding.model_dump_json()),
+                    (
+                        session.session_id,
+                        finding.id,
+                        finding.title,
+                        finding.severity,
+                        finding.status,
+                        finding.model_dump_json(),
+                    ),
                 )
 
-    def search_findings(self, *, severity: str | None = None, status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def search_findings(
+        self, *, severity: str | None = None, status: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
         clauses: list[str] = []
         params: list[Any] = []
         if severity:
@@ -164,7 +181,9 @@ class SessionStore:
                 f"SELECT session_id, finding_id, title, severity, status, document FROM findings {where} ORDER BY rowid DESC LIMIT ?",
                 (*params, max(1, min(limit, 1000))),
             ).fetchall()
-        return [json.loads(str(row["document"])) | {"session_id": row["session_id"]} for row in rows]
+        return [
+            json.loads(str(row["document"])) | {"session_id": row["session_id"]} for row in rows
+        ]
 
 
 class JsonLogFormatter(logging.Formatter):
@@ -200,7 +219,11 @@ T = TypeVar("T")
 
 
 def execute_with_controls(
-    operation: Callable[[], T], *, timeout: float | None = None, retries: int = 0, backoff: float = 0.25
+    operation: Callable[[], T],
+    *,
+    timeout: float | None = None,
+    retries: int = 0,
+    backoff: float = 0.25,
 ) -> T:
     """Run a synchronous operation with bounded retries and timeout."""
     if retries < 0 or timeout is not None and timeout <= 0:
@@ -258,5 +281,9 @@ def diagnostics_snapshot(*, package_version: str, workspace: Path) -> dict[str, 
 def discover_plugins() -> list[PluginDescriptor]:
     """Discover optional plugins through the standard package entry-point API."""
     discovered = entry_points()
-    selected = discovered.select(group=PLUGIN_GROUP) if hasattr(discovered, "select") else discovered.get(PLUGIN_GROUP, ())
+    selected = (
+        discovered.select(group=PLUGIN_GROUP)
+        if hasattr(discovered, "select")
+        else discovered.get(PLUGIN_GROUP, ())
+    )
     return [PluginDescriptor(item.name, item.value, item.load) for item in selected]

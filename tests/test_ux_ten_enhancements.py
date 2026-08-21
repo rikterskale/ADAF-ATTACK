@@ -192,10 +192,18 @@ def test_session_diff_reports_finding_identity_and_severity(tmp_path: Path) -> N
     second = tmp_path / "second"
     for session in (first, second):
         session.mkdir()
-        (session / "session.json").write_text(json.dumps({"session_id": session.name}), encoding="utf-8")
-        (session / "graph.json").write_text(json.dumps({"summary": {"nodes": 1, "edges": 0}}), encoding="utf-8")
-    (first / "findings.json").write_text(json.dumps({"findings": [{"id": "old", "severity": "low"}]}), encoding="utf-8")
-    (second / "findings.json").write_text(json.dumps({"findings": [{"id": "new", "severity": "high"}]}), encoding="utf-8")
+        (session / "session.json").write_text(
+            json.dumps({"session_id": session.name}), encoding="utf-8"
+        )
+        (session / "graph.json").write_text(
+            json.dumps({"summary": {"nodes": 1, "edges": 0}}), encoding="utf-8"
+        )
+    (first / "findings.json").write_text(
+        json.dumps({"findings": [{"id": "old", "severity": "low"}]}), encoding="utf-8"
+    )
+    (second / "findings.json").write_text(
+        json.dumps({"findings": [{"id": "new", "severity": "high"}]}), encoding="utf-8"
+    )
 
     result = diff_sessions(first, second)
 
@@ -214,8 +222,20 @@ def test_finding_triage_persists_status_tag_and_note(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "--format", "json", "finding", "triage", "--session", str(session), "--id", "F-1",
-            "--status", "acknowledged", "--tag", "review", "--note", "Owner assigned",
+            "--format",
+            "json",
+            "finding",
+            "triage",
+            "--session",
+            str(session),
+            "--id",
+            "F-1",
+            "--status",
+            "acknowledged",
+            "--tag",
+            "review",
+            "--note",
+            "Owner assigned",
         ],
     )
     assert result.exit_code == 0, result.output

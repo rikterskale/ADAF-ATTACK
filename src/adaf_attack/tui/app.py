@@ -181,7 +181,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "[bold]Engagement dashboard[/bold]\nLoading current engagement state.",
             id="engagement-dashboard",
         )
-        yield Static("[bold]First-launch setup[/bold]\nChecking local defaults.", id="first-launch-panel")
+        yield Static(
+            "[bold]First-launch setup[/bold]\nChecking local defaults.", id="first-launch-panel"
+        )
         with Vertical(id="wizard-panel"):
             yield Static("Guided workflow", id="wizard-step")
             yield Static("", id="wizard-guide")

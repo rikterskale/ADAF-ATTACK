@@ -208,10 +208,16 @@ def execute_capability(
         try:
             metadata = json.loads(session.path("session.json").read_text(encoding="utf-8"))
             findings_path = session.path("findings.json")
-            findings_doc = json.loads(findings_path.read_text(encoding="utf-8")) if findings_path.is_file() else {}
+            findings_doc = (
+                json.loads(findings_path.read_text(encoding="utf-8"))
+                if findings_path.is_file()
+                else {}
+            )
             findings = findings_doc.get("findings", []) if isinstance(findings_doc, dict) else []
             SessionStore(ws / "sessions.sqlite").index_session(
-                metadata, capability=capability_id, findings=findings if isinstance(findings, list) else []
+                metadata,
+                capability=capability_id,
+                findings=findings if isinstance(findings, list) else [],
             )
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
             _log(f"Session index warning: {exc}")

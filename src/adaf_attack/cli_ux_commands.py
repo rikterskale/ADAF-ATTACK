@@ -137,7 +137,8 @@ def register_ux_commands(
         cap = capability_registry.get(capability)
         if cap is None:
             error = ActionableError(
-                "UNKNOWN_CAPABILITY", f"Unknown capability: {capability}",
+                "UNKNOWN_CAPABILITY",
+                f"Unknown capability: {capability}",
                 "Run `adaf-attack list-capabilities --novice` to browse beginner-friendly capabilities.",
                 suggested_command="adaf-attack list-capabilities --novice --safe-only",
             )
@@ -177,7 +178,9 @@ def register_ux_commands(
     def what_next_cmd(
         ctx: typer.Context,
         capability: str | None = typer.Argument(None, help="Capability just completed, if known."),
-        safe_only: bool = typer.Option(True, "--safe-only/--include-advanced", help="Prefer beginner-safe suggestions."),
+        safe_only: bool = typer.Option(
+            True, "--safe-only/--include-advanced", help="Prefer beginner-safe suggestions."
+        ),
     ) -> None:
         """Recommend the next beginner-friendly action."""
         from adaf_attack.core.novice import beginner_next_actions, home_actions
@@ -186,7 +189,10 @@ def register_ux_commands(
             actions = home_actions(first_run=True)
             payload = {"ok": True, "context": "new-user", "suggestions": actions}
             human = Panel(
-                "\n".join(f"{i + 1}. {item['goal']}\n   {item['command']}\n   {item['why']}" for i, item in enumerate(actions)),
+                "\n".join(
+                    f"{i + 1}. {item['goal']}\n   {item['command']}\n   {item['why']}"
+                    for i, item in enumerate(actions)
+                ),
                 title="What should I do next?",
             )
             _emit(ctx, payload, human)
@@ -197,7 +203,8 @@ def register_ux_commands(
         cap = capability_registry.get(capability)
         if cap is None:
             error = ActionableError(
-                "UNKNOWN_CAPABILITY", f"Unknown capability: {capability}",
+                "UNKNOWN_CAPABILITY",
+                f"Unknown capability: {capability}",
                 "Run `adaf-attack list-capabilities --novice` to find a valid capability.",
                 suggested_command="adaf-attack list-capabilities --novice",
             )
@@ -208,13 +215,16 @@ def register_ux_commands(
             from adaf_attack.core.novice import safety_summary
 
             suggestions = [
-                item for item in suggestions
+                item
+                for item in suggestions
                 if (follow := capability_registry.get(item["id"])) is not None
                 and safety_summary(follow)["level"] != "RED"
             ]
         payload = {"ok": True, "context": capability, "suggestions": suggestions}
         human = Panel(
-            "\n".join(f"{i + 1}. {item['id']} — {item['message']}" for i, item in enumerate(suggestions))
+            "\n".join(
+                f"{i + 1}. {item['id']} — {item['message']}" for i, item in enumerate(suggestions)
+            )
             or "No follow-up is recommended yet. Review the session findings first.",
             title=f"What next after {capability}?",
         )
@@ -543,7 +553,7 @@ def register_ux_commands(
             )
             return
         typer.echo(script)
-        if not _json_mode(ctx):
+        if not _json_mode(ctx):  # pragma: no branch
             _console(ctx).print(f"[dim]# Install hint: {completion_install_hint(shell)}[/dim]")
 
     @session_app.command("show")
