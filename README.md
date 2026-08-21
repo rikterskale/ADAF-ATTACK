@@ -384,6 +384,12 @@ dedicated venv) when you need live enrollment:
 pip install "adaf-attack[certipy]"
 ```
 
+The AD CS capabilities shell out to the `certipy` binary, so it must be on
+`PATH` when they run. If you install Certipy into a dedicated venv, activate
+that venv (or prepend its `bin`/`Scripts` directory to `PATH`) in the same
+shell before running `cert-request`, `esc-chain`, or `pkinit-auth`. Verify with
+`adaf-attack doctor --profile certipy`.
+
 Without it, those capabilities still run and emit a ready-to-paste playbook.
 
 ## Examples

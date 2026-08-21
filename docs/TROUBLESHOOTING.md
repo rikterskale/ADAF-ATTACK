@@ -112,7 +112,11 @@ python -m pip install "adaf-attack[certipy]"
 ```
 
 Prefer a dedicated Certipy venv if pip cannot resolve the combined environment.
-`doctor --explain` distinguishes required failures from optional warnings.
+AD CS capabilities invoke the `certipy` binary from `PATH`, so activate the
+dedicated venv (or prepend its `bin`/`Scripts` directory to `PATH`) in the same
+shell before running them; otherwise the capability reports the tool as
+missing. `doctor --explain` distinguishes required failures from optional
+warnings.
 Use `--profile operator` to make TUI, reporting, and Kerberos tooling blocking,
 or `--profile certipy` to validate the separate AD CS dependency boundary.
 
