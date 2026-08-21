@@ -50,6 +50,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack favorites remove` | Unpin a capability |
 | `adaf-attack finding` | Finding explanation and remediation command group |
 | `adaf-attack finding explain` | Explain a saved finding in plain language |
+| `adaf-attack finding workspace` | Open an actionable finding workspace |
 | `adaf-attack finding remediate` | Build a remediation checklist for a finding |
 | `adaf-attack forest-campaign` | Compose a forest-aware campaign |
 | `adaf-attack glossary` | Explain Active Directory and operator terms |

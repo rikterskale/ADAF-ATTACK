@@ -13,6 +13,7 @@ from adaf_attack.core import user_config
 from adaf_attack.core.cli_contract import error_for
 from adaf_attack.core.completions import generate_completion
 from adaf_attack.core.engagement_dashboard import dashboard as engagement_dashboard
+from adaf_attack.core.finding_workspace import load_finding_workspace
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.outcomes import build_post_execution_outcome, record_detection_status
 from adaf_attack.core.rollback import cleanup_dashboard
@@ -306,6 +307,37 @@ def test_engagement_dashboard_exposes_explainable_action_ranking(tmp_path: Path)
     assert view["ranking"] == "quietest"
     assert action["ranking_factors"]["evidence_quality"] == 25
     assert "detection_value" in action["ranking_factors"]
+
+
+def test_finding_workspace_combines_evidence_validation_and_remediation(tmp_path: Path) -> None:
+    (tmp_path / "acl.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "findings.json").write_text(
+        json.dumps(
+            {
+                "findings": [
+                    {
+                        "id": "F-ACL",
+                        "title": "Replication rights",
+                        "severity": "critical",
+                        "confidence": "confirmed",
+                        "impact": "Credential exposure",
+                        "remediation": "Remove unnecessary replication rights.",
+                        "evidence": [{"artifact": "acl.json", "pointer": "/dcsync"}],
+                        "source_capability": "acl-enum",
+                        "attack_techniques": ["T1003.006"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    workspace = load_finding_workspace(tmp_path, "F-ACL")
+
+    assert workspace["evidence_quality"]["status"] == "complete"
+    assert workspace["validation_options"][0]["id"] == "repeat-source"
+    assert workspace["detection_guidance"]["techniques"] == ["T1003.006"]
+    assert workspace["next_actions"]
 
 
 def test_errors_command_shows_suggested() -> None:

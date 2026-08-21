@@ -3089,6 +3089,42 @@ def finding_explain_cmd(
     _emit(ctx, payload, Panel("\n".join(lines), title="Finding explainer"))
 
 
+@finding_app.command("workspace")
+def finding_workspace_cmd(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session"),
+    finding_id: str = typer.Option(..., "--id", help="Finding ID or exact title."),
+) -> None:
+    """Open one finding's evidence, validation, remediation, and detection workspace."""
+    from adaf_attack.core.finding_workspace import load_finding_workspace
+
+    try:
+        workspace = load_finding_workspace(session, finding_id)
+    except ValueError as exc:
+        error = ActionableError(
+            "UNKNOWN_FINDING" if "not found" in str(exc).lower() else "SESSION_NOT_FOUND",
+            str(exc),
+            "Run `adaf-attack session show --session <dir>` to inspect saved findings.",
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+    payload = {"ok": True, "session": str(session), "finding": workspace}
+    human = Panel(
+        "\n".join(
+            [
+                f"{workspace['id']}: {workspace['title']}",
+                f"Status: {workspace['status']}  Severity: {workspace['severity']}  Confidence: {workspace['confidence']}",
+                f"Evidence: {workspace['evidence_quality']['status']} ({workspace['evidence_quality']['captured']}/{workspace['evidence_quality']['expected']})",
+                f"Source: {workspace['source']}",
+                f"Remediation: {workspace['remediation']}",
+                "Next actions: " + "; ".join(item["action"] for item in workspace["next_actions"]),
+            ]
+        ),
+        title="Finding workspace",
+    )
+    _emit(ctx, payload, human)
+
+
 @finding_app.command("remediate")
 def finding_remediate_cmd(
     ctx: typer.Context,
