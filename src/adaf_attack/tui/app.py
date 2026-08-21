@@ -164,6 +164,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._pause_requested = threading.Event()
         self._wizard_resume_available = False
         self._workflow: WorkflowEngine | None = None
+        self._selected_attack_edge: dict[str, Any] | None = None
 
     def compose(self) -> ComposeResult:
         defaults = load_user_config()
@@ -308,6 +309,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     "Select an observed edge to inspect evidence, risk, ATT&CK mapping, and remediation.",
                     id="attack-edge-detail",
                 )
+                yield Button("Prepare validation review", id="prepare-edge-btn", disabled=True)
                 with Horizontal():
                     yield Input(placeholder="Filter logs by text or severity", id="log-filter")
                 yield Log(id="log-panel", highlight=True, max_lines=2000)
@@ -1638,6 +1640,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 )
         panel.update("\n".join(lines))
         edge_list = self.query_one("#attack-edge-list", ListView)
+        self._selected_attack_edge = None
         edge_list.clear()
         for edge in edges:
             edge_list.append(AttackEdgeItem(edge))
@@ -1646,16 +1649,20 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             if edges
             else "No selectable observed edges were found in the ranked paths."
         )
+        self.query_one("#prepare-edge-btn", Button).disabled = True
 
     def _clear_attack_edges(self) -> None:
         """Clear edge selection when the active session has no graph workspace."""
+        self._selected_attack_edge = None
         self.query_one("#attack-edge-list", ListView).clear()
         self.query_one("#attack-edge-detail", Static).update(
             "Select an observed edge to inspect evidence, risk, ATT&CK mapping, and remediation."
         )
+        self.query_one("#prepare-edge-btn", Button).disabled = True
 
     def _show_attack_edge(self, edge: dict[str, Any]) -> None:
         """Render the selected edge's evidence and safety context without executing it."""
+        self._selected_attack_edge = edge
         evidence = edge.get("evidence") or {}
         prerequisites = edge.get("prerequisites") or []
         mapping = edge.get("attack_mapping") or []
@@ -1672,6 +1679,49 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Remediation: {edge.get('remediation', 'not specified')}"
         )
         self.query_one("#attack-edge-detail", Static).update(detail)
+        self.query_one("#prepare-edge-btn", Button).disabled = False
+
+    def _prepare_edge_validation(self) -> None:
+        """Prepare a capability review from the selected edge; never execute it."""
+        edge = self._selected_attack_edge
+        if not edge:
+            self.notify("Select an observed edge first.", severity="information")
+            return
+        relation = str(edge.get("relation", ""))
+        capability_by_relation = {
+            "DCSync": "dcsync",
+            "ESC1": "cert-request",
+            "ESC8WebEnrollment": "cert-request",
+            "WriteGPO": "gpo-abuse",
+            "WriteSYSVOL": "gpo-abuse",
+            "AllowedToAct": "s4u-abuse",
+            "WriteRBCD": "s4u-abuse",
+            "SpoolerOpen": "coercion-map",
+            "EfsrpcOpen": "coercion-map",
+        }
+        capability_id = capability_by_relation.get(relation, "attack-paths")
+        capability = capability_registry.get(capability_id)
+        if not capability:
+            self.notify(
+                f"No validation capability is registered for {relation or 'this edge'}.",
+                severity="warning",
+            )
+            return
+        self.selected_cap = capability.id
+        self._reviewed_cap = None
+        self._update_help()
+        self._update_status()
+        self._update_readiness()
+        self._update_run_gate()
+        self.query_one("#review-panel", Static).update(
+            f"[bold]Edge validation handoff — review required[/bold]\n"
+            f"Edge: {edge.get('source', '?')} --{relation or 'unknown'}--> {edge.get('target', '?')}\n"
+            f"Suggested capability: {capability.id} — {capability.summary}\n"
+            f"Risk: {'destructive; Force and acknowledgement required' if capability.destructive else 'read-only'}\n"
+            f"Ready command: [dim]{self._ready_command(capability.id)}[/]\n"
+            "Select Review to inspect prerequisites and success criteria before any execution."
+        )
+        self.notify(f"Prepared {capability.id} for review; nothing has executed.", severity="information")
 
     def _show_timeline(self) -> None:
         if not self._last_session:
@@ -1770,6 +1820,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "findings-btn": self._show_findings,
             "cockpit-btn": self._show_cockpit,
             "attack-paths-btn": self._show_attack_paths,
+            "prepare-edge-btn": self._prepare_edge_validation,
             "timeline-btn": self._show_timeline,
             "copilot-btn": self._show_copilot,
             "command-only-btn": self._show_command_only,
