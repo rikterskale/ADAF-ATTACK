@@ -175,7 +175,19 @@ def session_findings_dashboard(
         # triage metadata for records that actually carry it.
         if "status" in item:
             normalized["status"] = str(item["status"]).lower()
-        for key in ("owner", "tags", "triage_note", "comment"):
+        for key in (
+            "owner",
+            "tags",
+            "triage_note",
+            "comment",
+            "confidence",
+            "evidence",
+            "exploitability",
+            "noise",
+            "rollback_quality",
+            "prerequisites_satisfied",
+            "detection_value",
+        ):
             if key in item:
                 normalized[key] = item[key]
         filtered.append(normalized)

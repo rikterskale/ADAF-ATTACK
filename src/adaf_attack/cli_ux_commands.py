@@ -187,6 +187,9 @@ def register_ux_commands(
         mode: str = typer.Option(
             "OBSERVE", "--mode", help="Operational mode: OBSERVE, VALIDATE, or EMULATE."
         ),
+        rank_by: str = typer.Option(
+            "balanced", "--rank-by", help="Ranking mode for session recommendations."
+        ),
     ) -> None:
         """Recommend the next action using capability or engagement context."""
         from adaf_attack.core.novice import beginner_next_actions, home_actions
@@ -194,13 +197,14 @@ def register_ux_commands(
         if session is not None:
             from adaf_attack.core.engagement_dashboard import dashboard
 
-            view = dashboard(session, mode=mode)
+            view = dashboard(session, mode=mode, ranking=rank_by)
             actions = view["recommended_next_actions"]
             payload = {
                 "ok": True,
                 "context": "session",
                 "session": str(session),
                 "mode": view["engagement"]["mode"],
+                "ranking": view["ranking"],
                 "objective": view["objective"],
                 "suggestions": actions,
             }

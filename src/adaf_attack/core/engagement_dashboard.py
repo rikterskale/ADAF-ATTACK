@@ -16,6 +16,7 @@ from adaf_attack.core.ux import (
 )
 
 MODES = ("OBSERVE", "VALIDATE", "EMULATE")
+RANKING_MODES = ("balanced", "fastest", "quietest", "safest", "least-disruptive", "purple-team")
 MISSIONS = (
     (
         "baseline-ad-security",
@@ -101,8 +102,35 @@ def capability_review(
     }
 
 
+def _rank_score(factors: dict[str, int], ranking: str) -> int:
+    weights = {
+        "balanced": {
+            "exploitability": 2,
+            "evidence_quality": 2,
+            "expected_value": 2,
+            "risk": 1,
+            "noise": 1,
+            "rollback_quality": 1,
+            "prerequisite_satisfaction": 1,
+            "detection_value": 1,
+        },
+        "fastest": {
+            "expected_value": 3,
+            "prerequisite_satisfaction": 3,
+            "exploitability": 2,
+            "risk": 1,
+        },
+        "quietest": {"noise": 4, "evidence_quality": 2, "risk": 1},
+        "safest": {"risk": 4, "rollback_quality": 3, "prerequisite_satisfaction": 2},
+        "least-disruptive": {"risk": 3, "noise": 3, "rollback_quality": 2},
+        "purple-team": {"detection_value": 4, "evidence_quality": 2, "expected_value": 2},
+    }
+    selected = weights.get(ranking, weights["balanced"])
+    return sum(factors.get(name, 0) * weight for name, weight in selected.items())
+
+
 def _next_actions(
-    session: Path, findings: list[dict[str, Any]], edges: int
+    session: Path, findings: list[dict[str, Any]], edges: int, ranking: str
 ) -> list[dict[str, Any]]:
     actions = []
     for finding in findings:
@@ -110,8 +138,18 @@ def _next_actions(
             continue
         severity = str(finding.get("severity", "unknown")).lower()
         confidence = str(finding.get("confidence", "unknown")).lower()
-        score = {"critical": 100, "high": 80, "medium": 55, "low": 30}.get(severity, 15)
-        score += {"confirmed": 20, "high": 15, "medium": 8}.get(confidence, 0)
+        factors = {
+            "exploitability": int(finding.get("exploitability", 10)),
+            "evidence_quality": 25 if finding.get("evidence") else 8,
+            "expected_value": {"critical": 30, "high": 24, "medium": 16, "low": 8}.get(severity, 4),
+            "risk": 15,
+            "noise": 15 if finding.get("noise") in {None, "low"} else 5,
+            "rollback_quality": 15 if finding.get("rollback_quality", True) else 3,
+            "prerequisite_satisfaction": 15 if finding.get("prerequisites_satisfied", True) else 2,
+            "detection_value": 15 if finding.get("detection_value") else 5,
+        }
+        factors["expected_value"] += {"confirmed": 10, "high": 7, "medium": 3}.get(confidence, 0)
+        score = _rank_score(factors, ranking)
         actions.append(
             {
                 "id": f"finding:{finding.get('id') or finding.get('title')}",
@@ -119,6 +157,7 @@ def _next_actions(
                 "why": "An open finding still needs evidence or a decision.",
                 "score": score,
                 "risk": "R1",
+                "ranking_factors": factors,
             }
         )
     if edges:
@@ -127,8 +166,30 @@ def _next_actions(
                 "id": "rank-attack-paths",
                 "action": "Rank evidence-backed attack paths",
                 "why": "The session contains graph relationships that can be inspected offline.",
-                "score": 70,
+                "score": _rank_score(
+                    {
+                        "exploitability": 25,
+                        "evidence_quality": 25,
+                        "expected_value": 24,
+                        "risk": 15,
+                        "noise": 15,
+                        "rollback_quality": 15,
+                        "prerequisite_satisfaction": 15,
+                        "detection_value": 15,
+                    },
+                    ranking,
+                ),
                 "risk": "R1",
+                "ranking_factors": {
+                    "exploitability": 25,
+                    "evidence_quality": 25,
+                    "expected_value": 24,
+                    "risk": 15,
+                    "noise": 15,
+                    "rollback_quality": 15,
+                    "prerequisite_satisfaction": 15,
+                    "detection_value": 15,
+                },
             }
         )
     if not actions:
@@ -137,15 +198,37 @@ def _next_actions(
                 "id": "generate-report",
                 "action": "Generate engagement deliverables",
                 "why": "No open action is blocking reporting.",
-                "score": 20,
+                "score": _rank_score(
+                    {
+                        "expected_value": 8,
+                        "risk": 15,
+                        "noise": 15,
+                        "rollback_quality": 15,
+                        "prerequisite_satisfaction": 15,
+                        "detection_value": 5,
+                    },
+                    ranking,
+                ),
                 "risk": "R1",
+                "ranking_factors": {
+                    "expected_value": 8,
+                    "risk": 15,
+                    "noise": 15,
+                    "rollback_quality": 15,
+                    "prerequisite_satisfaction": 15,
+                    "detection_value": 5,
+                },
             }
         )
     return sorted(actions, key=lambda item: (-item["score"], item["id"]))
 
 
 def dashboard(
-    session: Path, *, objective: str | None = None, mode: str = "OBSERVE"
+    session: Path,
+    *,
+    objective: str | None = None,
+    mode: str = "OBSERVE",
+    ranking: str = "balanced",
 ) -> dict[str, Any]:
     session = Path(session)
     meta = _load(session / "session.json", {})
@@ -162,6 +245,7 @@ def dashboard(
         str(item.get("status", "open")).lower() not in {"closed", "mitigated"} for item in findings
     )
     selected_mode = mode.upper() if mode.upper() in MODES else "OBSERVE"
+    selected_ranking = ranking.lower() if ranking.lower() in RANKING_MODES else "balanced"
     return {
         "ok": True,
         "session": str(session),
@@ -198,7 +282,8 @@ def dashboard(
             "evidence": "present" if findings or (session / "events.jsonl").is_file() else "empty",
             "report_ready": open_count == 0,
         },
-        "recommended_next_actions": _next_actions(session, findings, edges),
+        "recommended_next_actions": _next_actions(session, findings, edges, selected_ranking),
+        "ranking": selected_ranking,
     }
 
 

@@ -51,6 +51,11 @@ def register_product_commands(
         session: Path = typer.Option(..., "--session"),
         objective: str | None = typer.Option(None, "--objective"),
         mode: str = typer.Option("OBSERVE", "--mode", help="OBSERVE, VALIDATE, or EMULATE."),
+        ranking: str = typer.Option(
+            "balanced",
+            "--rank-by",
+            help="balanced, fastest, quietest, safest, least-disruptive, or purple-team.",
+        ),
     ) -> None:
         """Show the unified scope, access, findings, paths, and next-actions view."""
         from adaf_attack.core.engagement_dashboard import dashboard as engagement_dashboard
@@ -65,6 +70,7 @@ def register_product_commands(
                 f"Objective: {objective_data['title']} ({objective_data['progress']}% complete)\n"
                 f"Scope: {health['scope']}  Evidence: {health['evidence']}  Reports: {'ready' if health['report_ready'] else 'blocked'}\n"
                 f"Findings: {payload['findings']['count']}  Attack paths: {payload['attack_paths']['edges']} edges\n\n"
+                f"Ranking: {payload['ranking']}\n"
                 "Recommended next actions:\n"
                 + "\n".join(
                     f"{i}. {item['action']} [{item['risk']}] — {item['why']}"
@@ -76,7 +82,7 @@ def register_product_commands(
             ctx,
             "Engagement dashboard",
             session,
-            lambda p: engagement_dashboard(p, objective=objective, mode=mode),
+            lambda p: engagement_dashboard(p, objective=objective, mode=mode, ranking=ranking),
             human,
         )
 

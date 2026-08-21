@@ -12,6 +12,7 @@ from adaf_attack.core import profiles as profiles_mod
 from adaf_attack.core import user_config
 from adaf_attack.core.cli_contract import error_for
 from adaf_attack.core.completions import generate_completion
+from adaf_attack.core.engagement_dashboard import dashboard as engagement_dashboard
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.outcomes import build_post_execution_outcome, record_detection_status
 from adaf_attack.core.rollback import cleanup_dashboard
@@ -281,6 +282,30 @@ def test_detection_status_updates_outcome_without_changing_offensive_result(
     assert detection["status"] == "detected"
     assert outcome["offensive_success"] is True
     assert outcome["detection"]["observed_telemetry"] == ["4769", "EDR alert"]
+
+
+def test_engagement_dashboard_exposes_explainable_action_ranking(tmp_path: Path) -> None:
+    (tmp_path / "findings.json").write_text(
+        json.dumps(
+            {
+                "findings": [
+                    {
+                        "id": "F-1",
+                        "title": "High-confidence path",
+                        "severity": "high",
+                        "confidence": "confirmed",
+                        "evidence": "acl.json",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    view = engagement_dashboard(tmp_path, ranking="quietest")
+    action = view["recommended_next_actions"][0]
+    assert view["ranking"] == "quietest"
+    assert action["ranking_factors"]["evidence_quality"] == 25
+    assert "detection_value" in action["ranking_factors"]
 
 
 def test_errors_command_shows_suggested() -> None:
