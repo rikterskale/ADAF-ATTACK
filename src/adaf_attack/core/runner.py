@@ -143,6 +143,7 @@ def execute_capability(
 
     if cap.runner is None:
         raise RunError(f"Capability '{capability_id}' has no runner implemented yet.")
+    runner = cap.runner
 
     # Resolve working credentials (rotation / failover)
     try:
@@ -181,7 +182,7 @@ def execute_capability(
         retries = int(runner_kwargs.pop("retries", 0))
 
         def _run() -> dict[str, Any]:
-            return cap.runner.run(
+            return runner.run(
                 resolved_target,
                 session,
                 graph,

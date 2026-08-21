@@ -13,8 +13,8 @@ from adaf_attack.core import user_config
 from adaf_attack.core.cli_contract import error_for
 from adaf_attack.core.completions import generate_completion
 from adaf_attack.core.ux import (
-    diff_sessions,
     capability_prerequisites,
+    diff_sessions,
     export_plan_markdown,
     format_next_actions_block,
     format_stages_progress,

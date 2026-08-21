@@ -173,7 +173,8 @@ def stages_for_capability(cap: Capability) -> list[str]:
 
 def _load_json(path: Path) -> dict[str, Any]:
     try:
-        return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return cast(dict[str, Any], value) if isinstance(value, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
 

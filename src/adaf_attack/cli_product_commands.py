@@ -59,7 +59,17 @@ def register_product_commands(app: typer.Typer, *, emit: Callable[..., None], em
         """Replay a session timeline for review and handoff."""
         from adaf_attack.core.standout_ux import session_timeline
 
-        _run(ctx, "Engagement replay", session, lambda path: session_timeline(path, limit=limit), lambda p: "\n".join(f"{e.get('time') or '-'}  {e['type']}  {e.get('capability') or ''}" for e in p['events'][-12:]) or "No events recorded.")
+        def human(payload: dict[str, Any]) -> str:
+            events = payload.get("events")
+            if not isinstance(events, list):
+                return "No events recorded."
+            return "\n".join(
+                f"{event.get('time') or '-'}  {event.get('type', '-') }  {event.get('capability') or ''}"
+                for event in events[-12:]
+                if isinstance(event, dict)
+            ) or "No events recorded."
+
+        _run(ctx, "Engagement replay", session, session_timeline, human)
 
     @app.command("confidence")
     def confidence(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
@@ -73,8 +83,9 @@ def register_product_commands(app: typer.Typer, *, emit: Callable[..., None], em
         """List polished repeatable assessment templates."""
         from adaf_attack.core.product import product_templates
 
-        payload = {"ok": True, "templates": product_templates()}
-        emit(ctx, payload, Panel("\n".join(f"{item['id']}: {item['description']}" for item in payload['templates']), title="Assessment templates"))
+        templates = product_templates()
+        payload = {"ok": True, "templates": templates}
+        emit(ctx, payload, Panel("\n".join(f"{item['id']}: {item['description']}" for item in templates), title="Assessment templates"))
 
     @app.command("deliverables")
     def deliverables(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:

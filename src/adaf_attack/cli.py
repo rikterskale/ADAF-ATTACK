@@ -532,6 +532,14 @@ def _doctor_payload(
     for check in checks:
         if check["id"] in {"data_dir", "config_dir", "workspace"}:
             check["scope"] = "offline"
+            # Offline and demo profiles must remain usable on read-only hosts
+            # (for example a packaged checkout or support container). Keep the
+            # probe result visible, but do not make it block read-only checks;
+            # commands that actually write still report their own actionable
+            # error at the write boundary.
+            if profile in {"offline", "user-readiness"} and check["status"] == "error":
+                check["status"] = "warning"
+                check["severity"] = "advisory"
 
     for package, optional, remediation in _MODULE_CHECKS:
         try:
@@ -1047,20 +1055,21 @@ def support_bundle(
     safe_doctor = _replace_support_identifiers(
         _sanitize_support_value(payload), tuple(item for item in (domain, dc_ip) if item)
     )
+    runtime = _sanitize_support_value({
+        "python": sys.version.split()[0],
+        "executable": str(Path(sys.executable).resolve()),
+        "prefix": str(Path(sys.prefix).resolve()),
+        "base_prefix": str(Path(sys.base_prefix).resolve()),
+        "architecture": host_platform.machine() or "unknown",
+        "system": host_platform.system(),
+        "release": host_platform.release(),
+    })
     bundle = {
         "schema": 1,
         "type": "adaf-attack-support-bundle",
         "generated_at": datetime.now(UTC).isoformat(),
         "version": __version__,
-        "runtime": {
-            "python": sys.version.split()[0],
-            "executable": str(Path(sys.executable).resolve()),
-            "prefix": str(Path(sys.prefix).resolve()),
-            "base_prefix": str(Path(sys.base_prefix).resolve()),
-            "architecture": host_platform.machine() or "unknown",
-            "system": host_platform.system(),
-            "release": host_platform.release(),
-        },
+        "runtime": runtime,
         "environment": _support_environment(),
         "doctor": safe_doctor,
         "engineering": diagnostics_snapshot(
@@ -2481,9 +2490,9 @@ def credential_exposure_cmd(
 
     try:
         payload = credential_exposure(_offline_sessions(session))
-    except ActionableError as error:
-        _emit_error(ctx, error)
-        raise typer.Exit(code=error.exit_code) from error
+    except ActionableError as caught:
+        _emit_error(ctx, caught)
+        raise typer.Exit(code=caught.exit_code) from caught
     _emit(
         ctx,
         {"ok": True, **payload},
@@ -3015,17 +3024,18 @@ def finding_triage_cmd(
     changed = False
     if status is not None:
         if status not in allowed:
-            error = ActionableError(
+            status_error = ActionableError(
                 "INVALID_FINDING_STATUS", f"Invalid finding status: {status}",
                 f"Choose one of: {', '.join(sorted(allowed))}.",
                 suggested_command=f"adaf-attack finding triage --session {session} --id {finding_id} --status acknowledged",
             )
-            _emit_error(ctx, error)
-            raise typer.Exit(code=error.exit_code)
+            _emit_error(ctx, status_error)
+            raise typer.Exit(code=status_error.exit_code)
         finding["status"] = status
         changed = True
     if tag is not None:
-        tags = finding.get("tags") if isinstance(finding.get("tags"), list) else []
+        raw_tags = finding.get("tags")
+        tags: list[Any] = list(raw_tags) if isinstance(raw_tags, list) else []
         if tag not in tags:
             tags.append(tag)
         finding["tags"] = tags
@@ -3056,13 +3066,13 @@ def finding_triage_cmd(
                 raise ValueError("finding disappeared while updating findings.json")
             path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
         except (OSError, ValueError, json.JSONDecodeError) as exc:
-            error = ActionableError(
+            triage_error = ActionableError(
                 "FINDING_TRIAGE_WRITE_FAILED", f"Could not update finding triage state: {exc}",
                 "Check that the session is writable and rerun the command.",
                 suggested_command=f"adaf-attack finding explain --session {session} --id {finding_id}",
             )
-            _emit_error(ctx, error)
-            raise typer.Exit(code=error.exit_code) from exc
+            _emit_error(ctx, triage_error)
+            raise typer.Exit(code=triage_error.exit_code) from exc
     payload = {"ok": True, "updated": changed, "session": str(session), "finding": finding, "allowed_statuses": sorted(allowed)}
     _emit(ctx, payload, Panel(
         f"{finding.get('id') or finding.get('title')}\nStatus: {finding.get('status', 'open')}\n"

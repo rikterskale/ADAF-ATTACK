@@ -598,13 +598,17 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self.query_one("#target-validation", Static).update(message)
 
     def _refresh_first_launch_panel(self) -> None:
-        domain = bool(self.query_one("#domain", Input).value.strip())
-        dc_ip = bool(self.query_one("#dc_ip", Input).value.strip())
-        access = bool(
-            self.query_one("#username", Input).value.strip()
-            or self.query_one("#ccache", Input).value.strip()
-            or self.query_one("#password", Input).value
-        )
+        try:
+            domain = bool(self.query_one("#domain", Input).value.strip())
+            dc_ip = bool(self.query_one("#dc_ip", Input).value.strip())
+            access = bool(
+                self.query_one("#username", Input).value.strip()
+                or self.query_one("#ccache", Input).value.strip()
+                or self.query_one("#password", Input).value
+            )
+        except Exception:  # noqa: BLE001
+            # A minimal/test screen may not mount the setup controls.
+            return
         profile_count = len(list_profiles())
         checklist = [
             ("workspace", default_workspace_dir().exists()),
@@ -620,9 +624,12 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Next: {next_item}",
             "Use Setup for first-run defaults or What should I do? for goal-based commands.",
         ]
-        self.query_one("#first-launch-panel", Static).update(
-            "[bold]First-launch setup[/bold]\n" + "\n".join(lines)
-        )
+        try:
+            self.query_one("#first-launch-panel", Static).update(
+                "[bold]First-launch setup[/bold]\n" + "\n".join(lines)
+            )
+        except Exception:  # noqa: BLE001
+            return
 
     def _show_home(self) -> None:
         first_run = self._last_session is None and not list_profiles()
@@ -735,8 +742,13 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         for document in documents:
             if isinstance(document, dict) and document.get("id") and document.get("title"):
                 self._workflow.ingest_finding(finding_from_document(document), actor="session")
-        self._workflow.complete_step("discovery-complete", actor="tui", phase="validation")
-        self._refresh_workflow_panel()
+        try:
+            self._workflow.complete_step("discovery-complete", actor="tui", phase="validation")
+            self._refresh_workflow_panel()
+        except OSError as exc:
+            # Findings remain available in the session even when the optional
+            # workflow checkpoint cannot be persisted (e.g. read-only home).
+            self._show_log(f"[yellow]Workflow checkpoint unavailable:[/] {exc}")
 
     def _wizard_next(self) -> None:
         if self._wizard_step == 0:
@@ -972,11 +984,17 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             health = "Ready to review"
         else:
             health = "Awaiting target details"
-        self.query_one("#engagement-dashboard", Static).update(
-            "[bold]Engagement dashboard[/bold]\n"
-            f"Target: {target} · Scope: {scope} · OPSEC: {active_opsec().upper()}\n"
-            f"Authorization: {authorization} · Session health: {health}"
-        )
+        try:
+            self.query_one("#engagement-dashboard", Static).update(
+                "[bold]Engagement dashboard[/bold]\n"
+                f"Target: {target} · Scope: {scope} · OPSEC: {active_opsec().upper()}\n"
+                f"Authorization: {authorization} · Session health: {health}"
+            )
+        except Exception:  # noqa: BLE001
+            # Test/minimal screens and transitional layouts may not mount the
+            # optional dashboard widget; background capability completion must
+            # not fail solely because that presentation surface is absent.
+            return
 
     def _update_credential_strip(self) -> None:
         labels = []

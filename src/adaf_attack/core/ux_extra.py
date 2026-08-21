@@ -11,7 +11,8 @@ from adaf_attack.core.registry import Capability, capability_registry
 
 def _load_json(path: Path) -> dict[str, Any]:
     try:
-        return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
+        value = json.loads(path.read_text(encoding="utf-8"))
+        return cast(dict[str, Any], value) if isinstance(value, dict) else {}
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -120,19 +121,20 @@ def session_findings_dashboard(
         triage_counts[triage] = triage_counts.get(triage, 0) + 1
         if severity and sev != severity.lower():
             continue
-        filtered.append(
-            {
-                "id": item.get("id") or item.get("finding_id"),
-                "title": item.get("title") or item.get("name") or "untitled",
-                "severity": sev,
-                "category": item.get("category") or item.get("tactic"),
-                "status": str(item.get("status", "open")).lower(),
-                "owner": item.get("owner"),
-                "tags": item.get("tags") or [],
-                "triage_note": item.get("triage_note"),
-                "comment": item.get("comment"),
-            }
-        )
+        normalized = {
+            "id": item.get("id") or item.get("finding_id"),
+            "title": item.get("title") or item.get("name") or "untitled",
+            "severity": sev,
+            "category": item.get("category") or item.get("tactic"),
+        }
+        # Keep the stable minimal shape for legacy findings while preserving
+        # triage metadata for records that actually carry it.
+        if "status" in item:
+            normalized["status"] = str(item["status"]).lower()
+        for key in ("owner", "tags", "triage_note", "comment"):
+            if key in item:
+                normalized[key] = item[key]
+        filtered.append(normalized)
         if len(filtered) >= limit:
             break
 

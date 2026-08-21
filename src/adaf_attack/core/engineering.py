@@ -12,12 +12,13 @@ import logging
 import sqlite3
 import time
 from collections.abc import Callable, Iterable, Mapping
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
 from importlib.metadata import entry_points
 from pathlib import Path
 from threading import Lock
-from typing import Any, Generic, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -217,7 +218,7 @@ def execute_with_controls(
                 # A running Python thread cannot be force-killed; avoid making
                 # the caller wait for it after the bounded wait has expired.
                 pool.shutdown(wait=False, cancel_futures=True)
-        except FutureTimeoutError as exc:
+        except FutureTimeoutError:
             last_error = TimeoutError(f"operation exceeded {timeout:.1f}s timeout")
         except Exception as exc:  # noqa: BLE001
             last_error = exc
