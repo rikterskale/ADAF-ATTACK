@@ -9,7 +9,6 @@ permissions:
 jobs:
   artifact_smoke:
     name: Artifact smoke (${{ matrix.os }} / Python ${{ matrix.python-version }} / ${{ matrix.artifact }})
-    needs: [package]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -85,4 +84,3 @@ jobs:
             --artifact "${artifacts[0]}" \
             --venv "$RUNNER_TEMP/adaf-artifact-smoke" \
             --extras "${{ matrix.extras }}"
-

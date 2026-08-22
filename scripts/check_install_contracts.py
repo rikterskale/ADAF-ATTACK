@@ -39,6 +39,36 @@ def _check_action_pins() -> None:
                     )
 
 
+def _check_workflow_dependencies() -> None:
+    """Ensure every job-level ``needs`` reference is local to its workflow.
+
+    Reusable workflows run in their own job namespace. A called workflow must
+    not refer to caller-only jobs such as ``package`` or ``scripts``; those
+    dependencies belong on the caller's ``uses`` job instead.
+    """
+    for workflow_path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        workflow = _load_yaml(workflow_path)
+        jobs = workflow.get("jobs") or {}
+        job_names = set(jobs)
+        for job_name, job in jobs.items():
+            raw_needs = job.get("needs", []) if isinstance(job, dict) else []
+            if isinstance(raw_needs, str):
+                needs = [raw_needs]
+            elif isinstance(raw_needs, list):
+                needs = raw_needs
+            else:
+                _require(
+                    False,
+                    f"{workflow_path.name}:{job_name}: needs must be a string or list",
+                )
+                continue
+            unknown = sorted(str(item) for item in needs if str(item) not in job_names)
+            _require(
+                not unknown,
+                f"{workflow_path.name}:{job_name}: needs unknown local jobs {unknown}",
+            )
+
+
 def _resolve_job(jobs: dict[str, Any], name: str) -> dict[str, Any]:
     """Return the effective job definition, following one `uses:` hop if needed."""
     import yaml as _yaml
@@ -50,7 +80,7 @@ def _resolve_job(jobs: dict[str, Any], name: str) -> dict[str, Any]:
             called_wf = _yaml.safe_load(called.read_text(encoding="utf-8"))
             called_jobs = called_wf.get("jobs") or {}
             # Reusable file typically has one job; return the first non-called job.
-            for called_name, called_job in called_jobs.items():
+            for _called_name, called_job in called_jobs.items():
                 return called_job
     return job
 
@@ -489,6 +519,7 @@ def _check_precommit_pins() -> None:
 def main() -> int:
     checks = (
         _check_action_pins,
+        _check_workflow_dependencies,
         _check_ci,
         _check_published_workflow,
         _check_markdown_links,

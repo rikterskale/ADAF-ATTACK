@@ -20,6 +20,21 @@ def test_install_and_documentation_contracts() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_workflow_needs_reference_local_jobs() -> None:
+    for workflow_path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+        workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+        jobs = workflow.get("jobs", {})
+        job_names = set(jobs)
+        for job_name, job in jobs.items():
+            raw_needs = job.get("needs", []) if isinstance(job, dict) else []
+            needs = [raw_needs] if isinstance(raw_needs, str) else raw_needs
+            assert isinstance(needs, list), f"{workflow_path.name}:{job_name} has invalid needs"
+            assert set(needs) <= job_names, (
+                f"{workflow_path.name}:{job_name} references caller-only or unknown jobs: "
+                f"{sorted(set(needs) - job_names)}"
+            )
+
+
 def test_windows_installer_is_powershell_51_compatible_and_lifecycle_aware() -> None:
     script = (ROOT / "scripts" / "Install-AdafAttack.ps1").read_text(encoding="utf-8")
     assert "?." not in script, "PowerShell 7-only null-conditional syntax is not supported"

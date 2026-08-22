@@ -9,7 +9,6 @@ permissions:
 jobs:
   windows_installer:
     name: Windows installer (${{ matrix.shell }} / Python ${{ matrix.python-version }})
-    needs: [package, scripts]
     runs-on: windows-2022
     timeout-minutes: 30
     strategy:
@@ -49,5 +48,4 @@ jobs:
         if: matrix.shell == 'pwsh'
         shell: pwsh
         run: .\scripts\Test-WindowsInstaller.ps1 -RepoRoot $PWD -PreexistingConfig
-
 

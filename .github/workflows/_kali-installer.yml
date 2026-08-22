@@ -9,7 +9,6 @@ permissions:
 jobs:
   kali_installer:
     name: Kali artifact installer lifecycle
-    needs: [package, scripts]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     container:
@@ -67,4 +66,3 @@ jobs:
             --skip-completion
           bash scripts/install-kali.sh --uninstall --remove-workspace
           [[ ! -e "$XDG_DATA_HOME/adaf-attack/workspaces" ]]
-
