@@ -61,6 +61,7 @@ from adaf_attack.core.user_config import (
 )
 from adaf_attack.core.ux import (
     build_ready_command,
+    diff_sessions,
     format_stages_progress,
     group_capabilities_by_phase,
     risk_checklist,
@@ -138,6 +139,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         Binding("d", "dry_run", "Dry run"),
         Binding("l", "list_caps", "Refresh"),
         Binding("s", "show_sessions", "Sessions"),
+        Binding("c", "compare_sessions", "Compare sessions"),
         Binding("p", "toggle_password", "Show/Hide password"),
         Binding("ctrl+k", "focus_search", "Search", priority=True),
         Binding("e", "jump_to_error", "Last error"),
@@ -186,6 +188,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             yield Button("Reset form", id="reset-form-btn")
             yield Button("Undo reset", id="undo-reset-btn", disabled=True)
             yield Button("Sessions", id="sessions-btn")
+            yield Button("Compare sessions", id="compare-sessions-btn")
             yield Button("Findings", id="findings-btn")
             yield Button("Cockpit", id="cockpit-btn")
             yield Button("Attack paths", id="attack-paths-btn")
@@ -1144,6 +1147,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     def action_show_sessions(self) -> None:
         self._show_sessions()
 
+    def action_compare_sessions(self) -> None:
+        self._show_session_comparison()
+
     def action_toggle_password(self) -> None:
         self._toggle_password()
 
@@ -1489,6 +1495,47 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 )
         self.query_one("#session-panel", Static).update(
             "[bold]Recent sessions[/bold]\n" + ("\n".join(rows[:8]) or "No sessions found.")
+        )
+
+    def _show_session_comparison(self) -> None:
+        """Show a side-by-side summary of the latest two saved sessions."""
+        if not self._last_session or not self._last_session.is_dir():
+            self.notify("Complete or select a session first.", severity="information")
+            return
+        workspace = default_workspace_dir()
+        sessions = (
+            [
+                path
+                for path in sorted(workspace.iterdir(), reverse=True)
+                if path.is_dir()
+                and (path / "session.json").is_file()
+                and path != self._last_session
+            ]
+            if workspace.is_dir()
+            else []
+        )
+        if not sessions:
+            self.query_one("#session-panel", Static).update(
+                "[bold]Session comparison[/bold]\nNeed two saved sessions to compare."
+            )
+            return
+        baseline = sessions[0]
+        try:
+            payload = diff_sessions(baseline, self._last_session)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            self.query_one("#session-panel", Static).update(
+                f"[bold]Session comparison[/bold]\nCould not compare sessions: {exc}"
+            )
+            return
+        self.query_one("#session-panel", Static).update(
+            "[bold]Session comparison[/bold]\n"
+            f"Baseline: {baseline.name}\nCurrent: {self._last_session.name}\n\n"
+            f"Findings: {payload['finding_delta']:+d} · Nodes: {payload['node_delta']:+d} · "
+            f"Edges: {payload['edge_delta']:+d}\n"
+            f"Relationships added: {len(payload['relationships_added'])} · "
+            f"removed: {len(payload['relationships_removed'])}\n"
+            f"Findings added: {', '.join(payload['findings_added']) or 'none'}\n"
+            f"Findings removed: {', '.join(payload['findings_removed']) or 'none'}"
         )
 
     def _create_reports(self) -> None:
@@ -1839,6 +1886,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "reset-form-btn": self._reset_form,
             "undo-reset-btn": self._undo_form_reset,
             "sessions-btn": self._show_sessions,
+            "compare-sessions-btn": self._show_session_comparison,
             "findings-btn": self._show_findings,
             "cockpit-btn": self._show_cockpit,
             "attack-paths-btn": self._show_attack_paths,

@@ -143,6 +143,44 @@ def test_asset_workspace_aggregates_safe_evidence(tmp_path: Path) -> None:
     assert inspect_edge(session / "graph.json", source="missing")["count"] == 0
 
 
+def test_tui_side_by_side_session_comparison(tmp_path: Path, monkeypatch: Any) -> None:
+    import importlib
+
+    tui_module = importlib.import_module("adaf_attack.tui.app")
+    tui = ADAFAttackApp()
+    rendered: list[str] = []
+    notices: list[str] = []
+    monkeypatch.setattr(tui, "query_one", lambda *_args: SimpleNamespace(update=rendered.append))
+    monkeypatch.setattr(tui, "notify", lambda message, **_kwargs: notices.append(message))
+    tui.action_compare_sessions()
+    assert notices
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    alone = tmp_path / "alone"
+    alone.mkdir()
+    (alone / "session.json").write_text("{}", encoding="utf-8")
+    tui._last_session = alone
+    monkeypatch.setattr(tui_module, "default_workspace_dir", lambda: workspace)
+    tui.action_compare_sessions()
+    assert "Need two saved sessions" in rendered[-1]
+    current = workspace / "current"
+    baseline = workspace / "baseline"
+    for path in (current, baseline):
+        path.mkdir()
+        (path / "session.json").write_text("{}", encoding="utf-8")
+    tui._last_session = current
+    tui._last_session = current
+    tui.action_compare_sessions()
+    assert "Baseline: baseline" in rendered[-1]
+
+    monkeypatch.setattr(
+        tui_module, "diff_sessions", lambda *_args: (_ for _ in ()).throw(ValueError("bad diff"))
+    )
+    tui.action_compare_sessions()
+    assert "Could not compare sessions" in rendered[-1]
+
+
 def test_finding_workspace_variants_and_loader(tmp_path: Path) -> None:
     session = _session(tmp_path)
     (session / "evidence.json").write_text("{}", encoding="utf-8")
