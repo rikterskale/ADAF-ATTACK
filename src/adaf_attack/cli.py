@@ -2315,10 +2315,12 @@ def run_capability(
             _console(ctx).print(f"Cred attempts: {out['cred_attempts']}")
         if out.get("username"):
             _console(ctx).print(f"Using principal: {out['username']} ({out.get('auth')})")
-        _console(ctx).print(f"\nSession: {out['session_path']}")
+        # Keep the path intact for copy/paste even when Rich's terminal width
+        # would otherwise insert a line break inside a temporary directory.
+        typer.echo(f"\nSession: {out['session_path']}")
         session_id = out.get("session_id")
         if session_id:
-            _console(ctx).print(f"Inspect: adaf-attack sessions --session {session_id}")
+            typer.echo(f"Inspect: adaf-attack sessions --session {session_id}")
     except RunError as exc:
         text = str(exc)
         code = classify_run_error(text)

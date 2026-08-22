@@ -112,7 +112,11 @@ class TgtCaptureListener:
         """Bind and listen; return False (recording ``error``) on bind failure."""
         try:
             server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            exclusive_reuse = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+            if exclusive_reuse is not None:
+                server.setsockopt(socket.SOL_SOCKET, exclusive_reuse, 1)
+            else:
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             server.bind((self.host, self.port))
             server.listen(5)
             server.settimeout(0.25)
