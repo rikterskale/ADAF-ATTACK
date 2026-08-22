@@ -23,6 +23,7 @@ from adaf_attack.core.engagement_dashboard import dashboard, inspect_edge, missi
 from adaf_attack.core.finding_workspace import build_finding_workspace, load_finding_workspace
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.identity_workspace import build_identity_workspace
+from adaf_attack.core.investigation_workspace import build_investigation_workspace
 from adaf_attack.core.local_queries import query_local_evidence
 from adaf_attack.core.outcomes import build_post_execution_outcome, record_detection_status
 from adaf_attack.core.tier0_workspace import build_tier0_workspace
@@ -222,6 +223,59 @@ def test_asset_workspace_aggregates_safe_evidence(tmp_path: Path) -> None:
         app, ["--format", "json", "engagement", "domain", "--session", str(session)]
     )
     assert domain_cli.exit_code == 0
+    (session / "investigation.json").write_text(
+        json.dumps(
+            {
+                "title": "ACL investigation",
+                "notes": "Review the path to Tier 0.",
+                "findings": ["F-1"],
+                "identities": ["USER@CORP"],
+                "assets": [{"id": "GROUP@DOMAIN ADMINS@CORP"}],
+                "credentials": ["ticket.kirbi"],
+                "evidence": ["events.jsonl", "missing.json"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    investigation = build_investigation_workspace(session)
+    assert investigation["summary"] == {
+        "pins": 6,
+        "findings": 1,
+        "nodes": 2,
+        "events": 1,
+        "artifacts": 2,
+    }
+    assert investigation["health"]["workspace"] == "configured"
+    assert investigation["artifacts"][1]["present"] is False
+    investigation_cli = CliRunner().invoke(
+        app, ["--format", "json", "engagement", "investigation", "--session", str(session)]
+    )
+    assert investigation_cli.exit_code == 0
+    empty_investigation = build_investigation_workspace(tmp_path / "missing-investigation")
+    assert empty_investigation["health"] == {
+        "workspace": "empty",
+        "graph": "missing or unreadable",
+        "events": "empty",
+        "evidence": "empty",
+    }
+    malformed_investigation = tmp_path / "malformed-investigation"
+    malformed_investigation.mkdir()
+    (malformed_investigation / "investigation.json").write_text("[]", encoding="utf-8")
+    (malformed_investigation / "graph.json").write_text("not json", encoding="utf-8")
+    (malformed_investigation / "events.jsonl").write_text("[1]\nbad\n", encoding="utf-8")
+    assert build_investigation_workspace(malformed_investigation)["health"] == {
+        "workspace": "empty",
+        "graph": "missing or unreadable",
+        "events": "empty",
+        "evidence": "empty",
+    }
+    invalid_pins = tmp_path / "invalid-pins"
+    invalid_pins.mkdir()
+    (invalid_pins / "investigation.json").write_text(
+        json.dumps({"findings": "F-1", "identities": {"id": "USER@CORP"}}),
+        encoding="utf-8",
+    )
+    assert build_investigation_workspace(invalid_pins)["summary"]["pins"] == 0
     (session / "certificate.pfx").write_bytes(b"x")
     (session / "password.txt").write_bytes(b"x")
     assert len(session_access_context(session)["credential_artifacts"]) == 3

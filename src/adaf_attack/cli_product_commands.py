@@ -238,6 +238,23 @@ def register_product_commands(
 
         _run(ctx, "Domain workspace", session, build_domain_workspace, human)
 
+    @engagement_app.command("investigation")
+    def engagement_investigation(
+        ctx: typer.Context, session: Path = typer.Option(..., "--session")
+    ) -> None:
+        """Show pinned findings, identities, assets, credentials, and evidence."""
+        from adaf_attack.core.investigation_workspace import build_investigation_workspace
+
+        def human(payload: dict[str, Any]) -> str:
+            summary = payload["summary"]
+            return (
+                f"{payload['title']}\n"
+                f"Pins: {summary['pins']}  Findings: {summary['findings']}  Nodes: {summary['nodes']}\n"
+                f"Events: {summary['events']}  Evidence artifacts: {summary['artifacts']}"
+            )
+
+        _run(ctx, "Investigation workspace", session, build_investigation_workspace, human)
+
     @app.command("command-center")
     def command_center(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Open the polished mission-control view for an engagement."""
