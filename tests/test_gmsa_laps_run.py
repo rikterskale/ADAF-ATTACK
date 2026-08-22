@@ -1,4 +1,4 @@
-"""Offline end-to-end coverage for gMSA/LAPS enumeration."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

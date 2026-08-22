@@ -178,7 +178,10 @@ class SessionStore:
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self._connect() as db:
             rows = db.execute(
-                f"SELECT session_id, finding_id, title, severity, status, document FROM findings {where} ORDER BY rowid DESC LIMIT ?",
+                # nosec B608 - `where` is composed only from a fixed allowlist of
+                # column names ("severity", "status"); all values bind through
+                # the parameter tuple below.
+                f"SELECT session_id, finding_id, title, severity, status, document FROM findings {where} ORDER BY rowid DESC LIMIT ?",  # nosec B608
                 (*params, max(1, min(limit, 1000))),
             ).fetchall()
         return [

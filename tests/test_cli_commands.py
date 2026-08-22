@@ -1,4 +1,4 @@
-"""Broad CLI command coverage (human + json output, workflow wrappers)."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

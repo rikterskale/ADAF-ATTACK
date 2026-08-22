@@ -1,4 +1,4 @@
-"""Offline coverage for cleanup, rollback registry, and operator guidance."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

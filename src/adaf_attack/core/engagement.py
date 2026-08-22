@@ -79,6 +79,15 @@ def verify_approval(token: str, plan: EngagementPlan, capability: str) -> dict[s
     The service and CLI share a rotation-managed verification key in this minimal
     deployment. Production deployments should replace this with asymmetric JWKS.
     """
+    env_name = os.environ.get("ADAF_ATTACK_ENV", "").strip().lower()
+    if env_name in ("prod", "production"):
+        ack = os.environ.get("ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD", "").strip()
+        if ack not in ("1", "true", "yes"):
+            raise EngagementError(
+                "APPROVAL_VERIFIER_INSECURE: the built-in HMAC verifier is not permitted "
+                "when ADAF_ATTACK_ENV=prod. Deploy an asymmetric JWKS verifier or set "
+                "ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD=1 to accept the shared-secret verifier."
+            )
     key = os.environ.get("ADAF_APPROVAL_HMAC_KEY")
     if not key:
         raise EngagementError("ADAF_APPROVAL_HMAC_KEY is required for approval verification")

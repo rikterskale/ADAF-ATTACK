@@ -234,6 +234,14 @@ def test_coerce_trigger_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch
     rpcrt.uuidtup_to_bin = lambda value: b"uuid"
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.rpcrt", rpcrt)
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.transport", transport)
+    # When the real impacket.dcerpc.v5 package is already imported, its parent
+    # attributes shadow sys.modules for `from impacket.dcerpc.v5 import transport`.
+    # Rebind the parent-package attributes to the fakes as well; monkeypatch
+    # will revert both on teardown.
+    import importlib
+    v5 = importlib.import_module("impacket.dcerpc.v5")
+    monkeypatch.setattr(v5, "rpcrt", rpcrt, raising=False)
+    monkeypatch.setattr(v5, "transport", transport, raising=False)
     monkeypatch.setattr(coerce, "_build_coercion_request", lambda method, listener: {})
 
     outcome = coerce._trigger(_target(), "10.0.0.1", "10.0.0.2", "petitpotam")

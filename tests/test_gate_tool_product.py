@@ -1,4 +1,4 @@
-"""Coverage gate tests for cli_tool_commands and cli_product_commands."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

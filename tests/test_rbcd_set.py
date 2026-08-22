@@ -1,4 +1,4 @@
-"""Coverage for the RBCD write path (_set_rbcd) with a mocked LDAP connection."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

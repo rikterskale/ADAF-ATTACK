@@ -1,4 +1,4 @@
-"""Offline lifecycle coverage for campaign and credential-inventory capabilities."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

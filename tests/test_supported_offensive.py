@@ -1,4 +1,4 @@
-"""Offline coverage for the 40 promoted offensive capabilities."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

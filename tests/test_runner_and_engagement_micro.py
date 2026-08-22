@@ -1,4 +1,4 @@
-"""Small-gap coverage for creds, runner, esc6, forest_campaign, and report edges."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

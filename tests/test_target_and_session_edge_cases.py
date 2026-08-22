@@ -1,4 +1,4 @@
-"""Absolute final push for 99% coverage."""
+"""Edge cases for target and session helpers."""
 
 from __future__ import annotations
 

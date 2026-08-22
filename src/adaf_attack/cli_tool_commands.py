@@ -194,7 +194,7 @@ def register_tool_commands(
             ),
         )
 
-    @app.command("credential-inventory")
+    @app.command("credential-inventory", rich_help_panel="Discovery & analysis")
     def credential_inventory(
         ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")
     ) -> None:
@@ -221,7 +221,7 @@ def register_tool_commands(
             ),
         )
 
-    @app.command("cockpit")
+    @app.command("cockpit", rich_help_panel="Advanced product surfaces")
     def cockpit(
         ctx: typer.Context,
         session: Path = typer.Option(..., "--session"),
@@ -251,7 +251,7 @@ def register_tool_commands(
             ),
         )
 
-    @app.command("what-if")
+    @app.command("what-if", rich_help_panel="Advanced product surfaces")
     def what_if(
         ctx: typer.Context,
         graph: Path = typer.Option(..., "--graph"),
@@ -286,7 +286,7 @@ def register_tool_commands(
             ),
         )
 
-    @app.command("timeline")
+    @app.command("timeline", rich_help_panel="Advanced product surfaces")
     def timeline(
         ctx: typer.Context,
         session: Path = typer.Option(..., "--session"),
@@ -313,7 +313,7 @@ def register_tool_commands(
             Panel("\n".join(lines) or "No audit events found.", title="Engagement timeline"),
         )
 
-    @app.command("copilot")
+    @app.command("copilot", rich_help_panel="Advanced product surfaces")
     def copilot(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Recommend the next evidence-backed action without executing it."""
         from adaf_attack.core.standout_ux import copilot_recommendations
@@ -338,7 +338,7 @@ def register_tool_commands(
             ),
         )
 
-    @app.command("collaboration")
+    @app.command("collaboration", rich_help_panel="Advanced product surfaces")
     def collaboration(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Show finding ownership and collaboration state for a session."""
         from adaf_attack.core.standout_ux import collaboration_summary

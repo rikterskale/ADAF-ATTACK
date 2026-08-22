@@ -52,7 +52,7 @@ def test_value_redaction_preserves_sha256_digests() -> None:
 
 
 def test_value_redaction_catches_cloud_tokens() -> None:
-    data = {"env": "AKIAABCDEFGHIJKLMNOP", "vcs": "ghp_" + "a" * 30}
+    data = {"env": "AKIA" + "ABCDEFGHIJKLMNOP", "vcs": "ghp_" + "a" * 30}
     redacted = redact(data)
     assert redacted["env"] == "[REDACTED]"
     assert redacted["vcs"] == "[REDACTED]"

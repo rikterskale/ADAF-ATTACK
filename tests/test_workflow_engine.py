@@ -1,4 +1,4 @@
-"""Finding-driven workflow engine coverage."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

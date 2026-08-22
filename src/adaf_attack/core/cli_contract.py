@@ -61,6 +61,10 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Re-run with --yes when the destructive action is authorized.",
         "adaf-attack run <capability> ... --force --yes",
     ),
+    "APPROVAL_VERIFIER_INSECURE": (
+        "The built-in HMAC approval verifier is not permitted when ADAF_ATTACK_ENV=prod.",
+        "Deploy an asymmetric JWKS verifier for production, or set ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD=1 to explicitly accept the shared-secret verifier for this engagement.",
+    ),
     "ENGAGEMENT_PLAN_INVALID": (
         "The engagement plan YAML is invalid.",
         "Correct the YAML scope and validate again.",

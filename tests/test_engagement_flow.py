@@ -1,4 +1,4 @@
-"""Offline coverage for engagement plan loading, approval tokens, and execution."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 
@@ -244,3 +244,27 @@ def test_run_engagement_capability_not_in_scope(fake_caps: None, tmp_path: Path)
     )
     with pytest.raises(EngagementError, match="not allowed by engagement scope"):
         run_engagement(plan, workspace=tmp_path)
+
+def test_verify_approval_prod_refuses_hmac(monkeypatch: Any) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_ENV", "prod")
+    monkeypatch.delenv("ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD", raising=False)
+    monkeypatch.setenv("ADAF_APPROVAL_HMAC_KEY", "secret")
+    with pytest.raises(EngagementError, match="APPROVAL_VERIFIER_INSECURE"):
+        verify_approval("a.b", _plan(), "eng-write")
+
+
+def test_verify_approval_prod_accepts_when_acknowledged(monkeypatch: Any) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_ENV", "production")
+    monkeypatch.setenv("ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD", "1")
+    monkeypatch.setenv("ADAF_APPROVAL_HMAC_KEY", "secret")
+    with pytest.raises(EngagementError, match="Invalid approval token format"):
+        verify_approval("not-a-token", _plan(), "eng-write")
+
+
+def test_verify_approval_dev_env_unaffected(monkeypatch: Any) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_ENV", "dev")
+    monkeypatch.delenv("ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD", raising=False)
+    monkeypatch.delenv("ADAF_APPROVAL_HMAC_KEY", raising=False)
+    with pytest.raises(EngagementError, match="ADAF_APPROVAL_HMAC_KEY is required"):
+        verify_approval("a.b", _plan(), "eng-write")
+

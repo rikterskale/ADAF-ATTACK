@@ -577,11 +577,25 @@ def _job_is_gated() -> None:
 
 @binding.check("every pillar maps to live jobs, steps, and contract tests")
 def _pillars_are_wired() -> None:
+    import yaml
     workflow = _load_workflow()
     jobs = workflow["jobs"]
-    all_step_names = {
-        step.get("name", "") for job in jobs.values() for step in job.get("steps", [])
-    }
+    all_step_names: set[str] = set()
+    for job in jobs.values():
+        for step in job.get("steps", []) or []:
+            all_step_names.add(step.get("name", ""))
+    # Also look inside any called reusable workflows (jobs with `uses:`).
+    for job in jobs.values():
+        uses = job.get("uses") if isinstance(job, dict) else None
+        if not uses or not isinstance(uses, str) or not uses.startswith("./"):
+            continue
+        called = REPO_ROOT / uses.removeprefix("./")
+        if not called.is_file():
+            continue
+        called_wf = yaml.safe_load(called.read_text(encoding="utf-8"))
+        for called_job in (called_wf.get("jobs") or {}).values():
+            for step in called_job.get("steps", []) or []:
+                all_step_names.add(step.get("name", ""))
     problems: list[str] = []
     for pillar, spec in _PILLAR_BINDINGS.items():
         for job in spec["jobs"]:

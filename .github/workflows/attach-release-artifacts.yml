@@ -1,0 +1,66 @@
+name: Attach release evidence
+
+# When a private GitHub release is published, generate the SBOM (CycloneDX),
+# reproduce the release manifest, and attach both alongside the wheel assets.
+# The SBOM is generated on the release commit so it reflects the exact locked
+# dependency set that CI proved.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach evidence to."
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  attach:
+    name: Generate and attach SBOM + manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Install CI dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --requirement requirements-ci.txt
+
+      - name: Generate CycloneDX SBOM
+        run: >-
+          python -m pip_audit
+          --requirement requirements-ci.txt
+          --format cyclonedx-json
+          --output sbom.json
+
+      - name: Validate SBOM
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          sbom = json.loads(Path("sbom.json").read_text(encoding="utf-8"))
+          assert sbom.get("bomFormat") == "CycloneDX"
+          assert sbom.get("components"), "SBOM has no components"
+          PY
+
+      - name: Attach SBOM to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          gh release upload "$RELEASE_TAG" sbom.json --clobber

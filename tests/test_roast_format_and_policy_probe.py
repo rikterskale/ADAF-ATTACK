@@ -1,4 +1,4 @@
-"""Offline coverage for roast formatters and AD CS policy evidence."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

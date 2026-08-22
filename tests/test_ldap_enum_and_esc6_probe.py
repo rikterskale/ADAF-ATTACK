@@ -1,4 +1,4 @@
-"""Last-mile coverage for straggler branches across many modules."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

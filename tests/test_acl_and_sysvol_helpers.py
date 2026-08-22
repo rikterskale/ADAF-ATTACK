@@ -1,4 +1,4 @@
-"""Unit coverage for local ACL-right and SYSVOL path parsing."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

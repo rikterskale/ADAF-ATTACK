@@ -1,4 +1,4 @@
-"""Offline coverage for final capability containment branches."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

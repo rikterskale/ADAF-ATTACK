@@ -1,4 +1,4 @@
-"""Deeper offline coverage for the ESC6 probe (certutil + RRP paths)."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

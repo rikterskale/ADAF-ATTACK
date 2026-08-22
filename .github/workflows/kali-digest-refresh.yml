@@ -1,0 +1,71 @@
+name: Kali digest refresh
+
+# Weekly check for a newer `kalilinux/kali-rolling` container digest.
+# When the upstream digest changes, opens a pull request bumping the pin used by
+# the `kali-installer` job in ci.yml. Manual dispatch is also supported.
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"  # 05:17 UTC every Monday
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  IMAGE: docker.io/kalilinux/kali-rolling:latest
+  CI_FILE: .github/workflows/ci.yml
+
+jobs:
+  check-and-open-pr:
+    name: Check pinned Kali digest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve upstream digest
+        id: resolve
+        run: |
+          set -euo pipefail
+          docker pull --quiet "$IMAGE" > /dev/null
+          new_digest="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE" | awk -F@ '{print $2}')"
+          echo "digest=$new_digest" >> "$GITHUB_OUTPUT"
+          current="$(grep -oE 'kalilinux/kali-rolling@sha256:[0-9a-f]{64}' "$CI_FILE" | head -1 | awk -F@ '{print $2}')"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          if [ "$new_digest" = "$current" ]; then
+            echo "matched=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "matched=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip when already current
+        if: steps.resolve.outputs.matched == 'true'
+        run: echo "Kali digest ${{ steps.resolve.outputs.current }} matches upstream; nothing to do."
+
+      - name: Update pin in ci.yml
+        if: steps.resolve.outputs.matched != 'true'
+        run: |
+          set -euo pipefail
+          sed -i -E "s|kalilinux/kali-rolling@sha256:[0-9a-f]{64}|kalilinux/kali-rolling@${{ steps.resolve.outputs.digest }}|" "$CI_FILE"
+          git diff --stat
+
+      - name: Open pull request
+        if: steps.resolve.outputs.matched != 'true'
+        uses: peter-evans/create-pull-request@6d6857d36972b65feb161a90e484f2984215f83e # v7.0.7
+        with:
+          commit-message: "ci: bump Kali rolling digest"
+          title: "ci: bump Kali rolling digest"
+          branch: ci/kali-digest-refresh
+          body: |
+            Upstream `kalilinux/kali-rolling:latest` moved.
+
+            - Old: `${{ steps.resolve.outputs.current }}`
+            - New: `${{ steps.resolve.outputs.digest }}`
+
+            Verify the `kali-installer` job passes on this PR before merging.
+          labels: |
+            dependencies
+            ci

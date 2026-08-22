@@ -1,4 +1,4 @@
-"""Exercise residual pure helpers and mocked adapter branches for 100% coverage."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

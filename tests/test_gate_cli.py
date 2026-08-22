@@ -1,4 +1,4 @@
-"""Coverage gate tests for src/adaf_attack/cli.py."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

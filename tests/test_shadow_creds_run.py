@@ -1,4 +1,4 @@
-"""Offline end-to-end coverage for Shadow Credentials enumeration."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

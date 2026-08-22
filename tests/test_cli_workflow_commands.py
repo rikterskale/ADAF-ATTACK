@@ -1,4 +1,4 @@
-"""CLI coverage for the finding-driven guided workflow command group."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

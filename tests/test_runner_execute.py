@@ -1,4 +1,4 @@
-"""Coverage for runner.execute_capability end-to-end (offline, fake capability)."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

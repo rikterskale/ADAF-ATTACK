@@ -1,4 +1,4 @@
-"""Focused coverage for the selected novice UX improvements."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

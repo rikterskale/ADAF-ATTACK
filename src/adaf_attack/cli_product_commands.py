@@ -309,7 +309,7 @@ def register_product_commands(
 
         _run(ctx, "Investigation workspace", session, build_investigation_workspace, human)
 
-    @app.command("command-center")
+    @app.command("command-center", rich_help_panel="Advanced product surfaces")
     def command_center(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Open the polished mission-control view for an engagement."""
         from adaf_attack.core.product import command_center as build
@@ -324,7 +324,7 @@ def register_product_commands(
             ),
         )
 
-    @app.command("impact-map")
+    @app.command("impact-map", rich_help_panel="Advanced product surfaces")
     def impact_map(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Map evidence to findings, assets, paths, and business impact."""
         from adaf_attack.core.product import evidence_impact_map
@@ -337,7 +337,7 @@ def register_product_commands(
             lambda p: f"Mapped findings: {p['count']}\nOffline evidence correlation complete.",
         )
 
-    @app.command("investigate")
+    @app.command("investigate", rich_help_panel="Advanced product surfaces")
     def investigate(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Enter zero-noise read-only investigation mode over saved evidence."""
         from adaf_attack.core.product import zero_noise_investigation
@@ -352,14 +352,14 @@ def register_product_commands(
             ),
         )
 
-    @app.command("story")
+    @app.command("story", rich_help_panel="Advanced product surfaces")
     def story(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Build an executive story from technical findings."""
         from adaf_attack.core.product import executive_story
 
         _run(ctx, "Executive story", session, executive_story, lambda p: p["narrative"])
 
-    @app.command("replay")
+    @app.command("replay", rich_help_panel="Advanced product surfaces")
     def replay(
         ctx: typer.Context,
         session: Path = typer.Option(..., "--session"),
@@ -383,7 +383,7 @@ def register_product_commands(
 
         _run(ctx, "Engagement replay", session, session_timeline, human)
 
-    @app.command("confidence")
+    @app.command("confidence", rich_help_panel="Advanced product surfaces")
     def confidence(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Show confidence quality and findings needing more evidence."""
         from adaf_attack.core.product import confidence_report
@@ -398,7 +398,7 @@ def register_product_commands(
             ),
         )
 
-    @app.command("product-templates")
+    @app.command("product-templates", rich_help_panel="Advanced product surfaces")
     def templates(ctx: typer.Context) -> None:
         """List polished repeatable assessment templates."""
         from adaf_attack.core.product import product_templates
@@ -414,7 +414,7 @@ def register_product_commands(
             ),
         )
 
-    @app.command("deliverables")
+    @app.command("deliverables", rich_help_panel="Advanced product surfaces")
     def deliverables(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Show the one-click client deliverables manifest."""
         from adaf_attack.core.product import deliverables_manifest

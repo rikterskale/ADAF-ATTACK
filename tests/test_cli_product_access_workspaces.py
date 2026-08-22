@@ -1,4 +1,4 @@
-"""Targeted coverage for the evidence-first engagement surfaces."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

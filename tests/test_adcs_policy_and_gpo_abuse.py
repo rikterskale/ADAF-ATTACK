@@ -1,4 +1,4 @@
-"""Pure, offline coverage for classification and ranking branches."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

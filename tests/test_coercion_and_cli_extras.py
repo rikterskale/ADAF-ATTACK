@@ -1,4 +1,4 @@
-"""Coverage for coercion helpers plus remaining CLI branches."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

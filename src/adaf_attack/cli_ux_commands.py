@@ -30,7 +30,7 @@ def register_ux_commands(
     _json_mode = json_mode
     _console = console
 
-    @app.command("quickstart")
+    @app.command("quickstart", rich_help_panel="Setup & diagnostics")
     def quickstart_cmd(
         ctx: typer.Context,
         workspace: Path | None = typer.Option(
@@ -122,7 +122,7 @@ def register_ux_commands(
         """Beginner-friendly alias for the safe first-install flow."""
         quickstart_cmd(ctx, workspace)
 
-    @app.command("explain")
+    @app.command("explain", rich_help_panel="Guidance & UX helpers")
     def explain_cmd(
         ctx: typer.Context,
         capability: str = typer.Argument(..., help="Capability ID to explain in plain language."),
@@ -174,7 +174,7 @@ def register_ux_commands(
         )
         _emit(ctx, payload, human)
 
-    @app.command("what-next")
+    @app.command("what-next", rich_help_panel="Guidance & UX helpers")
     def what_next_cmd(
         ctx: typer.Context,
         capability: str | None = typer.Argument(None, help="Capability just completed, if known."),
@@ -490,7 +490,7 @@ def register_ux_commands(
             Panel(f"Default profile: {name}", title="Profile"),
         )
 
-    @app.command("demo")
+    @app.command("demo", rich_help_panel="Setup & diagnostics")
     def demo_cmd(
         ctx: typer.Context,
         workspace: Path | None = typer.Option(
@@ -552,43 +552,99 @@ def register_ux_commands(
         """Start the safe offline demo."""
         demo_cmd(ctx, workspace)
 
-    @app.command("completions")
+    @app.command("completions", rich_help_panel="Setup & diagnostics")
     def completions_cmd(
         ctx: typer.Context,
-        shell: str = typer.Argument(..., help="bash | zsh | fish | powershell"),
+        shell: str = typer.Argument(
+            "bash",
+            help="bash | zsh | fish | powershell (ignored when --all is set)",
+        ),
+        emit_all: bool = typer.Option(
+            False, "--all", help="Emit scripts for every supported shell."
+        ),
+        output_dir: Path | None = typer.Option(
+            None,
+            "--output-dir",
+            help="Write scripts as adaf-attack.<shell> under this directory instead of stdout.",
+        ),
     ) -> None:
-        """Print a shell completion script for adaf-attack."""
+        """Print (or write) shell completion scripts for adaf-attack."""
         from adaf_attack.core.completions import (
             SUPPORTED_SHELLS,
             completion_install_hint,
             generate_completion,
         )
 
-        try:
-            script = generate_completion(shell)
-        except ValueError as exc:
-            error = ActionableError(
-                "UNSUPPORTED_SHELL",
-                str(exc),
-                f"Choose one of: {', '.join(SUPPORTED_SHELLS)}",
-                suggested_command="adaf-attack completions bash",
-            )
-            _emit_error(ctx, error)
-            raise typer.Exit(code=error.exit_code) from exc
-        if _json_mode(ctx):
+        shells = list(SUPPORTED_SHELLS) if emit_all else [shell]
+
+        scripts: dict[str, str] = {}
+        for sh in shells:
+            try:
+                scripts[sh] = generate_completion(sh)
+            except ValueError as exc:
+                error = ActionableError(
+                    "UNSUPPORTED_SHELL",
+                    str(exc),
+                    f"Choose one of: {', '.join(SUPPORTED_SHELLS)}",
+                    suggested_command="adaf-attack completions bash",
+                )
+                _emit_error(ctx, error)
+                raise typer.Exit(code=error.exit_code) from exc
+
+        if output_dir is not None:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            written: list[str] = []
+            for sh, script in scripts.items():
+                extension = {"bash": "bash", "zsh": "zsh", "fish": "fish", "powershell": "ps1"}[sh]
+                path = output_dir / f"adaf-attack.{extension}"
+                path.write_text(script, encoding="utf-8")
+                written.append(str(path))
+            payload = {
+                "ok": True,
+                "written": written,
+                "install_hints": {sh: completion_install_hint(sh) for sh in shells},
+            }
             _emit(
                 ctx,
-                {
-                    "ok": True,
-                    "shell": shell,
-                    "script": script,
-                    "install_hint": completion_install_hint(shell),
-                },
-                "",
+                payload,
+                Panel(
+                    "\n".join(f"wrote {p}" for p in written),
+                    title="Completion scripts",
+                ),
             )
             return
-        typer.echo(script)
-        if not _json_mode(ctx):  # pragma: no branch
+
+        if _json_mode(ctx):
+            if emit_all:
+                _emit(
+                    ctx,
+                    {
+                        "ok": True,
+                        "scripts": scripts,
+                        "install_hints": {sh: completion_install_hint(sh) for sh in shells},
+                    },
+                    "",
+                )
+            else:
+                _emit(
+                    ctx,
+                    {
+                        "ok": True,
+                        "shell": shell,
+                        "script": scripts[shell],
+                        "install_hint": completion_install_hint(shell),
+                    },
+                    "",
+                )
+            return
+
+        if emit_all:
+            for sh, script in scripts.items():
+                typer.echo(f"# ---- {sh} ----")
+                typer.echo(script)
+                _console(ctx).print(f"[dim]# Install hint ({sh}): {completion_install_hint(sh)}[/dim]")
+        else:
+            typer.echo(scripts[shell])
             _console(ctx).print(f"[dim]# Install hint: {completion_install_hint(shell)}[/dim]")
 
     @session_app.command("show")
@@ -640,10 +696,13 @@ def register_ux_commands(
             "outcome": outcome,
             "resume_command": f"adaf-attack session show --session {session}",
         }
+        finding_count = dashboard.get("finding_count", 0)
+        severity_counts = dashboard.get("severity") or {}
+        severity_display = severity_counts if severity_counts else "none"
         lines = [
             f"Session: {dashboard.get('session_id')}",
             f"Created: {dashboard.get('created_at') or 'unknown'}",
-            f"Findings: {dashboard.get('finding_count', 0)}  Severity: {dashboard.get('severity') or {}}",
+            f"Findings: {finding_count}  Severity: {severity_display}",
             f"Graph: {dashboard.get('graph', {}).get('nodes', 0)} nodes / {dashboard.get('graph', {}).get('edges', 0)} edges",
             f"Outcome: {outcome.get('status')}  Rollback: {outcome.get('rollback', {}).get('status')}"
             if isinstance(outcome, dict)
@@ -653,6 +712,11 @@ def register_ux_commands(
             else "Detection: not recorded",
             f"Resume: adaf-attack session show --session {session}",
         ]
+        if finding_count == 0:
+            lines.append(
+                "Empty: populate this session with `adaf-attack demo --workspace <dir>`"
+                " or run a discovery capability."
+            )
         titles = dashboard.get("titles") or []
         if titles:
             lines.append("Titles:")

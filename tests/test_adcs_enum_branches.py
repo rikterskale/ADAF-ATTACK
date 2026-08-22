@@ -1,4 +1,4 @@
-"""Deep branch coverage for adcs-enum orchestration."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

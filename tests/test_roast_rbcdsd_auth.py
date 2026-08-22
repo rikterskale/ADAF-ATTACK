@@ -1,4 +1,4 @@
-"""Offline coverage for roast extraction, RBCD SD helpers, and auth branches."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

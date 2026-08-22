@@ -57,6 +57,7 @@ def _check_ci() -> None:
         "operator-workflow",
         "release-readiness",
         "windows-installer",
+        "private-index-smoke",
         "ci-gate",
     }
     _require(

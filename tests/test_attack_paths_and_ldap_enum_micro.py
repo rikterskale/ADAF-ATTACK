@@ -1,4 +1,4 @@
-"""Coverage for one-line stragglers across many modules."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

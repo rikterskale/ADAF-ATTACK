@@ -106,7 +106,7 @@ class TgtCaptureListener:
     @property
     def endpoint(self) -> str:
         """Address coercion triggers should be pointed at."""
-        return "127.0.0.1" if self.host in ("", "0.0.0.0", "::") else self.host
+        return "127.0.0.1" if self.host in ("", "0.0.0.0", "::") else self.host  # nosec B104 - value is an INPUT sentinel; endpoint accessor narrows it to 127.0.0.1
 
     def start(self) -> bool:
         """Bind and listen; return False (recording ``error``) on bind failure."""

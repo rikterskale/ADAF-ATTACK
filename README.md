@@ -4,6 +4,22 @@
 
 > Authorized internal red team use only.
 
+## Quick start
+
+Four commands from an approved wheel to a rendered offline demo session:
+
+```bash
+python -m pip install "./adaf_attack-0.10.0-py3-none-any.whl[full]"
+adaf-attack doctor --profile user-readiness
+adaf-attack quickstart --workspace ./quickstart
+adaf-attack session show --session ./quickstart/demo-session
+```
+
+Never contacts a domain controller. If any step fails, run
+`adaf-attack --format json doctor --explain` and see
+[Troubleshooting](docs/TROUBLESHOOTING.md). Windows and Kali operators
+should start from their platform guide below rather than pip directly.
+
 ## Platform guides
 
 | OS | Support |
@@ -16,8 +32,7 @@
 - New-user guides: [Windows](docs/WINDOWS_NOVICE_USABILITY_GUIDE.md) ·
   [Linux](docs/LINUX_NOVICE_USABILITY_GUIDE.md) · [macOS](docs/MACOS.md)
 - Platform/operator references: [Windows](docs/WINDOWS.md) ·
-  [Kali](docs/KALI.md) · [Windows commands](docs/WINDOWS_COMMAND_GUIDE.md) ·
-  [Linux commands](docs/LINUX_COMMAND_GUIDE.md)
+  [Kali](docs/KALI.md). Command references live in the new-user guides above.
 - [Troubleshooting](docs/TROUBLESHOOTING.md) ·
   [Known limitations](docs/KNOWN_LIMITATIONS.md) · [Changelog](CHANGELOG.md)
 - [New-user readiness guide](docs/USER_READINESS.md) ·

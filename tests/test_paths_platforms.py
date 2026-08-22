@@ -1,4 +1,4 @@
-"""Platform-branch coverage for cross-platform path helpers."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

@@ -1,0 +1,314 @@
+name: Operator workflow (reusable)
+
+# End-to-end validation that a wheel-installed operator can:
+#   * demo the offline capabilities,
+#   * generate reports and evidence bundles,
+#   * exercise the offline review + campaign surfaces,
+#   * refuse destructive commands without --force.
+#
+# Called by ci.yml. Requires the `python-distributions` artifact from the
+# `package` job (already produced by the calling workflow's prior lane).
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-operator-workflow:
+    name: Offline operator workflow
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Download built distribution
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-distributions
+          path: dist
+
+      - name: Validate release manifest
+        run: >-
+          python scripts/generate_release_manifest.py
+          --repo-root . --dist dist
+          --output dist/release-manifest.json --validate
+
+      - name: Verify downloaded distribution checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum -c SHA256SUMS)
+
+      - name: Install full operator runtime
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --requirement requirements-ci.txt
+          wheel=(dist/*.whl)
+          python -m pip install "${wheel[0]}[full]"
+          python -m pip check
+
+      - name: Validate operator-facing CLI contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          adaf-attack --format json doctor --explain > "$RUNNER_TEMP/doctor.json"
+          adaf-attack --format json list-capabilities > "$RUNNER_TEMP/capabilities.json"
+          adaf-attack --format json capability-help > "$RUNNER_TEMP/capability-help.json"
+          adaf-attack --format json workflow-profiles > "$RUNNER_TEMP/workflow-profiles.json"
+          adaf-attack --format json paths > "$RUNNER_TEMP/paths.json"
+          python - <<'PY'
+          import json
+          import hashlib
+          import os
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          for name in ("doctor", "capabilities", "capability-help", "workflow-profiles", "paths"):
+              payload = json.loads((temp / f"{name}.json").read_text(encoding="utf-8"))
+              assert isinstance(payload, dict) and payload.get("ok") is True, name
+          assert json.loads((temp / "capabilities.json").read_text())["count"] > 0
+          assert json.loads((temp / "workflow-profiles.json").read_text())["profiles"]
+          PY
+
+      - name: Validate scoped engagement lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan="$RUNNER_TEMP/engagement.yaml"
+          adaf-attack engagement init --output "$plan"
+          adaf-attack --format json engagement validate "$plan" > "$RUNNER_TEMP/engagement.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads((Path(os.environ["RUNNER_TEMP"]) / "engagement.json").read_text())
+          assert payload["ok"] is True
+          assert payload["phase_count"] >= 1
+          assert "report" in payload["allowed_capabilities"]
+          PY
+
+          run_plan="$RUNNER_TEMP/report-only-engagement.yaml"
+          cat > "$run_plan" <<'YAML'
+          engagement_id: CI-ENGAGEMENT-001
+          target:
+            domain: corp.example
+            dc_ip: 10.0.0.10
+          allowed_targets: [10.0.0.10]
+          allowed_capabilities: [report]
+          phases:
+            - name: reporting
+              capabilities: [report]
+          YAML
+          adaf-attack --format json engagement run "$run_plan" \
+            --workspace "$RUNNER_TEMP/engagement-workspace" > "$RUNNER_TEMP/engagement-run.log"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          text = (temp / "engagement-run.log").read_text(encoding="utf-8")
+          start = text.find("{")
+          assert start >= 0
+          payload, _ = json.JSONDecoder().raw_decode(text[start:])
+          assert payload["ok"] is True
+          assert payload["capabilities"] == ["report"]
+          session = Path(payload["session_path"])
+          assert (session / "session.json").is_file()
+          assert (session / "events.jsonl").is_file()
+          assert (session / "findings.json").is_file()
+          assert (session / "reports" / "report-manifest.json").is_file()
+          PY
+
+      - name: Exercise offline evidence, reporting, and packaging workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          adaf-attack --format json demo --workspace "$RUNNER_TEMP/demo-root" > "$RUNNER_TEMP/demo.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads((Path(os.environ["RUNNER_TEMP"]) / "demo.json").read_text())
+          assert payload["ok"] is True and payload["mode"] == "offline-demo"
+          Path(os.environ["RUNNER_TEMP"]).joinpath("demo-session.txt").write_text(
+              payload["session_path"], encoding="utf-8"
+          )
+          PY
+          session="$(cat "$RUNNER_TEMP/demo-session.txt")"
+          adaf-attack --format json engagement report --session "$session" --engagement-id DEMO-2026-001 > "$RUNNER_TEMP/report.json"
+          adaf-attack --format json engagement package --session "$session" --output "$RUNNER_TEMP/demo-engagement.zip" --profile client > "$RUNNER_TEMP/package.json"
+          adaf-attack --format json coercion-fixtures --fixtures tests/fixtures/demo-session --authorized-fixtures > "$RUNNER_TEMP/fixtures.json"
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import zipfile
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          report = json.loads((temp / "report.json").read_text())
+          package = json.loads((temp / "package.json").read_text())
+          fixtures = json.loads((temp / "fixtures.json").read_text())
+          assert report["ok"] is True and report["finding_count"] >= 1
+          assert package["ok"] is True and package["profile"] == "client"
+          assert fixtures["ok"] is True
+          session = Path(os.environ["RUNNER_TEMP"]).joinpath("demo-session.txt").read_text(encoding="utf-8")
+          findings = json.loads((Path(session) / "findings.json").read_text(encoding="utf-8"))
+          assert isinstance(findings, list) and findings
+          required_finding_keys = {
+              "id", "title", "severity", "confidence", "impact", "remediation", "evidence"
+          }
+          for finding in findings:
+              assert required_finding_keys <= finding.keys()
+              assert finding["severity"] in {"critical", "high", "medium", "low", "info"}
+              assert finding["evidence"]
+              for evidence in finding["evidence"]:
+                  assert {"artifact", "pointer", "sha256"} <= evidence.keys()
+                  assert len(evidence["sha256"]) == 64
+          with zipfile.ZipFile(temp / "demo-engagement.zip") as archive:
+              names = archive.namelist()
+          assert names and all("vault" not in name.lower() for name in names)
+          evidence_manifest = Path(package["manifest"])
+          manifest = json.loads(evidence_manifest.read_text(encoding="utf-8"))
+          assert manifest["redaction_profile"] == "client"
+          for entry in manifest["files"]:
+              path = evidence_manifest.parent / entry["path"]
+              assert path.is_file()
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == entry["sha256"]
+          reports = Path(session) / "reports"
+          manifest = json.loads((reports / "report-manifest.json").read_text())
+          assert manifest["finding_count"] == report["finding_count"]
+          for finding in findings:
+              title = finding["title"]
+              assert title in (reports / "technical-report.html").read_text()
+          from pypdf import PdfReader
+          technical_pdf = "\n".join(
+              page.extract_text() or ""
+              for page in PdfReader(reports / "technical-report.pdf").pages
+          )
+          assert all(finding["title"] in technical_pdf for finding in findings)
+          for report_name in ("executive", "technical", "remediation"):
+            assert (reports / f"{report_name}-report.html").is_file()
+            assert (reports / f"{report_name}-report.pdf").is_file()
+          PY
+
+      - name: Sweep offline operator review workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          session="$(cat "$RUNNER_TEMP/demo-session.txt")"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          session = Path(os.environ["RUNNER_TEMP"]).joinpath("demo-session.txt").read_text(encoding="utf-8")
+          session = Path(session)
+          (session / "graph.json").write_text(
+              json.dumps(
+                  {
+                      "nodes": [{"id": "USER@alice@CORP.LOCAL"}],
+                      "edges": [],
+                  }
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          Path(os.environ["RUNNER_TEMP"]).joinpath("bloodhound.json").write_text(
+              json.dumps({"nodes": [], "edges": []}) + "\n", encoding="utf-8"
+          )
+          Path(os.environ["RUNNER_TEMP"]).joinpath("report-plan.yaml").write_text(
+              "engagement_id: CI-REPORT-001\n"
+              "target:\n"
+              "  domain: corp.example\n"
+              "  dc_ip: 10.0.0.10\n"
+              "allowed_targets: [10.0.0.10]\n"
+              "allowed_capabilities: [report]\n"
+              "phases:\n"
+              "  - name: reporting\n"
+              "    capabilities: [report]\n",
+              encoding="utf-8",
+          )
+          Path(os.environ["RUNNER_TEMP"]).joinpath("campaign.yaml").write_text(
+              "campaign_id: CI-CAMPAIGN-001\n"
+              "engagements:\n"
+              "  - plan: report-plan.yaml\n",
+              encoding="utf-8",
+          )
+          PY
+          campaign_output="$RUNNER_TEMP/campaign-workspace"
+          adaf-attack --format json campaign-run \
+            --campaign "$RUNNER_TEMP/campaign.yaml" \
+            --workspace "$campaign_output" > "$RUNNER_TEMP/campaign-run.log"
+          if adaf-attack --format json cleanup --session "$session" \
+            --domain corp.example --dc-ip 10.0.0.10 > "$RUNNER_TEMP/cleanup-blocked.log" 2>&1; then
+            echo "cleanup unexpectedly ran without --force" >&2
+            exit 1
+          fi
+          declare -A commands=(
+            [sessions]="adaf-attack --format json sessions --workspace output"
+            [rank-paths]="adaf-attack --format json rank-paths --graph $session/graph.json"
+            [credential-exposure]="adaf-attack --format json credential-exposure --session $session"
+            [bloodhound-reconcile]="adaf-attack --format json bloodhound-reconcile --session $session --bloodhound $RUNNER_TEMP/bloodhound.json"
+            [trust-correlation]="adaf-attack --format json trust-correlation --session $session"
+            [delegation-validation]="adaf-attack --format json delegation-validation --session $session"
+            [adcs-validation]="adaf-attack --format json adcs-validation --session $session"
+            [campaign-compose]="adaf-attack --format json campaign-compose --session $session"
+            [forest-campaign]="adaf-attack --format json forest-campaign --session $session"
+            [purple-handoff]="adaf-attack --format json purple-handoff --session $session"
+            [gpo-impact-plan]="adaf-attack --format json gpo-impact-plan --session $session"
+            [coercion-fixtures]="adaf-attack --format json coercion-fixtures --fixtures tests/fixtures/demo-session --authorized-fixtures"
+            [workflow-profiles]="adaf-attack --format json workflow-profiles purple-team"
+          )
+          for name in "${!commands[@]}"; do
+            eval "${commands[$name]}" > "$RUNNER_TEMP/$name.json"
+          done
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          names = (
+              "sessions", "rank-paths", "credential-exposure", "bloodhound-reconcile",
+              "trust-correlation", "delegation-validation", "adcs-validation",
+              "campaign-compose", "forest-campaign", "purple-handoff", "gpo-impact-plan",
+              "coercion-fixtures", "workflow-profiles",
+          )
+          for name in names:
+              payload = json.loads((temp / f"{name}.json").read_text(encoding="utf-8"))
+              assert isinstance(payload, dict) and payload.get("ok") is True, name
+          campaign_text = (temp / "campaign-run.log").read_text(encoding="utf-8")
+          campaign_start = campaign_text.find("{")
+          assert campaign_start >= 0
+          campaign, _ = json.JSONDecoder().raw_decode(campaign_text[campaign_start:])
+          assert campaign["ok"] is True and campaign["stopped"] is False
+          assert len(campaign["completed"]) == 1
+          assert (temp / "campaign-workspace" / "CI-CAMPAIGN-001" / "campaign.json").is_file()
+          exposure = json.loads((temp / "credential-exposure.json").read_text())
+          assert all(item["secret_value"] == "redacted" for item in exposure["exposures"])
+          assert json.loads((temp / "rank-paths.json").read_text())["count"] >= 0
+          PY
+
+      - name: Upload operator evidence artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: operator-workflow-evidence
+          path: |
+            ${{ runner.temp }}/demo-root/
+            ${{ runner.temp }}/demo-engagement.zip
+          if-no-files-found: error
+          retention-days: 14

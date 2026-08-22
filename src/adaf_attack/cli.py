@@ -462,6 +462,61 @@ def _resolve_binary(candidates: tuple[str, ...]) -> str | None:
     return None
 
 
+def _os_release_label() -> str:
+    """Return a human distro label (e.g. "Ubuntu 24.04.1 LTS", "macOS 14.5", "Windows 11 10.0.22631").
+
+    Falls back to "<System> <release>" when a richer identity cannot be read.
+    """
+    system = host_platform.system()
+    if system == "Linux":
+        try:
+            data: dict[str, str] = {}
+            for line in Path("/etc/os-release").read_text(encoding="utf-8").splitlines():
+                if "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                data[key.strip()] = value.strip().strip('"')
+            pretty = data.get("PRETTY_NAME") or (
+                f"{data.get('NAME', '').strip()} {data.get('VERSION_ID', '').strip()}".strip()
+            )
+            if pretty:
+                return pretty
+        except OSError:
+            pass
+    elif system == "Darwin":
+        try:
+            release = host_platform.mac_ver()[0]
+            if release:
+                return f"macOS {release}"
+        except Exception:  # noqa: BLE001
+            pass
+    elif system == "Windows":
+        try:
+            release, version, _csd, _ptype = host_platform.win32_ver()
+            label = " ".join(part for part in (f"Windows {release}", version) if part).strip()
+            if label:
+                return label
+        except Exception:  # noqa: BLE001
+            pass
+    return f"{system} {host_platform.release()}".strip()
+
+
+def _container_context() -> tuple[str, str, str | None]:
+    """Return (status, value, remediation) for the container-context check."""
+    if os.environ.get("ADAF_ATTACK_IN_CONTAINER") == "1":
+        acked = os.environ.get("ADAF_ATTACK_CONTAINER_ACKNOWLEDGE_LIVE", "").strip()
+        if acked in ("1", "true", "yes"):
+            return ("ok", "container (live-mode acknowledged)", None)
+        return (
+            "warning",
+            "container (offline-only)",
+            "Live AD/Kerberos capabilities require host DNS, clock, and SMB routing. "
+            "Use a host install for live work, or set "
+            "ADAF_ATTACK_CONTAINER_ACKNOWLEDGE_LIVE=1 to suppress this warning.",
+        )
+    return ("ok", "host", None)
+
+
 _DOCTOR_PROFILES = {
     "offline": "Base installation and safe local workflows; no network probes.",
     "user-readiness": "Fresh-user installation, packaged demo, and safe local workflows; no network probes.",
@@ -539,7 +594,8 @@ def _doctor_payload(
     checks: list[dict[str, Any]] = [
         _doctor_check("platform", "ok", platform_name()),
         _doctor_check("architecture", "ok", host_platform.machine() or "unknown"),
-        _doctor_check("os-release", "ok", f"{host_platform.system()} {host_platform.release()}"),
+        _doctor_check("os-release", "ok", _os_release_label()),
+        _doctor_check("container", *_container_context()),
         _doctor_check(
             "python",
             "ok" if python_ok else "error",
@@ -747,7 +803,7 @@ def _doctor_payload(
     }
 
 
-@app.command("doctor")
+@app.command("doctor", rich_help_panel="Setup & diagnostics")
 def doctor(
     ctx: typer.Context,
     explain: bool = typer.Option(False, "--explain", help="Include remediation for every check."),
@@ -790,7 +846,7 @@ def doctor(
     )
 
 
-@app.command("list-capabilities")
+@app.command("list-capabilities", rich_help_panel="Discovery & analysis")
 def list_capabilities(
     ctx: typer.Context,
     by_phase: bool = typer.Option(
@@ -934,7 +990,7 @@ def list_capabilities(
     )
 
 
-@app.command("paths")
+@app.command("paths", rich_help_panel="Setup & diagnostics")
 def show_paths(
     ctx: typer.Context,
     repair: bool = typer.Option(
@@ -1072,7 +1128,7 @@ def _redaction_changes(raw: Any, safe: Any, path: str = "$") -> list[dict[str, s
     return changes
 
 
-@app.command("support-bundle")
+@app.command("support-bundle", rich_help_panel="Setup & diagnostics")
 def support_bundle(
     ctx: typer.Context,
     output: Path = typer.Option(Path("adaf-support-bundle.json"), "--output", "-o"),
@@ -1206,7 +1262,7 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
     }
 
 
-@app.command("capability-help")
+@app.command("capability-help", rich_help_panel="Discovery & analysis")
 def capability_help(
     ctx: typer.Context,
     capability: str | None = typer.Argument(None, help="Capability ID; omit for all capabilities."),
@@ -1269,7 +1325,7 @@ def capability_help(
     _emit(ctx, payload, table)
 
 
-@app.command("plan")
+@app.command("plan", rich_help_panel="Discovery & analysis")
 def plan(
     ctx: typer.Context,
     capability: str = typer.Argument(..., help="Capability ID to preview."),
@@ -1367,7 +1423,7 @@ def plan(
     _emit(ctx, payload, human)
 
 
-@app.command("tour")
+@app.command("tour", rich_help_panel="Guidance & UX helpers")
 def tour(ctx: typer.Context) -> None:
     """Show the guided operator tour."""
     from adaf_attack.core.ux import guided_tour_payload
@@ -1380,7 +1436,7 @@ def tour(ctx: typer.Context) -> None:
     _emit(ctx, {"ok": True, **payload}, human)
 
 
-@app.command("check")
+@app.command("check", rich_help_panel="Setup & diagnostics")
 def check(
     ctx: typer.Context,
     domain: str | None = typer.Option(None, "--domain", "-d"),
@@ -1402,7 +1458,7 @@ def check(
     )
 
 
-@app.command("review")
+@app.command("review", rich_help_panel="Discovery & analysis")
 def review(
     ctx: typer.Context,
     capability: str = typer.Argument(...),
@@ -1428,7 +1484,7 @@ def help_me(ctx: typer.Context) -> None:
     tour(ctx)
 
 
-@app.command("recent")
+@app.command("recent", rich_help_panel="Guidance & UX helpers")
 def recent(ctx: typer.Context) -> None:
     """Show recently viewed capabilities (stored locally, never targets or credentials)."""
     from adaf_attack.core.registry import capability_registry
@@ -1508,7 +1564,7 @@ def favorites_remove(ctx: typer.Context, capability: str = typer.Argument(...)) 
     )
 
 
-@app.command("targets")
+@app.command("targets", rich_help_panel="Guidance & UX helpers")
 def targets(ctx: typer.Context) -> None:
     """List recently used non-secret target identifiers."""
     from adaf_attack.core.user_config import recent_targets
@@ -1526,7 +1582,7 @@ def targets(ctx: typer.Context) -> None:
     )
 
 
-@app.command("search")
+@app.command("search", rich_help_panel="Guidance & UX helpers")
 def search(
     ctx: typer.Context,
     query: str = typer.Argument(...),
@@ -1543,7 +1599,7 @@ def search(
     _emit(ctx, {"ok": True, **payload}, Panel("\n".join(lines) or "No matches.", title="Search"))
 
 
-@app.command("query")
+@app.command("query", rich_help_panel="Guidance & UX helpers")
 def query_local(
     ctx: typer.Context,
     question: str = typer.Argument(..., help="A supported question over local evidence."),
@@ -1577,7 +1633,7 @@ def query_local(
     _emit(ctx, payload, Panel("\n".join(lines) or "No matches.", title="Local evidence query"))
 
 
-@app.command("sessions")
+@app.command("sessions", rich_help_panel="Execution & sessions")
 def sessions(
     ctx: typer.Context,
     workspace: Path | None = typer.Option(None, "--workspace"),
@@ -1657,7 +1713,7 @@ def sessions(
     _emit(ctx, payload, table)
 
 
-@app.command("cleanup")
+@app.command("cleanup", rich_help_panel="Execution & sessions")
 def cleanup_cmd(
     ctx: typer.Context,
     session: Path = typer.Option(..., "--session"),
@@ -1678,7 +1734,7 @@ def cleanup_cmd(
     _emit(ctx, {"ok": True, **result}, Panel(f"Completed: {result['completed']}", title="Cleanup"))
 
 
-@app.command("cleanup-status")
+@app.command("cleanup-status", rich_help_panel="Execution & sessions")
 def cleanup_status_cmd(
     ctx: typer.Context,
     session: Path = typer.Option(..., "--session"),
@@ -1702,7 +1758,7 @@ def cleanup_status_cmd(
     _emit(ctx, payload, human)
 
 
-@app.command("detection-status")
+@app.command("detection-status", rich_help_panel="Execution & sessions")
 def detection_status_cmd(
     ctx: typer.Context,
     session: Path = typer.Option(..., "--session"),
@@ -1925,7 +1981,7 @@ def _interactive_run_prompts(
     return collected
 
 
-@app.command("run")
+@app.command("run", rich_help_panel="Execution & sessions")
 def run_capability(
     ctx: typer.Context,
     capability: str = typer.Argument(..., help="Capability ID (see list-capabilities)"),
@@ -2564,7 +2620,7 @@ def engagement_package(
     )
 
 
-@app.command("rank-paths")
+@app.command("rank-paths", rich_help_panel="Discovery & analysis")
 def rank_paths_cmd(
     ctx: typer.Context,
     graph: Path = typer.Option(..., "--graph", "-g", help="Path to graph.json"),
@@ -2642,7 +2698,7 @@ def _offline_sessions(values: list[Path]) -> list[Path]:
     return values
 
 
-@app.command("credential-exposure")
+@app.command("credential-exposure", rich_help_panel="Discovery & analysis")
 def credential_exposure_cmd(
     ctx: typer.Context,
     session: list[Path] = typer.Option(
@@ -2667,7 +2723,7 @@ def credential_exposure_cmd(
     )
 
 
-@app.command("bloodhound-reconcile")
+@app.command("bloodhound-reconcile", rich_help_panel="Discovery & analysis")
 def bloodhound_reconcile_cmd(
     ctx: typer.Context,
     session: Path = typer.Option(..., "--session"),
@@ -2698,7 +2754,7 @@ def bloodhound_reconcile_cmd(
     )
 
 
-@app.command("trust-correlation")
+@app.command("trust-correlation", rich_help_panel="Discovery & analysis")
 def trust_correlation_cmd(
     ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")
 ) -> None:
@@ -2739,7 +2795,7 @@ def _surface_command(ctx: typer.Context, session: Path, kind: str, title: str) -
     )
 
 
-@app.command("delegation-validation")
+@app.command("delegation-validation", rich_help_panel="Discovery & analysis")
 def delegation_validation_cmd(
     ctx: typer.Context, session: Path = typer.Option(..., "--session")
 ) -> None:
@@ -2747,13 +2803,13 @@ def delegation_validation_cmd(
     _surface_command(ctx, session, "delegation", "Delegation path validation")
 
 
-@app.command("adcs-validation")
+@app.command("adcs-validation", rich_help_panel="Discovery & analysis")
 def adcs_validation_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
     """Validate AD CS attack-path evidence without requesting certificates."""
     _surface_command(ctx, session, "adcs", "AD CS attack-path validation")
 
 
-@app.command("campaign-compose")
+@app.command("campaign-compose", rich_help_panel="Discovery & analysis")
 def campaign_compose_cmd(
     ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")
 ) -> None:
@@ -2775,7 +2831,7 @@ def campaign_compose_cmd(
     )
 
 
-@app.command("forest-campaign")
+@app.command("forest-campaign", rich_help_panel="Discovery & analysis")
 def forest_campaign_cmd(
     ctx: typer.Context, session: list[Path] = typer.Option(..., "--session")
 ) -> None:
@@ -2800,7 +2856,7 @@ def forest_campaign_cmd(
     )
 
 
-@app.command("campaign-run")
+@app.command("campaign-run", rich_help_panel="Execution & sessions")
 def campaign_run_cmd(
     ctx: typer.Context,
     campaign: Path = typer.Option(
@@ -2856,7 +2912,7 @@ def campaign_run_cmd(
     )
 
 
-@app.command("purple-handoff")
+@app.command("purple-handoff", rich_help_panel="Discovery & analysis")
 def purple_handoff_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
     """Build a detection-aware handoff from recorded evidence."""
     from adaf_attack.core.workflows import purple_handoff
@@ -2877,13 +2933,13 @@ def purple_handoff_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--
     )
 
 
-@app.command("gpo-impact-plan")
+@app.command("gpo-impact-plan", rich_help_panel="Discovery & analysis")
 def gpo_impact_plan_cmd(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
     """Plan controlled GPO impact validation from saved evidence."""
     _surface_command(ctx, session, "gpo", "GPO impact planner")
 
 
-@app.command("coercion-fixtures")
+@app.command("coercion-fixtures", rich_help_panel="Discovery & analysis")
 def coercion_fixtures_cmd(
     ctx: typer.Context,
     fixtures: Path = typer.Option(..., "--fixtures"),
@@ -2921,7 +2977,7 @@ def coercion_fixtures_cmd(
     )
 
 
-@app.command("workflow-profiles")
+@app.command("workflow-profiles", rich_help_panel="Guidance & UX helpers")
 def workflow_profiles_cmd(
     ctx: typer.Context,
     profile: str | None = typer.Argument(
@@ -2955,7 +3011,7 @@ def workflow_profiles_cmd(
     )
 
 
-@app.command("errors")
+@app.command("errors", rich_help_panel="Guidance & UX helpers")
 def show_errors(
     ctx: typer.Context,
     code: str | None = typer.Argument(None, help="Optional error code to show in detail."),
@@ -2992,7 +3048,7 @@ def show_errors(
     _emit(ctx, payload, table)
 
 
-@app.command("glossary")
+@app.command("glossary", rich_help_panel="Guidance & UX helpers")
 def glossary_cmd(
     ctx: typer.Context,
     term: str | None = typer.Argument(None, help="Term to explain; omit to list all terms."),
@@ -3046,7 +3102,7 @@ def home_cmd(ctx: typer.Context) -> None:
     _emit(ctx, payload, table)
 
 
-@app.command("command")
+@app.command("command", rich_help_panel="Guidance & UX helpers")
 def command_builder_cmd(
     ctx: typer.Context,
     capability: str = typer.Argument(..., help="Capability ID to build a command for."),
@@ -3609,7 +3665,7 @@ def path_inspect(
     )
 
 
-@app.command("init")
+@app.command("init", rich_help_panel="Setup & diagnostics")
 def init_cmd(
     ctx: typer.Context,
     workspace: Path | None = typer.Option(
@@ -3737,7 +3793,7 @@ def init_cmd(
         console_obj.print(f"  {step}")
 
 
-@app.command("start")
+@app.command("start", rich_help_panel="Setup & diagnostics")
 def start(ctx: typer.Context) -> None:
     """Launch the interactive Textual TUI shell."""
     if ctx.ensure_object(dict).get("non_interactive"):

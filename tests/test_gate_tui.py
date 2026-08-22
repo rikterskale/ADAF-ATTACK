@@ -1,4 +1,4 @@
-"""Coverage gate tests for remaining branches in the ADAF-ATTACK TUI."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

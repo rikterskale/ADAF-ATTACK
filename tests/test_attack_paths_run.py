@@ -1,4 +1,4 @@
-"""Offline end-to-end coverage for attack-path ranking."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 

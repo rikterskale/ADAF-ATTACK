@@ -1,4 +1,4 @@
-"""Coverage for acl_enum helpers (_sid_index, _domain_targets, _high_value_targets)."""
+"""Behavioral tests."""
 
 from __future__ import annotations
 
