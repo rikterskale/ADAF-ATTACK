@@ -20,6 +20,7 @@ from adaf_attack.core.asset_workspace import build_asset_workspace
 from adaf_attack.core.engagement_dashboard import dashboard, inspect_edge, mission, missions
 from adaf_attack.core.finding_workspace import build_finding_workspace, load_finding_workspace
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.identity_workspace import build_identity_workspace
 from adaf_attack.core.local_queries import query_local_evidence
 from adaf_attack.core.outcomes import build_post_execution_outcome, record_detection_status
 from adaf_attack.core.ux import diff_sessions, unified_search
@@ -99,6 +100,13 @@ def test_asset_workspace_aggregates_safe_evidence(tmp_path: Path) -> None:
     assert view["access"]["recommended_identity"] == "alice"
     assert view["access"]["credential_lifecycle"][0]["used_by"] == ["ldap-enum"]
     assert view["access"]["credential_lifecycle"][0]["enables"] == ["LDAP read"]
+    identity_view = build_identity_workspace(session, "alice")
+    assert identity_view["summary"]["relationships"] == 0
+    assert identity_view["summary"]["actions"] == 1
+    assert identity_view["credential_lifecycle"][0]["artifact"] == "ticket.kirbi"
+    assert build_identity_workspace(tmp_path / "missing", "alice")["summary"]["nodes"] == 0
+    with pytest.raises(ValueError, match="cannot be empty"):
+        build_identity_workspace(session, " ")
     assert build_asset_workspace(tmp_path / "missing", "asset")["summary"]["nodes"] == 0
     with pytest.raises(ValueError, match="cannot be empty"):
         build_asset_workspace(session, " ")
@@ -118,10 +126,16 @@ def test_asset_workspace_aggregates_safe_evidence(tmp_path: Path) -> None:
         ["--format", "json", "engagement", "asset", "USER@CORP", "--session", str(session)],
     )
     assert cli.exit_code == 0
+    identity_cli = CliRunner().invoke(
+        app,
+        ["--format", "json", "engagement", "identity", "alice", "--session", str(session)],
+    )
+    assert identity_cli.exit_code == 0
     malformed = tmp_path / "malformed"
     malformed.mkdir()
     (malformed / "graph.json").write_text("not json", encoding="utf-8")
     assert build_asset_workspace(malformed, "asset")["summary"]["nodes"] == 0
+    assert build_identity_workspace(malformed, "alice")["summary"]["nodes"] == 0
     (session / "certificate.pfx").write_bytes(b"x")
     (session / "password.txt").write_bytes(b"x")
     assert len(session_access_context(session)["credential_artifacts"]) == 3

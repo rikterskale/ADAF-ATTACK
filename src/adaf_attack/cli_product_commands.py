@@ -149,6 +149,32 @@ def register_product_commands(
 
         _run(ctx, "Asset workspace", session, lambda p: build_asset_workspace(p, asset), human)
 
+    @engagement_app.command("identity")
+    def engagement_identity(
+        ctx: typer.Context,
+        identity: str = typer.Argument(..., help="Identity or principal to inspect."),
+        session: Path = typer.Option(..., "--session"),
+    ) -> None:
+        """Show identity control relationships, reachable assets, and credential context."""
+        from adaf_attack.core.identity_workspace import build_identity_workspace
+
+        def human(payload: dict[str, Any]) -> str:
+            summary = payload["summary"]
+            return (
+                f"Identity: {payload['identity']}\n"
+                f"Relationships: {summary['relationships']}  Reachable assets: {summary['reachable_assets']}\n"
+                f"Findings: {summary['findings']}  Actions: {summary['actions']}\n"
+                f"Credential lifecycle entries: {len(payload['credential_lifecycle'])}"
+            )
+
+        _run(
+            ctx,
+            "Identity workspace",
+            session,
+            lambda p: build_identity_workspace(p, identity),
+            human,
+        )
+
     @app.command("command-center")
     def command_center(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Open the polished mission-control view for an engagement."""

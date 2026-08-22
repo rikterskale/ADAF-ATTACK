@@ -40,6 +40,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack engagement package` | Create a redacted evidence archive |
 | `adaf-attack engagement dashboard` | Show the unified engagement dashboard |
 | `adaf-attack engagement asset` | Show an asset-centric evidence workspace |
+| `adaf-attack engagement identity` | Show an identity-centric evidence workspace |
 | `adaf-attack engagement missions` | List goal-first guided missions |
 | `adaf-attack engagement mission` | Show a deterministic mission workflow |
 | `adaf-attack engagement report` | Generate engagement reports |
