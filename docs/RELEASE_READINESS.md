@@ -80,7 +80,10 @@ also proven by the full source matrix.
 - [ ] Every registered capability is listed and has working generated help.
       **[CI: test_release_contracts]**
 - [ ] Offline engagement, evidence, reports, package, and analysis commands run
-      against deterministic fixtures. **[CI: operator-workflow]**
+      against deterministic fixtures; the clean base artifact also exercises the
+      dashboard, asset, identity, Tier-0, blast-radius, domain, investigation,
+      cleanup-status, and saved-mission surfaces. **[CI: operator-workflow;
+      release-readiness]**
 - [ ] Every destructive capability wires rollback or has a reviewed exemption;
       offline revertable kinds round-trip. **[CI: test_release_contracts;
       test_rollback_matrix]**

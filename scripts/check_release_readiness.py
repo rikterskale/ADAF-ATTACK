@@ -44,6 +44,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -62,7 +63,10 @@ def _cli_argv() -> list[str]:
     """Resolve how to invoke the tool: console script, else module form."""
     override = os.environ.get("ADAF_CLI")
     if override:
-        return override.split()
+        argv = shlex.split(override)
+        if not argv:
+            raise ValueError("ADAF_CLI must contain an executable")
+        return argv
     console = shutil.which("adaf-attack")
     if console:
         return [console]
@@ -96,13 +100,18 @@ def strip_ansi(text: str) -> str:
 
 
 def run_cli(*args: str, env: dict[str, str] | None = None) -> Cmd:
-    proc = subprocess.run(
-        [*_ARGV, *args],
-        capture_output=True,
-        text=True,
-        env=env if env is not None else _CLI_ENV,
-        timeout=120,
-    )
+    try:
+        proc = subprocess.run(
+            [*_ARGV, *args],
+            capture_output=True,
+            text=True,
+            env=env if env is not None else _CLI_ENV,
+            timeout=120,
+        )
+    except FileNotFoundError as exc:
+        return Cmd(127, "", f"CLI executable was not found: {exc}")
+    except subprocess.TimeoutExpired as exc:
+        return Cmd(124, exc.stdout or "", f"CLI timed out after 120 seconds: {exc}")
     return Cmd(proc.returncode, proc.stdout, proc.stderr)
 
 
@@ -185,7 +194,15 @@ def _doctor_contract() -> None:
         {"ok", "version", "checks", "next_step"} <= payload.keys(),
         "doctor payload is missing top-level contract keys",
     )
+    _require(isinstance(payload["checks"], list), "doctor checks is not a list")
+    check_ids: set[str] = set()
     for check in payload["checks"]:
+        _require(check["id"] not in check_ids, f"doctor check id is duplicated: {check['id']}")
+        check_ids.add(check["id"])
+        _require(
+            check["status"] in {"ok", "warning", "error"},
+            f"doctor check has unknown status: {check}",
+        )
         _require(
             {"id", "status", "value", "remediation"} <= check.keys(),
             f"doctor check missing contract keys: {check}",
@@ -302,6 +319,48 @@ def _documented_offline_runs() -> None:
         _require(payload.get("stage") == "complete", "quickstart did not complete all stages")
 
 
+@features.check("offline engagement product surfaces execute from a clean demo")
+def _offline_product_surfaces() -> None:
+    with tempfile.TemporaryDirectory(prefix="adaf-readiness-surfaces-") as root:
+        surface_env = {
+            **_CLI_ENV,
+            "ADAF_ATTACK_CONFIG_DIR": str(Path(root) / "config"),
+            "ADAF_ATTACK_DATA_DIR": str(Path(root) / "data"),
+            "ADAF_ATTACK_WORKSPACE": str(Path(root) / "workspace"),
+        }
+        demo = run_cli("--format", "json", "demo", "--workspace", root)
+        _require(demo.code == 0, f"demo failed: {demo.err or demo.out}")
+        session = demo.json().get("session_path")
+        _require(isinstance(session, str) and session, "demo did not return session_path")
+        commands = (
+            ["engagement", "dashboard", "--session", session],
+            ["engagement", "asset", "USER@alice@CORP.LOCAL", "--session", session],
+            ["engagement", "identity", "USER@alice@CORP.LOCAL", "--session", session],
+            ["engagement", "tier0", "--session", session],
+            ["engagement", "blast-radius", "USER@alice@CORP.LOCAL", "--session", session],
+            ["engagement", "domain", "--session", session],
+            ["engagement", "investigation", "--session", session],
+            ["cleanup-status", "--session", session],
+        )
+        for command in commands:
+            result = run_cli("--format", "json", *command, env=surface_env)
+            _require(result.code == 0, f"`{' '.join(command)}` failed: {result.err or result.out}")
+            payload = result.json()
+            _require(isinstance(payload, dict), f"`{' '.join(command)}` returned non-object JSON")
+            _require(
+                payload.get("ok", True) is True,
+                f"`{' '.join(command)}` returned ok != true",
+            )
+        for command in (
+            ["engagement", "mission-save", "tier-0-paths"],
+            ["engagement", "mission-saved"],
+            ["engagement", "mission-remove", "tier-0-paths"],
+        ):
+            result = run_cli("--format", "json", *command, env=surface_env)
+            _require(result.code == 0, f"`{' '.join(command)}` failed: {result.err or result.out}")
+            _require(result.json().get("ok") is True, f"`{' '.join(command)}` returned ok != true")
+
+
 # --------------------------------------------------------------------------- #
 # Pillar 4 - Tested recovery paths.
 # --------------------------------------------------------------------------- #
@@ -374,12 +433,22 @@ def _docs_reference_real_surface() -> None:
             continue
         for block in _FENCE.findall(doc.read_text(encoding="utf-8")):
             for command, rest in _INVOKE.findall(block):
-                if command not in commands:
-                    unknown_cmds.add(f"{command} ({doc.name})")
-                if command in {"run", "plan", "capability-help"}:
-                    tokens = rest.split()
-                    if tokens and not tokens[0].startswith(("-", "<")) and tokens[0] not in cap_ids:
-                        unknown_caps.add(f"{command} {tokens[0]} ({doc.name})")
+                tokens = (command + rest).split()
+                path: list[str] = []
+                for token in tokens:
+                    if token.startswith(("-", "<")):
+                        break
+                    candidate = " ".join([*path, token])
+                    if candidate not in commands:
+                        break
+                    path.append(token)
+                command_path = " ".join(path)
+                if command_path not in commands:
+                    unknown_cmds.add(f"{command_path or command} ({doc.name})")
+                if command_path in {"run", "plan", "capability-help"}:
+                    remaining = tokens[len(path) :]
+                    if remaining and not remaining[0].startswith(("-", "<")) and remaining[0] not in cap_ids:
+                        unknown_caps.add(f"{command_path} {remaining[0]} ({doc.name})")
     _require(not unknown_cmds, f"docs reference commands that do not exist: {sorted(unknown_cmds)}")
     _require(
         not unknown_caps, f"docs reference capabilities that do not exist: {sorted(unknown_caps)}"
@@ -397,14 +466,23 @@ def _registered_commands() -> set[str]:
     from adaf_attack.cli import app
 
     names: set[str] = set()
-    for command in app.registered_commands:
-        if command.name:
-            names.add(command.name)
-        elif command.callback is not None:
-            names.add(command.callback.__name__.replace("_", "-"))
-    for group in app.registered_groups:
-        if group.name:
-            names.add(group.name)
+
+    def visit(current: Any, prefix: tuple[str, ...] = ()) -> None:
+        for command in current.registered_commands:
+            name = command.name or (
+                command.callback.__name__.replace("_", "-")
+                if command.callback is not None
+                else None
+            )
+            if name:
+                names.add(" ".join((*prefix, name)))
+        for group in current.registered_groups:
+            if group.name and group.typer_instance is not None:
+                path = (*prefix, group.name)
+                names.add(" ".join(path))
+                visit(group.typer_instance, path)
+
+    visit(app)
     _require(names, "no commands registered on the installed app")
     return names
 

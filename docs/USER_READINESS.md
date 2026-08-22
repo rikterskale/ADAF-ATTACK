@@ -129,7 +129,9 @@ Before installation, obtain the approved wheel, matching `SHA256SUMS`, and
 internal package index. If you cannot access those assets, request access from
 the repository owner; there is no public PyPI fallback.
 
-CI proves installation, offline workflows, packaging, and safe command
-contracts. It does not prove the behavior of a customer's AD forest, proxy,
+CI proves clean-artifact installation, guided troubleshooting, documented
+subcommand validity, offline engagement product surfaces, packaging, and safe
+command contracts. It isolates readiness state in disposable CI directories and
+fails closed on missing or malformed JSON contracts. It does not prove the behavior of a customer's AD forest, proxy,
 custom CA, endpoint security, Kerberos realm, or production rollback target.
 Those require an authorized target.

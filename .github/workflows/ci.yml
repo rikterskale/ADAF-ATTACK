@@ -918,7 +918,7 @@ jobs:
           # shellcheck disable=SC1091
           source "$RUNNER_TEMP/newuser/bin/activate"
           # Drive the installed console script, exactly as a new user would.
-          ADAF_CLI="$(command -v adaf-attack)" \
+          PYTHONUNBUFFERED=1 ADAF_CLI="$(command -v adaf-attack)" \
             python scripts/check_release_readiness.py --repo-root "$PWD"
 
       - name: Publish readiness summary
@@ -927,12 +927,12 @@ jobs:
         run: |
           {
             echo "## ADAF-ATTACK user readiness"
-            echo "- Installation: PASS"
+            echo "- Readiness verifier: ${{ needs.release-readiness.result }}"
             echo "- Clean artifact smoke: ${{ needs.artifact-smoke.result }}"
-            echo "- Packaged offline demo: PASS (enforced above)"
-            echo "- Reports and evidence package: PASS (operator workflow)"
-            echo "- Windows installer: gated CI job"
-            echo "- Kali installer: gated CI job"
+            echo "- Packaged offline demo: ${{ needs.operator-workflow.result }}"
+            echo "- Reports and evidence package: ${{ needs.operator-workflow.result }}"
+            echo "- Windows installer: ${{ needs.windows-installer.result }}"
+            echo "- Kali installer: ${{ needs.kali-installer.result }}"
             echo "- Published artifact smoke: separate release-channel workflow"
           } >> "$GITHUB_STEP_SUMMARY"
 
