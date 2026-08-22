@@ -486,7 +486,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          (cd dist && sha256sum -c SHA256SUMS)
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd dist && sha256sum -c SHA256SUMS)
+          else
+            (cd dist && shasum -a 256 -c SHA256SUMS)
+          fi
 
       # Install ONLY the base wheel in a clean venv - the exact artifact a new
       # user gets, with optional tooling (impacket/certipy/tui/reports) absent.
@@ -553,7 +557,7 @@ jobs:
       - name: Install devpi-server and client
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "devpi-server==6.14.0" "devpi-client==7.2.0" "devpi-web==4.2.4"
+          python -m pip install "devpi-server==6.14.0" "devpi-client==7.2.0" "devpi-web==4.2.3"
 
       - name: Download built distribution
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
