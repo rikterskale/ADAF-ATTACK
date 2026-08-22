@@ -23,6 +23,7 @@ from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.identity_workspace import build_identity_workspace
 from adaf_attack.core.local_queries import query_local_evidence
 from adaf_attack.core.outcomes import build_post_execution_outcome, record_detection_status
+from adaf_attack.core.tier0_workspace import build_tier0_workspace
 from adaf_attack.core.ux import diff_sessions, unified_search
 from adaf_attack.core.ux_extra import capability_dependency_graph, evaluate_prerequisites
 from adaf_attack.tui.app import ADAFAttackApp
@@ -136,6 +137,15 @@ def test_asset_workspace_aggregates_safe_evidence(tmp_path: Path) -> None:
     (malformed / "graph.json").write_text("not json", encoding="utf-8")
     assert build_asset_workspace(malformed, "asset")["summary"]["nodes"] == 0
     assert build_identity_workspace(malformed, "alice")["summary"]["nodes"] == 0
+    tier0 = build_tier0_workspace(session)
+    assert tier0["summary"]["nodes"] == 1
+    assert tier0["summary"]["relationships"] == 1
+    assert build_tier0_workspace(malformed)["summary"]["nodes"] == 0
+    assert build_tier0_workspace(tmp_path / "missing")["summary"]["nodes"] == 0
+    tier0_cli = CliRunner().invoke(
+        app, ["--format", "json", "engagement", "tier0", "--session", str(session)]
+    )
+    assert tier0_cli.exit_code == 0
     (session / "certificate.pfx").write_bytes(b"x")
     (session / "password.txt").write_bytes(b"x")
     assert len(session_access_context(session)["credential_artifacts"]) == 3

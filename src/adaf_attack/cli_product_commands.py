@@ -175,6 +175,24 @@ def register_product_commands(
             human,
         )
 
+    @engagement_app.command("tier0")
+    def engagement_tier0(
+        ctx: typer.Context, session: Path = typer.Option(..., "--session")
+    ) -> None:
+        """Show Tier-0 nodes, control relationships, paths, and related findings."""
+        from adaf_attack.core.tier0_workspace import build_tier0_workspace
+
+        def human(payload: dict[str, Any]) -> str:
+            summary = payload["summary"]
+            return (
+                f"Tier-0 nodes: {summary['nodes']}\n"
+                f"Control relationships: {summary['relationships']}\n"
+                f"Evidence-backed paths: {summary['paths']}\n"
+                f"Related findings: {summary['findings']}"
+            )
+
+        _run(ctx, "Tier-0 workspace", session, build_tier0_workspace, human)
+
     @app.command("command-center")
     def command_center(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Open the polished mission-control view for an engagement."""
