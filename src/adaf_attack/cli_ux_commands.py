@@ -112,7 +112,7 @@ def register_ux_commands(
             ),
         )
 
-    @app.command("start-here")
+    @app.command("start-here", hidden=True)
     def start_here_cmd(
         ctx: typer.Context,
         workspace: Path | None = typer.Option(
@@ -542,7 +542,7 @@ def register_ux_commands(
         )
         _emit(ctx, payload, human)
 
-    @app.command("start-demo")
+    @app.command("start-demo", hidden=True)
     def start_demo_cmd(
         ctx: typer.Context,
         workspace: Path | None = typer.Option(

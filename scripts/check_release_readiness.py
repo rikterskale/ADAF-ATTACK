@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Executable new-user release-readiness standard (docs/RELEASE_READINESS.md).
 
-A release is *not* ready because ``--cov-fail-under=100`` passed. Coverage proves
+A release is *not* ready merely because the coverage gate passed. Coverage proves
 lines executed under test; it does not prove that a stranger can install the
 tool, diagnose their own problems, exercise every feature, recover from a bad
 run, or find the answer in the docs. This script turns that standard into a

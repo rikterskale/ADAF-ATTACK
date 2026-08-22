@@ -334,3 +334,17 @@ def test_what_next_without_context_is_dependency_light() -> None:
     assert payload["ok"] is True
     assert payload["context"] == "new-user"
     assert payload["suggestions"]
+
+
+def test_debug_flag_enables_diagnostic_logging() -> None:
+    import logging
+
+    result = runner.invoke(app, ["--debug", "--format", "json", "paths"])
+    assert result.exit_code == 0, result.output
+    # The global --debug flag lowers the package logger to DEBUG so operators
+    # can troubleshoot a live run; without it the logger stays quiet.
+    assert logging.getLogger("adaf_attack").level == logging.DEBUG
+
+    result = runner.invoke(app, ["--format", "json", "paths"])
+    assert result.exit_code == 0, result.output
+    assert logging.getLogger("adaf_attack").level == logging.WARNING

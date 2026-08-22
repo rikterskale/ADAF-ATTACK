@@ -211,11 +211,13 @@ class PkinitAuth:
                 result["playbook"] = str(playbook)
                 result["pfx"] = str(pfx_file)
                 console.print(f"  Playbook → {playbook}")
-                if not result.get("ok"):
-                    console.print(
-                        "  [yellow]Install certipy-ad for in-process PKINIT, "
-                        "or run the playbook.[/yellow]"
-                    )
+                # This block is only reached when certipy did not already
+                # produce a TGT (guarded by `if not result.get("ok")` above),
+                # so the install hint always applies here.
+                console.print(
+                    "  [yellow]Install certipy-ad for in-process PKINIT, "
+                    "or run the playbook.[/yellow]"
+                )
             except Exception as exc:  # noqa: BLE001
                 result["error"] = str(exc)
 

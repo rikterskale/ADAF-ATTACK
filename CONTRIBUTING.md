@@ -1,7 +1,7 @@
 # Contributing
 
 Thanks for improving ADAF-ATTACK. This project runs a strict CI gate — every
-lane must pass, including a **100% full-source coverage** requirement. The steps
+lane must pass, including a **95% full-source coverage** requirement. The steps
 below reproduce that gate locally so your first push goes green.
 
 ## 1. Set up a development environment
@@ -45,7 +45,7 @@ ruff check src tests
 ruff format --check src tests
 mypy src/adaf_attack
 python -m compileall -q src tests
-pytest --cov=adaf_attack --cov-report=term-missing --cov-fail-under=100
+pytest --cov=adaf_attack --cov-report=term-missing --cov-fail-under=95
 python scripts/check_cli_documentation.py
 ```
 
@@ -66,13 +66,24 @@ repository-local folders. It does not modify system ACLs and is safe to use on
 managed workstations. The same arguments can be passed for coverage or a
 full-suite run.
 
-### About the 100% coverage gate
+### About the coverage gate
 
-New code needs tests that exercise it — including error and edge branches.
-`pytest ... --cov-report=term-missing` lists any uncovered lines under
-`Missing`; add targeted tests until that column is empty. Many capabilities are
+The gate is **95%**, not 100%. The intent is high confidence without creating
+pressure to write tests that exist only to move the number. New code needs
+tests that exercise it — including error and edge branches. `pytest ...
+--cov-report=term-missing` lists uncovered lines under `Missing`; add *behavioral*
+tests (named for what they verify) until the important branches are covered.
+
+Do **not** add coverage-only tests, and never use `sys.settrace` or similar
+line-injection tricks to force an otherwise-unreachable branch to register as
+covered — if a branch is unreachable, delete it instead. Many capabilities are
 tested offline with mocked LDAP connections and impacket modules — see existing
-`tests/test_*_coverage*.py` files for the harness patterns.
+capability tests for the harness patterns.
+
+> **Note on what green means.** Because the suite mocks LDAP/Kerberos/impacket,
+> a passing run verifies control flow, parsing, redaction, and evidence
+> handling — it does **not** guarantee behavior against a live domain
+> controller. Validate live paths in an authorized lab before relying on them.
 
 ## 4. Pull requests
 

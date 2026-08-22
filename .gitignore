@@ -60,3 +60,6 @@ output/
 .codex/
 .audit-runtime/
 .audit-runtime2/
+
+# Review meta-prompt (kept locally, not part of the shipped repo)
+GitHub_Repository_Review_Master_Prompt_v3_merged.md

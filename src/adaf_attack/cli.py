@@ -351,16 +351,27 @@ def main(
     non_interactive: bool = typer.Option(
         False, "--non-interactive", help="Never prompt; suitable for scripts and CI."
     ),
+    debug: bool = typer.Option(
+        False,
+        "--debug",
+        help="Emit diagnostic logging to stderr for troubleshooting (never on stdout/JSON).",
+    ),
 ) -> None:
     if output_format not in {"human", "json", "summary", "table", "beginner"}:
         raise typer.BadParameter(
             "must be 'human', 'json', 'summary', 'table', or 'beginner'",
             param_hint="--format",
         )
+    import logging
+
+    from adaf_attack.core.engineering import configure_logging
+
+    configure_logging(level=logging.DEBUG if debug else logging.WARNING)
     ctx.ensure_object(dict).update(
         output_format=output_format,
         no_color=no_color or output_format == "json",
         non_interactive=non_interactive,
+        debug=debug,
     )
     if version:
         _emit(ctx, {"ok": True, "version": __version__}, f"adaf-attack {__version__}")
@@ -1411,9 +1422,9 @@ def review(
     )
 
 
-@app.command("help-me")
+@app.command("help-me", hidden=True)
 def help_me(ctx: typer.Context) -> None:
-    """Show the guided tour for new operators."""
+    """Show the guided tour for new operators (alias of `tour`)."""
     tour(ctx)
 
 
@@ -3013,7 +3024,7 @@ def glossary_cmd(
     _emit(ctx, payload, table)
 
 
-@app.command("home")
+@app.command("home", hidden=True)
 def home_cmd(ctx: typer.Context) -> None:
     """Show plain-language goals for users who do not know the command names."""
     from adaf_attack.core.novice import home_actions

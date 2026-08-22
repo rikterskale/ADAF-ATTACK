@@ -3,6 +3,34 @@
 All notable changes are documented here. The project follows release versions
 declared in `pyproject.toml`.
 
+## Unreleased
+
+### Added
+
+- Global `--debug` flag: routes diagnostic logging to stderr (never stdout/JSON)
+  for troubleshooting live runs, wired to the existing package logger.
+- Value-pattern redaction: secrets are now redacted when they appear in
+  unstructured fields (e.g. `notes`, `stdout`, log lines) whose key is not
+  itself sensitive - Kerberos hashcat blobs, `LM:NT` hash pairs, PEM private
+  keys, and cloud/VCS tokens. SHA-256 evidence digests are deliberately
+  preserved.
+
+### Changed
+
+- Promoted development status from Alpha to Beta.
+- Lowered the CI branch-coverage gate from 100% to 95% to remove the incentive
+  to write coverage-only tests; behavioral tests are now the documented norm.
+
+### Removed
+
+- Removed a `sys.settrace` line-injection test and the unreachable branch it was
+  gaming in `pkinit-auth`; replaced with a behavioral test.
+
+### Fixed
+
+- Repo hygiene: untracked the bundled review meta-prompt and tightened
+  `.dockerignore` so the build context excludes venvs, tests, docs, and caches.
+
 ## 0.10.0
 
 ### Added

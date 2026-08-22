@@ -186,7 +186,9 @@ def test_ntlm_relay_log_already_in_artifacts(monkeypatch: Any, tmp_path: Path) -
     assert result["artifacts"].count(result["log"]) == 1
 
 
-def test_pkinit_playbook_hint_skipped_when_certipy_ok(monkeypatch: Any, tmp_path: Path) -> None:
+def test_pkinit_writes_playbook_when_certipy_unavailable(monkeypatch: Any, tmp_path: Path) -> None:
+    # When certipy cannot produce a TGT the capability falls back to writing a
+    # ready-to-run playbook and printing the install hint.
     pfx = tmp_path / "card.pfx"
     pfx.write_bytes(b"pfx-bytes")
 
@@ -195,36 +197,15 @@ def test_pkinit_playbook_hint_skipped_when_certipy_ok(monkeypatch: Any, tmp_path
 
     monkeypatch.setattr(pkinit_auth.subprocess, "run", boom)
     session = Session(tmp_path / "pk")
-    tracer_state = {"installed": False}
 
-    previous = sys.gettrace()
+    result = pkinit_auth.PkinitAuth().run(
+        _target(), session, AttackGraph(), force=True, sam="alice", pfx=str(pfx)
+    )
 
-    def tracer(frame: Any, event: str, arg: Any) -> Any:
-        if (
-            event == "line"
-            and frame.f_code.co_name == "run"
-            and frame.f_code.co_filename.endswith("pkinit_auth.py")
-            and frame.f_lineno == 193
-        ):
-            frame.f_locals["result"]["ok"] = True
-        if previous is not None:
-            previous(frame, event, arg)
-        return tracer
-
-    def run_traced() -> dict[str, Any]:
-        sys.settrace(tracer)
-        tracer_state["installed"] = True
-        try:
-            return pkinit_auth.PkinitAuth().run(
-                _target(), session, AttackGraph(), force=True, sam="alice", pfx=str(pfx)
-            )
-        finally:
-            sys.settrace(previous)
-
-    result = run_traced()
-    assert tracer_state["installed"]
-    assert result["ok"] is True
+    assert result["ok"] is not True
+    assert result["method"] == "certipy-error"
     assert result.get("playbook")
+    assert Path(result["playbook"]).is_file()
 
 
 def test_report_handles_non_dict_finding_and_nested_values(tmp_path: Path) -> None:

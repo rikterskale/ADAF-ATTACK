@@ -427,7 +427,9 @@ ATT&CK technique references, and confidence level.
 
 Every non-interactive command supports a stable JSON document with
 `--format json`; use `--no-color` for plain human-readable output and
-`--non-interactive` to prevent interactive-only commands from launching.
+`--non-interactive` to prevent interactive-only commands from launching. Add
+`--debug` to emit diagnostic logging to stderr when troubleshooting a live run;
+it never contaminates the `--format json` document on stdout.
 
 ```bash
 # Diagnose prerequisites and receive specific remediation steps

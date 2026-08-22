@@ -106,10 +106,21 @@ def test_configure_logging_is_idempotent() -> None:
 
     from adaf_attack.core.engineering import configure_logging
 
-    logger = configure_logging(level=logging.DEBUG, stream=None)
-    again = configure_logging(level=logging.DEBUG, stream=None)
-    assert logger is again
-    assert len(logger.handlers) == 1
+    # Isolate from global logger state: other tests (and the CLI `--debug`
+    # flag) may have already attached handlers to the shared "adaf_attack"
+    # logger, and pytest injects its own capture handlers. Clear them so this
+    # test verifies exactly what it claims: configure_logging adds one handler
+    # and is idempotent on repeat calls.
+    package_logger = logging.getLogger("adaf_attack")
+    saved = package_logger.handlers[:]
+    package_logger.handlers.clear()
+    try:
+        logger = configure_logging(level=logging.DEBUG, stream=None)
+        again = configure_logging(level=logging.DEBUG, stream=None)
+        assert logger is again
+        assert len(logger.handlers) == 1
+    finally:
+        package_logger.handlers[:] = saved
 
 
 def test_execute_with_controls_timeout_and_exhaustion() -> None:

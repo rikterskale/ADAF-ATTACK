@@ -8,6 +8,7 @@ works is used for the capability run.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,10 @@ from adaf_attack.core.paths import default_workspace_dir, normalize_path
 from adaf_attack.core.registry import capability_registry
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
+
+# Diagnostic logger. Configured (and made visible) by the CLI `--debug` flag
+# via adaf_attack.core.engineering.configure_logging; silent otherwise.
+_logger = logging.getLogger("adaf_attack.runner")
 
 
 class RunError(Exception):
@@ -133,6 +138,7 @@ def execute_capability(
         if log:
             log(msg)
 
+    _logger.debug("execute_capability requested: %s (force=%s)", capability_id, force)
     cap = capability_registry.get(capability_id)
     if cap is None:
         raise RunError(f"Unknown capability: {capability_id}")
@@ -167,6 +173,14 @@ def execute_capability(
     _log(f"Auth: {describe_auth(resolved_target)}")
     _log(f"Session: {session.session_id}")
     _log(f"Workspace: {session.root}")
+    _logger.debug(
+        "running %s domain=%s dc_ip=%s session=%s cred_attempts=%d",
+        capability_id,
+        resolved_target.domain,
+        resolved_target.dc_ip,
+        session.session_id,
+        len(cred_attempts),
+    )
 
     session.log(
         "run.start",

@@ -1,7 +1,7 @@
 """Offline coverage for the remaining error-path and guard branches.
 
 Each test drives one specific defensive branch that is otherwise only reached
-against a live directory, keeping the full-source coverage gate at 100% without
+against a live directory, keeping the full-source coverage gate satisfied without
 network access.
 """
 

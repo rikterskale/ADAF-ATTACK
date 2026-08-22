@@ -1,13 +1,37 @@
+# Version control and CI
 .git
+.github
+
+# Virtual environments (both local venvs must be excluded from the build context)
 .venv
+.venv*
+venv
+env
+
+# Caches
 .pytest_cache
 .pytest-local
 .pytest-runtime
 .mypy_cache
 .ruff_cache
-coverage.xml
-.coverage
-dist
-output
-*.pyc
 __pycache__
+*.pyc
+*.pyo
+
+# Coverage / build / distribution artifacts
+.coverage
+.coverage.*
+coverage.xml
+htmlcov
+build
+dist
+*.egg-info
+
+# Content not needed to build/run the offline image
+tests
+docs
+scripts
+requirements-ci.txt
+GitHub_Repository_Review_Master_Prompt_v3_merged.md
+output
+*.log

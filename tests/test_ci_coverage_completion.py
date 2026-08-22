@@ -2,7 +2,7 @@
 
 These tests drive the last uncovered defensive branches (empty sAMAccountName
 skips, vault-error handlers, malformed attribute values, and alternate
-selection paths) so the full-source coverage gate stays at 100%.
+selection paths) so the full-source coverage gate stays satisfied.
 """
 
 from __future__ import annotations
