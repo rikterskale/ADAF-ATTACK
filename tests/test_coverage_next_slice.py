@@ -16,6 +16,7 @@ from typer.testing import CliRunner
 
 from adaf_attack.cli import app
 from adaf_attack.core.access_context import best_identity_for_capability, session_access_context
+from adaf_attack.core.asset_workspace import build_asset_workspace
 from adaf_attack.core.engagement_dashboard import dashboard, inspect_edge, mission, missions
 from adaf_attack.core.finding_workspace import build_finding_workspace, load_finding_workspace
 from adaf_attack.core.graph import AttackGraph
@@ -79,6 +80,25 @@ def test_engagement_and_edge_views_cover_saved_evidence(tmp_path: Path) -> None:
     assert edge["verified"] is True
     assert edge["corroboration_count"] == 2
     assert inspect_edge(session / "graph.json", source="missing")["count"] == 0
+
+
+def test_asset_workspace_aggregates_safe_evidence(tmp_path: Path) -> None:
+    session = _session(tmp_path)
+    (session / "events.jsonl").write_text(
+        '{"type":"run.complete","capability":"ldap-enum","username":"alice","asset":"USER@CORP"}\n'
+        "bad\n{}\n",
+        encoding="utf-8",
+    )
+    (session / "findings.json").write_text(
+        json.dumps({"findings": [{"id": "F-1", "asset": "USER@CORP"}, "bad"]}),
+        encoding="utf-8",
+    )
+    view = build_asset_workspace(session, "user@corp")
+    assert view["summary"] == {"nodes": 1, "relationships": 1, "findings": 1, "actions": 1}
+    assert view["access"]["recommended_identity"] == "alice"
+    assert build_asset_workspace(tmp_path / "missing", "asset")["summary"]["nodes"] == 0
+    with pytest.raises(ValueError, match="cannot be empty"):
+        build_asset_workspace(session, " ")
     alternate = AttackGraph()
     alternate.add_node("A", "User")
     alternate.add_node("B", "Group")
@@ -88,8 +108,17 @@ def test_engagement_and_edge_views_cover_saved_evidence(tmp_path: Path) -> None:
     assert missions() and mission("tier-0-paths") is not None and mission("missing") is None
     context = session_access_context(session)
     assert context["recommended_identity"] == "alice"
-    assert best_identity_for_capability(session, "acl-enum")["identity"] == "alice"
+    assert best_identity_for_capability(session, "ldap-enum")["identity"] == "alice"
     assert best_identity_for_capability(session, "missing")["identity"] == "alice"
+    cli = CliRunner().invoke(
+        app,
+        ["--format", "json", "engagement", "asset", "USER@CORP", "--session", str(session)],
+    )
+    assert cli.exit_code == 0
+    malformed = tmp_path / "malformed"
+    malformed.mkdir()
+    (malformed / "graph.json").write_text("not json", encoding="utf-8")
+    assert build_asset_workspace(malformed, "asset")["summary"]["nodes"] == 0
     (session / "ticket.kirbi").write_bytes(b"x")
     (session / "certificate.pfx").write_bytes(b"x")
     (session / "password.txt").write_bytes(b"x")

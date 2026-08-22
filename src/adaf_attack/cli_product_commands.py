@@ -129,6 +129,26 @@ def register_product_commands(
             ),
         )
 
+    @engagement_app.command("asset")
+    def engagement_asset(
+        ctx: typer.Context,
+        asset: str = typer.Argument(..., help="Asset, host, or node identifier to inspect."),
+        session: Path = typer.Option(..., "--session"),
+    ) -> None:
+        """Show findings, graph relationships, actions, and safe access context for an asset."""
+        from adaf_attack.core.asset_workspace import build_asset_workspace
+
+        def human(payload: dict[str, Any]) -> str:
+            summary = payload["summary"]
+            return (
+                f"Asset: {payload['asset']}\n"
+                f"Nodes: {summary['nodes']}  Relationships: {summary['relationships']}\n"
+                f"Findings: {summary['findings']}  Actions: {summary['actions']}\n"
+                f"Recommended identity: {payload['access']['recommended_identity'] or 'none'}"
+            )
+
+        _run(ctx, "Asset workspace", session, lambda p: build_asset_workspace(p, asset), human)
+
     @app.command("command-center")
     def command_center(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Open the polished mission-control view for an engagement."""
