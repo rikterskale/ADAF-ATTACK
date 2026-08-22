@@ -970,7 +970,7 @@ def show_paths(
             "[green]yes[/green]" if row["exists"] else "[yellow]no[/yellow]",
             "[green]yes[/green]" if row["writable"] else "[red]no[/red]",
         )
-    payload = {
+    payload: dict[str, Any] = {
         "ok": not any(item["status"].startswith("error:") for item in repairs),
         "platform": platform_name(),
         "data": str(user_data_dir()),
@@ -1301,7 +1301,7 @@ def plan(
         "force_provided": force,
         "requires_force": requires_force,
     }
-    payload = {
+    payload: dict[str, Any] = {
         "ok": True,
         "mode": "preview",
         "capability": _capability_payload(cap),
@@ -1400,7 +1400,15 @@ def review(
     force: bool = typer.Option(False, "--force"),
 ) -> None:
     """Preview a capability before running it."""
-    plan(ctx, capability=capability, domain=domain, dc_ip=dc_ip, force=force, export=None)
+    plan(
+        ctx,
+        capability=capability,
+        domain=domain,
+        dc_ip=dc_ip,
+        force=force,
+        session=None,
+        export=None,
+    )
 
 
 @app.command("help-me")
@@ -2081,7 +2089,13 @@ def run_capability(
 
     if dry_run:
         return plan(
-            ctx, capability=capability, domain=domain, dc_ip=dc_ip, force=force, export=None
+            ctx,
+            capability=capability,
+            domain=domain,
+            dc_ip=dc_ip,
+            force=force,
+            session=None,
+            export=None,
         )
 
     target = _build_target(

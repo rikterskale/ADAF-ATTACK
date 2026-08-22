@@ -326,7 +326,7 @@ def unified_search(query: str, *, session: Path | None = None, limit: int = 25) 
     q = (query or "").strip().lower()
     caps: list[dict[str, Any]] = []
     if not q:
-        return {"query": query, "capabilities": [], "results": [], "count": 0}
+        return {"query": query, "capabilities": [], "count": 0}
 
     for cap in capability_registry.list():
         hay = " ".join(
