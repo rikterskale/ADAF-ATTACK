@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from adaf_attack.core.access_context import best_identity_for_capability, session_access_context
 from adaf_attack.core.confidence import score_chain
 from adaf_attack.core.graph import EXPLOIT_PROFILES, AttackGraph
 from adaf_attack.core.registry import Capability
@@ -100,6 +101,13 @@ def capability_review(
             "verification": "required after cleanup" if destructive else "not applicable",
         },
         "target": target or {},
+        "access": best_identity_for_capability(session, cap.id)
+        if session is not None
+        else {
+            "identity": None,
+            "auth": None,
+            "reason": "No session supplied; access has not been verified.",
+        },
     }
 
 
@@ -241,6 +249,7 @@ def dashboard(
         except (OSError, KeyError, TypeError, ValueError):
             graph = None
     findings = findings_view.get("findings") or []
+    access_context = session_access_context(session)
     edges = graph.summary()["edges"] if graph else 0
     open_count = sum(
         str(item.get("status", "open")).lower() not in {"closed", "mitigated"} for item in findings
@@ -288,6 +297,10 @@ def dashboard(
         "access": {
             "identity": meta.get("username") or meta.get("identity") or "not recorded",
             "credential_context": meta.get("credential_context") or "not recorded",
+            "identities": access_context["identities"],
+            "credential_artifacts": access_context["credential_artifacts"],
+            "recommended_identity": access_context["recommended_identity"],
+            "safety": access_context["safety"],
         },
         "findings": {
             "count": len(findings),

@@ -15,7 +15,7 @@ from textual.widgets import ListView, Static
 from typer.testing import CliRunner
 
 from adaf_attack.cli import app
-from adaf_attack.core.access_context import session_access_context
+from adaf_attack.core.access_context import best_identity_for_capability, session_access_context
 from adaf_attack.core.engagement_dashboard import dashboard, inspect_edge, mission, missions
 from adaf_attack.core.finding_workspace import build_finding_workspace, load_finding_workspace
 from adaf_attack.core.graph import AttackGraph
@@ -88,6 +88,8 @@ def test_engagement_and_edge_views_cover_saved_evidence(tmp_path: Path) -> None:
     assert missions() and mission("tier-0-paths") is not None and mission("missing") is None
     context = session_access_context(session)
     assert context["recommended_identity"] == "alice"
+    assert best_identity_for_capability(session, "acl-enum")["identity"] == "alice"
+    assert best_identity_for_capability(session, "missing")["identity"] == "alice"
     (session / "ticket.kirbi").write_bytes(b"x")
     (session / "certificate.pfx").write_bytes(b"x")
     (session / "password.txt").write_bytes(b"x")
@@ -100,6 +102,10 @@ def test_engagement_and_edge_views_cover_saved_evidence(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert session_access_context(session)["recommended_identity"] is None
+    assert best_identity_for_capability(session, "missing")["identity"] == "bob"
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert best_identity_for_capability(empty, "missing")["identity"] is None
     (session / "findings.json").write_text(
         json.dumps({"findings": [{"id": "closed", "status": "closed"}]}), encoding="utf-8"
     )

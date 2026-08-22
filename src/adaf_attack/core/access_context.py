@@ -72,3 +72,33 @@ def session_access_context(session: Path) -> dict[str, Any]:
         "recommended_identity": recommended["identity"] if recommended else None,
         "safety": "secret values are never read or returned",
     }
+
+
+def best_identity_for_capability(session: Path, capability: str) -> dict[str, Any]:
+    """Recommend a recorded identity for a capability without exposing secrets."""
+    context = session_access_context(session)
+    for action in reversed(context["actions"]):
+        if action["capability"] == capability and action["identity"]:
+            return {
+                "identity": action["identity"],
+                "auth": action["auth"],
+                "reason": "Previously used for this capability in the session.",
+            }
+    if context["recommended_identity"]:
+        return {
+            "identity": context["recommended_identity"],
+            "auth": "last-recorded",
+            "reason": "Most recently recorded identity with an executed action.",
+        }
+    if context["identities"]:
+        identity = context["identities"][0]
+        return {
+            "identity": identity["identity"],
+            "auth": identity["auth_modes"][0] if identity["auth_modes"] else "not-recorded",
+            "reason": "Only recorded identity available in the session.",
+        }
+    return {
+        "identity": None,
+        "auth": None,
+        "reason": "No identity has been recorded; review access before execution.",
+    }
