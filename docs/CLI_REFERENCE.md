@@ -43,6 +43,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack engagement identity` | Show an identity-centric evidence workspace |
 | `adaf-attack engagement tier0` | Show the dedicated Tier-0 evidence workspace |
 | `adaf-attack engagement blast-radius` | Show saved-evidence blast radius for a principal |
+| `adaf-attack engagement domain` | Show domain and forest operational posture |
 | `adaf-attack engagement missions` | List goal-first guided missions |
 | `adaf-attack engagement mission` | Show a deterministic mission workflow |
 | `adaf-attack engagement report` | Generate engagement reports |

@@ -18,6 +18,7 @@ from adaf_attack.cli import app
 from adaf_attack.core.access_context import best_identity_for_capability, session_access_context
 from adaf_attack.core.asset_workspace import build_asset_workspace
 from adaf_attack.core.blast_radius_workspace import build_blast_radius_workspace
+from adaf_attack.core.domain_workspace import build_domain_workspace
 from adaf_attack.core.engagement_dashboard import dashboard, inspect_edge, mission, missions
 from adaf_attack.core.finding_workspace import build_finding_workspace, load_finding_workspace
 from adaf_attack.core.graph import AttackGraph
@@ -179,6 +180,48 @@ def test_asset_workspace_aggregates_safe_evidence(tmp_path: Path) -> None:
         ["--format", "json", "engagement", "blast-radius", "USER@CORP", "--session", str(session)],
     )
     assert blast_cli.exit_code == 0
+    domain = build_domain_workspace(session)
+    assert domain["summary"]["domains"] == 0
+    assert domain["summary"]["assets"] == 2
+    assert domain["summary"]["tier0"] == 1
+    assert build_domain_workspace(malformed)["health"]["graph"] == "missing or unreadable"
+    domain_session = tmp_path / "domain"
+    domain_session.mkdir()
+    (domain_session / "session.json").write_text(
+        json.dumps({"session_id": "S-D", "scope": "corp.example"}), encoding="utf-8"
+    )
+    domain_graph = AttackGraph()
+    domain_graph.add_node("DOMAIN@CORP", "Domain")
+    domain_graph.add_node("FOREST@CORP", "Forest", forest="CORP")
+    domain_graph.add_node("COMPUTER@CORP", "Computer")
+    domain_graph.add_node("GROUP@USERS@CORP", "Group")
+    domain_graph.add_node("OU@CORP", "OrganizationalUnit")
+    domain_graph.add_edge("DOMAIN@CORP", "FOREST@CORP", "Trusts", direction="outbound")
+    domain_graph.add_edge("DOMAIN@CORP", "OU@CORP", "Contains")
+    domain_graph.save(domain_session / "graph.json")
+    (domain_session / "findings.json").write_text(
+        json.dumps({"findings": [{"id": "F-D", "asset": "DOMAIN@CORP"}]}),
+        encoding="utf-8",
+    )
+    domain_view = build_domain_workspace(domain_session)
+    assert domain_view["summary"] == {
+        "domains": 1,
+        "forests": 1,
+        "assets": 2,
+        "trusts": 1,
+        "tier0": 0,
+        "findings": 1,
+    }
+    missing_domain = build_domain_workspace(tmp_path / "missing-domain")
+    assert missing_domain["health"] == {
+        "scope": "needs review",
+        "graph": "missing or unreadable",
+        "evidence": "empty",
+    }
+    domain_cli = CliRunner().invoke(
+        app, ["--format", "json", "engagement", "domain", "--session", str(session)]
+    )
+    assert domain_cli.exit_code == 0
     (session / "certificate.pfx").write_bytes(b"x")
     (session / "password.txt").write_bytes(b"x")
     assert len(session_access_context(session)["credential_artifacts"]) == 3

@@ -220,6 +220,24 @@ def register_product_commands(
             human,
         )
 
+    @engagement_app.command("domain")
+    def engagement_domain(
+        ctx: typer.Context, session: Path = typer.Option(..., "--session")
+    ) -> None:
+        """Show domain, forest, trust, asset, and Tier-0 posture from saved evidence."""
+        from adaf_attack.core.domain_workspace import build_domain_workspace
+
+        def human(payload: dict[str, Any]) -> str:
+            summary = payload["summary"]
+            return (
+                f"Scope: {payload['scope']}\n"
+                f"Domains: {summary['domains']}  Forests: {summary['forests']}\n"
+                f"Assets: {summary['assets']}  Trusts: {summary['trusts']}\n"
+                f"Tier-0 nodes: {summary['tier0']}  Findings: {summary['findings']}"
+            )
+
+        _run(ctx, "Domain workspace", session, build_domain_workspace, human)
+
     @app.command("command-center")
     def command_center(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Open the polished mission-control view for an engagement."""
