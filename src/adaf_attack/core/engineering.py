@@ -22,8 +22,11 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from adaf_attack.core.paths import ensure_dir
+
 SCHEMA_VERSION = 2
 PLUGIN_GROUP = "adaf_attack.capabilities"
+_PLUGIN_STATUS: list[dict[str, str]] = []
 
 
 class SessionContract(BaseModel):
@@ -57,6 +60,19 @@ class RunResultContract(BaseModel):
     capability: str
     session_id: str
     session_path: str
+
+
+class CapabilityResultContract(BaseModel):
+    """Normalized boundary contract returned by every capability runner."""
+
+    model_config = ConfigDict(extra="allow")
+    ok: bool
+    error: str | None = None
+
+
+def validate_capability_result(document: Mapping[str, Any]) -> CapabilityResultContract:
+    """Validate the explicit success/failure field at the runner boundary."""
+    return CapabilityResultContract.model_validate(document)
 
 
 def validate_session(document: Mapping[str, Any]) -> SessionContract:
@@ -95,13 +111,15 @@ class SessionStore:
 
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path).expanduser()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        ensure_dir(self.path.parent)
         self._lock = Lock()
         self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=10)
         connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 10000")
         return connection
 
     def _initialize(self) -> None:
@@ -141,7 +159,15 @@ class SessionStore:
         session = validate_session(migrate_document(metadata, kind="session"))
         with self._lock, self._connect() as db:
             db.execute(
-                "INSERT OR REPLACE INTO sessions VALUES (?, ?, ?, ?, ?)",
+                """
+                INSERT INTO sessions(session_id, root, created_at, capability, schema_version)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET
+                    root = excluded.root,
+                    created_at = excluded.created_at,
+                    capability = excluded.capability,
+                    schema_version = excluded.schema_version
+                """,
                 (
                     session.session_id,
                     session.root or "",
@@ -227,10 +253,19 @@ def execute_with_controls(
     timeout: float | None = None,
     retries: int = 0,
     backoff: float = 0.25,
+    mutating: bool = False,
 ) -> T:
-    """Run a synchronous operation with bounded retries and timeout."""
+    """Run an operation with bounded controls.
+
+    Mutating operations are deliberately single-shot: a thread timeout cannot
+    stop the underlying network call and a retry can duplicate a directory
+    change.  Callers must use an operation-specific cancellation/rollback
+    strategy for those cases instead of this generic wrapper.
+    """
     if retries < 0 or timeout is not None and timeout <= 0:
         raise ValueError("retries must be non-negative and timeout must be positive")
+    if mutating and (retries or timeout is not None):
+        raise ValueError("timeouts and retries are not permitted for mutating operations")
     last_error: Exception | None = None
     for attempt in range(retries + 1):
         try:
@@ -276,7 +311,8 @@ def diagnostics_snapshot(*, package_version: str, workspace: Path) -> dict[str, 
         "architecture": platform.machine(),
         "workspace": workspace.name or "workspace",
         "workspace_exists": workspace.exists(),
-        "plugins": [{"name": item.name, "value": item.value} for item in discover_plugins()],
+        "plugins": _PLUGIN_STATUS
+        or [{"name": item.name, "value": item.value} for item in discover_plugins()],
         "implementation": sys.implementation.name,
     }
 
@@ -290,3 +326,33 @@ def discover_plugins() -> list[PluginDescriptor]:
         else discovered.get(PLUGIN_GROUP, ())
     )
     return [PluginDescriptor(item.name, item.value, item.load) for item in selected]
+
+
+def load_plugins() -> list[dict[str, str]]:
+    """Load discovered plugins with per-plugin failure isolation.
+
+    Entry points may register capabilities as an import side effect or expose
+    a zero-argument registration function.  A broken optional plugin is
+    reported, not allowed to prevent built-in capabilities from loading.
+    """
+    global _PLUGIN_STATUS
+    statuses: list[dict[str, str]] = []
+    for descriptor in discover_plugins():
+        try:
+            loaded = descriptor.loader()
+            if callable(loaded) and not hasattr(loaded, "__path__"):
+                loaded()
+            statuses.append(
+                {"name": descriptor.name, "value": descriptor.value, "status": "loaded"}
+            )
+        except Exception as exc:  # noqa: BLE001
+            statuses.append(
+                {
+                    "name": descriptor.name,
+                    "value": descriptor.value,
+                    "status": "failed",
+                    "error": str(exc)[:240],
+                }
+            )
+    _PLUGIN_STATUS = statuses
+    return list(statuses)

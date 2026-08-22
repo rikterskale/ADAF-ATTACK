@@ -14,6 +14,7 @@ from typing import Any
 
 from rich.console import Console
 
+from adaf_attack.core.engagement import EngagementError, verify_scoped_approval
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import capability_registry, register_capability
 from adaf_attack.core.session import Session
@@ -161,7 +162,9 @@ class CampaignRun:
     ) -> dict[str, Any]:
         phases = _load_phases(kwargs)
         approval_token = str(kwargs.get("approval_token") or "")
-        expected_token = str(kwargs.get("required_approval_token") or "ENGAGE")
+        engagement_id = str(
+            kwargs.get("engagement_id") or kwargs.get("campaign_id") or session.session_id
+        )
 
         console.print(f"[bold]Campaign run[/bold]  phases={len(phases)}  domain={target.domain}")
 
@@ -184,20 +187,33 @@ class CampaignRun:
                 )
                 continue
 
-            if destructive and approval_token != expected_token:
-                console.print(
-                    f"  [yellow]skipped — destructive phase requires "
-                    f"-P approval_token={expected_token}[/yellow]"
+            if destructive:
+                try:
+                    approval = verify_scoped_approval(
+                        approval_token,
+                        engagement_id=engagement_id,
+                        dc_ip=target.dc_ip,
+                        capability=capability_id,
+                    )
+                except EngagementError as exc:
+                    console.print(f"  [yellow]skipped — approval rejected: {exc}[/yellow]")
+                    phase_results.append(
+                        {
+                            "id": phase_id,
+                            "capability": capability_id,
+                            "ok": False,
+                            "skipped": "approval_token_required",
+                            "error": str(exc),
+                        }
+                    )
+                    continue
+                session.log(
+                    "approval.accepted",
+                    approval_id=approval.get("approval_id"),
+                    engagement_id=engagement_id,
+                    capability=capability_id,
+                    approver=approval.get("approved_by"),
                 )
-                phase_results.append(
-                    {
-                        "id": phase_id,
-                        "capability": capability_id,
-                        "ok": False,
-                        "skipped": "approval_token_required",
-                    }
-                )
-                continue
 
             cap = capability_registry.get(capability_id)
             if not cap or not cap.runner:
@@ -236,8 +252,13 @@ class CampaignRun:
                     include_secrets=include_secrets,
                     **params,
                 )
-                ok = True
-                error = None
+                if isinstance(outcome, dict):
+                    ok = bool(outcome.get("ok", "error" not in outcome))
+                else:
+                    ok = True
+                error = (
+                    str(outcome.get("error") or "capability reported failure") if not ok else None
+                )
             except Exception as exc:  # noqa: BLE001
                 outcome = {}
                 ok = False

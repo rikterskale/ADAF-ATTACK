@@ -43,6 +43,12 @@ jobs:
           --repo-root . --dist dist
           --output dist/release-manifest.json --validate
 
+      - name: Validate release provenance
+        run: >-
+          python scripts/generate_release_provenance.py
+          --repo-root . --dist dist
+          --output dist/release-provenance.json --validate
+
       - name: Verify downloaded distribution checksums
         shell: bash
         run: |

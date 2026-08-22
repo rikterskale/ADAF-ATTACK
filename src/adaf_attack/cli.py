@@ -1245,6 +1245,10 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
         "category": cap.category,
         "summary": cap.summary,
         "destructive": cap.destructive,
+        "maturity": cap.maturity,
+        "environment": cap.environment,
+        "tools": list(cap.tools),
+        "fixture": cap.fixture,
         "difficulty": capability_difficulty(cap),
         "tags": list(cap.tags),
         "required_options": list(spec.required),
@@ -3592,6 +3596,31 @@ def session_events(
             json.dumps(detail, default=str)[:80] if detail else "",
         )
     _emit(ctx, payload, table)
+
+
+@session_app.command("verify-audit")
+def session_verify_audit(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session", help="Session directory to verify."),
+) -> None:
+    """Verify the SHA-256 hash chain in a session's events.jsonl."""
+    from adaf_attack.core.session import verify_event_log
+
+    payload = verify_event_log(session.expanduser() / "events.jsonl")
+    if _json_mode(ctx):
+        _emit(ctx, payload, "")
+        if not payload.get("ok"):
+            raise typer.Exit(code=1)
+        return
+    panel = Panel(
+        f"Events: {payload.get('events', 0)}\n"
+        f"Status: {'valid' if payload.get('ok') else 'invalid'}"
+        + (f"\nError: {payload['error']}" if payload.get("error") else ""),
+        title="Session audit integrity",
+    )
+    _emit(ctx, payload, panel)
+    if not payload.get("ok"):
+        raise typer.Exit(code=1)
 
 
 @session_app.command("list")

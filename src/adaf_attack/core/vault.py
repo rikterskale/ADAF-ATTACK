@@ -10,6 +10,12 @@ from typing import Any, cast
 
 from cryptography.fernet import Fernet, InvalidToken
 
+from adaf_attack.core.paths import (
+    atomic_write_bytes,
+    atomic_write_text,
+    ensure_dir,
+    restrict_permissions,
+)
 from adaf_attack.core.redaction import redact
 
 
@@ -30,7 +36,8 @@ class SessionVault:
 
     def __init__(self, session_root: Path, key: str | None = None) -> None:
         self.root = session_root / "vault"
-        self.root.mkdir(exist_ok=True)
+        ensure_dir(self.root)
+        restrict_permissions(self.root, 0o700)
         self.index_path = self.root / "index.json"
         self._key = key or os.environ.get("ADAF_SESSION_VAULT_KEY")
 
@@ -43,7 +50,7 @@ class SessionVault:
         return cast(dict[str, Any], loaded)
 
     def _save(self, index: dict[str, Any]) -> None:
-        self.index_path.write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
+        atomic_write_text(self.index_path, json.dumps(index, indent=2) + "\n")
 
     def put(
         self,
@@ -67,7 +74,7 @@ class SessionVault:
             except Exception as exc:  # noqa: BLE001
                 raise VaultError("ADAF_SESSION_VAULT_KEY must be a Fernet key") from exc
             payload = json.dumps(value, default=str).encode("utf-8")
-            (self.root / f"{name}.vault").write_bytes(cipher.encrypt(payload))
+            atomic_write_bytes(self.root / f"{name}.vault", cipher.encrypt(payload))
             record["file"] = f"{name}.vault"
         else:
             record["value"] = value

@@ -9,6 +9,7 @@ from typing import Any
 from ldap3 import MODIFY_DELETE, MODIFY_REPLACE
 
 from adaf_attack.core.ldap_util import ldap_connect
+from adaf_attack.core.rollback import classification_for_kind
 from adaf_attack.core.target import Target
 
 
@@ -16,12 +17,24 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
     """Apply pending LDAP-backed cleanup actions in a recorded session."""
     path = session / "cleanup.json"
     entries = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else []
+    advisory = 0
+    unsupported = 0
     conn, _base, _cfg = ldap_connect(target)
     try:
         for item in entries:
             if item.get("status") != "pending":
                 continue
             kind = item.get("kind")
+            classification = classification_for_kind(str(kind or ""))
+            item.setdefault("classification", classification)
+            if classification == "advisory":
+                item["result"] = "Manual review required; no automatic rollback handler"
+                advisory += 1
+                continue
+            if classification == "unsupported":
+                item["result"] = "Unsupported cleanup kind; manual review required"
+                unsupported += 1
+                continue
             if kind == "computer-identity":
                 ok = conn.modify(
                     item["target"],
@@ -121,4 +134,6 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
     return {
         "entries": entries,
         "completed": sum(item.get("status") == "completed" for item in entries),
+        "advisory": advisory,
+        "unsupported": unsupported,
     }

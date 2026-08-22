@@ -7,7 +7,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from adaf_attack.core.paths import user_config_dir
+from adaf_attack.core.paths import atomic_write_text, ensure_dir, user_config_dir
 
 _ALLOWED_KEYS = {
     "target.domain",
@@ -48,8 +48,8 @@ def load_user_config() -> dict[str, Any]:
 
 def save_user_config(data: dict[str, Any]) -> Path:
     path = config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    ensure_dir(path.parent)
+    atomic_write_text(path, json.dumps(data, indent=2, sort_keys=True) + "\n")
     return path
 
 

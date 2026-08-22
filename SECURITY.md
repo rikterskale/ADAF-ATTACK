@@ -26,16 +26,20 @@ Only the latest minor release line receives security fixes. See
 
 Please **do not** open a public GitHub issue for security reports.
 
-Report privately by emailing **security@adaf-attack.invalid** (replace with the
-project owner's real address before publishing). Include:
+Report privately through the repository's configured private security channel
+(for example, the private vulnerability-reporting workflow or an approved
+internal security contact). Do not include sensitive material in a public
+issue. Include:
 
 - A clear description of the issue and its impact.
 - Reproduction steps or a proof of concept.
 - Affected version(s) and platform(s).
 - Any suggested mitigation.
 
-For sensitive reports, encrypt to the maintainer PGP key published at
-`https://<project-owner>/pgp.asc` (fingerprint: `TO BE ANNOUNCED`).
+If the configured channel supports encryption, use its published key or
+encryption instructions. This repository does not publish a placeholder PGP
+identity; maintainers must configure that information before requesting
+encrypted submissions.
 
 We acknowledge every report within **3 business days** and aim to publish a
 fix, workaround, or disposition within **90 days** of the initial report.

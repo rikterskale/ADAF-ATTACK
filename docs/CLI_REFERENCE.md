@@ -106,6 +106,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack session access` | Show safe identity and credential context |
 | `adaf-attack session resume` | Prepare a safe review/resume package |
 | `adaf-attack session events` | Read a session's events.jsonl audit trail |
+| `adaf-attack session verify-audit` | Verify the session audit hash chain |
 | `adaf-attack finding triage` | View or update finding status, tags, and notes |
 | `adaf-attack session list` | List workspace sessions |
 | `adaf-attack session show` | Inspect a session |

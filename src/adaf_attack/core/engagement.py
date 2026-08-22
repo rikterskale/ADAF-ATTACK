@@ -73,11 +73,18 @@ def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode().rstrip("=")
 
 
-def verify_approval(token: str, plan: EngagementPlan, capability: str) -> dict[str, Any]:
-    """Verify HMAC-signed approval issued by an internal service.
+def verify_scoped_approval(
+    token: str,
+    *,
+    engagement_id: str,
+    dc_ip: str,
+    capability: str,
+) -> dict[str, Any]:
+    """Verify an HMAC-signed approval scoped to one campaign and target.
 
-    The service and CLI share a rotation-managed verification key in this minimal
-    deployment. Production deployments should replace this with asymmetric JWKS.
+    The service and CLI share a rotation-managed verification key in this
+    minimal deployment. Production deployments should replace this with
+    asymmetric JWKS.
     """
     env_name = os.environ.get("ADAF_ATTACK_ENV", "").strip().lower()
     if env_name in ("prod", "production"):
@@ -99,15 +106,31 @@ def verify_approval(token: str, plan: EngagementPlan, capability: str) -> dict[s
         raise EngagementError("Invalid approval token format") from exc
     if not isinstance(payload, dict) or not hmac.compare_digest(expected, signature):
         raise EngagementError("Approval token signature is invalid")
-    if payload.get("engagement_id") != plan.engagement_id or capability not in payload.get(
-        "capabilities", []
-    ):
+    capabilities = payload.get("capabilities", [])
+    targets = payload.get("targets", [])
+    if not isinstance(capabilities, list) or not isinstance(targets, list):
+        raise EngagementError("Approval token scope fields are malformed")
+    if payload.get("engagement_id") != engagement_id or capability not in capabilities:
         raise EngagementError("Approval token scope does not match the requested action")
-    if plan.dc_ip not in payload.get("targets", []):
+    if dc_ip not in targets:
         raise EngagementError("Approval token does not permit this target")
-    if int(payload.get("exp", 0)) <= int(datetime.now(UTC).timestamp()):
+    try:
+        expires_at = int(payload.get("exp", 0))
+    except (TypeError, ValueError) as exc:
+        raise EngagementError("Approval token expiry is malformed") from exc
+    if expires_at <= int(datetime.now(UTC).timestamp()):
         raise EngagementError("Approval token has expired")
     return cast(dict[str, Any], payload)
+
+
+def verify_approval(token: str, plan: EngagementPlan, capability: str) -> dict[str, Any]:
+    """Verify an approval against an engagement plan."""
+    return verify_scoped_approval(
+        token,
+        engagement_id=plan.engagement_id,
+        dc_ip=plan.dc_ip,
+        capability=capability,
+    )
 
 
 def run_engagement(

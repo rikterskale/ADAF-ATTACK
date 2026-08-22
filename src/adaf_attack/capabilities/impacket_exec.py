@@ -141,6 +141,7 @@ class ImpacketExec:
             outcome = {"error": str(exc)[:400]}
 
         result = {
+            "ok": "error" not in outcome,
             "host": host,
             "method": method,
             "command": str(command),

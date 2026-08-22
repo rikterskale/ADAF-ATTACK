@@ -17,6 +17,11 @@ external operator tools are available.
 | Relay, coercion, destructive workflows | Base plus capability dependencies | Approval token, rollback, authorized target | Yes | Yes | Operator-verified |
 | Promoted offensive IDs (capability catalog) | Base plus capability tools | Authorized account / test fixtures | Usually | Depends on capability | Operator-verified |
 
+Capability listings expose an explicit maturity value (`implemented`,
+`fixture-tested`, `operator-verified`, or `playbook-only`) together with the
+expected environment, external tools, and fixture identifier. Metadata does
+not claim live AD validation by itself.
+
 ## Release status vocabulary
 
 - **CI**: exercised automatically in a clean environment.

@@ -3,6 +3,7 @@
 
 CI runs this and asserts the working copy matches; a stale file fails CI.
 """
+
 from __future__ import annotations
 
 import sys
@@ -19,8 +20,8 @@ This document is regenerated from the running package by
 `scripts/generate_capability_catalog.py`. Do not edit by hand; run the
 script (CI enforces parity).
 
-| ID | Category | Difficulty | Destructive | Summary |
-|----|----------|------------|-------------|---------|
+| ID | Category | Maturity | Environment | Tools | Fixture | Difficulty | Destructive | Summary |
+|----|----------|----------|-------------|-------|---------|------------|-------------|---------|
 """
 
 
@@ -37,8 +38,13 @@ def _rows() -> list[str]:
         destructive = "yes" if getattr(cap, "destructive", False) else "no"
         difficulty = getattr(cap, "difficulty", "-") or "-"
         category = getattr(cap, "category", "-") or "-"
+        maturity = getattr(cap, "maturity", "implemented") or "implemented"
+        environment = getattr(cap, "environment", "unknown") or "unknown"
+        tools = ", ".join(getattr(cap, "tools", ()) or ()) or "-"
+        fixture = getattr(cap, "fixture", None) or "-"
         lines.append(
-            f"| `{cap.id}` | {category} | {difficulty} | {destructive} | {summary} |"
+            f"| `{cap.id}` | {category} | {maturity} | {environment} | {tools} | "
+            f"{fixture} | {difficulty} | {destructive} | {summary} |"
         )
     return lines
 

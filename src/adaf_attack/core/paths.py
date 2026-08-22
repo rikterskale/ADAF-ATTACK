@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
+from contextlib import suppress
 from pathlib import Path
 
 
@@ -90,9 +92,48 @@ def default_workspace_dir() -> Path:
     return user_data_dir() / "workspaces"
 
 
-def ensure_dir(path: Path) -> Path:
-    path.mkdir(parents=True, exist_ok=True)
+def restrict_permissions(path: Path, mode: int = 0o600) -> Path:
+    """Best-effort least-privilege permissions for local artifacts."""
+    try:
+        if not is_windows():
+            path.chmod(mode)
+    except OSError:
+        # ACLs and read-only filesystems can make chmod unavailable.  The
+        # caller still gets the normal filesystem error for the actual write.
+        pass
     return path
+
+
+def ensure_dir(path: Path, mode: int = 0o700) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    if not is_windows():
+        restrict_permissions(path, mode)
+    return path
+
+
+def atomic_write_bytes(path: Path, data: bytes, *, mode: int = 0o600) -> Path:
+    """Atomically replace a local file and apply restrictive permissions."""
+    ensure_dir(path.parent)
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        restrict_permissions(temporary, mode)
+        os.replace(temporary, path)
+        restrict_permissions(path, mode)
+    except BaseException:
+        with suppress(OSError):
+            temporary.unlink(missing_ok=True)
+        raise
+    return path
+
+
+def atomic_write_text(path: Path, text: str, *, encoding: str = "utf-8", mode: int = 0o600) -> Path:
+    """Atomically write text using a temporary file in the destination dir."""
+    return atomic_write_bytes(path, text.encode(encoding), mode=mode)
 
 
 def normalize_path(path: str | Path) -> Path:

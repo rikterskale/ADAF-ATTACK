@@ -33,6 +33,22 @@ def _smb_blob(apreq_bytes: bytes) -> bytes:
     return bytes([0]) + len(smb2).to_bytes(3, "big") + smb2
 
 
+def _start_or_skip(listener: TgtCaptureListener) -> None:
+    if listener.start():
+        return
+    error = (listener.error or "").lower()
+    if "operation not permitted" in error or "permission denied" in error:
+        pytest.skip("socket creation is restricted in this execution environment")
+    pytest.fail(listener.error or "listener failed to start")
+
+
+def _connect_or_skip(port: int) -> socket.socket:
+    try:
+        return socket.create_connection(("127.0.0.1", port), timeout=3)
+    except PermissionError:
+        pytest.skip("socket connections are restricted in this execution environment")
+
+
 def test_extract_apreq_variants() -> None:
     assert _extract_apreq(b"\xde\xad\xbe\xef") is None
     assert _extract_apreq(KERBEROS_OID + b"\x6d\x01\x02") is None  # wrong tag
@@ -49,8 +65,8 @@ def test_extract_apreq_variants() -> None:
 
 def test_listener_capture_roundtrip(tmp_path: Any) -> None:
     listener = TgtCaptureListener(tmp_path, host="127.0.0.1", port=44591, timeout=5.0)
-    assert listener.start() is True
-    sock = socket.create_connection(("127.0.0.1", 44591), timeout=3)
+    _start_or_skip(listener)
+    sock = _connect_or_skip(44591)
     sock.sendall(_smb_blob(_apreq()))
     captures = listener.wait()
     sock.close()
@@ -86,7 +102,7 @@ def test_read_exact_variants() -> None:
 
 def test_listener_bind_error(tmp_path: Any) -> None:
     first = TgtCaptureListener(tmp_path, port=44592)
-    assert first.start() is True
+    _start_or_skip(first)
     second = TgtCaptureListener(tmp_path / "other", port=44592)
     try:
         assert second.start() is False
@@ -99,14 +115,14 @@ def test_listener_bind_error(tmp_path: Any) -> None:
 
 def test_listener_garbage_and_empty_payload(tmp_path: Any) -> None:
     listener = TgtCaptureListener(tmp_path, host="127.0.0.1", port=44593, timeout=2.0)
-    assert listener.start() is True
+    _start_or_skip(listener)
     try:
         for blob in (
             bytes([0]) + (5).to_bytes(3, "big") + b"\xaa" * 5,
             bytes([1]) + (2).to_bytes(3, "big") + b"\xbb\xbb",
             bytes([0]) + (0).to_bytes(3, "big"),
         ):
-            sock = socket.create_connection(("127.0.0.1", 44593), timeout=3)
+            sock = _connect_or_skip(44593)
             sock.sendall(blob)
             sock.shutdown(socket.SHUT_WR)
             time.sleep(0.1)
@@ -119,7 +135,7 @@ def test_listener_garbage_and_empty_payload(tmp_path: Any) -> None:
 
 def test_listener_accept_oserror_and_handler_error(tmp_path: Any) -> None:
     listener = TgtCaptureListener(tmp_path, host="127.0.0.1", port=44594, timeout=2.0)
-    assert listener.start() is True
+    _start_or_skip(listener)
     server = listener._server
     try:
         if server is not None:
@@ -133,8 +149,8 @@ def test_listener_accept_oserror_and_handler_error(tmp_path: Any) -> None:
                 raise OSError("handler failed")
 
         raising = _Raising(tmp_path / "r", host="127.0.0.1", port=44594, timeout=2.0)
-        assert raising.start() is True
-        sock = socket.create_connection(("127.0.0.1", 44594), timeout=3)
+        _start_or_skip(raising)
+        sock = _connect_or_skip(44594)
         sock.sendall(_smb_blob(_apreq()))
         sock.close()
         assert raising.wait() == []
@@ -146,9 +162,9 @@ def test_listener_accept_oserror_and_handler_error(tmp_path: Any) -> None:
 
 def test_listener_truncated_payload(tmp_path: Any) -> None:
     listener = TgtCaptureListener(tmp_path, host="127.0.0.1", port=44595, timeout=2.0)
-    assert listener.start() is True
+    _start_or_skip(listener)
     try:
-        sock = socket.create_connection(("127.0.0.1", 44595), timeout=3)
+        sock = _connect_or_skip(44595)
         sock.sendall(bytes([0]) + (64).to_bytes(3, "big") + b"partial")
         sock.shutdown(socket.SHUT_WR)
         time.sleep(0.1)
@@ -190,6 +206,7 @@ def test_workflow_capture_success(
     session = Session(base_dir=tmp_path)
     graph = AttackGraph()
     listener = TgtCaptureListener(session.path("captured"), timeout=1.0)
+    monkeypatch.setattr(listener, "start", lambda: True)
     monkeypatch.setattr(joined_workflows, "TgtCaptureListener", lambda *_a, **_k: listener)
     result = joined_workflows.UnconstTgtDumpWorkflow().run(
         target(), session, graph, force=True, capture=True

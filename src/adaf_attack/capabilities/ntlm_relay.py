@@ -192,6 +192,7 @@ class NtlmRelay:
             graph.add_edge(node, node, "NtlmRelayTarget")
 
         result = {
+            "ok": returncode == 0,
             "listen_port": listen_port,
             "relay_targets": relay_targets,
             "duration_seconds": duration_seconds,

@@ -55,7 +55,8 @@ jobs:
           fi
           mkdir -p published-dist
           gh release download "$tag" --dir published-dist \
-            --pattern "*.whl" --pattern "release-manifest.json" --pattern "SHA256SUMS"
+            --pattern "*.whl" --pattern "release-manifest.json" \
+            --pattern "release-provenance.json" --pattern "SHA256SUMS"
           wheels=(published-dist/*.whl)
           if [[ "${#wheels[@]}" -ne 1 ]]; then
             echo "Release $tag must contain exactly one wheel asset; found ${#wheels[@]}." >&2
@@ -72,6 +73,11 @@ jobs:
             --repo-root . \
             --dist published-dist \
             --output published-dist/release-manifest.json \
+            --validate
+          python scripts/generate_release_provenance.py \
+            --repo-root . \
+            --dist published-dist \
+            --output published-dist/release-provenance.json \
             --validate
           python scripts/smoke_distribution.py \
             --artifact "$artifact" \

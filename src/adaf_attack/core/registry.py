@@ -37,6 +37,10 @@ class Capability:
     destructive: bool = False
     category: str = "general"
     tags: tuple[str, ...] = field(default_factory=tuple)
+    maturity: str = "implemented"
+    environment: str = "unknown"
+    tools: tuple[str, ...] = field(default_factory=tuple)
+    fixture: str | None = None
     runner: CapabilityRunner | None = None
 
 
@@ -69,6 +73,10 @@ def register_capability(
     destructive: bool = False,
     category: str = "general",
     tags: tuple[str, ...] = (),
+    maturity: str = "implemented",
+    environment: str = "unknown",
+    tools: tuple[str, ...] = (),
+    fixture: str | None = None,
 ) -> Callable[[type], type]:
     """Decorator that registers a capability class implementing .run()."""
 
@@ -82,6 +90,10 @@ def register_capability(
                 destructive=destructive,
                 category=category,
                 tags=tags,
+                maturity=maturity,
+                environment=environment,
+                tools=tools,
+                fixture=fixture,
                 runner=runner,
             )
         )

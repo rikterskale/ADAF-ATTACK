@@ -14,19 +14,58 @@ from typing import Any
 
 from adaf_attack.core.session import Session
 
-SUPPORTED_KINDS = {
+REVERTABLE_KINDS = {
     "acl-write",
+    "acl",
+    "computer-identity",
+    "ldap-attribute",
+    "ldap-add-value",
+    "ldap-object",
     "rbcd",
     "shadow-creds",
+    "shadow-credential",
+    "keycred-write",
+    "gpo-link",
     "template-mod",
-    "gpo-abuse",
     "gpo-sysvol",
-    "ntlm-relay",
-    "rodc",
-    "gmsa",
-    "certificate-enroll",
     "local-artifact",
 }
+
+# These effects may require operator judgment or a separate product-specific
+# rollback procedure, but they must still be tracked and surfaced.
+ADVISORY_KINDS = {
+    "coercion",
+    "gpo-abuse",
+    "gmsa",
+    "krb-relay",
+    "ntlm-challenge",
+    "ntlm-hash",
+    "ntlm-relay",
+    "password-reset",
+    "remote-exec",
+    "rodc",
+    "sccm-push",
+    "cert-enroll",
+    "certificate-enroll",
+}
+
+SUPPORTED_KINDS = REVERTABLE_KINDS | ADVISORY_KINDS
+
+
+def classification_for_kind(kind: str) -> str:
+    """Return whether a recorded effect has an automatic rollback handler."""
+    if kind in REVERTABLE_KINDS:
+        return "revertable"
+    if kind in ADVISORY_KINDS:
+        return "advisory"
+    return "unsupported"
+
+
+def validate_cleanup_entry(action: dict[str, Any]) -> None:
+    """Reject unclassified cleanup entries before they enter the ledger."""
+    kind = str(action.get("kind") or "")
+    if classification_for_kind(kind) == "unsupported":
+        raise ValueError(f"Unsupported cleanup kind: {kind or '<missing>'}")
 
 
 def record_pre_state(
@@ -45,13 +84,14 @@ def record_pre_state(
 
     Returns the registered cleanup entry.
     """
-    if kind not in SUPPORTED_KINDS:
+    if classification_for_kind(kind) == "unsupported":
         raise ValueError(f"Unsupported rollback kind: {kind}. Supported: {sorted(SUPPORTED_KINDS)}")
 
     action: dict[str, Any] = {
         "kind": kind,
         "target": target,
         "status": "pending",
+        "classification": classification_for_kind(kind),
         "registered_at": datetime.now(UTC).isoformat(),
     }
     if attribute is not None:
@@ -95,11 +135,14 @@ def summarize_rollbacks(session_dir: Path) -> dict[str, Any]:
 
     by_status: dict[str, int] = {}
     by_kind: dict[str, int] = {}
+    by_classification: dict[str, int] = {}
     for e in entries:
         status = str(e.get("status") or "unknown")
         kind = str(e.get("kind") or "unknown")
+        classification = str(e.get("classification") or classification_for_kind(kind))
         by_status[status] = by_status.get(status, 0) + 1
         by_kind[kind] = by_kind.get(kind, 0) + 1
+        by_classification[classification] = by_classification.get(classification, 0) + 1
 
     return {
         "session": str(session_dir),
@@ -107,6 +150,8 @@ def summarize_rollbacks(session_dir: Path) -> dict[str, Any]:
         "pending": by_status.get("pending", 0),
         "completed": by_status.get("completed", 0),
         "failed": by_status.get("failed", 0),
+        "advisory": by_classification.get("advisory", 0),
+        "by_classification": by_classification,
         "by_status": by_status,
         "by_kind": by_kind,
         "entries": entries,

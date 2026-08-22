@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -24,6 +28,24 @@ def _target() -> Target:
 def _session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Session:
     monkeypatch.setenv("ADAF_SESSION_VAULT_KEY", Fernet.generate_key().decode())
     return Session(tmp_path)
+
+
+def _approval_token(session: Session, target: Target, capability: str) -> str:
+    key = "campaign-test-key"
+    payload = {
+        "engagement_id": session.session_id,
+        "capabilities": [capability],
+        "targets": [target.dc_ip],
+        "approved_by": "test",
+        "exp": int(time.time()) + 3600,
+    }
+    encoded = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    signature = (
+        base64.urlsafe_b64encode(hmac.new(key.encode(), encoded.encode(), hashlib.sha256).digest())
+        .decode()
+        .rstrip("=")
+    )
+    return f"{encoded}.{signature}"
 
 
 def test_campaign_helpers_and_all_phase_outcomes(
@@ -70,8 +92,15 @@ def test_campaign_helpers_and_all_phase_outcomes(
     execution_plan.write_text(json.dumps({"phases": phases}), encoding="utf-8")
     result = campaign_run.CampaignRun().run(_target(), session, AttackGraph(), plan=execution_plan)
     assert result["skipped"] == 3 and result["failed"] == 2 and result["completed"] == 1
+    monkeypatch.setenv("ADAF_APPROVAL_HMAC_KEY", "campaign-test-key")
     result = campaign_run.CampaignRun().run(
-        _target(), session, AttackGraph(), plan=execution_plan, force=True, approval_token="ENGAGE"
+        _target(),
+        session,
+        AttackGraph(),
+        plan=execution_plan,
+        force=True,
+        approval_token=_approval_token(session, _target(), "good"),
+        engagement_id=session.session_id,
     )
     assert result["completed"] == 3
     assert Path(result["purple_handoff"]).is_file()

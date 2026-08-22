@@ -443,4 +443,8 @@ def register_from_catalog(cap_id: str, extra_tags: tuple[str, ...] = ()) -> Call
         destructive=item[2],
         category=item[3],
         tags=(*item[4], *extra_tags),
+        environment=item[5],
+        tools=item[6],
+        fixture=item[7],
+        maturity="fixture-tested",
     )

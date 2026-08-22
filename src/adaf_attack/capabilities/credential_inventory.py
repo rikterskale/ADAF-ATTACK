@@ -178,7 +178,11 @@ def _export_items(
             continue
 
         # Session file path (relative)
-        candidate = session.root / name
+        try:
+            candidate = session.path(name)
+        except ValueError:
+            errors.append({"name": name, "error": "session path escapes session root"})
+            continue
         if candidate.is_file():
             dest = export_dir / candidate.name
             shutil.copy2(candidate, dest)
@@ -218,7 +222,10 @@ def _purge(
         for name in names or []:
             if vault.delete(name):
                 removed_vault.append(name)
-            candidate = session.root / name
+            try:
+                candidate = session.path(name)
+            except ValueError:
+                continue
             if purge_files and candidate.is_file():
                 candidate.unlink()
                 removed_files.append(name)

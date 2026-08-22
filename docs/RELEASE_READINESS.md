@@ -9,6 +9,11 @@ automation proves from what requires manual follow-up.
   reproduce the environment.
 - **[GAP]** is not yet enforced.
 
+Release bundles include `release-provenance.json`, binding artifact hashes to
+the source revision and CI build context. Set `ADAF_RELEASE_PROVENANCE_KEY`
+when a publisher needs an HMAC-signed provenance record; unsigned provenance
+is an integrity record only.
+
 ## Supported install matrix
 
 Source/editable tests and artifact smoke have different purposes:

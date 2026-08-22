@@ -413,6 +413,15 @@ jobs:
           second = digests("dist-repro-b")
           assert first and first == second, (first, second)
           PY
+          python scripts/generate_release_provenance.py \
+            --repo-root . \
+            --dist dist \
+            --output dist/release-provenance.json
+          python scripts/generate_release_provenance.py \
+            --repo-root . \
+            --dist dist \
+            --output dist/release-provenance.json \
+            --validate
           (
             cd dist
             sha256sum * > SHA256SUMS

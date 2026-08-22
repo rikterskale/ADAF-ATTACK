@@ -7,9 +7,30 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from adaf_attack.core.engineering import validate_capability_result
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.paths import atomic_write_text, ensure_dir
 
 DETECTION_STATUSES = ("detected", "not-detected", "inconclusive", "not-recorded")
+
+
+def normalize_capability_result(result: Any) -> dict[str, Any]:
+    """Give every capability result an explicit top-level success field."""
+    if isinstance(result, dict):
+        normalized = dict(result)
+        nested = normalized.get("outcome")
+        if "ok" in normalized:
+            normalized["ok"] = bool(normalized["ok"])
+        elif isinstance(nested, dict) and "ok" in nested:
+            normalized["ok"] = bool(nested["ok"])
+        elif isinstance(normalized.get("return_code"), int):
+            normalized["ok"] = normalized["return_code"] == 0
+        else:
+            normalized["ok"] = "error" not in normalized
+        return validate_capability_result(normalized).model_dump(exclude_none=True)
+    return validate_capability_result({"ok": bool(result), "value": result}).model_dump(
+        exclude_none=True
+    )
 
 
 def build_post_execution_outcome(
@@ -21,7 +42,8 @@ def build_post_execution_outcome(
     auth: str,
 ) -> dict[str, Any]:
     """Create a stable outcome document without exposing credential material."""
-    success = isinstance(result, dict) and result.get("ok", True) is True
+    normalized = normalize_capability_result(result)
+    success = normalized["ok"] is True
     files = sorted(
         path.name
         for path in Path(session).iterdir()
@@ -93,15 +115,15 @@ def record_detection_status(
         "updated_at": datetime.now(UTC).isoformat(),
     }
     session = Path(session)
-    session.mkdir(parents=True, exist_ok=True)
-    (session / "detection.json").write_text(
-        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    ensure_dir(session)
+    atomic_write_text(
+        session / "detection.json", json.dumps(record, indent=2, sort_keys=True) + "\n"
     )
     outcome_path = session / "outcome.json"
     outcome = _load_object(outcome_path)
     outcome.setdefault("schema_version", 1)
     outcome["detection"] = record
-    outcome_path.write_text(json.dumps(outcome, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_text(outcome_path, json.dumps(outcome, indent=2, sort_keys=True) + "\n")
     return record
 
 

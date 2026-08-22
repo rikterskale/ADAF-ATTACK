@@ -62,3 +62,6 @@ from adaf_attack.capabilities import (  # noqa: F401
     unpac_the_hash,
     workflow_wrappers,
 )
+from adaf_attack.core.engineering import load_plugins
+
+load_plugins()

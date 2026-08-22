@@ -87,7 +87,7 @@ def test_execute_happy_path(cleanup_registry: list[str], tmp_path: Any) -> None:
     )
     assert out["ok"] is True
     assert out["capability"] == "t-ok"
-    assert out["result"] == {"echo": "value"}
+    assert out["result"] == {"echo": "value", "ok": True}
     assert "graph_summary" in out and "interesting" in out
     assert any("Running t-ok" in line for line in logs)
     assert runner.calls[0]["echo"] == "value"

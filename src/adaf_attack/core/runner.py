@@ -17,8 +17,8 @@ from adaf_attack.core.auth import describe_auth
 from adaf_attack.core.creds import CredentialSet, load_credentials_json
 from adaf_attack.core.engineering import SessionStore, execute_with_controls
 from adaf_attack.core.graph import AttackGraph
-from adaf_attack.core.outcomes import build_post_execution_outcome
-from adaf_attack.core.paths import default_workspace_dir, normalize_path
+from adaf_attack.core.outcomes import build_post_execution_outcome, normalize_capability_result
+from adaf_attack.core.paths import atomic_write_text, default_workspace_dir, normalize_path
 from adaf_attack.core.registry import capability_registry
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
@@ -209,17 +209,22 @@ def execute_capability(
                 **runner_kwargs,
             )
 
-        result = execute_with_controls(_run, timeout=timeout, retries=retries)
+        result = execute_with_controls(
+            _run,
+            timeout=timeout,
+            retries=retries,
+            mutating=cap.destructive,
+        )
+        result = normalize_capability_result(result)
         resolved = graph.resolve_dn_edges()
         if resolved:
             graph.save(session.path("graph.json"))
             _log(f"Resolved {resolved} MemberOf DN edges")
 
         interesting = graph.interesting_summary()
-        session.path("interesting.json").write_text(
+        atomic_write_text(
+            session.path("interesting.json"),
             __import__("json").dumps(interesting, indent=2, default=str) + "\n",
-            encoding="utf-8",
-            newline="\n",
         )
 
         outcome = build_post_execution_outcome(
@@ -229,10 +234,9 @@ def execute_capability(
             graph=graph,
             auth=describe_auth(resolved_target),
         )
-        session.path("outcome.json").write_text(
+        atomic_write_text(
+            session.path("outcome.json"),
             json.dumps(outcome, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-            newline="\n",
         )
 
         session.log(
