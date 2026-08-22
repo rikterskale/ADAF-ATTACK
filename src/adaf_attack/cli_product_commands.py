@@ -193,6 +193,33 @@ def register_product_commands(
 
         _run(ctx, "Tier-0 workspace", session, build_tier0_workspace, human)
 
+    @engagement_app.command("blast-radius")
+    def engagement_blast_radius(
+        ctx: typer.Context,
+        principal: str = typer.Argument(..., help="Compromised identity or graph principal."),
+        session: Path = typer.Option(..., "--session"),
+        max_depth: int = typer.Option(6, "--max-depth", min=1, max=20),
+    ) -> None:
+        """Show reachable assets and high-value impact from a saved principal."""
+        from adaf_attack.core.blast_radius_workspace import build_blast_radius_workspace
+
+        def human(payload: dict[str, Any]) -> str:
+            summary = payload["summary"]
+            return (
+                f"Principal: {payload['principal']}\n"
+                f"Reachable nodes: {summary['reachable_nodes']}\n"
+                f"High-value impacts: {summary['impacts']}\n"
+                f"Related findings: {summary['findings']}"
+            )
+
+        _run(
+            ctx,
+            "Blast-radius workspace",
+            session,
+            lambda p: build_blast_radius_workspace(p, principal, max_depth=max_depth),
+            human,
+        )
+
     @app.command("command-center")
     def command_center(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:
         """Open the polished mission-control view for an engagement."""

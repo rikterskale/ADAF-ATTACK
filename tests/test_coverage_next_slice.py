@@ -17,6 +17,7 @@ from typer.testing import CliRunner
 from adaf_attack.cli import app
 from adaf_attack.core.access_context import best_identity_for_capability, session_access_context
 from adaf_attack.core.asset_workspace import build_asset_workspace
+from adaf_attack.core.blast_radius_workspace import build_blast_radius_workspace
 from adaf_attack.core.engagement_dashboard import dashboard, inspect_edge, mission, missions
 from adaf_attack.core.finding_workspace import build_finding_workspace, load_finding_workspace
 from adaf_attack.core.graph import AttackGraph
@@ -146,6 +147,38 @@ def test_asset_workspace_aggregates_safe_evidence(tmp_path: Path) -> None:
         app, ["--format", "json", "engagement", "tier0", "--session", str(session)]
     )
     assert tier0_cli.exit_code == 0
+    blast = build_blast_radius_workspace(session, "USER@CORP")
+    assert blast["summary"]["reachable_nodes"] == 2
+    assert blast["summary"]["impacts"] == 1
+    assert (
+        build_blast_radius_workspace(session, "USER@CORP", max_depth=1)["summary"]["impacts"] == 1
+    )
+    assert build_blast_radius_workspace(malformed, "USER@CORP")["summary"]["reachable_nodes"] == 0
+    assert (
+        build_blast_radius_workspace(tmp_path / "missing", "USER@CORP")["summary"][
+            "reachable_nodes"
+        ]
+        == 0
+    )
+    with pytest.raises(ValueError, match="not found"):
+        build_blast_radius_workspace(session, "missing")
+    with pytest.raises(ValueError, match="cannot be empty"):
+        build_blast_radius_workspace(session, " ")
+    cycle = tmp_path / "cycle"
+    cycle.mkdir()
+    cycle_graph = AttackGraph()
+    cycle_graph.add_node("A", "User")
+    cycle_graph.add_node("B", "User")
+    cycle_graph.add_edge("A", "B", "MemberOf")
+    cycle_graph.add_edge("B", "A", "MemberOf")
+    cycle_graph.add_edge("A", "A", "Self")
+    cycle_graph.save(cycle / "graph.json")
+    assert build_blast_radius_workspace(cycle, "A")["summary"]["impacts"] == 0
+    blast_cli = CliRunner().invoke(
+        app,
+        ["--format", "json", "engagement", "blast-radius", "USER@CORP", "--session", str(session)],
+    )
+    assert blast_cli.exit_code == 0
     (session / "certificate.pfx").write_bytes(b"x")
     (session / "password.txt").write_bytes(b"x")
     assert len(session_access_context(session)["credential_artifacts"]) == 3
