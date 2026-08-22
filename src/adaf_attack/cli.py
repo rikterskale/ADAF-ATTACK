@@ -1447,9 +1447,14 @@ def check(
 ) -> None:
     """Check local setup, or preflight an authorized target when both target options are supplied."""
     if bool(domain) != bool(dc_ip):
-        raise typer.BadParameter(
-            "Provide both --domain and --dc-ip for a target preflight, or neither for setup checks."
+        error = ActionableError(
+            "TARGET_OPTIONS_INCOMPLETE",
+            "both --domain and --dc-ip are required together for a target preflight",
+            "Provide both target options, or omit both to run local setup checks.",
+            details={"domain_supplied": bool(domain), "dc_ip_supplied": bool(dc_ip)},
         )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
     doctor(
         ctx,
         explain=True,

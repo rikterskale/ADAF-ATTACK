@@ -5,6 +5,7 @@ Commands are templates for authorized lab/operator use. They never auto-execute.
 
 from __future__ import annotations
 
+import re
 import shlex
 from typing import Any
 
@@ -340,6 +341,21 @@ def _sam_from_node_id(node_id: str | None) -> str:
     return node_id
 
 
+_SAFE_COMMAND_VALUE = re.compile(r"^[A-Za-z0-9_./:@%+=,-]+\$?$")
+
+
+def _shell_quote(value: str) -> str:
+    """Quote a value unless it is a safe shell token.
+
+    Computer accounts conventionally end in ``$``. A trailing dollar has no
+    expansion meaning in a POSIX shell, so preserve that familiar display
+    form while still quoting whitespace and shell metacharacters.
+    """
+    if _SAFE_COMMAND_VALUE.fullmatch(value):
+        return value
+    return shlex.quote(value)
+
+
 def build_exploit_commands(
     chain: dict[str, Any],
     target: Target,
@@ -370,7 +386,7 @@ def build_exploit_commands(
     # Quote substituted values individually so generated examples remain safe
     # to paste when an operator name, domain, or filter contains whitespace or
     # shell metacharacters. Simple values are unchanged by shlex.quote().
-    quoted_ctx = {key: shlex.quote(str(value)) for key, value in ctx.items()}
+    quoted_ctx = {key: _shell_quote(str(value)) for key, value in ctx.items()}
 
     out: list[dict[str, Any]] = []
     for t in templates:

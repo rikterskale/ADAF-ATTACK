@@ -373,6 +373,8 @@ def unified_search(query: str, *, session: Path | None = None, limit: int = 25) 
                         for key in ("id", "title", "category", "evidence", "asset")
                     )
                     if q in text.lower():
+                        finding_id = str(item.get("id") or "").lower()
+                        finding_title = str(item.get("title") or "").lower()
                         results.append(
                             {
                                 "type": "finding",
@@ -381,7 +383,13 @@ def unified_search(query: str, *, session: Path | None = None, limit: int = 25) 
                                 "summary": item.get("evidence")
                                 or item.get("category")
                                 or "saved finding",
-                                "score": 90 if str(item.get("id", "")).lower() == q else 50,
+                                "score": (
+                                    90
+                                    if finding_id == q
+                                    else 85
+                                    if finding_id.startswith(q) or finding_title.startswith(q)
+                                    else 50
+                                ),
                                 "data": item,
                             }
                         )
@@ -443,7 +451,7 @@ def unified_search(query: str, *, session: Path | None = None, limit: int = 25) 
                             "id": artifact,
                             "title": artifact,
                             "summary": "Persisted engagement artifact",
-                            "score": 20,
+                            "score": 80 if artifact.lower().startswith(q) else 20,
                             "data": {"path": str(session / artifact)},
                         }
                     )

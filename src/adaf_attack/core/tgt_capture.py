@@ -181,6 +181,7 @@ class TgtCaptureListener:
         self._write_capture(apreq, addr[0])
 
     def _write_capture(self, apreq: bytes, peer: str) -> None:
+        self.captured_dir.mkdir(parents=True, exist_ok=True)
         safe_host = re.sub(r"[^A-Za-z0-9._-]", "_", peer) or "unknown"
         index = len(self.captures) + 1
         path = self.captured_dir / f"{safe_host}-{index}.kirbi"

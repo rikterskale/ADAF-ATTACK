@@ -304,7 +304,8 @@ def register_tool_commands(
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from exc
         lines = [
-            f"{item.get('time') or '-'}  {item['status'].upper()}  {item['type']}  "
+            f"{item.get('time') or '-'}  {str(item.get('status') or 'ok').upper()}  "
+            f"{item.get('type') or 'event'}  "
             f"{item.get('capability') or '-'}  "
             f"duration={item.get('duration_ms') if item.get('duration_ms') is not None else '-'}ms"
             + (f"  {item['details']}" if item.get("details") else "")

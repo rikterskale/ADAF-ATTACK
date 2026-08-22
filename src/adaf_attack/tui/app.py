@@ -1825,7 +1825,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self.query_one("#session-panel", Static).update(
             "[bold]Engagement timeline[/bold]\n"
             + "\n".join(
-                f"{item.get('time') or '-'}  {item['status'].upper()}  {item['type']}  "
+                f"{item.get('time') or '-'}  {str(item.get('status') or 'ok').upper()}  "
+                f"{item.get('type') or 'event'}  "
                 f"{item.get('capability') or '-'}  "
                 f"{item.get('duration_ms') if item.get('duration_ms') is not None else '-'}ms"
                 for item in payload["events"][-8:]
