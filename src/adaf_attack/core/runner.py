@@ -182,6 +182,8 @@ def execute_capability(
         len(cred_attempts),
     )
 
+    import time as _time
+    _run_start_monotonic = _time.monotonic()
     session.log(
         "run.start",
         capability=capability_id,
@@ -232,7 +234,12 @@ def execute_capability(
             newline="\n",
         )
 
-        session.log("run.complete", capability=capability_id, ok=True)
+        session.log(
+            "run.complete",
+            capability=capability_id,
+            ok=True,
+            duration_ms=int((_time.monotonic() - _run_start_monotonic) * 1000),
+        )
         try:
             metadata = json.loads(session.path("session.json").read_text(encoding="utf-8"))
             findings_path = session.path("findings.json")
@@ -265,5 +272,10 @@ def execute_capability(
             "outcome": outcome,
         }
     except Exception as exc:
-        session.log("run.error", capability=capability_id, error=str(exc))
+        session.log(
+            "run.error",
+            capability=capability_id,
+            error=str(exc),
+            duration_ms=int((_time.monotonic() - _run_start_monotonic) * 1000),
+        )
         raise RunError(str(exc)) from exc

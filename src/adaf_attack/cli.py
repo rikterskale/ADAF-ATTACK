@@ -824,10 +824,11 @@ def doctor(
     payload = _doctor_payload(profile, domain=domain, dc_ip=dc_ip, timeout=timeout)
     checks = payload["checks"]
     first_run = payload["first_run"]
+    from adaf_attack.core.glyphs import render_status
     glyph = {
-        "ok": "[green]OK[/green]",
-        "warning": "[yellow]WARN[/yellow]",
-        "error": "[red]ERR[/red]",
+        "ok": render_status("ok"),
+        "warning": render_status("warning"),
+        "error": render_status("error"),
     }
     lines = [
         f"{glyph.get(c['status'], c['status']):>18} {c['id']}: {escape(str(c['value']))}"
@@ -3520,6 +3521,59 @@ def capability_dependencies_cmd(
     )
 
 
+@session_app.command("events")
+def session_events(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session", help="Session directory to read."),
+    limit: int = typer.Option(50, "--limit", help="Maximum events to return (most recent)."),
+    event_type: str | None = typer.Option(
+        None, "--type", help="Filter by event type substring (e.g. run.complete)."
+    ),
+) -> None:
+    """Read a session's events.jsonl (most-recent first)."""
+    events_path = session.expanduser() / "events.jsonl"
+    if not events_path.is_file():
+        error = ActionableError(
+            "SESSION_NOT_FOUND",
+            f"No events.jsonl at {events_path}",
+            "Pass --session pointing at a directory produced by a prior run.",
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    lines = events_path.read_text(encoding="utf-8").splitlines()
+    events: list[dict[str, Any]] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event_type and event_type not in str(entry.get("type", "")):
+            continue
+        events.append(entry)
+    events.reverse()
+    events = events[:limit]
+    payload = {"ok": True, "count": len(events), "events": events}
+    if _json_mode(ctx):
+        _emit(ctx, payload, "")
+        return
+    table = Table(title=f"Session events ({len(events)})", show_lines=False)
+    for column in ("ts", "type", "capability", "duration_ms", "detail"):
+        table.add_column(column)
+    for entry in events:
+        detail = {k: v for k, v in entry.items() if k not in {"ts", "type", "capability", "duration_ms", "event_schema_version", "correlation_id"}}
+        table.add_row(
+            str(entry.get("ts", "")),
+            str(entry.get("type", "")),
+            str(entry.get("capability", "")),
+            str(entry.get("duration_ms", "")),
+            json.dumps(detail, default=str)[:80] if detail else "",
+        )
+    _emit(ctx, payload, table)
+
+
 @session_app.command("list")
 def session_list_alias(
     ctx: typer.Context,
@@ -3791,6 +3845,37 @@ def init_cmd(
     console_obj.print("\n[bold]Next:[/bold]")
     for step in next_steps:
         console_obj.print(f"  {step}")
+
+
+@app.command("setup", rich_help_panel="Setup & diagnostics")
+def setup_cmd(
+    ctx: typer.Context,
+    workspace: Path | None = typer.Option(None, "--workspace"),
+    domain: str | None = typer.Option(None, "--domain"),
+    dc_ip: str | None = typer.Option(None, "--dc-ip"),
+    username: str | None = typer.Option(None, "--username"),
+) -> None:
+    """Interactive first-run setup: runs init, then prints the next-step ladder.
+
+    Convenience alias for `init` with a clearer name for new operators; nothing
+    is written unless a value is supplied at the prompt.
+    """
+    init_cmd(
+        ctx,
+        workspace=workspace,
+        domain=domain,
+        dc_ip=dc_ip,
+        username=username,
+        skip_quickstart=False,
+    )
+    if not _json_mode(ctx):
+        console = _console(ctx)
+        console.print(
+            "\n[dim]Recommended next commands:[/dim]\n"
+            "  1. [cyan]adaf-attack doctor --profile user-readiness[/cyan]\n"
+            "  2. [cyan]adaf-attack quickstart --workspace ./quickstart[/cyan]\n"
+            "  3. [cyan]adaf-attack list-capabilities --novice[/cyan]"
+        )
 
 
 @app.command("start", rich_help_panel="Setup & diagnostics")

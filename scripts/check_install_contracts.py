@@ -39,6 +39,22 @@ def _check_action_pins() -> None:
                     )
 
 
+def _resolve_job(jobs: dict[str, Any], name: str) -> dict[str, Any]:
+    """Return the effective job definition, following one `uses:` hop if needed."""
+    import yaml as _yaml
+    job = jobs[name]
+    if isinstance(job, dict) and job.get("uses"):
+        uses = str(job["uses"])
+        if uses.startswith("./"):
+            called = ROOT / uses.removeprefix("./")
+            called_wf = _yaml.safe_load(called.read_text(encoding="utf-8"))
+            called_jobs = called_wf.get("jobs") or {}
+            # Reusable file typically has one job; return the first non-called job.
+            for called_name, called_job in called_jobs.items():
+                return called_job
+    return job
+
+
 def _check_ci() -> None:
     path = ROOT / ".github" / "workflows" / "ci.yml"
     workflow = _load_yaml(path)
@@ -72,7 +88,7 @@ def _check_ci() -> None:
         gate_needs == required - {"ci-gate"},
         f"ci-gate needs mismatch: expected {sorted(required - {'ci-gate'})}, got {sorted(gate_needs)}",
     )
-    includes = jobs["artifact-smoke"]["strategy"]["matrix"]["include"]
+    includes = _resolve_job(jobs, "artifact-smoke")["strategy"]["matrix"]["include"]
     systems = {entry["os"] for entry in includes}
     _require(
         {"ubuntu-24.04", "windows-2022", "macos-14"} <= systems,
@@ -80,7 +96,7 @@ def _check_ci() -> None:
     )
     kinds = {entry["artifact"] for entry in includes}
     _require(kinds == {"wheel", "sdist"}, f"artifact-smoke must cover wheel and sdist; got {kinds}")
-    kali_image = jobs["kali-installer"]["container"]["image"]
+    kali_image = _resolve_job(jobs, "kali-installer")["container"]["image"]
     _require(
         re.fullmatch(r"kalilinux/kali-rolling@sha256:[0-9a-f]{64}", kali_image) is not None,
         f"kali-installer must pin the container manifest digest, got {kali_image}",
@@ -96,12 +112,19 @@ def _check_ci() -> None:
         "source tests must cover Python 3.11, 3.12, 3.13, and 3.14",
     )
     ci_text = path.read_text(encoding="utf-8")
+    # Also pull in reusable workflows that ci.yml delegates to.
+    aggregated_text = ci_text
+    for job in jobs.values():
+        if isinstance(job, dict) and isinstance(job.get("uses"), str) and job["uses"].startswith("./"):
+            called = ROOT / job["uses"].removeprefix("./")
+            if called.is_file():
+                aggregated_text += "\n" + called.read_text(encoding="utf-8")
     _require(
         "0.10.0" not in ci_text, "ci.yml hardcodes the project version; derive it from metadata"
     )
     _require(
-        "scripts/smoke_distribution.py" in ci_text,
-        "ci.yml must use the shared clean-distribution smoke script",
+        "scripts/smoke_distribution.py" in aggregated_text,
+        "ci workflows must use the shared clean-distribution smoke script",
     )
     for job_name, job in jobs.items():
         for step in job.get("steps", []):
@@ -111,7 +134,7 @@ def _check_ci() -> None:
                 f"ci.yml:{job_name}:{step.get('name', '<unnamed>')}: "
                 f"matrix expressions are unsupported in shell: {shell}",
             )
-    windows_steps = jobs["windows-installer"]["steps"]
+    windows_steps = _resolve_job(jobs, "windows-installer")["steps"]
     lifecycle_shells = {
         step.get("shell")
         for step in windows_steps
@@ -406,6 +429,63 @@ def _check_metadata_and_versions() -> None:
     )
 
 
+
+
+def _check_changelog_version() -> None:
+    """CHANGELOG's most recent versioned heading must match pyproject version."""
+    import re
+    pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    version_match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, flags=re.MULTILINE)
+    _require(version_match is not None, "pyproject.toml is missing a `version` line")
+    assert version_match
+    version = version_match.group(1)
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    heading = re.search(r"^##\s+(\d+\.\d+\.\d+)", changelog, flags=re.MULTILINE)
+    _require(heading is not None, "CHANGELOG.md has no versioned `## X.Y.Z` heading")
+    assert heading
+    changelog_version = heading.group(1)
+    _require(
+        changelog_version == version,
+        f"CHANGELOG top version ({changelog_version!r}) does not match pyproject "
+        f"({version!r}); either bump one or move new entries under `## Unreleased`.",
+    )
+
+
+def _check_front_matter() -> None:
+    """Novice guides must expose stable front-matter for the docs pipeline."""
+    required_keys = ("guide_id", "guide_schema_version", "platform", "canonical_path")
+    guides = (
+        "docs/WINDOWS_NOVICE_USABILITY_GUIDE.md",
+        "docs/LINUX_NOVICE_USABILITY_GUIDE.md",
+    )
+    for relative in guides:
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        _require(text.startswith("---\n"), f"{relative}: missing leading `---` front-matter block")
+        end = text.find("\n---\n", 4)
+        _require(end != -1, f"{relative}: front-matter block is not terminated")
+        block = text[4:end]
+        for key in required_keys:
+            _require(f"{key}:" in block, f"{relative}: front-matter missing `{key}:`")
+        _require(
+            f"canonical_path: {relative}" in block,
+            f"{relative}: front-matter canonical_path must match the file path",
+        )
+
+
+def _check_precommit_pins() -> None:
+    """Delegate to scripts/check_precommit_pins.py for the actual comparison."""
+    import subprocess
+    import sys as _sys
+    result = subprocess.run(
+        [_sys.executable, "scripts/check_precommit_pins.py"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    _require(result.returncode == 0, f"pre-commit / CI pin drift:\n{result.stderr.strip()}")
+
+
 def main() -> int:
     checks = (
         _check_action_pins,
@@ -414,6 +494,9 @@ def main() -> int:
         _check_markdown_links,
         _check_docs,
         _check_metadata_and_versions,
+        _check_changelog_version,
+        _check_front_matter,
+        _check_precommit_pins,
     )
     failures: list[str] = []
     for check in checks:

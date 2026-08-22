@@ -68,6 +68,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack help-me` | Show the guided novice tour |
 | `adaf-attack home` | Show goal-based starting points |
 | `adaf-attack init` | First-run onboarding: check environment and save defaults |
+| `adaf-attack setup` | Interactive first-run wizard alias with next-step ladder |
 | `adaf-attack list-capabilities` | List registered capabilities |
 | `adaf-attack path` | Attack-path command group |
 | `adaf-attack path rank` | Rank attack paths |
@@ -104,6 +105,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack session diff` | Compare sessions |
 | `adaf-attack session access` | Show safe identity and credential context |
 | `adaf-attack session resume` | Prepare a safe review/resume package |
+| `adaf-attack session events` | Read a session's events.jsonl audit trail |
 | `adaf-attack finding triage` | View or update finding status, tags, and notes |
 | `adaf-attack session list` | List workspace sessions |
 | `adaf-attack session show` | Inspect a session |

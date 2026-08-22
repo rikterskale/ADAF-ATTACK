@@ -25,6 +25,7 @@ class Session:
         base = default_workspace_dir() if base_dir is None else normalize_path(base_dir)
         self.base_dir = ensure_dir(base)
         self.session_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
+        self.correlation_id = uuid.uuid4().hex
         self.root = ensure_dir(self.base_dir / self.session_id)
         self._events: list[dict[str, Any]] = []
         self._event_lock = threading.Lock()
@@ -34,6 +35,7 @@ class Session:
         meta = {
             "schema_version": 2,
             "session_id": self.session_id,
+            "correlation_id": self.correlation_id,
             "created_at": datetime.now(UTC).isoformat(),
             "tool": "adaf-attack",
             "root": str(self.root),
@@ -45,11 +47,17 @@ class Session:
     def log(self, event_type: str, **payload: Any) -> None:
         if not event_type.strip():
             raise ValueError("event_type must be non-empty")
-        if "type" in payload or "ts" in payload:
-            raise ValueError("event payload cannot override reserved audit fields")
+        reserved = {"type", "ts", "event_schema_version", "correlation_id"}
+        if reserved & payload.keys():
+            raise ValueError(
+                f"event payload cannot override reserved audit fields: "
+                f"{sorted(reserved & payload.keys())}"
+            )
         event = {
+            "event_schema_version": 1,
             "ts": datetime.now(UTC).isoformat(),
             "type": event_type,
+            "correlation_id": self.correlation_id,
             **payload,
         }
         self._events.append(event)

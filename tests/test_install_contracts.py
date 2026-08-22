@@ -40,11 +40,13 @@ def test_windows_installer_is_powershell_51_compatible_and_lifecycle_aware() -> 
 
 
 def test_windows_installer_workflow_uses_static_shells() -> None:
-    workflow_text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-    assert "shell: ${{ matrix." not in workflow_text
-    assert "shell: powershell" in workflow_text
-    assert "shell: pwsh" in workflow_text
-    assert workflow_text.count(r"scripts\Test-WindowsInstaller.ps1") == 2
+    reusable = ROOT / ".github" / "workflows" / "_windows-installer.yml"
+    text = reusable.read_text(encoding="utf-8") if reusable.exists() else ""
+    text += "\n" + (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "shell: ${{ matrix." not in text
+    assert "shell: powershell" in text
+    assert "shell: pwsh" in text
+    assert text.count(r"scripts\Test-WindowsInstaller.ps1") == 2
 
 
 def test_kali_installer_keeps_non_kali_guard_and_supports_artifacts() -> None:
@@ -64,7 +66,12 @@ def test_kali_installer_keeps_non_kali_guard_and_supports_artifacts() -> None:
 
 def test_artifact_matrix_is_focused() -> None:
     workflow = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
-    matrix = workflow["jobs"]["artifact-smoke"]["strategy"]["matrix"]["include"]
+    job = workflow["jobs"]["artifact-smoke"]
+    if isinstance(job, dict) and job.get("uses", "").startswith("./"):
+        reusable_path = ROOT / job["uses"].removeprefix("./")
+        reusable = yaml.safe_load(reusable_path.read_text())
+        job = next(iter(reusable["jobs"].values()))
+    matrix = job["strategy"]["matrix"]["include"]
     assert 4 <= len(matrix) <= 6, (
         "artifact smoke should stay focused, not duplicate the test matrix"
     )

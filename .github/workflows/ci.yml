@@ -335,6 +335,9 @@ jobs:
       - name: Validate workflow YAML and referenced operator assets
         run: python scripts/check_install_contracts.py
 
+      - name: Verify capability catalog is regenerated
+        run: python scripts/generate_capability_catalog.py --check
+
   package:
     name: Build and install package
     needs: [tests, security, scripts]
@@ -439,144 +442,12 @@ jobs:
           retention-days: 14
 
   artifact-smoke:
-    name: Artifact smoke (${{ matrix.os }} / Python ${{ matrix.python-version }} / ${{ matrix.artifact }})
     needs: [package]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-24.04
-            python-version: "3.11"
-            artifact: wheel
-            extras: base
-          - os: ubuntu-24.04
-            python-version: "3.13"
-            artifact: sdist
-            extras: base
-          - os: windows-2022
-            python-version: "3.12"
-            artifact: wheel
-            extras: base
-          - os: macos-14
-            python-version: "3.13"
-            artifact: wheel
-            extras: base
-          - os: ubuntu-24.04
-            python-version: "3.14"
-            artifact: wheel
-            extras: base
-          - os: ubuntu-24.04
-            python-version: "3.12"
-            artifact: wheel
-            extras: full
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Download built distributions
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: python-distributions
-          path: dist
-
-      - name: Validate release manifest
-        run: >-
-          python scripts/generate_release_manifest.py
-          --repo-root . --dist dist
-          --output dist/release-manifest.json --validate
-
-      - name: Verify downloaded distribution checksums
-        shell: bash
-        run: |
-          set -euo pipefail
-          (cd dist && sha256sum -c SHA256SUMS)
-
-      - name: Install and exercise the clean distribution
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          if [[ "${{ matrix.artifact }}" == "wheel" ]]; then
-            artifacts=(dist/*.whl)
-          else
-            artifacts=(dist/*.tar.gz)
-          fi
-          if [[ "${#artifacts[@]}" -ne 1 ]]; then
-            echo "Expected exactly one ${{ matrix.artifact }} artifact, found ${#artifacts[@]}" >&2
-            exit 1
-          fi
-          python scripts/smoke_distribution.py \
-            --artifact "${artifacts[0]}" \
-            --venv "$RUNNER_TEMP/adaf-artifact-smoke" \
-            --extras "${{ matrix.extras }}"
+    uses: ./.github/workflows/_artifact-smoke.yml
 
   kali-installer:
-    name: Kali artifact installer lifecycle
     needs: [package, scripts]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    container:
-      image: kalilinux/kali-rolling@sha256:1a2eb0501a2dbe8aa8f513b0791699dbd9b539696768f40b2cbe1dead2fb0d67
-    env:
-      XDG_DATA_HOME: /tmp/adaf-data
-    steps:
-      - name: Install action prerequisites
-        run: >-
-          apt-get update && apt-get install --yes git ca-certificates
-          python3.13 python3.13-venv python3.13-dev
-
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Download built distributions
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: python-distributions
-          path: dist
-
-      - name: Install the wheel and verify lifecycle behavior
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          artifacts=(dist/*.whl)
-          [[ "${#artifacts[@]}" -eq 1 ]]
-          mkdir unowned-venv
-          touch unowned-venv/preserve-me
-          if bash scripts/install-kali.sh --uninstall --venv unowned-venv; then
-            echo "Kali installer removed an unowned venv" >&2
-            exit 1
-          fi
-          [[ -f unowned-venv/preserve-me ]]
-          bash scripts/install-kali.sh \
-            --package "${artifacts[0]}" \
-            --extras base \
-            --python python3.13 \
-            --skip-completion
-          .venv/bin/python -m pip check
-          .venv/bin/adaf-attack --version
-          .venv/bin/adaf-attack --format json doctor --explain
-          .venv/bin/adaf-attack list-capabilities
-          .venv/bin/adaf-attack paths
-          touch "$XDG_DATA_HOME/adaf-attack/workspaces/preserve-me"
-          bash scripts/install-kali.sh --uninstall
-          [[ ! -d .venv ]]
-          [[ -f "$XDG_DATA_HOME/adaf-attack/workspaces/preserve-me" ]]
-          bash scripts/install-kali.sh \
-            --package "${artifacts[0]}" \
-            --extras base \
-            --python python3.13 \
-            --skip-system-deps \
-            --skip-completion
-          bash scripts/install-kali.sh --uninstall --remove-workspace
-          [[ ! -e "$XDG_DATA_HOME/adaf-attack/workspaces" ]]
+    uses: ./.github/workflows/_kali-installer.yml
 
   operator-workflow:
     name: Offline operator workflow
@@ -662,48 +533,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   windows-installer:
-    name: Windows installer (${{ matrix.shell }} / Python ${{ matrix.python-version }})
     needs: [package, scripts]
-    runs-on: windows-2022
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - shell: powershell
-            python-version: "3.11"
-            preexisting-config: false
-          - shell: pwsh
-            python-version: "3.13"
-            preexisting-config: true
-          - shell: pwsh
-            python-version: "3.14"
-            preexisting-config: false
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Download built distributions
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: python-distributions
-          path: dist
-
-      - name: Run lifecycle with Windows PowerShell 5.1
-        if: matrix.shell == 'powershell'
-        shell: powershell
-        run: .\scripts\Test-WindowsInstaller.ps1 -RepoRoot $PWD
-
-      - name: Run lifecycle with PowerShell 7
-        if: matrix.shell == 'pwsh'
-        shell: pwsh
-        run: .\scripts\Test-WindowsInstaller.ps1 -RepoRoot $PWD -PreexistingConfig
-
+    uses: ./.github/workflows/_windows-installer.yml
 
   private-index-smoke:
     name: Private index smoke (devpi)

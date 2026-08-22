@@ -1,0 +1,70 @@
+name: Kali installer lifecycle (reusable)
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  kali_installer:
+    name: Kali artifact installer lifecycle
+    needs: [package, scripts]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container:
+      image: kalilinux/kali-rolling@sha256:1a2eb0501a2dbe8aa8f513b0791699dbd9b539696768f40b2cbe1dead2fb0d67
+    env:
+      XDG_DATA_HOME: /tmp/adaf-data
+    steps:
+      - name: Install action prerequisites
+        run: >-
+          apt-get update && apt-get install --yes git ca-certificates
+          python3.13 python3.13-venv python3.13-dev
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download built distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-distributions
+          path: dist
+
+      - name: Install the wheel and verify lifecycle behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          artifacts=(dist/*.whl)
+          [[ "${#artifacts[@]}" -eq 1 ]]
+          mkdir unowned-venv
+          touch unowned-venv/preserve-me
+          if bash scripts/install-kali.sh --uninstall --venv unowned-venv; then
+            echo "Kali installer removed an unowned venv" >&2
+            exit 1
+          fi
+          [[ -f unowned-venv/preserve-me ]]
+          bash scripts/install-kali.sh \
+            --package "${artifacts[0]}" \
+            --extras base \
+            --python python3.13 \
+            --skip-completion
+          .venv/bin/python -m pip check
+          .venv/bin/adaf-attack --version
+          .venv/bin/adaf-attack --format json doctor --explain
+          .venv/bin/adaf-attack list-capabilities
+          .venv/bin/adaf-attack paths
+          touch "$XDG_DATA_HOME/adaf-attack/workspaces/preserve-me"
+          bash scripts/install-kali.sh --uninstall
+          [[ ! -d .venv ]]
+          [[ -f "$XDG_DATA_HOME/adaf-attack/workspaces/preserve-me" ]]
+          bash scripts/install-kali.sh \
+            --package "${artifacts[0]}" \
+            --extras base \
+            --python python3.13 \
+            --skip-system-deps \
+            --skip-completion
+          bash scripts/install-kali.sh --uninstall --remove-workspace
+          [[ ! -e "$XDG_DATA_HOME/adaf-attack/workspaces" ]]
+

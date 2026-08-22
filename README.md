@@ -1,5 +1,10 @@
 # ADAF-ATTACK
 
+[![CI](https://github.com/rikterskale/ADAF-ATTACK/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rikterskale/ADAF-ATTACK/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/rikterskale/ADAF-ATTACK/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/rikterskale/ADAF-ATTACK/actions/workflows/codeql.yml)
+[![Python](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13%20|%203.14-blue)](pyproject.toml)
+[![License: Proprietary](https://img.shields.io/badge/license-Proprietary-lightgrey)](#license)
+
 **Aggressive Active Directory offensive toolkit for senior internal red teamers.**
 
 > Authorized internal red team use only.
