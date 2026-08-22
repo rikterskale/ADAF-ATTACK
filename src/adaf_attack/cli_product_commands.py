@@ -129,6 +129,60 @@ def register_product_commands(
             ),
         )
 
+    @engagement_app.command("mission-saved")
+    def engagement_saved_missions(ctx: typer.Context) -> None:
+        """List locally saved goal-first mission templates."""
+        from adaf_attack.core.engagement_dashboard import mission as find_mission
+        from adaf_attack.core.user_config import saved_missions
+
+        ids = saved_missions()
+        values = [find_mission(mission_id) for mission_id in ids]
+        missions = [value for value in values if value is not None]
+        emit(
+            ctx,
+            {"ok": True, "missions": missions, "saved_ids": ids, "count": len(missions)},
+            Panel(
+                "\n".join(f"{item['id']}: {item['title']}" for item in missions)
+                or "No saved mission templates.",
+                title="Saved missions",
+            ),
+        )
+
+    @engagement_app.command("mission-save")
+    def engagement_save_mission(ctx: typer.Context, mission_id: str = typer.Argument(...)) -> None:
+        """Save one guided mission template for quick recall."""
+        from adaf_attack.core.engagement_dashboard import mission as find_mission
+        from adaf_attack.core.user_config import set_saved_mission
+
+        if find_mission(mission_id) is None:
+            error = ActionableError(
+                "UNKNOWN_MISSION",
+                f"Unknown mission: {mission_id}",
+                "Run `adaf-attack engagement missions` to list available missions.",
+            )
+            emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code)
+        saved = set_saved_mission(mission_id, saved=True)
+        emit(
+            ctx,
+            {"ok": True, "mission": mission_id, "saved_ids": saved},
+            Panel("Saved", title="Mission"),
+        )
+
+    @engagement_app.command("mission-remove")
+    def engagement_remove_mission(
+        ctx: typer.Context, mission_id: str = typer.Argument(...)
+    ) -> None:
+        """Remove one guided mission template from local saved missions."""
+        from adaf_attack.core.user_config import set_saved_mission
+
+        saved = set_saved_mission(mission_id, saved=False)
+        emit(
+            ctx,
+            {"ok": True, "mission": mission_id, "saved_ids": saved},
+            Panel("Removed", title="Mission"),
+        )
+
     @engagement_app.command("asset")
     def engagement_asset(
         ctx: typer.Context,

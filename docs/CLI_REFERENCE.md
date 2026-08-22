@@ -47,6 +47,9 @@ for current options, defaults, validation, and examples.
 | `adaf-attack engagement investigation` | Show a pinned investigation workspace |
 | `adaf-attack engagement missions` | List goal-first guided missions |
 | `adaf-attack engagement mission` | Show a deterministic mission workflow |
+| `adaf-attack engagement mission-saved` | List saved mission templates |
+| `adaf-attack engagement mission-save` | Save a mission template |
+| `adaf-attack engagement mission-remove` | Remove a saved mission template |
 | `adaf-attack engagement report` | Generate engagement reports |
 | `adaf-attack engagement run` | Run an authorized engagement plan |
 | `adaf-attack engagement validate` | Validate an engagement plan |

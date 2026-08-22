@@ -23,6 +23,14 @@ def test_favorite_capabilities_non_list_value() -> None:
     assert user_config.set_favorite_capability("ldap-enum", favorite=False) == []
 
 
+def test_saved_missions_round_trip_and_non_list_value() -> None:
+    user_config.save_user_config({"ui.saved_missions": "not-a-list"})
+    assert user_config.saved_missions() == []
+    assert user_config.set_saved_mission("tier-0-paths", saved=True) == ["tier-0-paths"]
+    assert user_config.set_saved_mission("tier-0-paths", saved=True) == ["tier-0-paths"]
+    assert user_config.set_saved_mission("tier-0-paths", saved=False) == []
+
+
 def test_record_recent_target_requires_domain_and_dc(tmp_path: Path) -> None:
     assert user_config.record_recent_target("", "", "high-value") == []
     entry = user_config.record_recent_target("corp.example", "10.0.0.10", " domain ")

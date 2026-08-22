@@ -159,6 +159,21 @@ def test_cli_favorites_and_recent_targets_are_non_secret(tmp_path: Path, monkeyp
     assert "password" not in (tmp_path / "config.json").read_text(encoding="utf-8").lower()
 
 
+def test_cli_saved_mission_templates(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(user_config, "config_path", lambda: tmp_path / "config.json")
+    saved = runner.invoke(app, ["--format", "json", "engagement", "mission-save", "tier-0-paths"])
+    assert saved.exit_code == 0, saved.output
+    listed = runner.invoke(app, ["--format", "json", "engagement", "mission-saved"])
+    assert listed.exit_code == 0, listed.output
+    assert json.loads(listed.output)["saved_ids"] == ["tier-0-paths"]
+    removed = runner.invoke(
+        app, ["--format", "json", "engagement", "mission-remove", "tier-0-paths"]
+    )
+    assert removed.exit_code == 0, removed.output
+    unknown = runner.invoke(app, ["--format", "json", "engagement", "mission-save", "missing"])
+    assert unknown.exit_code == 1
+
+
 def test_cli_novice_journey_aliases(tmp_path: Path) -> None:
     review = runner.invoke(
         app,

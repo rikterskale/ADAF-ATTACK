@@ -25,6 +25,7 @@ _ALLOWED_KEYS = {
     "novice.safe_mode",
     "ui.recent_capabilities",
     "ui.favorite_capabilities",
+    "ui.saved_missions",
     "ui.recent_targets",
     "ui.command_complete",
 }
@@ -124,6 +125,27 @@ def set_favorite_capability(capability_id: str, *, favorite: bool) -> list[str]:
         updated.append(capability_id)
     data = load_user_config()
     data["ui.favorite_capabilities"] = updated
+    save_user_config(data)
+    return updated
+
+
+def saved_missions() -> list[str]:
+    """Return goal-first mission IDs saved by the user."""
+    value = load_user_config().get("ui.saved_missions", [])
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if isinstance(item, str)]
+
+
+def set_saved_mission(mission_id: str, *, saved: bool, limit: int = 10) -> list[str]:
+    """Save or remove a mission ID without persisting target or credential data."""
+    current = saved_missions()
+    updated = [item for item in current if item != mission_id]
+    if saved:
+        updated.append(mission_id)
+    updated = updated[:limit]
+    data = load_user_config()
+    data["ui.saved_missions"] = updated
     save_user_config(data)
     return updated
 
