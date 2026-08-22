@@ -602,6 +602,17 @@ def test_adminsdholder_precheck_branches(monkeypatch: Any, tmp_path: Any) -> Non
     )
     assert override["ok"] is True
 
+    monkeypatch.setattr(acl_primitives, "_write_sd", lambda *a, **k: False)
+    failed_write = acl_primitives.AdminSdHolderPersist().run(
+        target(),
+        session,
+        AttackGraph(),
+        force=True,
+        principal_sid="S-1-5-21-1-2-3-4",
+        assume_rights=True,
+    )
+    assert failed_write["ok"] is False
+
     from adaf_attack.core.acl import (
         GENERIC_ALL as _GA,
     )
