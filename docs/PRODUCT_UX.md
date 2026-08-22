@@ -12,3 +12,6 @@ The product layer turns saved evidence into polished operator and client workflo
 - `deliverables` shows report and evidence-package readiness.
 
 This iteration intentionally excludes collaborative finding rooms (#6) and operator workspace profiles (#10); existing triage and configuration behavior is unchanged.
+
+See the [UX acceptance matrix](UX_ACCEPTANCE_MATRIX.md) for the complete
+fifteen-item checklist, CLI/TUI mapping, and release verification steps.

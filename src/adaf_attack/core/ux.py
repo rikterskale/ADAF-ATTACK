@@ -8,6 +8,7 @@ opsec indicators.
 from __future__ import annotations
 
 import json
+import shlex
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, cast
@@ -137,16 +138,16 @@ def build_ready_command(
     """Build a copy-pasteable CLI invocation."""
     parts = ["adaf-attack", "run", capability_id]
     if domain:
-        parts.extend(["--domain", domain])
+        parts.extend(["--domain", shlex.quote(domain)])
     if dc_ip:
-        parts.extend(["--dc-ip", dc_ip])
+        parts.extend(["--dc-ip", shlex.quote(dc_ip)])
     if username:
-        parts.extend(["--username", username])
+        parts.extend(["--username", shlex.quote(username)])
     if force:
         parts.append("--force")
     if extra:
         for k, v in extra.items():
-            parts.extend(["-P", f"{k}={v}"])
+            parts.extend(["-P", shlex.quote(f"{k}={v}")])
     return " ".join(parts)
 
 
@@ -176,7 +177,7 @@ def _load_json(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
         return cast(dict[str, Any], value) if isinstance(value, dict) else {}
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return {}
 
 
@@ -348,8 +349,6 @@ def unified_search(query: str, *, session: Path | None = None, limit: int = 25) 
                     "destructive": cap.destructive,
                 }
             )
-            if len(caps) >= limit:
-                break
     results: list[dict[str, Any]] = [
         {
             "type": "capability",
@@ -363,28 +362,29 @@ def unified_search(query: str, *, session: Path | None = None, limit: int = 25) 
     ]
     if session is not None:
         session = Path(session)
-        findings = _load_json(session / "findings.json").get("findings") or []
-        if isinstance(findings, list):
-            for item in findings:
-                if not isinstance(item, dict):
-                    continue
-                text = " ".join(
-                    str(item.get(key, ""))
-                    for key in ("id", "title", "category", "evidence", "asset")
-                )
-                if q in text.lower():
-                    results.append(
-                        {
-                            "type": "finding",
-                            "id": item.get("id") or item.get("title") or "finding",
-                            "title": item.get("title") or item.get("id") or "finding",
-                            "summary": item.get("evidence")
-                            or item.get("category")
-                            or "saved finding",
-                            "score": 90 if str(item.get("id", "")).lower() == q else 50,
-                            "data": item,
-                        }
+        if session.is_dir():
+            findings = _load_json(session / "findings.json").get("findings") or []
+            if isinstance(findings, list):
+                for item in findings:
+                    if not isinstance(item, dict):
+                        continue
+                    text = " ".join(
+                        str(item.get(key, ""))
+                        for key in ("id", "title", "category", "evidence", "asset")
                     )
+                    if q in text.lower():
+                        results.append(
+                            {
+                                "type": "finding",
+                                "id": item.get("id") or item.get("title") or "finding",
+                                "title": item.get("title") or item.get("id") or "finding",
+                                "summary": item.get("evidence")
+                                or item.get("category")
+                                or "saved finding",
+                                "score": 90 if str(item.get("id", "")).lower() == q else 50,
+                                "data": item,
+                            }
+                        )
         graph_path = session / "graph.json"
         if graph_path.is_file():
             try:
@@ -427,18 +427,26 @@ def unified_search(query: str, *, session: Path | None = None, limit: int = 25) 
                                 },
                             }
                         )
-        for artifact in sorted(path.name for path in session.iterdir() if path.is_file()):
-            if q in artifact.lower() and not any(item["id"] == artifact for item in results):
-                results.append(
-                    {
-                        "type": "evidence",
-                        "id": artifact,
-                        "title": artifact,
-                        "summary": "Persisted engagement artifact",
-                        "score": 20,
-                        "data": {"path": str(session / artifact)},
-                    }
+            try:
+                artifacts = sorted(
+                    artifact_path.name
+                    for artifact_path in session.iterdir()
+                    if artifact_path.is_file()
                 )
+            except OSError:
+                artifacts = []
+            for artifact in artifacts:
+                if q in artifact.lower() and not any(item["id"] == artifact for item in results):
+                    results.append(
+                        {
+                            "type": "evidence",
+                            "id": artifact,
+                            "title": artifact,
+                            "summary": "Persisted engagement artifact",
+                            "score": 20,
+                            "data": {"path": str(session / artifact)},
+                        }
+                    )
     results.sort(key=lambda item: (-int(item["score"]), str(item["type"]), str(item["id"])))
     results = results[: max(1, limit)]
     return {

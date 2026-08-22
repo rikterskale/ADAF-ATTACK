@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import tempfile
-from collections import Counter
+from collections import Counter, deque
 from pathlib import Path
 from typing import Any
 
+from adaf_attack.core.redaction import redact
 from adaf_attack.core.tooling import graph_explorer
 from adaf_attack.core.ux import session_findings_dashboard
 
@@ -93,27 +94,60 @@ def what_if_graph(
 def session_timeline(session: Path, *, limit: int = 100) -> dict[str, Any]:
     """Normalize audit events into a replayable engagement timeline."""
     events_path = session / "events.jsonl"
-    events: list[dict[str, Any]] = []
+    max_events = max(1, limit)
+    events: deque[dict[str, Any]] = deque(maxlen=max_events)
+    total = 0
     if events_path.is_file():
-        for line in events_path.read_text(encoding="utf-8").splitlines():
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(item, dict):
+        with events_path.open(encoding="utf-8", errors="replace") as stream:
+            for line in stream:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(item, dict):
+                    continue
+                total += 1
+                event_type = str(item.get("type") or item.get("event") or "event")
+                event_status = str(item.get("status") or "").lower()
+                detail_keys = (
+                    "message",
+                    "error_code",
+                    "phase",
+                    "exit_code",
+                    "finding_id",
+                    "finding_count",
+                    "artifact_count",
+                    "rollback_status",
+                    "next_step",
+                )
+                details = {
+                    key: item[key] for key in detail_keys if key in item and item[key] is not None
+                }
                 events.append(
                     {
                         "time": item.get("ts") or item.get("time"),
-                        "type": item.get("type") or item.get("event") or "event",
+                        "type": event_type,
                         "capability": item.get("capability"),
-                        "status": "error" if "error" in item else "ok",
+                        "status": (
+                            "error"
+                            if "error" in item
+                            or event_status in {"error", "failed", "failure"}
+                            or event_type.endswith((".error", ".failed"))
+                            else "ok"
+                        ),
+                        "duration_ms": item.get("duration_ms"),
+                        "correlation_id": item.get("correlation_id"),
+                        "details": redact(details, profile="operator"),
                     }
                 )
     return {
         "ok": True,
         "session": str(session),
-        "events": events[-max(1, limit) :],
-        "count": len(events),
+        "events": list(events),
+        "count": total,
         "replayable": True,
     }
 

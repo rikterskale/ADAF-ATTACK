@@ -1,5 +1,54 @@
 # Installation troubleshooting
 
+For a complete clean-install walkthrough, start with the
+[Installation guide](INSTALLATION.md). Use this page when a step fails or
+when an installed command behaves differently from the documented path.
+
+## Fastest triage path
+
+Work through these checks in order. Stop at the first failing command; later
+checks are not useful until that boundary is healthy.
+
+```text
+Python selected → virtual environment active → package installed
+→ PATH points at that environment → pip dependencies consistent
+→ local paths writable → offline quickstart passes → live preflight passes
+```
+
+Run the following from the same shell in which the failure occurred:
+
+```bash
+python --version
+python -c 'import sys; print(sys.executable)'
+python -m pip --version
+python -m pip check
+command -v adaf-attack || true
+adaf-attack --version
+adaf-attack --format json doctor --profile user-readiness --explain
+adaf-attack --format json paths
+```
+
+On PowerShell, use:
+
+```powershell
+py -0p
+python --version
+python -c "import sys; print(sys.executable)"
+python -m pip --version
+python -m pip check
+Get-Command adaf-attack -All
+adaf-attack --version
+adaf-attack --format json doctor --profile user-readiness --explain
+adaf-attack --format json paths
+```
+
+If the failure is not local setup, reproduce it with the smallest safe
+offline command before attempting a live target:
+
+```bash
+adaf-attack quickstart --workspace ./quickstart-retry
+```
+
 Run this first and retain the output after sanitizing paths and usernames:
 
 ```bash
@@ -37,6 +86,26 @@ and remediation field.
 - Use the venv executable directly to distinguish PATH from installation issues.
 - Confirm `python -m pip --version` points into the intended venv.
 
+If `adaf-attack --version` reports an unexpected release, compare these three
+paths. They must refer to the same environment:
+
+```bash
+command -v python
+command -v adaf-attack
+python -m pip show adaf-attack
+```
+
+On Windows:
+
+```powershell
+(Get-Command python).Source
+(Get-Command adaf-attack).Source
+python -m pip show adaf-attack
+```
+
+Activate the intended venv again, or call its executable by absolute path.
+Do not solve a mixed-environment problem by installing with `sudo`.
+
 ## Python and virtual environments
 
 ADAF-ATTACK requires Python 3.11-3.14. The Windows installer accepts
@@ -44,6 +113,24 @@ ADAF-ATTACK requires Python 3.11-3.14. The Windows installer accepts
 systems, install `python3-venv` if venv creation fails. A PEP 668
 `externally-managed-environment` error means pip is protecting the system Python:
 create a venv instead of using `sudo pip` or `--break-system-packages`.
+
+If `python3 -m venv .venv` fails on Debian/Kali, install the matching venv
+package through the approved system package process, then retry:
+
+```bash
+sudo apt-get update
+sudo apt-get install --yes python3-venv python3-pip
+```
+
+If multiple Python versions are installed, select one explicitly and verify
+the resulting interpreter before installing:
+
+```bash
+python3.13 -m venv .venv
+.venv/bin/python --version
+```
+
+Do not reuse an environment created by another Python minor version.
 
 ## PowerShell execution policy and SmartScreen
 
@@ -70,6 +157,25 @@ Use `HTTPS_PROXY` only with the approved proxy. Avoid permanent
 `--trusted-host` settings because they disable certificate verification for the
 named host. Private GitHub release downloads also need an authenticated client
 that trusts the organization's CA.
+
+If pip reports a TLS or certificate error, first inspect the effective
+configuration rather than disabling verification:
+
+```bash
+python -m pip config debug
+env | grep -E '^(HTTP|HTTPS|NO)_PROXY=|^PIP_' || true
+```
+
+On PowerShell:
+
+```powershell
+python -m pip config debug
+Get-ChildItem Env: | Where-Object Name -match '^(HTTP|HTTPS|NO)_PROXY$|^PIP_'
+```
+
+Use the organization's CA bundle with `--cert` or its approved pip
+configuration. If the release is air-gapped, use `--find-links` and
+`--no-index` rather than fighting a blocked proxy.
 
 ## Offline or air-gapped install
 
@@ -120,6 +226,19 @@ warnings.
 Use `--profile operator` to make TUI, reporting, and Kerberos tooling blocking,
 or `--profile certipy` to validate the separate AD CS dependency boundary.
 
+Typical symptoms and fixes:
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `No module named textual` | TUI extra not installed | Install `[tui]` or `[full]` in the active venv. |
+| `No module named impacket` | Kerberos/operator extra missing | Install `[kerberos]` or `[full]`; rerun `doctor --profile operator`. |
+| `reportlab` or `pypdf` missing | Reporting extra missing | Install `[reports]` or `[full]`. |
+| `certipy` missing from PATH | Separate Certipy environment is inactive | Activate that venv or add its `bin`/`Scripts` directory to PATH. |
+| Dependency resolution conflict | Certipy mixed into the pinned runtime | Keep Certipy in a separate venv. |
+
+Do not install an arbitrary newer dependency to silence a warning. Runtime
+versions are intentionally pinned for reproducible release behavior.
+
 ## Target and input failures
 
 JSON failures include a stable error code, remediation, and often a suggested
@@ -137,6 +256,19 @@ For a complete catalog, run `adaf-attack --format json errors`. The generic
 `RUN_FAILED` code is reserved for provider failures that do not match a safer
 specific recovery class; retain the exact message and sanitized support bundle
 when requesting help.
+
+## Quickstart and workspace failures
+
+| Symptom | Fix |
+|---|---|
+| `QUICKSTART_WORKSPACE_EXISTS` | Choose a new empty `--workspace` path; the command will not overwrite an existing demo session. |
+| `QUICKSTART_WRITE_FAILED` | Run `paths`, choose writable data/config/workspace directories, then retry. |
+| `PERMISSION_DENIED` under a managed home directory | Set `ADAF_ATTACK_DATA_DIR`, `ADAF_ATTACK_CONFIG_DIR`, and `ADAF_ATTACK_WORKSPACE` to approved per-user paths. |
+| A session is present but findings are empty | Confirm the session contains `findings.json`; malformed JSON is treated as unavailable evidence rather than repaired automatically. |
+| A report or package fails on a huge workspace | Use a dedicated session directory and preview exclusions before creating the archive. |
+
+Never point `--workspace` at a broad home, repository root, or shared evidence
+directory for a disposable quickstart.
 
 ## Read-only profile or managed workstation
 

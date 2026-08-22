@@ -5,6 +5,7 @@ Commands are templates for authorized lab/operator use. They never auto-execute.
 
 from __future__ import annotations
 
+import shlex
 from typing import Any
 
 from adaf_attack.core.target import Target
@@ -366,11 +367,15 @@ def build_exploit_commands(
         "target": _sam_from_node_id(end),
         "spn": f"cifs/{_sam_from_node_id(end)}",
     }
+    # Quote substituted values individually so generated examples remain safe
+    # to paste when an operator name, domain, or filter contains whitespace or
+    # shell metacharacters. Simple values are unchanged by shlex.quote().
+    quoted_ctx = {key: shlex.quote(str(value)) for key, value in ctx.items()}
 
     out: list[dict[str, Any]] = []
     for t in templates:
         try:
-            cmd = t["cmd"].format(**ctx)
+            cmd = t["cmd"].format(**quoted_ctx)
         except KeyError:
             cmd = t["cmd"]
         out.append(

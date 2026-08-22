@@ -39,6 +39,7 @@ should start from their platform guide below rather than pip directly.
 - Platform/operator references: [Windows](docs/WINDOWS.md) ·
   [Kali](docs/KALI.md). Command references live in the new-user guides above.
 - [Troubleshooting](docs/TROUBLESHOOTING.md) ·
+  [Installation guide](docs/INSTALLATION.md) ·
   [Known limitations](docs/KNOWN_LIMITATIONS.md) · [Changelog](CHANGELOG.md)
 - [New-user readiness guide](docs/USER_READINESS.md) ·
   [Feature and support matrix](docs/FEATURE_MATRIX.md) ·

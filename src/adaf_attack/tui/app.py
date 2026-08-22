@@ -111,6 +111,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     CSS = """
     Screen { layout: vertical; }
     #toolbar { height: auto; padding: 0 1; border-bottom: solid $accent; }
+    #toolbar { overflow-x: auto; }
     #sidebar { width: 44; border: solid $accent; padding: 0 1; }
     #main { border: solid $primary; }
     #target-form { height: auto; padding: 1; border-bottom: solid $accent; }
@@ -126,6 +127,12 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     #search { margin-bottom: 1; }
     Input { margin-bottom: 1; }
     Button { margin-right: 1; }
+    .field-label { color: $text-muted; text-style: bold; margin-top: 1; }
+    .compact #toolbar { max-height: 8; overflow-y: auto; }
+    .compact #sidebar { width: 30; }
+    .compact #toolbar Label { display: none; }
+    .compact #toolbar Button { min-width: 12; }
+    .compact #target-form { padding: 0 1; }
     .section-label, .phase-label { color: $accent; text-style: bold; margin-top: 1; }
     """
 
@@ -254,35 +261,45 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     yield Static(
                         "Safe Mode: nothing changes until Force is enabled.", id="novice-panel"
                     )
+                    yield Label("Domain", classes="field-label")
                     yield Input(
                         placeholder="Domain (corp.local)",
                         id="domain",
                         value=defaults.get("target.domain", ""),
                     )
+                    yield Label("Domain controller", classes="field-label")
                     yield Input(
                         placeholder="DC IP / hostname",
                         id="dc_ip",
                         value=defaults.get("target.dc_ip", ""),
                     )
+                    yield Label("Username", classes="field-label")
                     yield Input(
                         placeholder="Username (optional)",
                         id="username",
                         value=defaults.get("target.username", ""),
                     )
                     with Horizontal():
+                        yield Label("Password", classes="field-label")
                         yield Input(placeholder="Password (optional)", password=True, id="password")
                         yield Button("Show", id="toggle-password-btn")
+                    yield Label("Hash material", classes="field-label")
                     yield Input(placeholder="NT / LM:NT hash (optional)", id="hashes")
+                    yield Label("AES key", classes="field-label")
                     yield Input(placeholder="AES key hex (optional)", id="aes_key")
+                    yield Label("Kerberos cache", classes="field-label")
                     yield Input(placeholder="Kerberos ccache path (optional)", id="ccache")
+                    yield Label("Credential rotation file", classes="field-label")
                     yield Input(placeholder="Creds JSON file (optional rotation)", id="creds_file")
                     yield Button("Advanced credentials", id="advanced-creds-btn")
                     yield Static("[bold]Scope & safety[/bold]", classes="section-label")
+                    yield Label("Engagement scope", classes="field-label")
                     yield Input(
                         placeholder="ACL scope: high-value | domain",
                         id="scope",
                         value=defaults.get("acl.scope", "high-value"),
                     )
+                    yield Label("Attack-path start", classes="field-label")
                     yield Input(placeholder="Attack-path start principal (optional)", id="start")
                     with Horizontal():
                         yield Label("Kerberos")
@@ -350,6 +367,14 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 severity="information",
             )
             self.query_one("#domain", Input).focus()
+
+    def on_resize(self, event: Any) -> None:
+        """Keep the dense operator surface usable on narrow terminals."""
+        width = getattr(getattr(event, "size", None), "width", 0)
+        if width and width < 120:
+            self.add_class("compact")
+        else:
+            self.remove_class("compact")
 
     def _show_log(self, message: str) -> None:
         self._log_lines.extend(message.splitlines())
@@ -1800,7 +1825,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self.query_one("#session-panel", Static).update(
             "[bold]Engagement timeline[/bold]\n"
             + "\n".join(
-                f"{item.get('time') or '-'}  {item['type']}  {item.get('capability') or ''}"
+                f"{item.get('time') or '-'}  {item['status'].upper()}  {item['type']}  "
+                f"{item.get('capability') or '-'}  "
+                f"{item.get('duration_ms') if item.get('duration_ms') is not None else '-'}ms"
                 for item in payload["events"][-8:]
             )
         )
