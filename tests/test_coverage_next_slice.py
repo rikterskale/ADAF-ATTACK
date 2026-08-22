@@ -85,7 +85,7 @@ def test_engagement_and_edge_views_cover_saved_evidence(tmp_path: Path) -> None:
 def test_asset_workspace_aggregates_safe_evidence(tmp_path: Path) -> None:
     session = _session(tmp_path)
     (session / "events.jsonl").write_text(
-        '{"type":"run.complete","capability":"ldap-enum","username":"alice","asset":"USER@CORP"}\n'
+        '{"type":"run.complete","capability":"ldap-enum","username":"alice","asset":"USER@CORP","credential_artifact":"ticket.kirbi","enables":"LDAP read"}\n'
         "bad\n{}\n",
         encoding="utf-8",
     )
@@ -93,9 +93,12 @@ def test_asset_workspace_aggregates_safe_evidence(tmp_path: Path) -> None:
         json.dumps({"findings": [{"id": "F-1", "asset": "USER@CORP"}, "bad"]}),
         encoding="utf-8",
     )
+    (session / "ticket.kirbi").write_bytes(b"x")
     view = build_asset_workspace(session, "user@corp")
     assert view["summary"] == {"nodes": 1, "relationships": 1, "findings": 1, "actions": 1}
     assert view["access"]["recommended_identity"] == "alice"
+    assert view["access"]["credential_lifecycle"][0]["used_by"] == ["ldap-enum"]
+    assert view["access"]["credential_lifecycle"][0]["enables"] == ["LDAP read"]
     assert build_asset_workspace(tmp_path / "missing", "asset")["summary"]["nodes"] == 0
     with pytest.raises(ValueError, match="cannot be empty"):
         build_asset_workspace(session, " ")
@@ -119,7 +122,6 @@ def test_asset_workspace_aggregates_safe_evidence(tmp_path: Path) -> None:
     malformed.mkdir()
     (malformed / "graph.json").write_text("not json", encoding="utf-8")
     assert build_asset_workspace(malformed, "asset")["summary"]["nodes"] == 0
-    (session / "ticket.kirbi").write_bytes(b"x")
     (session / "certificate.pfx").write_bytes(b"x")
     (session / "password.txt").write_bytes(b"x")
     assert len(session_access_context(session)["credential_artifacts"]) == 3

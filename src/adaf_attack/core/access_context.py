@@ -12,6 +12,7 @@ def session_access_context(session: Path) -> dict[str, Any]:
     session = Path(session)
     identities: dict[str, dict[str, Any]] = {}
     actions: list[dict[str, Any]] = []
+    raw_events: list[dict[str, Any]] = []
     events_path = session / "events.jsonl"
     if events_path.is_file():
         for line in events_path.read_text(encoding="utf-8").splitlines():
@@ -21,6 +22,7 @@ def session_access_context(session: Path) -> dict[str, Any]:
                 continue
             if not isinstance(event, dict):
                 continue
+            raw_events.append(event)
             username = str(event.get("username") or "").strip()
             auth = str(event.get("auth") or "not-recorded")
             if username:
@@ -43,7 +45,7 @@ def session_access_context(session: Path) -> dict[str, Any]:
                         "event": event.get("type"),
                     }
                 )
-    artifacts = []
+    artifacts: list[dict[str, Any]] = []
     for path in sorted(session.iterdir()) if session.is_dir() else []:
         if not path.is_file() or path.name in {"session.json", "events.jsonl"}:
             continue
@@ -62,12 +64,40 @@ def session_access_context(session: Path) -> dict[str, Any]:
     for item in identities.values():
         item["auth_modes"] = sorted(item["auth_modes"])
         item["capabilities"] = sorted(item["capabilities"])
+    lifecycle: list[dict[str, Any]] = []
+    for artifact in artifacts:
+        related = [
+            event
+            for event in raw_events
+            if artifact["name"].casefold() in json.dumps(event, sort_keys=True).casefold()
+        ]
+        lifecycle.append(
+            {
+                "artifact": artifact["name"],
+                "kind": artifact["kind"],
+                "source": "session evidence",
+                "used_by": sorted(
+                    {str(event["capability"]) for event in related if event.get("capability")}
+                ),
+                "identities": sorted(
+                    {
+                        str(event.get("username") or event.get("identity"))
+                        for event in related
+                        if event.get("username") or event.get("identity")
+                    }
+                ),
+                "enables": sorted(
+                    {str(event["enables"]) for event in related if event.get("enables")}
+                ),
+            }
+        )
     recommended = next((item for item in reversed(actions) if item["identity"]), None)
     return {
         "ok": True,
         "session": str(session),
         "identities": sorted(identities.values(), key=lambda item: item["identity"]),
         "credential_artifacts": artifacts,
+        "credential_lifecycle": lifecycle,
         "actions": actions,
         "recommended_identity": recommended["identity"] if recommended else None,
         "safety": "secret values are never read or returned",
