@@ -22,20 +22,20 @@ RenderMode = Literal["rich", "ascii"]
 # Distinct printable characters so meaning survives without color.
 STATUS_GLYPHS: dict[str, tuple[str, str, str]] = {
     # key: (label, ascii_glyph, rich_color)
-    "ok":       ("OK",   "[+]", "green"),
-    "warning":  ("WARN", "[!]", "yellow"),
-    "error":    ("ERR",  "[x]", "red"),
-    "info":     ("INFO", "[i]", "cyan"),
-    "skipped":  ("SKIP", "[-]", "dim"),
-    "pending":  ("PEND", "[?]", "magenta"),
+    "ok": ("OK", "[+]", "green"),
+    "warning": ("WARN", "[!]", "yellow"),
+    "error": ("ERR", "[x]", "red"),
+    "info": ("INFO", "[i]", "cyan"),
+    "skipped": ("SKIP", "[-]", "dim"),
+    "pending": ("PEND", "[?]", "magenta"),
 }
 
 SEVERITY_GLYPHS: dict[str, tuple[str, str, str]] = {
     "critical": ("CRITICAL", "[!!!]", "bright_red"),
-    "high":     ("HIGH",     "[!!]",  "red"),
-    "medium":   ("MEDIUM",   "[!]",   "yellow"),
-    "low":      ("LOW",      "[.]",   "blue"),
-    "info":     ("INFO",     "[i]",   "cyan"),
+    "high": ("HIGH", "[!!]", "red"),
+    "medium": ("MEDIUM", "[!]", "yellow"),
+    "low": ("LOW", "[.]", "blue"),
+    "info": ("INFO", "[i]", "cyan"),
 }
 
 

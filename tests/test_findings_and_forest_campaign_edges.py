@@ -239,6 +239,7 @@ def test_coerce_trigger_reports_unexpected_error(monkeypatch: pytest.MonkeyPatch
     # Rebind the parent-package attributes to the fakes as well; monkeypatch
     # will revert both on teardown.
     import importlib
+
     v5 = importlib.import_module("impacket.dcerpc.v5")
     monkeypatch.setattr(v5, "rpcrt", rpcrt, raising=False)
     monkeypatch.setattr(v5, "transport", transport, raising=False)

@@ -245,6 +245,7 @@ def test_run_engagement_capability_not_in_scope(fake_caps: None, tmp_path: Path)
     with pytest.raises(EngagementError, match="not allowed by engagement scope"):
         run_engagement(plan, workspace=tmp_path)
 
+
 def test_verify_approval_prod_refuses_hmac(monkeypatch: Any) -> None:
     monkeypatch.setenv("ADAF_ATTACK_ENV", "prod")
     monkeypatch.delenv("ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD", raising=False)
@@ -267,4 +268,3 @@ def test_verify_approval_dev_env_unaffected(monkeypatch: Any) -> None:
     monkeypatch.delenv("ADAF_APPROVAL_HMAC_KEY", raising=False)
     with pytest.raises(EngagementError, match="ADAF_APPROVAL_HMAC_KEY is required"):
         verify_approval("a.b", _plan(), "eng-write")
-

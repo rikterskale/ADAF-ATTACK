@@ -183,6 +183,7 @@ def execute_capability(
     )
 
     import time as _time
+
     _run_start_monotonic = _time.monotonic()
     session.log(
         "run.start",

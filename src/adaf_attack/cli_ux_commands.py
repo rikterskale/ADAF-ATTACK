@@ -642,7 +642,9 @@ def register_ux_commands(
             for sh, script in scripts.items():
                 typer.echo(f"# ---- {sh} ----")
                 typer.echo(script)
-                _console(ctx).print(f"[dim]# Install hint ({sh}): {completion_install_hint(sh)}[/dim]")
+                _console(ctx).print(
+                    f"[dim]# Install hint ({sh}): {completion_install_hint(sh)}[/dim]"
+                )
         else:
             typer.echo(scripts[shell])
             _console(ctx).print(f"[dim]# Install hint: {completion_install_hint(shell)}[/dim]")

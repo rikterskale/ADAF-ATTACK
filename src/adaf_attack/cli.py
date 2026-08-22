@@ -825,6 +825,7 @@ def doctor(
     checks = payload["checks"]
     first_run = payload["first_run"]
     from adaf_attack.core.glyphs import render_status
+
     glyph = {
         "ok": render_status("ok"),
         "warning": render_status("warning"),
@@ -3563,7 +3564,19 @@ def session_events(
     for column in ("ts", "type", "capability", "duration_ms", "detail"):
         table.add_column(column)
     for entry in events:
-        detail = {k: v for k, v in entry.items() if k not in {"ts", "type", "capability", "duration_ms", "event_schema_version", "correlation_id"}}
+        detail = {
+            k: v
+            for k, v in entry.items()
+            if k
+            not in {
+                "ts",
+                "type",
+                "capability",
+                "duration_ms",
+                "event_schema_version",
+                "correlation_id",
+            }
+        }
         table.add_row(
             str(entry.get("ts", "")),
             str(entry.get("type", "")),
