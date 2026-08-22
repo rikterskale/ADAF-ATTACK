@@ -257,7 +257,7 @@ def dashboard(
                 continue
             if isinstance(event, dict):
                 events.append(event)
-    open_finding = next(
+    open_finding: dict[str, Any] = next(
         (
             item
             for item in findings

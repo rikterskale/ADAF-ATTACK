@@ -47,8 +47,8 @@ from adaf_attack.core.registry import Capability, capability_registry
 from adaf_attack.core.reporting import generate_report_bundle
 from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.standout_ux import copilot_recommendations, evidence_cockpit, session_timeline
-from adaf_attack.core.tooling import graph_explorer
 from adaf_attack.core.target import Target
+from adaf_attack.core.tooling import graph_explorer
 from adaf_attack.core.user_config import (
     favorite_capabilities,
     load_user_config,
@@ -1600,8 +1600,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         except (OSError, ValueError, KeyError, TypeError) as exc:
             self._clear_attack_edges()
             panel.update(
-                "[bold]Attack-path workspace[/bold]\n"
-                f"Saved graph could not be read: {exc}"
+                f"[bold]Attack-path workspace[/bold]\nSaved graph could not be read: {exc}"
             )
             return
         summary = payload.get("summary") or {}
@@ -1742,7 +1741,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Ready command: [dim]{self._ready_command(capability.id)}[/]\n"
             "Select Review to inspect prerequisites and success criteria before any execution."
         )
-        self.notify(f"Prepared {capability.id} for review; nothing has executed.", severity="information")
+        self.notify(
+            f"Prepared {capability.id} for review; nothing has executed.", severity="information"
+        )
 
     def _show_timeline(self) -> None:
         if not self._last_session:
