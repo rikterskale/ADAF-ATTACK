@@ -18,7 +18,6 @@ dist/
 *.egg-info/
 *.egg
 .eggs/
-skiils/
 
 # Testing & coverage
 .coverage
@@ -52,6 +51,7 @@ output/
 .env
 .env.*
 !.env.example
+skills/
 
 # Secrets / results that should never be committed
 **/secrets/
