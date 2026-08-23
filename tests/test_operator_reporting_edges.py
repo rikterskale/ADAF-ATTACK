@@ -251,6 +251,7 @@ def test_impacket_exec_safe_script_modes(monkeypatch: Any, tmp_path: Path) -> No
     with pytest.raises(RuntimeError, match="Pass"):
         capability.run(_target(), Session(tmp_path / "no-command"), AttackGraph(), force=True)
     monkeypatch.setattr(impacket_exec, "require_impacket", lambda _name: None)
+    monkeypatch.setattr(impacket_exec.shutil, "which", lambda _name: None)
     for method in ("atexec", "dcomexec"):
         result = capability.run(
             _target(),
