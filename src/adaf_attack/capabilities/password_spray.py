@@ -94,7 +94,7 @@ def _try_bind(target: Target, username: str, password: str, ldaps: bool) -> tupl
         )
         conn.unbind()
         return True, "ok"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return False, str(exc)[:200]
 
 
@@ -143,7 +143,7 @@ class PasswordSpray:
         hits: list[dict[str, Any]] = []
 
         for sam in users:
-            bad, last_ts = _account_lockout_state(conn, base_dn, sam)
+            bad, _last_ts = _account_lockout_state(conn, base_dn, sam)
             safe_ceiling = threshold - safety_margin if threshold else 999
             if threshold and bad >= safe_ceiling:
                 attempts.append(

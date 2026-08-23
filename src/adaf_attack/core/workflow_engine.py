@@ -615,7 +615,7 @@ class WorkflowEngine:
             record.related_findings = sorted(
                 set(record.related_findings + [item for item in ids if item != finding_id])
             )
-            record.tags = sorted(set(record.tags + [relation]))
+            record.tags = sorted({*record.tags, relation})
             record.updated_at = _now()
         self._event(
             "findings.correlated",
@@ -926,9 +926,9 @@ def finding_from_document(document: dict[str, Any]) -> FindingRecord:
 
 
 __all__ = [
+    "PHASES",
     "AuditEvent",
     "FindingRecord",
-    "PHASES",
     "WorkflowAction",
     "WorkflowEngine",
     "WorkflowError",

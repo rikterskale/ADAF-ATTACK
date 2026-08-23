@@ -71,7 +71,7 @@ class TicketForge:
             domain=target.domain,
             domain_sid=domain_sid,
             groups=",".join(groups),
-            user_id="500" if variant == "golden" else "500",
+            user_id="500",
             duration="87600",
             extra_sid=kwargs.get("extra_sid", ""),
             extra_pac=variant == "sapphire",

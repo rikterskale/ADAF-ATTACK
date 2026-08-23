@@ -34,7 +34,7 @@ def _check_smb_signing(dc_ip: str) -> dict[str, Any]:
         with contextlib.suppress(Exception):
             conn.close()
         return info
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"error": str(exc)[:200]}
 
 
@@ -49,7 +49,7 @@ def _check_ldap_signing(conn: Any, base_dn: str) -> dict[str, Any]:
             attributes=["msDS-ExpirePasswordsOnSmartCardOnlyAccounts"],
         )
         return {"ok": True, "hint": "operator should validate LdapEnforceChannelBinding via GPO"}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"error": str(exc)[:200]}
 
 
@@ -72,11 +72,11 @@ def _check_certifried_templates(conn: Any, config_nc: str) -> dict[str, Any]:
             if flag & 0x1:  # ENROLLEE_SUPPLIES_SUBJECT
                 weak.append(str(entry.cn))
         return {"weak_templates": weak, "count": len(weak)}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"error": str(exc)[:200]}
 
 
-def _check_noPAC(conn: Any, base_dn: str) -> dict[str, Any]:
+def _check_no_pac(conn: Any, base_dn: str) -> dict[str, Any]:
     try:
         conn.search(
             base_dn,
@@ -92,8 +92,13 @@ def _check_noPAC(conn: Any, base_dn: str) -> dict[str, Any]:
             "krbtgt_kvno": kvno,
             "hint": "kvno of 1 or unpatched build implies possible noPAC exposure",
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"error": str(exc)[:200]}
+
+
+# Compatibility alias for older offline integrations; the implementation now
+# follows the project's lowercase private-function naming convention.
+_check_noPAC = _check_no_pac  # noqa: N816  # compatibility alias
 
 
 def _check_functional_level(conn: Any, base_dn: str) -> dict[str, Any]:
@@ -109,7 +114,7 @@ def _check_functional_level(conn: Any, base_dn: str) -> dict[str, Any]:
         entry = conn.entries[0]
         level = int(entry["msDS-Behavior-Version"].value) if entry["msDS-Behavior-Version"] else 0
         return {"domain_functional_level": level}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"error": str(exc)[:200]}
 
 
@@ -138,7 +143,7 @@ def _check_ntlm_and_rc4(conn: Any, base_dn: str) -> dict[str, Any]:
             "accounts_without_supported_etypes": no_etype,
             "hint": "AES-only rollout blocks RC4 downgrade + ticket-forge with old keys",
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"error": str(exc)[:200]}
 
 
@@ -168,7 +173,7 @@ class AdCveScan:
             "smb_signing": _check_smb_signing(target.dc_ip),
             "ldap_signing": _check_ldap_signing(conn, base_dn),
             "certifried_templates": _check_certifried_templates(conn, config_nc),
-            "noPAC_indicator": _check_noPAC(conn, base_dn),
+            "noPAC_indicator": _check_no_pac(conn, base_dn),
             "domain_functional_level": _check_functional_level(conn, base_dn),
             "ntlm_and_rc4": _check_ntlm_and_rc4(conn, base_dn),
         }

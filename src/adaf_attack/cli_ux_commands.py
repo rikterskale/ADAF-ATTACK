@@ -128,7 +128,6 @@ def register_ux_commands(
         capability: str = typer.Argument(..., help="Capability ID to explain in plain language."),
     ) -> None:
         """Explain what a capability does, its safety level, and what to do first."""
-        import adaf_attack.capabilities  # noqa: F401
         from adaf_attack.core.capability_help_data import capability_option_spec
         from adaf_attack.core.novice import capability_difficulty, plain_description, safety_summary
         from adaf_attack.core.registry import capability_registry
@@ -232,7 +231,6 @@ def register_ux_commands(
             )
             _emit(ctx, payload, human)
             return
-        import adaf_attack.capabilities  # noqa: F401
         from adaf_attack.core.registry import capability_registry
 
         cap = capability_registry.get(capability)

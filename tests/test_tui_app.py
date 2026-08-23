@@ -425,7 +425,7 @@ def test_tui_operator_safety_and_profile_controls(
             monkeypatch.setattr(tui_app, "default_workspace_dir", lambda: tmp_path / "workspace")
             monkeypatch.setattr(tui_app, "active_opsec", lambda: "stealth")
             monkeypatch.setattr(tui_app, "list_profiles", lambda: [{"name": "lab"}])
-            monkeypatch.setattr(tui_app, "load_user_config", lambda: {})
+            monkeypatch.setattr(tui_app, "load_user_config", dict)
             saved_config: list[dict[str, object]] = []
             monkeypatch.setattr(
                 tui_app, "save_user_config", lambda value: saved_config.append(value)

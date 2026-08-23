@@ -446,7 +446,7 @@ class AttackGraph:
                     continue
                 visited_depth[nxt] = depth
                 w = self._edge_weight(edge.kind)
-                queue.append((nxt, path + [nxt], edge_kinds + [edge.kind], score + w))
+                queue.append((nxt, [*path, nxt], [*edge_kinds, edge.kind], score + w))
 
         found.sort(key=lambda p: (p.score, p.length))
         return found[:limit]
@@ -520,7 +520,7 @@ class AttackGraph:
                 for edge in self.neighbors(current):
                     profile = EXPLOIT_PROFILES.get(edge.kind)
                     chain_nodes = path + ([] if edge.target == current else [edge.target])
-                    chain_edges = edge_kinds + [edge.kind]
+                    chain_edges = [*edge_kinds, edge.kind]
                     chain_score = score + self._edge_weight(edge.kind)
 
                     if profile:

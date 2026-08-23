@@ -8,7 +8,7 @@ ADAF-ATTACK runs on **Windows 10/11 and Windows Server** with Python 3.11-3.14.
 # From a normal PowerShell in the repo root
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # if needed
 .\scripts\Install-AdafAttack.ps1 `
-  -Package .\dist\adaf_attack-0.10.0-py3-none-any.whl `
+  -Package .\dist\adaf_attack-0.10.1-py3-none-any.whl `
   -Extras full
 ```
 

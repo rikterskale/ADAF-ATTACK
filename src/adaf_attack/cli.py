@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import logging
 import os
 import platform as host_platform
 import shutil
@@ -35,7 +36,14 @@ from adaf_attack.core.cli_contract import (
     classify_run_error,
     error_for,
 )
+from adaf_attack.core.glyphs import render_severity
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.operator_table import (
+    TableColumn,
+    adaptive_table,
+    copy_to_clipboard,
+    table_text,
+)
 from adaf_attack.core.paths import (
     default_workspace_dir,
     platform_name,
@@ -46,10 +54,11 @@ from adaf_attack.core.runner import RunError, execute_capability
 from adaf_attack.core.target import Target
 from adaf_attack.core.user_config import load_user_config
 
+_logger = logging.getLogger(__name__)
+
 
 def _closest_capabilities(value: str, limit: int = 3) -> list[str]:
     """Return useful typo suggestions without guessing at execution."""
-    import adaf_attack.capabilities  # noqa: F401
     from adaf_attack.core.registry import capability_registry
 
     return difflib.get_close_matches(value, capability_registry.ids(), n=limit, cutoff=0.60)
@@ -369,8 +378,10 @@ def main(
     import logging
 
     from adaf_attack.core.engineering import configure_logging
+    from adaf_attack.core.registry import load_builtin_capabilities
 
     configure_logging(level=logging.DEBUG if debug else logging.WARNING)
+    load_builtin_capabilities()
     ctx.ensure_object(dict).update(
         output_format=output_format,
         no_color=no_color or output_format == "json",
@@ -486,22 +497,22 @@ def _os_release_label() -> str:
             if pretty:
                 return pretty
         except OSError:
-            pass
+            _logger.debug("Could not read Linux release metadata", exc_info=True)
     elif system == "Darwin":
         try:
             release = host_platform.mac_ver()[0]
             if release:
                 return f"macOS {release}"
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            _logger.debug("Could not read macOS release metadata", exc_info=True)
     elif system == "Windows":
         try:
             release, version, _csd, _ptype = host_platform.win32_ver()
             label = " ".join(part for part in (f"Windows {release}", version) if part).strip()
             if label:
                 return label
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            _logger.debug("Could not read Windows release metadata", exc_info=True)
     return f"{system} {host_platform.release()}".strip()
 
 
@@ -868,9 +879,18 @@ def list_capabilities(
         "--safe-only",
         help="Show only offline-safe (GREEN) capabilities. Useful for a first session.",
     ),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Expand the table with safety, tags, tools, and required options.",
+    ),
+    copy: bool = typer.Option(
+        False,
+        "--copy",
+        help="Copy the tab-separated table to the system clipboard.",
+    ),
 ) -> None:
     """List registered capabilities."""
-    import adaf_attack.capabilities  # noqa: F401
     from adaf_attack.core.registry import capability_registry
 
     caps = capability_registry.list()
@@ -955,23 +975,34 @@ def list_capabilities(
         )
         return
 
-    table = Table(title="Registered Capabilities", show_header=True, header_style="bold")
-    table.add_column("ID", style="cyan")
-    if by_phase:
-        table.add_column("Phase")
-    table.add_column("Category")
-    table.add_column("Difficulty")
-    table.add_column("Summary")
-    table.add_column("Flags")
-
     display_caps = (
         [cap for group in group_capabilities_by_phase().values() for cap in group]
         if by_phase
         else caps
     )
+    columns = [TableColumn("ID", max_width=28, style="cyan")]
+    if by_phase:
+        columns.append(TableColumn("Phase", max_width=26))
+    columns.extend(
+        [
+            TableColumn("Category", max_width=24),
+            TableColumn("Difficulty", max_width=14),
+            TableColumn("Summary", max_width=(full and 72) or 44),
+            TableColumn("Risk", max_width=18),
+        ]
+    )
+    if full:
+        columns.extend(
+            [
+                TableColumn("Tags", max_width=38),
+                TableColumn("Tools", max_width=38),
+                TableColumn("Required", max_width=42),
+            ]
+        )
+
+    rows: list[list[str]] = []
     for cap in display_caps:
-        risk_label = cap.safety.risk.value.upper() if cap.safety else "APPROVAL REQUIRED"
-        flags = [f"[red]{risk_label}[/red]"] if cap.requires_force else []
+        risk = cap.safety.risk.value if cap.safety else "approval-required"
         row = [cap.id]
         if by_phase:
             row.append(phase_label(capability_phase(cap)))
@@ -980,19 +1011,36 @@ def list_capabilities(
                 cap.category,
                 capability_difficulty(cap)["level"],
                 cap.summary,
-                " ".join(flags) or "-",
+                render_severity(
+                    risk, mode="ascii" if ctx.ensure_object(dict).get("no_color") else "rich"
+                ),
             ]
         )
-        table.add_row(*row)
+        if full:
+            spec = capability_option_spec(cap.id, cap.requires_force)
+            row.extend(
+                [
+                    ", ".join(cap.tags) or "-",
+                    ", ".join(cap.tools) or "-",
+                    ", ".join(spec.required) or "-",
+                ]
+            )
+        rows.append(row)
+    table, table_rows = adaptive_table("Registered Capabilities", columns, rows, full=full)
+    clipboard = copy_to_clipboard(table_text(columns, table_rows)) if copy else None
 
+    payload: dict[str, Any] = {
+        "ok": True,
+        "capabilities": [_capability_payload(cap) for cap in caps],
+        "count": len(caps),
+        "full": full,
+        "next_step": "Run `adaf-attack capability-help <id>` for details.",
+    }
+    if clipboard is not None:
+        payload["clipboard"] = clipboard
     _emit(
         ctx,
-        {
-            "ok": True,
-            "capabilities": [_capability_payload(cap) for cap in caps],
-            "count": len(caps),
-            "next_step": "Run `adaf-attack capability-help <id>` for details.",
-        },
+        payload,
         table,
     )
 
@@ -1281,7 +1329,6 @@ def capability_help(
     capability: str | None = typer.Argument(None, help="Capability ID; omit for all capabilities."),
 ) -> None:
     """Generated capability reference, requirements, risks, and examples."""
-    import adaf_attack.capabilities  # noqa: F401
     from adaf_attack.core.registry import capability_registry
 
     caps = capability_registry.list()
@@ -1360,7 +1407,6 @@ def plan(
     export: Path | None = typer.Option(None, "--export", help="Write the plan as Markdown."),
 ) -> None:
     """Preview the target, effects, and risk of a proposed capability run."""
-    import adaf_attack.capabilities  # noqa: F401
     from adaf_attack.core.registry import capability_registry
 
     cap = capability_registry.get(capability)
@@ -1890,7 +1936,6 @@ def _interactive_run_prompts(
     plain-language safety summary, and requires confirmation before returning.
     Raises typer.Exit on user abort.
     """
-    import adaf_attack.capabilities  # noqa: F401
     from adaf_attack.core.novice import (
         glossary_definition,
         plain_description,
@@ -2197,7 +2242,6 @@ def run_capability(
     )
 
     # Resolve capability early so we can gate confirmation
-    import adaf_attack.capabilities  # noqa: F401
     from adaf_attack.core.registry import capability_registry
 
     cap = capability_registry.get(capability)
@@ -2331,7 +2375,7 @@ def run_capability(
             )
         if _json_mode(ctx):
             _emit(ctx, out, "")
-            return
+            return None
         interesting = out.get("interesting") or {}
         top = interesting.get("top_paths") or []
         if top:
@@ -2358,7 +2402,7 @@ def run_capability(
             error = _unknown_capability_error(capability)
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from exc
-        elif "DESTRUCTIVE" in text and "--force" in text:
+        if "DESTRUCTIVE" in text and "--force" in text:
             code = "DESTRUCTIVE_CONFIRMATION_REQUIRED"
         elif "no runner implemented" in text:
             code = "CAPABILITY_UNAVAILABLE"
@@ -2387,7 +2431,7 @@ def _execute_with_spinner(
         cap = capability_registry.get(capability)
         if cap is not None:
             stage_hint = " -> ".join(item["id"] for item in format_stages_progress(cap)["stages"])
-    except Exception:  # noqa: BLE001
+    except Exception:
         stage_hint = capability
     with Progress(
         SpinnerColumn(),
@@ -2669,6 +2713,12 @@ def rank_paths_cmd(
     max_depth: int = typer.Option(6, "--max-depth"),
     limit: int = typer.Option(25, "--limit"),
     output: Path | None = typer.Option(None, "--output", "-o", help="Write ranked JSON here"),
+    full: bool = typer.Option(
+        False, "--full", help="Show complete paths and untruncated command follow-ons."
+    ),
+    copy: bool = typer.Option(
+        False, "--copy", help="Copy the ranked table and commands to the system clipboard."
+    ),
 ) -> None:
     """Rank attack paths from a saved graph.json (offline, no DC contact)."""
     if not graph.is_file():
@@ -2686,19 +2736,22 @@ def rank_paths_cmd(
     ranked = g.rank_from_principals(starts, max_depth=max_depth, limit=limit)
     exploit_chains = g.rank_exploit_chains(starts, max_depth=max_depth, limit=limit)
 
-    table = Table(title="Ranked attack paths", show_header=True, header_style="bold")
-    table.add_column("#", style="dim", width=4)
-    table.add_column("Score", justify="right")
-    table.add_column("Len", justify="right")
-    table.add_column("Path")
-
+    columns = [
+        TableColumn("#", min_width=2, max_width=4, justify="right", style="dim"),
+        TableColumn("Score", min_width=5, max_width=8, justify="right"),
+        TableColumn("Len", min_width=3, max_width=6, justify="right"),
+        TableColumn("Path", max_width=120 if full else 72),
+    ]
+    rows: list[list[str]] = []
     for i, p in enumerate(ranked[:20], 1):
-        short = " → ".join((x.split("@")[1] if "@" in x else x) for x in p["path"][:8])
-        if len(p["path"]) > 8:
+        path_values = p["path"] if full else p["path"][:8]
+        short = " → ".join((x.split("@")[1] if "@" in x else x) for x in path_values)
+        if not full and len(p["path"]) > 8:
             short += " → …"
-        table.add_row(str(i), f"{p['score']:.1f}", str(p["length"]), short)
+        rows.append([str(i), f"{p['score']:.1f}", str(p["length"]), short])
+    table, table_rows = adaptive_table("Ranked attack paths", columns, rows, full=full)
 
-    payload = {
+    payload: dict[str, Any] = {
         "graph": str(graph),
         "start": start,
         "paths": ranked,
@@ -2707,8 +2760,18 @@ def rank_paths_cmd(
         "exploit_chain_count": len(exploit_chains),
     }
     if output:
-        output.write_text(__import__("json").dumps(payload, indent=2) + "\n", encoding="utf-8")
+        output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         payload["output"] = str(output)
+    clipboard_text = table_text(columns, table_rows)
+    if exploit_chains:
+        clipboard_text += "\nExploit chains\n"
+        for chain in exploit_chains[:10]:
+            clipboard_text += (
+                f"{chain.get('score', 0):.1f}\t{chain.get('terminal_relation') or '-'}\t"
+                f"{(chain.get('example_commands') or [{}])[0].get('command', '')}\n"
+            )
+    if copy:
+        payload["clipboard"] = copy_to_clipboard(clipboard_text)
     if _json_mode(ctx):
         _emit(ctx, {"ok": True, **payload}, "")
     elif ranked or exploit_chains:
@@ -3153,7 +3216,6 @@ def command_builder_cmd(
     force: bool = typer.Option(False, "--force"),
 ) -> None:
     """Generate a copy-ready command and explain each option in plain language."""
-    import adaf_attack.capabilities  # noqa: F401
     from adaf_attack.core.novice import command_option_explanations
     from adaf_attack.core.registry import capability_registry
     from adaf_attack.core.ux import build_ready_command
@@ -3544,7 +3606,6 @@ def capability_dependencies_cmd(
     ),
 ) -> None:
     """Show capability prerequisite and downstream evidence relationships."""
-    import adaf_attack.capabilities  # noqa: F401
     from adaf_attack.core.ux import capability_dependency_graph
 
     payload = capability_dependency_graph(capability)
@@ -3823,7 +3884,7 @@ def init_cmd(
     above act as the sole input (safe for scripts and CI). Nothing is written
     unless a value is supplied or accepted at the prompt.
     """
-    from adaf_attack.core.user_config import allowed_keys, load_user_config, set_key  # noqa: F401
+    from adaf_attack.core.user_config import load_user_config, set_key
 
     non_interactive = ctx.ensure_object(dict).get("non_interactive")
     prompt_ok = not non_interactive and not _json_mode(ctx)

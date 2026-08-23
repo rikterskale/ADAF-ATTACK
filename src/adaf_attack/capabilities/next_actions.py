@@ -11,7 +11,7 @@ from typing import Any
 
 from adaf_attack.core.command_templates import build_exploit_commands
 from adaf_attack.core.confidence import score_chain
-from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.graph import EXPLOIT_PROFILES, AttackGraph
 from adaf_attack.core.registry import register_capability
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
@@ -144,6 +144,13 @@ class NextActions:
     def run(
         self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any
     ) -> dict[str, Any]:
+        """Build review-only actions from graph evidence.
+
+        Accepted ``-P`` values are ``graph_path`` (path-like), ``limit``
+        (positive integer), and the standard runner controls. The capability
+        writes ``next-actions.json`` and never executes the suggested command.
+        It is read-only and does not create rollback entries.
+        """
         if not graph.nodes:
             source = Path(kwargs.get("graph_path") or session.path("graph.json"))
             if source.is_file():
@@ -163,6 +170,44 @@ class NextActions:
             relation = str(chain["terminal_relation"])
             mapped = ACTION_MAP.get(relation)
             if not mapped:
+                examples = build_exploit_commands(chain, target, operator_user=target.username)
+                if not examples:
+                    continue
+                fallback_example = examples[0]
+                seen_key = f"plan:{relation}"
+                if seen_key in seen:
+                    continue
+                seen.add(seen_key)
+                observed_for_chain = sorted(
+                    {str(item) for item in chain.get("edges") or []} & observed
+                )
+                actions.append(
+                    {
+                        "capability": fallback_example["capability"],
+                        "risk": fallback_example["risk"],
+                        "approval_required": fallback_example["approval_required"],
+                        "reason": (
+                            f"Unmapped relation {relation}; review the path and capability "
+                            "catalog before executing anything."
+                        ),
+                        "rationale": (
+                            f"The graph contains {relation} evidence, but no execution "
+                            "template is registered for it."
+                        ),
+                        "evidence_relation": relation,
+                        "evidence_present": observed_for_chain,
+                        "evidence_missing": [],
+                        "score": chain.get("score"),
+                        "confidence": "unknown",
+                        "confidence_rank": 0,
+                        "command": fallback_example["command"],
+                        "example_commands": examples,
+                        "follow_on_commands": fallback_example.get("follow_on_commands", []),
+                        "path": chain.get("path"),
+                        "terminal_relation": relation,
+                        "review_only": True,
+                    }
+                )
                 continue
 
             capability, risk, approval, required = mapped
@@ -173,20 +218,43 @@ class NextActions:
             if required and not (required & observed):
                 continue
 
+            chain_profile = dict(EXPLOIT_PROFILES.get(relation, {}))
+            if chain.get("confidence"):
+                chain_profile["confidence"] = chain["confidence"]
             conf = score_chain(
                 terminal_relation=relation,
                 path_length=int(chain.get("length") or 1),
                 edge_kinds=list(chain.get("edges") or []),
+                profile=chain_profile,
             )
 
             examples = build_exploit_commands(chain, target, operator_user=target.username)
-            primary = examples[0] if examples else None
+            primary: dict[str, Any] | None = examples[0] if examples else None
 
             # Prefer template risk/approval when available; fall back to ACTION_MAP
-            if primary:
+            if primary and not primary.get("fallback"):
                 capability = primary["capability"]
                 risk = primary["risk"]
                 approval = primary["approval_required"]
+            elif primary and primary.get("fallback"):
+                prefix = f"adaf-attack plan {relation}"
+                if str(primary["command"]).startswith(prefix):
+                    primary = dict(primary)
+                    primary["command"] = str(primary["command"]).replace(
+                        prefix, f"adaf-attack plan {capability}", 1
+                    )
+
+            evidence_present = sorted(required & observed)
+            evidence_missing = sorted(required - observed)
+            impact = str(
+                chain.get("impact") or EXPLOIT_PROFILES.get(relation, {}).get("impact") or ""
+            )
+            rationale = (
+                f"{impact or 'Evidence-backed terminal condition'}; observed "
+                f"{', '.join(evidence_present) or relation}. "
+                f"Confidence is {conf['confidence']} based on the relation and "
+                f"{len(chain.get('edges') or [])} path edge(s)."
+            )
 
             seen.add(capability)
             actions.append(
@@ -194,9 +262,11 @@ class NextActions:
                     "capability": capability,
                     "risk": risk,
                     "approval_required": approval,
-                    "reason": chain.get("impact"),
+                    "reason": impact,
+                    "rationale": rationale,
                     "evidence_relation": relation,
-                    "evidence_present": sorted(required & observed),
+                    "evidence_present": evidence_present,
+                    "evidence_missing": evidence_missing,
                     "score": chain.get("score"),
                     "confidence": conf["confidence"],
                     "confidence_rank": conf["confidence_rank"],
@@ -206,6 +276,7 @@ class NextActions:
                         f"adaf-attack plan {capability} -d {target.domain} --dc-ip {target.dc_ip}"
                     ),
                     "example_commands": examples,
+                    "follow_on_commands": (primary or {}).get("follow_on_commands", []),
                     "path": chain.get("path"),
                     "terminal_relation": relation,
                 }
@@ -216,6 +287,8 @@ class NextActions:
 
         result = {
             "domain": target.domain,
+            "target": target.as_dict(),
+            "session_path": str(session.root),
             "observed_relations": sorted(observed),
             "actions": actions,
             "count": len(actions),

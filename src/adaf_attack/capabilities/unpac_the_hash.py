@@ -8,6 +8,7 @@ NT hash. Requires impacket + a working PFX/PEM + a KDC that returns PAC.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any
 
@@ -20,6 +21,7 @@ from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 console = Console()
+_logger = logging.getLogger(__name__)
 
 
 def _extract_nt_from_pac(pac_data: bytes) -> str | None:
@@ -35,7 +37,8 @@ def _extract_nt_from_pac(pac_data: bytes) -> str | None:
                 )
                 # Decrypt cred_info["SerializedData"] using the AS session key here.
                 return "<credential-info-blob-present>"
-        except Exception:  # noqa: BLE001
+        except Exception:
+            _logger.debug("Could not parse PAC credential buffer", exc_info=True)
             continue
     return None
 
@@ -107,7 +110,7 @@ class UnpacTheHash:
                 f"krbtgt/{target.domain.upper()}",
                 type=constants.PrincipalNameType.NT_SRV_INST.value,
             )
-            tgs, cipher, _old, session_key = getKerberosTGS(
+            tgs, _cipher, _old, _session_key = getKerberosTGS(
                 sname,
                 target.domain.upper(),
                 target.dc_ip,
@@ -116,7 +119,7 @@ class UnpacTheHash:
                 tgt["sessionKey"],
             )
             pac_note = _extract_nt_from_pac(bytes(tgs))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             pac_note = f"parse-failed: {exc}"
 
         result = {

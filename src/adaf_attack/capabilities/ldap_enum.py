@@ -264,7 +264,7 @@ class LdapEnum:
                 }
                 graph.add_node(gpo_id, "GPO", **props)
                 result["gpos"].append(props)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             console.print(f"[yellow]GPO enum limited: {exc}[/yellow]")
 
         conn.unbind()

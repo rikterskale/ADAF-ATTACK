@@ -1,4 +1,4 @@
-# ADAF-ATTACK 0.10.0 release notes
+# ADAF-ATTACK 0.10.1 release notes
 
 ## Operator capabilities
 

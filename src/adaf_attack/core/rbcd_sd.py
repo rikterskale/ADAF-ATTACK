@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 
 def _sid_to_bytes(canonical: str) -> bytes:
@@ -65,10 +68,10 @@ def sid_from_ldap_value(sid_val: Any) -> str | None:
 
                 s = LDAP_SID(sid_val)
                 return str(s.formatCanonical())
-            except Exception:  # noqa: BLE001
-                pass
-    except Exception:  # noqa: BLE001
-        pass
+            except Exception:
+                _logger.debug("Could not parse binary LDAP SID", exc_info=True)
+    except Exception:
+        _logger.debug("Could not normalize LDAP SID value", exc_info=True)
     text = str(sid_val)
     if text.startswith("S-1-"):
         return text

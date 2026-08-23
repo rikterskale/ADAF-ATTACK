@@ -337,7 +337,7 @@ class DpapiDomainBackup:
                 error = f"unsupported DPAPI domain backup key version {version}"
             else:
                 backup_keys.append(key.hex())
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             text = str(exc).lower()
             if "access_denied" in text or "access denied" in text:
                 error = (

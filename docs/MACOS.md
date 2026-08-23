@@ -24,7 +24,7 @@ mkdir -p "$HOME/.venvs"
 python3 -m venv "$HOME/.venvs/adaf-attack"
 source "$HOME/.venvs/adaf-attack/bin/activate"
 python -m pip install --upgrade pip
-python -m pip install "$HOME/Downloads/adaf_attack-0.10.0-py3-none-any.whl[full]"
+python -m pip install "$HOME/Downloads/adaf_attack-0.10.1-py3-none-any.whl[full]"
 python -m pip check
 ```
 
@@ -46,7 +46,7 @@ user data directory reported by `paths`.
 Install an explicitly approved newer or older wheel in the same venv:
 
 ```bash
-python -m pip install --upgrade "$HOME/Downloads/adaf_attack-0.10.0-py3-none-any.whl[full]"
+python -m pip install --upgrade "$HOME/Downloads/adaf_attack-0.10.1-py3-none-any.whl[full]"
 adaf-attack --version
 ```
 

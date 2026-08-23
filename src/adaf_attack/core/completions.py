@@ -8,11 +8,10 @@ OUTPUT_FORMATS = ("human", "json", "summary", "table", "beginner")
 
 def _capability_ids() -> list[str]:
     try:
-        import adaf_attack.capabilities  # noqa: F401
         from adaf_attack.core.registry import capability_registry
 
         return capability_registry.ids()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return []
 
 
@@ -21,7 +20,7 @@ def _profile_names() -> list[str]:
         from adaf_attack.core.profiles import list_profiles
 
         return [str(item["name"]) for item in list_profiles() if item.get("name")]
-    except Exception:  # noqa: BLE001
+    except Exception:
         return []
 
 
@@ -38,7 +37,7 @@ def _session_ids() -> list[str]:
             if path.is_dir() and (path / "session.json").is_file()
         ]
         return sorted(sessions, reverse=True)[:100]
-    except Exception:  # noqa: BLE001
+    except Exception:
         return []
 
 

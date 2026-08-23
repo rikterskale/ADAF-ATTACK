@@ -124,7 +124,7 @@ def test_high_value_targets_covers_all_object_classes() -> None:
     assert any(t[2] == "Computer" for t in out)
     assert any(t[2] == "User" for t in out)
     # de-duped
-    assert len(dns) == len(set(d.lower() for d in dns))
+    assert len(dns) == len({d.lower() for d in dns})
 
 
 def test_domain_targets_respects_limit_and_dedupes() -> None:

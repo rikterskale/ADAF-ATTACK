@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 from contextlib import suppress
 from pathlib import Path
@@ -434,7 +435,7 @@ def test_local_queries_outcomes_and_detection(tmp_path: Path) -> None:
     nodes = [f"N{i}" for i in range(10)]
     for node in nodes:
         deep.add_node(node, "User")
-    for left, right in zip(nodes[:-1], nodes[1:], strict=True):
+    for left, right in itertools.pairwise(nodes):
         deep.add_edge(left, right, "MemberOf")
     deep.add_node("GOAL", "Group")
     deep.add_edge(nodes[-1], "GOAL", "MemberOf")

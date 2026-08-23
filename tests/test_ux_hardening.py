@@ -109,7 +109,7 @@ def test_timeline_is_bounded_rich_and_redacted(tmp_path: Path) -> None:
 def test_recent_preferences_remain_usable_on_read_only_config(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(user_config, "load_user_config", lambda: {})
+    monkeypatch.setattr(user_config, "load_user_config", dict)
     monkeypatch.setattr(
         user_config, "save_user_config", lambda _data: (_ for _ in ()).throw(OSError("read-only"))
     )

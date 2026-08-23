@@ -91,7 +91,7 @@ def _query_paths(session: Path, start_text: str, goal_text: str, *, limit: int) 
                 continue
             for edge in sorted(graph.neighbors(current), key=lambda item: (item.target, item.kind)):
                 if edge.target not in nodes:
-                    queue.append((edge.target, nodes + [edge.target], edges + [edge.kind]))
+                    queue.append((edge.target, [*nodes, edge.target], [*edges, edge.kind]))
     return {
         "ok": True,
         "query_type": "paths",

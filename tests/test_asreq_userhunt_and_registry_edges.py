@@ -547,7 +547,7 @@ def test_cli_run_uses_saved_target_defaults_and_validates_required_options(
     )
     result = CliRunner().invoke(cli.app, ["--format", "json", "run", "report"])
     assert result.exit_code == 0, result.stdout
-    monkeypatch.setattr(cli, "load_user_config", lambda: {})
+    monkeypatch.setattr(cli, "load_user_config", dict)
     result = CliRunner().invoke(cli.app, ["--format", "json", "run", "report"])
     assert result.exit_code != 0
 
@@ -927,7 +927,8 @@ def test_more_evidence_and_recommendation_branches(monkeypatch: Any, tmp_path: P
     actions = next_actions.NextActions().run(
         _target(), Session(base_dir=tmp_path / "actions"), Graph(), limit=10
     )
-    assert actions["count"] == 1 and actions["actions"][0]["capability"] == "kerberoast"
+    assert actions["count"] == 2 and actions["actions"][0]["capability"] == "kerberoast"
+    assert actions["actions"][1]["review_only"] is True
 
     sleeps: list[float] = []
     monkeypatch.setattr(

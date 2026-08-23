@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
 
@@ -17,6 +18,7 @@ from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 console = Console()
+_logger = logging.getLogger(__name__)
 
 GPO_ATTRS = [
     "displayName",
@@ -75,7 +77,7 @@ class GpoAbuse:
         **kwargs: Any,
     ) -> dict[str, Any]:
         console.print(f"[bold]GPO abuse[/bold] → {target.domain} @ {target.dc_ip}")
-        conn, base_dn, config_nc = ldap_connect(target)
+        conn, base_dn, _config_nc = ldap_connect(target)
 
         result: dict[str, Any] = {
             "domain": target.domain,
@@ -131,8 +133,8 @@ class GpoAbuse:
                             src = f"SID@{ace.principal_sid}"
                             graph.add_node(src, "Base", sid=ace.principal_sid)
                             graph.add_edge(src, gpo_id, "WriteGPO", right=ace.right)
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception:
+                    _logger.debug("Could not parse GPO security descriptor", exc_info=True)
 
             gpo_by_cn[cn.upper()] = gpo
             result["gpos"].append(gpo)
@@ -183,7 +185,7 @@ class GpoAbuse:
                         f"GPO@{gpo['cn'].upper()}@{target.domain.upper()}",
                         "GPLink",
                     )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             console.print(f"[yellow]GPLink enum limited: {exc}[/yellow]")
 
         # Rank writable GPOs by impact

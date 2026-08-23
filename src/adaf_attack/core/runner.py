@@ -11,7 +11,8 @@ import contextlib
 import io
 import json
 import logging
-from collections.abc import Callable
+import sys
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,41 @@ class RunError(Exception):
     pass
 
 
+@contextlib.contextmanager
+def _capture_capability_output() -> Iterator[None]:
+    """Keep capability progress out of the machine-readable stdout stream.
+
+    Most capability modules use a module-level Rich ``Console``.  Redirecting
+    ``sys.stdout`` alone does not affect those consoles because Rich stores the
+    stream when the console is constructed.  Temporarily replacing their
+    output file closes that gap without changing human-mode output or forcing
+    every capability to know about the CLI formatter.
+    """
+    muted: list[tuple[Any, Any]] = []
+    for module_name, module in tuple(sys.modules.items()):
+        if not module_name.startswith("adaf_attack.capabilities"):
+            continue
+        console = getattr(module, "console", None)
+        if console is None or not hasattr(console, "file"):
+            continue
+        # Rich's default ``Console()`` keeps ``_file`` as None and resolves
+        # stdout/stderr at print time. Preserve that dynamic behavior; saving
+        # the resolved ``console.file`` can pin a pytest or CLI capture stream
+        # that is closed as soon as the current invocation ends.
+        original = getattr(console, "_file", None)
+        console.file = io.StringIO()
+        muted.append((console, original))
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            yield
+    finally:
+        for console, original in muted:
+            if original is None:
+                console._file = None
+            else:
+                console.file = original
+
+
 def _probe_ldap(target: Target) -> bool:
     """Return True if LDAP bind succeeds with this target."""
     from adaf_attack.core.ldap_util import ldap_connect
@@ -48,7 +84,7 @@ def _probe_ldap(target: Target) -> bool:
         conn, _dn, _cfg = ldap_connect(target)
         conn.unbind()
         return True
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 
@@ -145,7 +181,6 @@ def execute_capability(
     When ``creds_file`` or ``credential_set`` is provided, credentials are
     rotated until an LDAP bind succeeds; that target is then used for the run.
     """
-    import adaf_attack.capabilities  # noqa: F401
 
     def _log(msg: str) -> None:
         if log:
@@ -187,7 +222,7 @@ def execute_capability(
         )
     except RunError:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise RunError(f"Credential resolution failed: {exc}") from exc
 
     ws = normalize_path(workspace) if workspace else default_workspace_dir()
@@ -235,7 +270,7 @@ def execute_capability(
             )
 
         output_context: Any = (
-            contextlib.redirect_stdout(io.StringIO()) if json_mode else contextlib.nullcontext()
+            _capture_capability_output() if json_mode else contextlib.nullcontext()
         )
         with output_context:
             result = execute_with_controls(
@@ -253,7 +288,7 @@ def execute_capability(
         interesting = graph.interesting_summary()
         atomic_write_text(
             session.path("interesting.json"),
-            __import__("json").dumps(interesting, indent=2, default=str) + "\n",
+            json.dumps(interesting, indent=2, default=str) + "\n",
         )
 
         outcome = build_post_execution_outcome(

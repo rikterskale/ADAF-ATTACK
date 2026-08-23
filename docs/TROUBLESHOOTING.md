@@ -185,7 +185,7 @@ together:
 
 ```bash
 python scripts/build-release-wheelhouse.py \
-  --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
+  --wheel ./adaf_attack-0.10.1-py3-none-any.whl \
   --output ./wheelhouse --extras full
 python scripts/generate_release_manifest.py \
   --dist . --wheelhouse ./wheelhouse \
@@ -197,7 +197,7 @@ every manifest-listed wheelhouse file before pip runs:
 
 ```bash
 python scripts/install-approved-wheel.py \
-  --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
+  --wheel ./adaf_attack-0.10.1-py3-none-any.whl \
   --venv .venv --extras full \
   --find-links ./wheelhouse \
   --manifest ./wheelhouse/release-manifest.json

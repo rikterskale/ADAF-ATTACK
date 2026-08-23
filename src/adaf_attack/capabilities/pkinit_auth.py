@@ -183,7 +183,7 @@ class PkinitAuth:
                 console.print(f"  {(proc.stderr or proc.stdout or '')[:400]}")
         except FileNotFoundError:
             result["method"] = "certipy-missing"
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             result["method"] = "certipy-error"
             result["error_certipy"] = str(exc)
 
@@ -218,7 +218,7 @@ class PkinitAuth:
                     "  [yellow]Install certipy-ad for in-process PKINIT, "
                     "or run the playbook.[/yellow]"
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 result["error"] = str(exc)
 
         # Redact paths unless include_secrets

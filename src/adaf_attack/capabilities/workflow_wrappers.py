@@ -48,7 +48,7 @@ class ShadowPkinitWorkflow:
                 secret=True,
                 metadata={"sam": sam},
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             session.log("vault.store_skipped", reason=str(exc), workflow="shadow-pkinit")
         pkinit = PkinitAuth().run(
             target, session, graph, force=True, include_secrets=include_secrets, sam=sam

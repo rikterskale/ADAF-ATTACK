@@ -143,7 +143,7 @@ def _trigger(target: Target, host: str, listener: str, method: str) -> dict[str,
             "ok": True,
             "risk": meta["risk"],
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         text = str(exc)
         if "STATUS_BAD_NETWORK_NAME" in text or "STATUS_NETWORK_PATH_NOT_FOUND" in text:
             return {

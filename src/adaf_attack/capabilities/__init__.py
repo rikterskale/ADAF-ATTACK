@@ -3,7 +3,7 @@
 Importing this package registers all available capabilities.
 """
 
-from adaf_attack.capabilities import (  # noqa: F401
+from adaf_attack.capabilities import (
     acl_enum,
     acl_primitives,
     acl_write,

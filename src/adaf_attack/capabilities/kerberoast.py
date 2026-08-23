@@ -128,7 +128,7 @@ class Kerberoast:
 
                     roasted.append(roast_entry)
                     console.print(f"  [green]✓[/green] {sam}  ({spn})")
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     console.print(f"  [red]✗[/red] {sam}/{spn}  ({exc})")
                     roasted.append({"account": sam, "spn": spn, "error": str(exc)})
 

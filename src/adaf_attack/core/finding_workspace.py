@@ -62,14 +62,19 @@ def build_finding_workspace(session: Path, finding: dict[str, Any]) -> dict[str,
         ]
     elif present < len(evidence_records) or not evidence_records:
         next_actions = [
-            {"id": "capture-evidence", "action": "Capture or restore the missing evidence artifact"}
-        ] + validation
+            {
+                "id": "capture-evidence",
+                "action": "Capture or restore the missing evidence artifact",
+            },
+            *validation,
+        ]
     else:
-        next_actions = validation + [
+        next_actions = [
+            *validation,
             {
                 "id": "prepare-remediation",
                 "action": "Review remediation guidance and assign an owner",
-            }
+            },
         ]
     technique_values = finding.get("attack_techniques") or finding.get("techniques") or []
     if isinstance(technique_values, str):

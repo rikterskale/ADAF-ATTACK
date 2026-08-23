@@ -107,7 +107,7 @@ def run_campaign(
                 approval_token=approval_tokens.get(plan.engagement_id),
                 ccache=ccache,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {
                 "campaign_id": campaign_id,
                 "completed": completed,

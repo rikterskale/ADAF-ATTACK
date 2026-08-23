@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 from adaf_attack.core.target import Target
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -159,6 +162,7 @@ def first_working_target(
         try:
             if probe(t):
                 return t
-        except Exception:  # noqa: BLE001
+        except Exception:
+            _logger.debug("Credential probe failed for %s", t.username, exc_info=True)
             continue
     return None

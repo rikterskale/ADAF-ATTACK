@@ -14,7 +14,7 @@
 Four commands from an approved wheel to a rendered offline demo session:
 
 ```bash
-python -m pip install "./adaf_attack-0.10.0-py3-none-any.whl[full]"
+python -m pip install "./adaf_attack-0.10.1-py3-none-any.whl[full]"
 adaf-attack doctor --profile user-readiness
 adaf-attack quickstart --workspace ./quickstart
 adaf-attack session show --session ./quickstart/demo-session
@@ -40,6 +40,7 @@ should start from their platform guide below rather than pip directly.
   [Kali](docs/KALI.md). Command references live in the new-user guides above.
 - [Troubleshooting](docs/TROUBLESHOOTING.md) ·
   [Installation guide](docs/INSTALLATION.md) ·
+  [Single-operator runbook](docs/RUNBOOK.md) ·
   [Known limitations](docs/KNOWN_LIMITATIONS.md) · [Changelog](CHANGELOG.md)
 - [New-user readiness guide](docs/USER_READINESS.md) ·
   [Feature and support matrix](docs/FEATURE_MATRIX.md) ·
@@ -154,6 +155,10 @@ installs use wheel assets attached to this repository's private GitHub releases.
 If you cannot access those assets, ask the repository owner for an approved
 wheel or use an authorized source checkout.
 
+The license terms are in [LICENSE](LICENSE). Security reports belong in the
+[private GitHub security channel](https://github.com/rikterskale/ADAF-ATTACK/security/advisories/new),
+not in public issues.
+
 The runtime dependency versions used by the release are pinned in both
 `pyproject.toml` and [requirements-runtime.txt](requirements-runtime.txt).
 The complete transitive dependency set is reproducible from the approved
@@ -169,7 +174,7 @@ an isolated environment. The `full` extra contains production operator features
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install "./adaf_attack-0.10.0-py3-none-any.whl[full]"
+python -m pip install "./adaf_attack-0.10.1-py3-none-any.whl[full]"
 ```
 
 On Windows PowerShell:
@@ -177,7 +182,7 @@ On Windows PowerShell:
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install ".\adaf_attack-0.10.0-py3-none-any.whl[full]"
+.\.venv\Scripts\python.exe -m pip install ".\adaf_attack-0.10.1-py3-none-any.whl[full]"
 ```
 
 For an internal release bundle, the portable bootstrap performs the same clean
@@ -185,7 +190,7 @@ environment setup on every OS:
 
 ```bash
 python scripts/install-approved-wheel.py \
-  --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
+  --wheel ./adaf_attack-0.10.1-py3-none-any.whl \
   --venv .venv --extras full \
   --manifest ./wheelhouse/release-manifest.json
 ```
@@ -327,7 +332,7 @@ in an empty directory and download all dependencies:
 
 ```bash
 python scripts/build-release-wheelhouse.py \
-  --wheel ./adaf_attack-0.10.0-py3-none-any.whl \
+  --wheel ./adaf_attack-0.10.1-py3-none-any.whl \
   --output ./wheelhouse --extras full
 ```
 
@@ -337,7 +342,7 @@ offline host:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --no-index --find-links wheelhouse "adaf-attack[full]==0.10.0"
+python -m pip install --no-index --find-links wheelhouse "adaf-attack[full]==0.10.1"
 python -m pip check
 adaf-attack doctor --explain
 ```
@@ -361,7 +366,7 @@ configured before building the wheelhouse; see
 Install the explicitly approved artifact version into the existing environment:
 
 ```bash
-python -m pip install --upgrade "./adaf_attack-0.10.0-py3-none-any.whl[full]"
+python -m pip install --upgrade "./adaf_attack-0.10.1-py3-none-any.whl[full]"
 python -m pip check
 adaf-attack --version
 ```

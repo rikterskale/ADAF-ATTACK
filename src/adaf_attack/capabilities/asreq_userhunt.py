@@ -62,7 +62,7 @@ def _probe_user(username: str, domain: str, dc_ip: str) -> dict[str, Any]:
         else:
             record["kdc_error"] = str(exc)[:200]
         return record
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         state, valid, code = _classify_kdc_error(str(exc))
         return {
             "user": username,

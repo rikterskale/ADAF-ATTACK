@@ -8,6 +8,8 @@ capability registration rather than by engagement input.
 
 from __future__ import annotations
 
+import importlib
+import pkgutil
 from builtins import list as builtin_list
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -176,8 +178,13 @@ class CapabilityRegistry:
 capability_registry = CapabilityRegistry()
 
 
+def load_builtin_capabilities() -> None:
+    """Import built-in capability modules so their decorators can register them."""
+    importlib.import_module("adaf_attack.capabilities")
+
+
 def register_capability(
-    id: str,
+    id: str,  # noqa: A002  # stable decorator keyword used by third-party capabilities
     summary: str,
     *,
     destructive: bool = False,
@@ -194,12 +201,14 @@ def register_capability(
     def decorator(cls: type) -> type:
         instance = cls()
         runner = cast(CapabilityRunner, instance) if hasattr(instance, "run") else None
+        profile = safety or default_safety_profile(destructive)
+        _ensure_capability_documentation(cls, summary, profile)
         capability_registry.register(
             Capability(
                 id=id,
                 summary=summary,
                 destructive=destructive,
-                safety=safety or default_safety_profile(destructive),
+                safety=profile,
                 category=category,
                 tags=tags,
                 maturity=maturity,
@@ -212,3 +221,55 @@ def register_capability(
         return cls
 
     return decorator
+
+
+def _ensure_capability_documentation(cls: type, summary: str, safety: SafetyProfile) -> None:
+    """Give every registered runner a discoverable operator contract.
+
+    Capabilities are intentionally lightweight classes and historically many
+    omitted method docstrings.  Registration is the one place that knows the
+    safety and persistence contract, so it supplies a stable baseline while
+    preserving any detailed author-written documentation.
+    """
+    if not cls.__doc__:
+        cls.__doc__ = f"{summary}."
+    run_method = getattr(cls, "run", None)
+    if run_method is None or run_method.__doc__:
+        return
+    rollback = safety.rollback.value
+    mutation = (
+        "may contact or modify the authorized target" if safety.is_mutating else "is read-only"
+    )
+    run_method.__doc__ = (
+        f"{summary}.\n\n"
+        "Parameters: ``target: Target``, ``session: Session``, ``graph: AttackGraph``, "
+        "``include_secrets: bool``, ``force: bool``, and capability-specific ``**kwargs: Any`` "
+        "from repeated ``-P key=value`` options.\n\n"
+        f"The runner writes its capability result and event log under the session workspace; "
+        f"it {mutation}. Rollback coverage is ``{rollback}`` and is recorded by the capability "
+        "when applicable."
+    )
+
+
+def registration_gaps() -> dict[str, list[str]]:
+    """Report capability modules that are not represented in the registry.
+
+    This is intentionally a diagnostic helper rather than an import-time
+    assertion: third-party entry points may be unavailable in an offline
+    installation, while built-in module drift should remain test-visible.
+    """
+    package = importlib.import_module("adaf_attack.capabilities")
+    module_names = {
+        info.name
+        for info in pkgutil.iter_modules(package.__path__)
+        if info.name not in {"__init__", "capability_catalog"}
+    }
+    registered_modules = {
+        cap.runner.__class__.__module__.rsplit(".", 1)[-1]
+        for cap in capability_registry.list()
+        if cap.runner is not None
+    }
+    return {
+        "unregistered_modules": sorted(module_names - registered_modules),
+        "orphaned_registry_modules": sorted(registered_modules - module_names),
+    }

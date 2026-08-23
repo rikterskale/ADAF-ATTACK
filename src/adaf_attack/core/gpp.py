@@ -45,7 +45,7 @@ def decrypt_cpassword(cpassword: str) -> str:
     padded = cpassword + "=" * (-len(cpassword) % 4)
     try:
         raw = base64.b64decode(padded)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise ValueError(f"invalid base64 cpassword: {exc}") from exc
 
     cipher = Cipher(algorithms.AES(GPP_KEY), modes.CBC(GPP_IV))

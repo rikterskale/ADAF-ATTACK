@@ -590,7 +590,7 @@ def phase_label(phase_key: str) -> str:
 
 
 # Re-export extended helpers (kept in ux_extra to ease incremental deploys)
-from adaf_attack.core.ux_extra import (  # noqa: E402
+from adaf_attack.core.ux_extra import (  # noqa: E402  # intentional late re-export
     capability_dependency_graph,
     capability_prerequisites,
     evaluate_prerequisites,
@@ -602,22 +602,22 @@ from adaf_attack.core.ux_extra import (  # noqa: E402
 
 __all__ = [
     "PHASE_LABELS",
-    "capability_phase",
-    "group_capabilities_by_phase",
-    "risk_checklist",
     "build_ready_command",
-    "stages_for_capability",
-    "session_findings_summary",
-    "diff_sessions",
-    "unified_search",
-    "suggested_next_actions",
-    "guided_tour_payload",
-    "phase_label",
-    "capability_prerequisites",
     "capability_dependency_graph",
+    "capability_phase",
+    "capability_prerequisites",
+    "diff_sessions",
     "evaluate_prerequisites",
+    "export_plan_markdown",
     "format_next_actions_block",
     "format_stages_progress",
+    "group_capabilities_by_phase",
+    "guided_tour_payload",
+    "phase_label",
+    "risk_checklist",
     "session_findings_dashboard",
-    "export_plan_markdown",
+    "session_findings_summary",
+    "stages_for_capability",
+    "suggested_next_actions",
+    "unified_search",
 ]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import struct
 from typing import Any
 
@@ -17,6 +18,7 @@ from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 console = Console()
+_logger = logging.getLogger(__name__)
 
 GMSA_FILTER = "(objectClass=msDS-GroupManagedServiceAccount)"
 GMSA_ATTRS = [
@@ -46,8 +48,8 @@ def _parse_managed_password_blob(blob: bytes) -> dict[str, Any] | None:
     if not blob or len(blob) < 16:
         return None
     try:
-        version, reserved, length = struct.unpack_from("<HHI", blob, 0)
-        cur_off, prev_off, query_off, unchanged_off = struct.unpack_from("<HHHH", blob, 8)
+        version, _reserved, length = struct.unpack_from("<HHI", blob, 0)
+        cur_off, prev_off, _query_off, _unchanged_off = struct.unpack_from("<HHHH", blob, 8)
         out: dict[str, Any] = {"version": version, "length": length}
 
         def _wcs(offset: int) -> str | None:
@@ -65,7 +67,7 @@ def _parse_managed_password_blob(blob: bytes) -> dict[str, Any] | None:
         if prev is not None:
             out["previous_password"] = prev
         return out
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
@@ -131,8 +133,8 @@ class GmsaLapsEnum:
                             "AllExtendedRights",
                         ):
                             readable_by.append({"sid": ace.principal_sid, "right": ace.right})
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception:
+                    _logger.debug("Could not parse gMSA ACL", exc_info=True)
             item["acl_read_signals"] = [f"{row['sid']}:{row['right']}" for row in readable_by[:20]]
 
             mp = entry["msDS-ManagedPassword"] if entry["msDS-ManagedPassword"] else None
@@ -225,8 +227,8 @@ class GmsaLapsEnum:
                     for ace in parse_interesting_aces(sd):
                         if ace.right in ("GenericAll", "ReadProperty"):
                             readable_by.append({"sid": ace.principal_sid, "right": ace.right})
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception:
+                    _logger.debug("Could not parse LAPS ACL", exc_info=True)
             item["acl_read_signals"] = [f"{row['sid']}:{row['right']}" for row in readable_by[:20]]
 
             node_id = f"COMPUTER@{sam.upper()}@{target.domain.upper()}"

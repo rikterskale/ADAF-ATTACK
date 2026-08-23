@@ -52,7 +52,7 @@ def test_tool_graph_success(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_tool_graph_missing_file(tmp_path: Path) -> None:
-    code, payload = _invoke_error("tool", "graph", str(tmp_path / "nope.json"))
+    _code, payload = _invoke_error("tool", "graph", str(tmp_path / "nope.json"))
     assert payload["error"]["code"] == "GRAPH_NOT_FOUND"
 
 
@@ -60,7 +60,7 @@ def test_tool_graph_value_error(tmp_path: Path, monkeypatch) -> None:
     graph = tmp_path / "graph.json"
     graph.write_text("{}", encoding="utf-8")
     _patch(monkeypatch, "tooling", "graph_explorer", ValueError("bad graph"))
-    code, payload = _invoke_error("tool", "graph", str(graph))
+    _code, payload = _invoke_error("tool", "graph", str(graph))
     assert payload["error"]["code"] == "GRAPH_NOT_FOUND"
 
 
@@ -84,7 +84,7 @@ def test_tool_evidence_import_failure(tmp_path: Path, monkeypatch) -> None:
     source = tmp_path / "ev.json"
     source.write_text("{}", encoding="utf-8")
     _patch(monkeypatch, "tooling", "import_evidence", OSError("locked"))
-    code, payload = _invoke_error(
+    _code, payload = _invoke_error(
         "tool", "evidence-import", "--session", str(tmp_path), "--source", str(source)
     )
     assert payload["error"]["code"] == "INPUT_FILE_INVALID"
@@ -113,7 +113,7 @@ def test_tool_scope_failure(tmp_path: Path, monkeypatch) -> None:
     plan = tmp_path / "plan.yaml"
     plan.write_text("scope: []", encoding="utf-8")
     _patch(monkeypatch, "tooling", "scope_summary", ValueError("bad yaml"))
-    code, payload = _invoke_error("tool", "scope", str(plan))
+    _code, payload = _invoke_error("tool", "scope", str(plan))
     assert payload["error"]["code"] == "ENGAGEMENT_PLAN_INVALID"
 
 
@@ -136,7 +136,7 @@ def test_tool_verify_success(tmp_path: Path, monkeypatch) -> None:
 
 def test_tool_verify_key_error(tmp_path: Path, monkeypatch) -> None:
     _patch(monkeypatch, "tooling", "verify_finding", KeyError("F-1"))
-    code, payload = _invoke_error("tool", "verify", "--session", str(tmp_path), "--id", "F-1")
+    _code, payload = _invoke_error("tool", "verify", "--session", str(tmp_path), "--id", "F-1")
     assert payload["error"]["code"] == "UNKNOWN_FINDING"
 
 
@@ -162,7 +162,7 @@ def test_tool_detect_failure(tmp_path: Path, monkeypatch) -> None:
     session = tmp_path / "session"
     session.mkdir()
     _patch(monkeypatch, "tooling", "detection_export", OSError("missing"))
-    code, payload = _invoke_error("tool", "detect", "--session", str(session))
+    _code, payload = _invoke_error("tool", "detect", "--session", str(session))
     assert payload["error"]["code"] == "INPUT_FILE_INVALID"
 
 
@@ -189,7 +189,7 @@ def test_tool_lab_failure(tmp_path: Path, monkeypatch) -> None:
     manifest = tmp_path / "lab.json"
     manifest.write_text("{}", encoding="utf-8")
     _patch(monkeypatch, "tooling", "lab_manifest_summary", ValueError("bad"))
-    code, payload = _invoke_error("tool", "lab", str(manifest))
+    _code, payload = _invoke_error("tool", "lab", str(manifest))
     assert payload["error"]["code"] == "INPUT_FILE_INVALID"
 
 
@@ -203,7 +203,7 @@ def test_credential_inventory_success(tmp_path: Path, monkeypatch) -> None:
 
 def test_credential_inventory_missing_sessions(tmp_path: Path) -> None:
     missing = tmp_path / "gone"
-    code, payload = _invoke_error("credential-inventory", "--session", str(missing))
+    _code, payload = _invoke_error("credential-inventory", "--session", str(missing))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
     assert payload["error"].get("details", {}).get("missing") == [str(missing)] or any(
         str(missing) in json.dumps(payload) for _ in [0]
@@ -236,7 +236,7 @@ def test_cockpit_defaults_and_failure(tmp_path: Path, monkeypatch) -> None:
     assert payload["priority_focus"] == []
 
     _patch(monkeypatch, "standout_ux", "evidence_cockpit", KeyError("session.json"))
-    code, payload = _invoke_error("cockpit", "--session", str(session))
+    _code, payload = _invoke_error("cockpit", "--session", str(session))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
 
 
@@ -267,7 +267,7 @@ def test_what_if_failure(tmp_path: Path, monkeypatch) -> None:
     graph = tmp_path / "g.json"
     graph.write_text("{}", encoding="utf-8")
     _patch(monkeypatch, "standout_ux", "what_if_graph", ValueError("nope"))
-    code, payload = _invoke_error("what-if", "--graph", str(graph))
+    _code, payload = _invoke_error("what-if", "--graph", str(graph))
     assert payload["error"]["code"] == "GRAPH_NOT_FOUND"
 
 
@@ -297,7 +297,7 @@ def test_timeline_event_defaults_and_failure(tmp_path: Path, monkeypatch) -> Non
     assert payload["events"][0]["type"] == "run"
 
     _patch(monkeypatch, "standout_ux", "session_timeline", OSError("gone"))
-    code, payload = _invoke_error("timeline", "--session", str(session))
+    _code, payload = _invoke_error("timeline", "--session", str(session))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
 
 
@@ -314,7 +314,7 @@ def test_copilot_success_and_failure(tmp_path: Path, monkeypatch) -> None:
     assert payload["recommendations"][0]["action"] == "review"
 
     _patch(monkeypatch, "standout_ux", "copilot_recommendations", ValueError("bad"))
-    code, payload = _invoke_error("copilot", "--session", str(session))
+    _code, payload = _invoke_error("copilot", "--session", str(session))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
 
 
@@ -340,7 +340,7 @@ def test_collaboration_success_and_failure(tmp_path: Path, monkeypatch) -> None:
     assert payload["commented_findings"] == 0
 
     _patch(monkeypatch, "standout_ux", "collaboration_summary", OSError("gone"))
-    code, payload = _invoke_error("collaboration", "--session", str(session))
+    _code, payload = _invoke_error("collaboration", "--session", str(session))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
 
 
@@ -357,7 +357,7 @@ def _product_patch(monkeypatch, name: str, payload: dict | Exception) -> None:
 
 def test_product_missing_session_directory(tmp_path: Path) -> None:
     missing = tmp_path / "gone"
-    code, payload = _invoke_error("command-center", "--session", str(missing))
+    _code, payload = _invoke_error("command-center", "--session", str(missing))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
 
 
@@ -378,7 +378,7 @@ def test_command_center_success_and_failure(tmp_path: Path, monkeypatch) -> None
     assert payload["headline"] == "h"
 
     _product_patch(monkeypatch, "command_center", FileNotFoundError(str(session)))
-    code, payload = _invoke_error("command-center", "--session", str(session))
+    _code, payload = _invoke_error("command-center", "--session", str(session))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
 
 
@@ -390,7 +390,7 @@ def test_impact_map_success_and_failure(tmp_path: Path, monkeypatch) -> None:
     assert payload["count"] == 4
 
     _product_patch(monkeypatch, "evidence_impact_map", ValueError("bad"))
-    code, payload = _invoke_error("impact-map", "--session", str(session))
+    _code, payload = _invoke_error("impact-map", "--session", str(session))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
 
 
@@ -406,7 +406,7 @@ def test_investigate_success_and_failure(tmp_path: Path, monkeypatch) -> None:
     assert payload["artifacts"] == ["a"]
 
     _product_patch(monkeypatch, "zero_noise_investigation", KeyError("x"))
-    code, payload = _invoke_error("investigate", "--session", str(session))
+    _code, payload = _invoke_error("investigate", "--session", str(session))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
 
 
@@ -418,7 +418,7 @@ def test_story_success_and_failure(tmp_path: Path, monkeypatch) -> None:
     assert payload["narrative"] == "once upon a time"
 
     _product_patch(monkeypatch, "executive_story", OSError("gone"))
-    code, payload = _invoke_error("story", "--session", str(session))
+    _code, payload = _invoke_error("story", "--session", str(session))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
 
 
@@ -470,7 +470,7 @@ def test_replay_failure(tmp_path: Path, monkeypatch) -> None:
     session = tmp_path / "s"
     session.mkdir()
     _replay_patch(monkeypatch, OSError("gone"))
-    code, payload = _invoke_error("replay", "--session", str(session))
+    _code, payload = _invoke_error("replay", "--session", str(session))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
 
 
@@ -494,7 +494,7 @@ def test_confidence_success_and_failure(tmp_path: Path, monkeypatch) -> None:
     assert payload["needs_more_evidence"] == ["F-1"]
 
     _product_patch(monkeypatch, "confidence_report", ValueError("bad"))
-    code, payload = _invoke_error("confidence", "--session", str(session))
+    _code, payload = _invoke_error("confidence", "--session", str(session))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"
 
 
@@ -526,5 +526,5 @@ def test_deliverables_success_and_failure(tmp_path: Path, monkeypatch) -> None:
     assert payload["ready"] is False
 
     _product_patch(monkeypatch, "deliverables_manifest", FileNotFoundError(str(session)))
-    code, payload = _invoke_error("deliverables", "--session", str(session))
+    _code, payload = _invoke_error("deliverables", "--session", str(session))
     assert payload["error"]["code"] == "SESSION_NOT_FOUND"

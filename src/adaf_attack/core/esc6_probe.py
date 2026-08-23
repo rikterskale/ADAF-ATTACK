@@ -67,7 +67,7 @@ def probe_certutil(ca_config: str | None = None) -> dict[str, Any]:
             "edit_flags_hex": hex(flags),
             "esc6": esc6,
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"method": "certutil", "available": True, "ok": False, "error": str(exc)}
 
 
@@ -106,7 +106,7 @@ def probe_impacket_rrp(target: Target, ca_hostname: str | None = None) -> dict[s
 
         try:
             ans = rrp.hBaseRegOpenKey(dce, h_root, POLICY_KEY)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             dce.disconnect()
             return {
                 "method": "impacket-rrp",
@@ -118,11 +118,11 @@ def probe_impacket_rrp(target: Target, ca_hostname: str | None = None) -> dict[s
 
         h_cfg = ans["phkResult"]
         ca_names: list[str] = []
-        for i in range(0, 32):
+        for i in range(32):
             try:
                 enum = rrp.hBaseRegEnumKey(dce, h_cfg, i)
                 ca_names.append(enum["lpNameOut"])
-            except Exception:  # noqa: BLE001
+            except Exception:
                 break
 
         results = []
@@ -147,7 +147,7 @@ def probe_impacket_rrp(target: Target, ca_hostname: str | None = None) -> dict[s
                         "esc6": esc6,
                     }
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 results.append({"ca": name, "error": str(exc)})
 
         dce.disconnect()
@@ -160,7 +160,7 @@ def probe_impacket_rrp(target: Target, ca_hostname: str | None = None) -> dict[s
             "cas": results,
             "esc6": any_esc6,
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {
             "method": "impacket-rrp",
             "available": True,

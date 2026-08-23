@@ -52,7 +52,7 @@ class _FakeServer:
 def test_ldap_connect_password_bind(monkeypatch: Any) -> None:
     monkeypatch.setattr(ldap_util, "Server", _FakeServer)
     monkeypatch.setattr(ldap_util, "Connection", _FakeConnection)
-    conn, dn, cfg = ldap_util.ldap_connect(
+    _conn, dn, cfg = ldap_util.ldap_connect(
         Target(domain="corp.test", dc_ip="10.0.0.1", username="a", password="p")
     )
     assert dn == "DC=corp,DC=test"
@@ -66,7 +66,7 @@ def test_ldap_connect_anonymous_and_missing_dc(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(ldap_util, "Server", _S)
     monkeypatch.setattr(ldap_util, "Connection", _FakeConnection)
-    conn, dn, cfg = ldap_util.ldap_connect(Target(domain="corp.test", dc_ip="10.0.0.1"))
+    _conn, dn, cfg = ldap_util.ldap_connect(Target(domain="corp.test", dc_ip="10.0.0.1"))
     assert dn == "DC=corp,DC=test"
     assert cfg is None
 

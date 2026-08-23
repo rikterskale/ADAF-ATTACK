@@ -125,14 +125,14 @@ def test_vault_delete_and_purge_with_missing_blobs(tmp_path: Path) -> None:
 def test_export_plan_markdown_prerequisite_variants() -> None:
     from adaf_attack.core.ux_extra import export_plan_markdown
 
-    base = dict(
-        capability_id="shadow-creds",
-        domain="corp.lab",
-        dc_ip="10.0.0.10",
-        risk={"level": "high"},
-        checklist={"opsec_hint": "Stay quiet"},
-        ready_command="adaf-attack run shadow-creds",
-    )
+    base = {
+        "capability_id": "shadow-creds",
+        "domain": "corp.lab",
+        "dc_ip": "10.0.0.10",
+        "risk": {"level": "high"},
+        "checklist": {"opsec_hint": "Stay quiet"},
+        "ready_command": "adaf-attack run shadow-creds",
+    }
     without = export_plan_markdown(**base, prerequisites=None)
     assert "Prerequisites" not in without
     best_only = export_plan_markdown(

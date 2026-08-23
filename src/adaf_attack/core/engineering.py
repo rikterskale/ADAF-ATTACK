@@ -263,7 +263,7 @@ def execute_with_controls(
     change.  Callers must use an operation-specific cancellation/rollback
     strategy for those cases instead of this generic wrapper.
     """
-    if retries < 0 or timeout is not None and timeout <= 0:
+    if retries < 0 or (timeout is not None and timeout <= 0):
         raise ValueError("retries must be non-negative and timeout must be positive")
     if mutating and (retries or timeout is not None):
         raise ValueError("timeouts and retries are not permitted for mutating operations")
@@ -282,7 +282,7 @@ def execute_with_controls(
                 pool.shutdown(wait=False, cancel_futures=True)
         except FutureTimeoutError:
             last_error = TimeoutError(f"operation exceeded {timeout:.1f}s timeout")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             last_error = exc
         if attempt < retries:
             time.sleep(backoff * (2**attempt))
@@ -346,7 +346,7 @@ def load_plugins() -> list[dict[str, str]]:
             statuses.append(
                 {"name": descriptor.name, "value": descriptor.value, "status": "loaded"}
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             statuses.append(
                 {
                     "name": descriptor.name,

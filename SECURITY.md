@@ -26,10 +26,11 @@ Only the latest minor release line receives security fixes. See
 
 Please **do not** open a public GitHub issue for security reports.
 
-Report privately through the repository's configured private security channel
-(for example, the private vulnerability-reporting workflow or an approved
-internal security contact). Do not include sensitive material in a public
-issue. Include:
+Report privately through the repository's
+[GitHub private vulnerability reporting channel](https://github.com/rikterskale/ADAF-ATTACK/security/advisories/new).
+If repository access is unavailable, use the private security contact named in
+your delivery or engagement agreement. Do not include sensitive material in a
+public issue. Include:
 
 - A clear description of the issue and its impact.
 - Reproduction steps or a proof of concept.
@@ -37,9 +38,8 @@ issue. Include:
 - Any suggested mitigation.
 
 If the configured channel supports encryption, use its published key or
-encryption instructions. This repository does not publish a placeholder PGP
-identity; maintainers must configure that information before requesting
-encrypted submissions.
+encryption instructions. Do not send credentials, customer data, tickets, or
+private keys in an unencrypted report.
 
 We acknowledge every report within **3 business days** and aim to publish a
 fix, workaround, or disposition within **90 days** of the initial report.

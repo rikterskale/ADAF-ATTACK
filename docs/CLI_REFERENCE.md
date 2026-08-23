@@ -69,7 +69,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack home` | Show goal-based starting points |
 | `adaf-attack init` | First-run onboarding: check environment and save defaults |
 | `adaf-attack setup` | Interactive first-run wizard alias with next-step ladder |
-| `adaf-attack list-capabilities` | List registered capabilities |
+| `adaf-attack list-capabilities` | List capabilities; `--full` adds tags/tools/required options and `--copy` exports a table |
 | `adaf-attack path` | Attack-path command group |
 | `adaf-attack path rank` | Rank attack paths |
 | `adaf-attack path inspect` | Inspect graph-edge evidence and risk |
@@ -96,7 +96,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack confidence` | Show evidence confidence quality |
 | `adaf-attack product-templates` | List polished assessment templates |
 | `adaf-attack deliverables` | Show client deliverables readiness |
-| `adaf-attack rank-paths` | Rank paths from a saved graph |
+| `adaf-attack rank-paths` | Rank paths; `--full` keeps complete paths and `--copy` exports the table |
 | `adaf-attack recent` | Show recently viewed capabilities |
 | `adaf-attack review` | Preview a capability before running it |
 | `adaf-attack run` | Run a capability against a target |

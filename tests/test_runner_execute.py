@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Iterator
+from types import ModuleType
 from typing import Any
 
 import pytest
@@ -109,6 +111,27 @@ def test_execute_json_mode_suppresses_runner_progress(
     out = execute_capability("t-noisy", _target(), workspace=tmp_path, json_mode=True)
     assert out["ok"] is True
     assert "human progress" not in capsys.readouterr().out
+
+
+def test_execute_json_mode_suppresses_module_rich_console(
+    cleanup_registry: list[str], tmp_path: Any, capsys: pytest.CaptureFixture[str], monkeypatch: Any
+) -> None:
+    cleanup_registry.append("t-rich-noisy")
+    from rich.console import Console
+
+    fake_module = ModuleType("adaf_attack.capabilities._test_console")
+    fake_module.console = Console()  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, fake_module.__name__, fake_module)
+
+    class _RichNoisyRunner(_FakeRunner):
+        def run(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            fake_module.console.print("human Rich progress must not corrupt JSON")  # type: ignore[attr-defined]
+            return super().run(*args, **kwargs)
+
+    _register("t-rich-noisy", runner=_RichNoisyRunner())
+    out = execute_capability("t-rich-noisy", _target(), workspace=tmp_path, json_mode=True)
+    assert out["ok"] is True
+    assert "human Rich progress" not in capsys.readouterr().out
 
 
 def test_execute_capability_error_wrapped(cleanup_registry: list[str], tmp_path: Any) -> None:

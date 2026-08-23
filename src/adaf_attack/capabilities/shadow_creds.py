@@ -8,6 +8,7 @@ central rollback registry so `adaf-attack run rollback --force` can reverse them
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from ldap3 import SUBTREE
@@ -22,6 +23,7 @@ from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 console = Console()
+_logger = logging.getLogger(__name__)
 
 ATTR = "msDS-KeyCredentialLink"
 
@@ -128,8 +130,8 @@ class ShadowCreds:
                         tgt = f"USER@{sam.upper()}@{target.domain.upper()}"
                         graph.add_node(src, "Base", sid=ace.principal_sid)
                         graph.add_edge(src, tgt, "WriteKeyCredentialLink", right=ace.right)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                _logger.debug("Could not parse shadow-credential ACL", exc_info=True)
 
         # Optional write
         if write_target:
@@ -225,5 +227,5 @@ class ShadowCreds:
             else:
                 console.print(f"  [red]LDAP modify failed[/red]: {conn.result}")
             return result
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"sam": sam, "ok": False, "error": str(exc)}

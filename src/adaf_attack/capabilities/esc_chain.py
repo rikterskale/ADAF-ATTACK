@@ -1,4 +1,4 @@
-"""ESC1–ESC15 automated exploit chain.
+"""ESC1-ESC15 automated exploit chain.
 
 Reads a prior adcs-enum / adcs-policy-probe session output, ranks templates by
 ESC severity + confidence, then invokes cert-request → pkinit-auth.
@@ -103,7 +103,7 @@ def _pick_template(adcs_json: dict[str, Any]) -> dict[str, Any] | None:
 
 @register_capability(
     id="esc-chain",
-    summary="Automated ESC1–ESC15 exploit chain: template → cert → PKINIT → TGT",
+    summary="Automated ESC1-ESC15 exploit chain: template -> cert -> PKINIT -> TGT",
     category="privilege-escalation",
     tags=("adcs", "esc1", "esc2", "esc3", "esc6", "esc8", "esc9", "chain"),
     safety=SafetyProfile(

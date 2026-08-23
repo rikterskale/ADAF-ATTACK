@@ -36,7 +36,7 @@ def analyze_template_flags(
     ekus: list[str] | None = None,
     application_policies: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Classify ESC1–ESC3 / ESC9 template conditions from numeric/string flags."""
+    """Classify ESC1-ESC3 / ESC9 template conditions from numeric/string flags."""
     ekus = list(ekus or [])
     app = list(application_policies or [])
     enrollee_supplies = bool(name_flags & CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT)
@@ -104,7 +104,7 @@ def classify_modern_esc(
     dangerous_acl: bool = False,
     policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Produce a normalized ESC1–ESC15 candidate map with confidence labels.
+    """Produce a normalized ESC1-ESC15 candidate map with confidence labels.
 
     ESC10 / ESC11 / ESC13 are policy-driven and come from authorized artifacts
     (adcs-policy-probe).  ESC12 / ESC14 / ESC15 remain research signals and are

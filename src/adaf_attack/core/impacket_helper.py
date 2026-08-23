@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 
-class ImpacketMissing(RuntimeError):
+class ImpacketMissingError(RuntimeError):
     """Raised when a capability requires impacket but it is not installed."""
 
     def __init__(self, feature: str) -> None:
@@ -16,9 +16,14 @@ class ImpacketMissing(RuntimeError):
 
 def require_impacket(feature: str) -> None:
     try:
-        import impacket  # noqa: F401
+        import impacket as _impacket  # noqa: F401  # availability probe
     except ImportError as exc:
-        raise ImpacketMissing(feature) from exc
+        raise ImpacketMissingError(feature) from exc
+
+
+# Backward-compatible alias for integrations that imported the historical
+# exception name. New code should catch the explicit Error-suffixed class.
+ImpacketMissing = ImpacketMissingError
 
 
 def smb_connect(target_ip: str, target: Any) -> Any:

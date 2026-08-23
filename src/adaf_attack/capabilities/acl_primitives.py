@@ -93,7 +93,7 @@ class AddMember:
         member = require_param(kwargs, "member", "sam")
         conn, base_dn, _cfg = ldap_connect(target)
         try:
-            group_dn, group_entry = _lookup_or_raise(conn, base_dn, group)
+            group_dn, _group_entry = _lookup_or_raise(conn, base_dn, group)
             member_dn, _member_entry = _lookup_or_raise(conn, base_dn, member)
             ok = _add_group_member(conn, session, group_dn, member_dn)
             result = {
@@ -133,7 +133,7 @@ class AddSelf:
         group = require_param(kwargs, "group", "write_target")
         conn, base_dn, _cfg = ldap_connect(target)
         try:
-            group_dn, group_entry = _lookup_or_raise(conn, base_dn, group)
+            group_dn, _group_entry = _lookup_or_raise(conn, base_dn, group)
             member_dn, _member_entry = _lookup_or_raise(conn, base_dn, target.username)
             ok = _add_group_member(conn, session, group_dn, member_dn)
             result = {
@@ -377,7 +377,7 @@ def _adminsdholder_rights_ok(sd_bytes: bytes | None, principal_sid: str) -> bool
         aces = parse_interesting_aces(sd_bytes)
     except RuntimeError:
         raise
-    except Exception:  # noqa: BLE001 - malformed SD should not crash the precheck
+    except Exception:
         return False
     for ace in aces:
         if ace.principal_sid in _UNIVERSAL_SIDS and ace.right in _RIGHT_GRANTING_SIDS:
@@ -447,7 +447,7 @@ _SIDHISTORY_ERROR_NOTE = (
 
 def _impacket_available() -> bool:
     try:
-        import impacket  # noqa: F401
+        import impacket as _impacket  # noqa: F401  # availability probe
     except ImportError:
         return False
     return True

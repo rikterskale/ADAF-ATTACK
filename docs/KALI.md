@@ -10,7 +10,7 @@ Clone/extract the matching source release, place the approved wheel in `dist`,
 then run the installer from the repository root:
 
 ```bash
-bash scripts/install-kali.sh --package dist/adaf_attack-0.10.0-py3-none-any.whl
+bash scripts/install-kali.sh --package dist/adaf_attack-0.10.1-py3-none-any.whl
 source .venv/bin/activate
 adaf-attack doctor
 ```

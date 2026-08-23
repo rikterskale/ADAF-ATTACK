@@ -132,7 +132,7 @@ def _purple_package(
     chains = []
     try:
         chains = graph.rank_exploit_chains(limit=15)
-    except Exception:  # noqa: BLE001
+    except Exception:
         chains = []
 
     return {
@@ -339,7 +339,7 @@ class CampaignRun:
                 error = (
                     str(outcome.get("error") or "capability reported failure") if not ok else None
                 )
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 outcome = {}
                 ok = False
                 error = str(exc)

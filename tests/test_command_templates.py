@@ -6,6 +6,7 @@ import pytest
 
 from adaf_attack.core.command_templates import (
     COMMAND_TEMPLATES,
+    SECONDARY_COMMAND_TEMPLATES,
     _sam_from_node_id,
     build_exploit_commands,
 )
@@ -58,7 +59,9 @@ def test_dcsync_requires_approval():
 def test_unknown_relation_returns_empty():
     target = Target(domain="corp.local", dc_ip="10.0.0.1")
     chain = {"terminal_relation": "UnknownRel"}
-    assert build_exploit_commands(chain, target) == []
+    result = build_exploit_commands(chain, target)
+    assert result and result[0]["fallback"] is True
+    assert "adaf-attack plan UnknownRel" in result[0]["command"]
 
 
 def test_write_rbcd_placeholders():
@@ -77,8 +80,8 @@ def test_write_rbcd_placeholders():
     assert "--impersonate DC01$" in cmd
 
 
-def test_unknown_placeholder_falls_back_to_raw_command(monkeypatch):
-    """A template placeholder missing from the context yields the raw cmd."""
+def test_unknown_placeholder_is_explicit_and_shell_safe(monkeypatch):
+    """A missing template field remains visible without creating raw shell syntax."""
     raw = "run --thing {unresolved_placeholder}"
     monkeypatch.setitem(
         COMMAND_TEMPLATES,
@@ -100,7 +103,87 @@ def test_unknown_placeholder_falls_back_to_raw_command(monkeypatch):
     }
     examples = build_exploit_commands(chain, target)
     assert len(examples) == 1
-    assert examples[0]["command"] == raw
+    assert examples[0]["command"] == "run --thing '<unresolved_placeholder>'"
+
+
+def test_service_spn_can_come_from_chain_evidence() -> None:
+    target = Target(domain="corp.local", dc_ip="10.0.0.1", username="op")
+    chain = {
+        "terminal_relation": "WriteRBCD",
+        "start": "COMPUTER@WS01$",
+        "end": "COMPUTER@SQL01$",
+        "service_class": "MSSQLSvc",
+        "service_host": "sql01.corp.local:1433",
+    }
+    result = build_exploit_commands(chain, target)
+    assert "--spn MSSQLSvc/sql01.corp.local:1433" in result[0]["command"]
+
+
+def test_explicit_spn_override_is_quoted() -> None:
+    target = Target(domain="corp example", dc_ip="10.0.0.1", username="operator one")
+    chain = {
+        "terminal_relation": "AllowedToAct",
+        "start": "COMPUTER@WS01$",
+        "end": "COMPUTER@DC01$",
+    }
+    result = build_exploit_commands(chain, target, spn="HTTP/dc01.corp example")
+    assert "-P spn='HTTP/dc01.corp example'" in result[0]["command"]
+
+
+def test_template_schema_and_filter_values_are_shell_safe() -> None:
+    assert all(
+        isinstance(template["approval_required"], bool)
+        for templates in COMMAND_TEMPLATES.values()
+        for template in templates
+    )
+    target = Target(domain="corp.local", dc_ip="10.0.0.1", username="op")
+    result = build_exploit_commands(
+        {
+            "terminal_relation": "ReadLAPSPassword",
+            "end": "COMPUTER@DC 01$",
+        },
+        target,
+    )
+    assert "computer_filter='(sAMAccountName=DC 01$)'" in result[0]["command"]
+
+
+def test_hashcat_follow_ons_are_review_only_and_use_expected_modes() -> None:
+    target = Target(domain="corp.local", dc_ip="10.0.0.1", username="op")
+    result = build_exploit_commands(
+        {
+            "terminal_relation": "HasSPN",
+            "start": "USER@alice@CORP.LOCAL",
+            "end": "USER@alice@CORP.LOCAL",
+        },
+        target,
+    )
+    follow_ons = result[0]["follow_on_commands"]
+    assert {item["kind"] for item in follow_ons} == {"hashcat"}
+    assert "-m 13100" in follow_ons[0]["command"]
+    assert "./kerberoast.hashes.txt" in follow_ons[0]["command"]
+    assert all(item["review_only"] for item in follow_ons)
+
+
+def test_ticket_import_follow_on_is_parameterized() -> None:
+    target = Target(domain="corp.local", dc_ip="10.0.0.1", username="op")
+    result = build_exploit_commands(
+        {
+            "terminal_relation": "HasKeyCredentialLink",
+            "start": "USER@alice@CORP.LOCAL",
+            "end": "USER@alice@CORP.LOCAL",
+        },
+        target,
+    )
+    follow_on = result[0]["follow_on_commands"][0]
+    assert follow_on["kind"] == "ticket-import"
+    assert "operation=import-ccache" in follow_on["command"]
+    assert "artifact=./ticket.ccache" in follow_on["command"]
+
+
+def test_secondary_template_registry_covers_cracking_and_imports() -> None:
+    assert "HasSPN" in SECONDARY_COMMAND_TEMPLATES
+    assert "CanASREP" in SECONDARY_COMMAND_TEMPLATES
+    assert "AllowedToAct" in SECONDARY_COMMAND_TEMPLATES
 
 
 @pytest.mark.parametrize(
@@ -110,7 +193,7 @@ def test_unknown_placeholder_falls_back_to_raw_command(monkeypatch):
         ("ForceChangePassword", "force-change-password", True),
         ("HasSession", "session-abuse", False),
         ("AdminTo", "local-admin", False),
-        ("ESC2", "esc-chain", False),
+        ("ESC2", "esc-chain", True),
         ("AllowedToDelegate", "constrained-delegation", True),
         ("DfscoerceOpen", "coerce", True),
         ("GetChanges", "dcsync", True),

@@ -44,7 +44,7 @@ def _extract_cipher_and_etype(ticket: Any) -> tuple[bytes | None, int | None]:
                 cipher = cipher.encode()
         if cipher is not None and not isinstance(cipher, bytes | bytearray):
             cipher = bytes(cipher)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None, None
     return cipher, etype
 
@@ -75,7 +75,7 @@ def format_tgs_hashcat(
         checksum = _hex(cipher[:16])
         data = _hex(cipher[16:])
         return f"$krb5tgs$23$*{user}${domain.upper()}${spn}*${checksum}${data}"
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
@@ -90,5 +90,5 @@ def format_asrep_hashcat(username: str, domain: str, as_rep: Any) -> str | None:
         checksum = _hex(cipher[:16])
         data = _hex(cipher[16:])
         return f"$krb5asrep${etype}${user}@{domain.upper()}:{checksum}${data}"
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None

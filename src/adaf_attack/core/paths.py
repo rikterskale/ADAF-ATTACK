@@ -141,5 +141,5 @@ def normalize_path(path: str | Path) -> Path:
     p = Path(path).expanduser()
     try:
         return p.resolve(strict=False)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return p.absolute()

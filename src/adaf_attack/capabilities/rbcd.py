@@ -11,6 +11,7 @@ Write (set RBCD) requires --force and records pre-state for rollback.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from ldap3 import LEVEL, SUBTREE
@@ -25,6 +26,7 @@ from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 console = Console()
+_logger = logging.getLogger(__name__)
 
 ATTR_RBCD = "msDS-AllowedToActOnBehalfOfOtherIdentity"
 # Backwards-compatible public alias used by callers and integrations.
@@ -47,8 +49,8 @@ def _parse_security_descriptor_sids(raw: Any) -> list[str]:
         import re
 
         sids = re.findall(r"S-1-5-\d+(?:-\d+)+", text)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:
+        _logger.debug("Could not parse security descriptor SIDs", exc_info=True)
     return list(dict.fromkeys(sids))
 
 
@@ -216,8 +218,8 @@ class Rbcd:
                         graph.add_node(src, "Base", sid=ace.principal_sid)
                         graph.add_node(tgt, "Computer", sam=sam, dn=dn)
                         graph.add_edge(src, tgt, "WriteRBCD", right=ace.right)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                _logger.debug("Could not parse computer ACL for RBCD", exc_info=True)
 
         uniq = {
             (w["computer"], w["principal_sid"], w["right"]) for w in result["writable_computers"]
@@ -292,13 +294,13 @@ class Rbcd:
 
         candidates_on = [set_on, set_on if set_on.endswith("$") else set_on + "$"]
         candidates_from = [set_from, set_from if set_from.endswith("$") else set_from + "$"]
-        on_dn = on_sid = from_dn = from_sid = None
+        on_dn = from_sid = None
         for c in candidates_on:
-            on_dn, on_sid = _lookup(c)
+            on_dn, _on_sid = _lookup(c)
             if on_dn:
                 break
         for c in candidates_from:
-            from_dn, from_sid = _lookup(c)
+            _from_dn, from_sid = _lookup(c)
             if from_sid:
                 break
 
@@ -349,7 +351,7 @@ class Rbcd:
             else:
                 console.print(f"  [red]LDAP modify failed[/red]: {conn.result}")
             return result
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {
                 "ok": False,
                 "set_on": set_on,

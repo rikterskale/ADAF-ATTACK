@@ -44,6 +44,17 @@ def test_list_capabilities_human() -> None:
     assert "Capabilities" in result.output
 
 
+def test_list_capabilities_full_and_copy_are_explicit(monkeypatch: Any) -> None:
+    monkeypatch.setattr(
+        cli, "copy_to_clipboard", lambda value: {"ok": True, "characters": len(value)}
+    )
+    result = runner.invoke(app, ["--format", "json", "list-capabilities", "--full", "--copy"])
+    _ok(result)
+    payload = json.loads(result.output)
+    assert payload["full"] is True
+    assert payload["clipboard"]["ok"] is True
+
+
 def test_paths_human() -> None:
     _ok(runner.invoke(app, ["paths"]))
 

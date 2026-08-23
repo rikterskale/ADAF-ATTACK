@@ -43,6 +43,52 @@ class Target:
             self.password or self.hashes or self.aes_key or self.ccache or self.use_kerberos
         )
 
+    def missing_fields(self, *, require_credentials: bool = False) -> list[str]:
+        """Return fields an operator must supply before a requested operation.
+
+        The model intentionally permits partial targets for offline planning
+        and anonymous enumeration. Callers that are about to contact a live
+        target can request credential validation without duplicating these
+        checks in every capability.
+        """
+        missing: list[str] = []
+        if not self.domain.strip():
+            missing.append("domain")
+        if not self.dc_ip.strip():
+            missing.append("dc_ip")
+        if require_credentials and not self.has_credentials:
+            missing.append("credentials")
+        return missing
+
+    def validate(self, *, require_credentials: bool = False) -> None:
+        """Raise a concise error when required target context is incomplete."""
+        missing = self.missing_fields(require_credentials=require_credentials)
+        if missing:
+            raise ValueError("Target is missing: " + ", ".join(missing))
+
+    def as_dict(self, *, include_secrets: bool = False) -> dict[str, object]:
+        """Return operator context without exposing secrets by default."""
+        result: dict[str, object] = {
+            "domain": self.domain,
+            "dc_ip": self.dc_ip,
+            "username": self.username,
+            "auth_user": self.auth_user,
+            "use_kerberos": self.use_kerberos,
+            "ldaps": self.ldaps,
+            "port": self.port,
+            "has_credentials": self.has_credentials,
+        }
+        if include_secrets:
+            result.update(
+                {
+                    "password": self.password,
+                    "hashes": self.hashes,
+                    "aes_key": self.aes_key,
+                    "ccache": self.ccache,
+                }
+            )
+        return result
+
     def lm_nt_hashes(self) -> tuple[str, str]:
         """Return (lmhash, nthash) strings suitable for Impacket."""
         if not self.hashes:

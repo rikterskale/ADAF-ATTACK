@@ -44,7 +44,7 @@ def _load(session: Session, name: str) -> Any | None:
         return None
     try:
         return json.loads(p.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
@@ -75,7 +75,7 @@ class Report:
         if not graph.nodes:
             gp = session.path("graph.json")
             if gp.exists():
-                with suppress(Exception):  # noqa: BLE001
+                with suppress(Exception):
                     graph = AttackGraph.from_file(gp)
 
         lines: list[str] = []
@@ -183,7 +183,7 @@ class Report:
         lines.append("")
         try:
             arts = sorted(p.name for p in session.root.iterdir() if p.is_file())
-        except Exception:  # noqa: BLE001
+        except Exception:
             arts = []
         for a in arts:
             lines.append(f"- `{a}`")

@@ -58,7 +58,7 @@ class CertRequest:
         if adcs_path.exists():
             try:
                 adcs = json.loads(adcs_path.read_text(encoding="utf-8"))
-            except Exception:  # noqa: BLE001
+            except Exception:
                 adcs = None
 
         if not template and adcs:
@@ -170,7 +170,7 @@ class CertRequest:
             result["note"] = "certipy not installed; playbook written"
             console.print("  [yellow]certipy not installed — playbook only[/yellow]")
             console.print(f"  → {playbook_path}")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             result["error"] = str(exc)
             result["method"] = "error"
 

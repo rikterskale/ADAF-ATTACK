@@ -1,4 +1,4 @@
-"""AD CS ESC9–ESC16 enrollment, golden cert, and ESC8 relay workflow."""
+"""AD CS ESC9-ESC16 enrollment, golden cert, and ESC8 relay workflow."""
 
 from __future__ import annotations
 
@@ -116,7 +116,7 @@ def _run_certipy(argv: list[str], session: Session) -> dict[str, Any]:
         )
     except FileNotFoundError:
         return {"ok": False, "method": "playbook-only", "playbook": playbook}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"ok": False, "method": "error", "error": str(exc), "playbook": playbook}
     pfxes = [str(p) for p in session.root.glob("*.pfx")]
     return {

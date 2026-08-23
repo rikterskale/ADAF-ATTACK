@@ -34,6 +34,13 @@ def _enrich_exploit_chains(
     return exploit_chains
 
 
+def emit_ranked_paths_for_target(
+    exploit_chains: list[dict[str, Any]], target: Target
+) -> list[dict[str, Any]]:
+    """Public compatibility wrapper for integrations using this capability."""
+    return _enrich_exploit_chains(exploit_chains, target)
+
+
 @register_capability(
     id="attack-paths",
     summary="Rank weighted attack paths from principals toward high-value targets",
@@ -65,8 +72,8 @@ class AttackPaths:
             loaded = AttackGraph.from_file(p)
             graph.nodes = loaded.nodes
             graph.edges = loaded.edges
-            graph._adj = loaded._adj  # noqa: SLF001
-            graph._dn_index = loaded._dn_index  # noqa: SLF001
+            graph._adj = loaded._adj
+            graph._dn_index = loaded._dn_index
             loaded_from = str(p)
             console.print(f"Loaded graph from [cyan]{p}[/cyan]")
         elif not graph.nodes:
@@ -80,8 +87,8 @@ class AttackPaths:
                 loaded = AttackGraph.from_file(candidates[0])
                 graph.nodes = loaded.nodes
                 graph.edges = loaded.edges
-                graph._adj = loaded._adj  # noqa: SLF001
-                graph._dn_index = loaded._dn_index  # noqa: SLF001
+                graph._adj = loaded._adj
+                graph._dn_index = loaded._dn_index
                 loaded_from = str(candidates[0])
                 console.print(f"Loaded latest session graph: [cyan]{candidates[0]}[/cyan]")
             else:

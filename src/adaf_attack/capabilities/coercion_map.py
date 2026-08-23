@@ -53,7 +53,7 @@ def _smb_pipe_check(host: str, target: Target) -> dict[str, Any]:
         else:
             try:
                 smb.login("", "")  # null
-            except Exception:  # noqa: BLE001
+            except Exception:
                 out["error"] = "SMB login failed"
                 return out
 
@@ -64,10 +64,10 @@ def _smb_pipe_check(host: str, target: Target) -> dict[str, Any]:
                 fid = smb.openFile(tid, pipe)
                 smb.closeFile(tid, fid)
                 out[name] = True
-            except Exception:  # noqa: BLE001
+            except Exception:
                 out[name] = False
         smb.logoff()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         out["error"] = str(exc)
     return out
 

@@ -1,4 +1,4 @@
-"""Evaluate authorized AD CS policy evidence for ESC10–ESC15."""
+"""Evaluate authorized AD CS policy evidence for ESC10-ESC15."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from adaf_attack.core.target import Target
 
 @register_capability(
     id="adcs-policy-probe",
-    summary="Evaluate CA/DC policy evidence for ESC10–ESC15",
+    summary="Evaluate CA/DC policy evidence for ESC10-ESC15",
     category="enumeration",
     tags=("adcs", "esc10", "esc11", "esc13", "esc14", "esc15", "policy"),
 )

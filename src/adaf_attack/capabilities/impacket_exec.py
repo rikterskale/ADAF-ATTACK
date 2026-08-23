@@ -72,12 +72,12 @@ def _run_wmiexec(target: Target, host: str, command: str) -> dict[str, Any]:
         kdcHost=target.dc_ip,
     )
     try:
-        iInterface = dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
-        iWbemLevel1Login = wmi.IWbemLevel1Login(iInterface)
-        iWbemServices = iWbemLevel1Login.NTLMLogin("//./root/cimv2", NULL, NULL)
-        iWbemLevel1Login.RemRelease()
-        win32Process, _ = iWbemServices.GetObject("Win32_Process")
-        result = win32Process.Create(command, "C:\\", None)
+        interface = dcom.CoCreateInstanceEx(wmi.CLSID_WbemLevel1Login, wmi.IID_IWbemLevel1Login)
+        wbem_level1_login = wmi.IWbemLevel1Login(interface)
+        wbem_services = wbem_level1_login.NTLMLogin("//./root/cimv2", NULL, NULL)
+        wbem_level1_login.RemRelease()
+        win32_process, _ = wbem_services.GetObject("Win32_Process")
+        result = win32_process.Create(command, "C:\\", None)
         return {"return_value": int(result.ReturnValue), "pid": int(result.ProcessId)}
     finally:
         with contextlib.suppress(Exception):
@@ -137,7 +137,7 @@ class ImpacketExec:
                         cmd=str(command),
                     ),
                 }
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             outcome = {"error": str(exc)[:400]}
 
         result = {

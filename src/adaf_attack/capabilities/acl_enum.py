@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from ldap3 import SUBTREE
@@ -16,6 +17,7 @@ from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 console = Console()
+_logger = logging.getLogger(__name__)
 
 # Builtin SIDs we still record but mark as low signal
 NOISY_SIDS = {
@@ -45,7 +47,8 @@ def _sid_index(conn: Any, base_dn: str) -> dict[str, dict[str, str]]:
                 sid_str = sid.formatCanonical()
             else:
                 sid_str = str(sid)
-        except Exception:  # noqa: BLE001
+        except Exception:
+            _logger.debug("Could not normalize object SID", exc_info=True)
             continue
         classes = [str(c).lower() for c in (entry.objectClass.values if entry.objectClass else [])]
         if "computer" in classes:
@@ -207,7 +210,7 @@ class AclEnum:
             except RuntimeError as exc:
                 conn.unbind()
                 raise exc
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 console.print(f"  [yellow]parse fail {dn}: {exc}[/yellow]")
                 continue
 

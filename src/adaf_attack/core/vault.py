@@ -84,7 +84,7 @@ class SessionVault:
                 raise VaultError("Set ADAF_SESSION_VAULT_KEY before storing secret material")
             try:
                 cipher = Fernet(self._key.encode())
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 raise VaultError("ADAF_SESSION_VAULT_KEY must be a Fernet key") from exc
             payload = json.dumps(value, default=str).encode("utf-8")
             atomic_write_bytes(self.root / f"{name}.vault", cipher.encrypt(payload))

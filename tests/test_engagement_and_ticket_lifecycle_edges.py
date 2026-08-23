@@ -397,7 +397,7 @@ def test_runner_execute_log_lambda(monkeypatch: Any, tmp_path: Path) -> None:
     creds.write_text(json.dumps([{"username": "a", "password": "p"}]), encoding="utf-8")
     monkeypatch.setattr(runner_mod, "_probe_ldap", lambda t: True)
     logs: list[str] = []
-    chosen, _ = runner_mod._resolve_target(
+    _chosen, _ = runner_mod._resolve_target(
         Target(domain="corp.test", dc_ip="10.0.0.1"),
         creds_file=creds,
         log=logs.append,

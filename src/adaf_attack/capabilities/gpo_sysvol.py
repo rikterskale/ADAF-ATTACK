@@ -8,6 +8,7 @@ into the GPO directory for immediate-task abuse patterns.
 from __future__ import annotations
 
 import json
+import logging
 from contextlib import suppress
 from typing import Any
 
@@ -22,6 +23,7 @@ from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 console = Console()
+_logger = logging.getLogger(__name__)
 
 GPO_ATTRS = [
     "displayName",
@@ -134,8 +136,8 @@ class GpoSysvol:
                             item["ldap_writers"].append(
                                 {"sid": ace.principal_sid, "right": ace.right}
                             )
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception:
+                    _logger.debug("Could not parse GPO LDAP writer ACL", exc_info=True)
 
             # SMB probe
             parsed = _parse_sysvol_unc(unc)
@@ -154,7 +156,7 @@ class GpoSysvol:
                     try:
                         smb.listPath(share, check_path + "/*")
                         item["sysvol_reachable"] = True
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         item["sysvol_reachable"] = False
                         item["sysvol_error"] = f"list: {exc}"
 
@@ -169,16 +171,16 @@ class GpoSysvol:
                             smb.writeFile(tid, fid, b"adaf-attack write probe\n")
                             smb.closeFile(tid, fid)
                             item["sysvol_writable"] = True
-                            with suppress(Exception):  # noqa: BLE001
+                            with suppress(Exception):
                                 smb.deleteFile(share, probe_name.replace("/", "\\"))
                             writable_sysvol.append(item)
                             console.print(f"  [red]WRITABLE SYSVOL[/red]  {display}  {unc}")
-                        except Exception as exc:  # noqa: BLE001
+                        except Exception as exc:
                             item["sysvol_writable"] = False
                             item["sysvol_error"] = f"write: {exc}"
                     smb.disconnectTree(tid)
                     smb.logoff()
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     item["sysvol_error"] = str(exc)
 
             gpo_id = f"GPO@{cn.upper()}@{target.domain.upper()}"
@@ -294,5 +296,5 @@ class GpoSysvol:
                 f"  [red]STAGED[/red] → \\\\{host}\\SYSVOL\\{rel_task.replace('/', chr(92))}"
             )
             return {"ok": True, "path": rel_task, "gpo": match["cn"]}
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             return {"ok": False, "error": str(exc), "gpo": match["cn"]}

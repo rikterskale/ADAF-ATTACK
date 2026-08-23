@@ -136,7 +136,7 @@ def test_resolve_target_single_credentialed_probe_failure(monkeypatch: Any) -> N
 def test_resolve_target_primary_appended_when_distinct(monkeypatch: Any) -> None:
     monkeypatch.setattr(runner_mod, "_probe_ldap", lambda target: target.username == "primary")
     cs = CredentialSet(credentials=[Credential(username="other", password="x")])
-    chosen, attempts = _resolve_target(
+    chosen, _attempts = _resolve_target(
         Target(domain="corp.test", dc_ip="10.0.0.1", username="primary", password="y"),
         credential_set=cs,
     )

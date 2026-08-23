@@ -9,7 +9,7 @@ import shutil
 import threading
 from contextlib import suppress
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -151,7 +151,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     TITLE = f"ADAF-ATTACK v{__version__}"
     SUB_TITLE = "Authorized internal red team operations — review-first execution"
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding | tuple[str, str] | tuple[str, str, str]]] = [
         Binding("q", "quit", "Quit", priority=True),
         Binding("r", "run_selected", "Run"),
         Binding("v", "review_run", "Review"),
@@ -200,7 +200,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
         try:
             self.call_from_thread(callback, *args, **kwargs)
-        except Exception:  # noqa: BLE001 - callback may fail during teardown
+        except Exception:
             # Textual can close the message pump while a network worker is
             # unwinding. The capability result remains in its session.
             return
@@ -208,19 +208,19 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     def _set_button_disabled(self, widget_id: str, disabled: bool) -> None:
         try:
             self.query_one(f"#{widget_id}", Button).disabled = disabled
-        except Exception:  # noqa: BLE001 - widget may have been unmounted
+        except Exception:
             return
 
     def _set_button_label(self, widget_id: str, label: str) -> None:
         try:
             self.query_one(f"#{widget_id}", Button).label = label
-        except Exception:  # noqa: BLE001 - widget may have been unmounted
+        except Exception:
             return
 
     def _safe_update_status(self) -> None:
         try:
             self._update_status()
-        except Exception:  # noqa: BLE001 - screen may have been unmounted
+        except Exception:
             return
 
     def compose(self) -> ComposeResult:
@@ -440,7 +440,6 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._post_ui(self._update_progress)
 
     def _populate_capabilities(self, query: str = "") -> None:
-        import adaf_attack.capabilities  # noqa: F401
 
         self._capabilities = capability_registry.list()
         needle = query.strip().lower()
@@ -730,7 +729,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 or self.query_one("#ccache", Input).value.strip()
                 or self.query_one("#password", Input).value
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             # A minimal/test screen may not mount the setup controls.
             return
         profile_count = len(list_profiles())
@@ -752,7 +751,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self.query_one("#first-launch-panel", Static).update(
                 "[bold]First-launch setup[/bold]\n" + "\n".join(lines)
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             return
 
     def _show_home(self) -> None:
@@ -830,7 +829,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             if cap.safety
             else ("destructive" if cap.destructive else "read-only")
         )
-        estimate = "1–3 minutes" if cap.category in {"discovery", "analysis"} else "3–10 minutes"
+        estimate = "1-3 minutes" if cap.category in {"discovery", "analysis"} else "3-10 minutes"
         self.query_one("#summary-panel", Static).update(
             f"[bold]Run summary[/bold] · {cap.id} · {risk}\n"
             f"Target: {target} @ {dc}\nEstimated duration: {estimate} · OPSEC: {active_opsec().upper()}"
@@ -1118,7 +1117,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 f"Target: {target} · Scope: {scope} · OPSEC: {active_opsec().upper()}\n"
                 f"Mode: {self._operation_mode} · Authorization: {authorization} · Session health: {health}"
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             # Test/minimal screens and transitional layouts may not mount the
             # optional dashboard widget; background capability completion must
             # not fail solely because that presentation surface is absent.
@@ -1381,7 +1380,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         try:
             self.copy_to_clipboard(self._ready_command())
             self.notify("Ready command copied to clipboard.")
-        except Exception:  # noqa: BLE001
+        except Exception:
             self.notify("Clipboard is unavailable in this terminal.", severity="warning")
 
     def _dry_run(self) -> None:
@@ -1450,7 +1449,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         )
         try:
             self._ensure_workflow_started()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self._show_log(f"[yellow]Workflow state unavailable:[/] {exc}")
         self._show_log(f"\n[bold]→ {capability_id}[/] on {domain} @ {dc_ip}")
         self._cancel_requested.clear()
@@ -1618,7 +1617,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 + "\n".join(
                     f"{key}: {value}"
                     for key, value in result.items()
-                    if key.endswith("html") or key.endswith("pdf")
+                    if key.endswith(("html", "pdf"))
                 )
             )
             self.notify(
@@ -1914,7 +1913,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         try:
             self.copy_to_clipboard(text)
             self.notify("Findings dashboard copied to clipboard.", severity="information")
-        except Exception:  # noqa: BLE001
+        except Exception:
             self.notify("Clipboard is unavailable in this terminal.", severity="warning")
 
     def _load_findings(self, session: Path) -> None:

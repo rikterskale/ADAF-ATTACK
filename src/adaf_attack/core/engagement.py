@@ -123,7 +123,6 @@ class EngagementPlan:
 
 
 def load_plan(path: Path) -> EngagementPlan:
-    import adaf_attack.capabilities  # noqa: F401
 
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -215,7 +214,7 @@ def verify_scoped_approval(
         encoded, signature = token.split(".", 1)
         expected = _b64(hmac.new(key.encode(), encoded.encode(), hashlib.sha256).digest())
         payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise EngagementError("Invalid approval token format") from exc
     if not isinstance(payload, dict) or not hmac.compare_digest(expected, signature):
         raise EngagementError("Approval token signature is invalid")
@@ -260,7 +259,6 @@ def run_engagement(
     approval_token: str | None = None,
     ccache: str | None = None,
 ) -> dict[str, Any]:
-    import adaf_attack.capabilities  # noqa: F401
 
     if _normalize_target(plan.dc_ip) not in {
         _normalize_target(item) for item in plan.allowed_targets

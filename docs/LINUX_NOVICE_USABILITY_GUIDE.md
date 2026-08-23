@@ -4,7 +4,7 @@ guide_schema_version: 1
 platform: linux
 canonical_path: docs/LINUX_NOVICE_USABILITY_GUIDE.md
 project_name: ADAF-ATTACK
-target_release: 0.10.0
+target_release: 0.10.1
 support_status: hosted_ci_artifact_smoke
 primary_shells: ["Bash"]
 maintainer_source_of_truth: pyproject.toml
@@ -46,7 +46,7 @@ Recommended wheel path:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install "./dist/adaf_attack-0.10.0-py3-none-any.whl[full]"
+python -m pip install "./dist/adaf_attack-0.10.1-py3-none-any.whl[full]"
 ```
 
 Authorized source path:
@@ -95,7 +95,7 @@ been reviewed.
 Install the exact approved wheel in the existing venv:
 
 ```bash
-python -m pip install --upgrade "./dist/adaf_attack-0.10.0-py3-none-any.whl[full]"
+python -m pip install --upgrade "./dist/adaf_attack-0.10.1-py3-none-any.whl[full]"
 python -m pip check
 adaf-attack --version
 ```

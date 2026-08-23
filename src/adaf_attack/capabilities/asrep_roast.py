@@ -151,7 +151,7 @@ class AsrepRoast:
                     }
                 )
                 console.print(f"  [green]✓[/green] {sam}  etype={etype}")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 console.print(f"  [red]✗[/red] {sam}  ({exc})")
                 roasted.append({"account": sam, "error": str(exc)})
 

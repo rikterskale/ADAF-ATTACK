@@ -36,6 +36,27 @@ def test_target_resolved_ccache_expanduser(tmp_path: Path) -> None:
     assert str(tmp_path / "cc") in result
 
 
+def test_target_operator_context_and_validation() -> None:
+    partial = Target(domain="", dc_ip="", username="operator")
+    assert partial.missing_fields() == ["domain", "dc_ip"]
+    with pytest.raises(ValueError, match="domain, dc_ip, credentials"):
+        partial.validate(require_credentials=True)
+
+    target = Target(
+        domain="corp.test",
+        dc_ip="10.0.0.1",
+        username="operator",
+        password="secret",
+        port=636,
+        ldaps=True,
+    )
+    assert target.auth_user == "corp.test\\operator"
+    safe = target.as_dict()
+    assert safe["has_credentials"] is True
+    assert "password" not in safe
+    assert target.as_dict(include_secrets=True)["password"] == "secret"
+
+
 # --------------------------- campaign_analysis ---------------------------
 
 

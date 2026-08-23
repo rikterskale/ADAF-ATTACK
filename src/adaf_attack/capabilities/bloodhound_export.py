@@ -32,7 +32,7 @@ def _hydrate_graph_from_session(session: Session, graph: AttackGraph) -> bool:
                 **(e.get("properties") or {}),
             )
         return len(graph.nodes) > 0
-    except Exception:  # noqa: BLE001
+    except Exception:
         return False
 
 

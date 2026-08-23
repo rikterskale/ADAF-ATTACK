@@ -47,7 +47,7 @@ def attr_value(entry: Any, name: str) -> Any:
     if attr is None and hasattr(entry, "__getitem__"):
         try:
             attr = entry[name]
-        except Exception:  # noqa: BLE001
+        except Exception:
             attr = None
     if attr is None:
         return None
@@ -129,7 +129,7 @@ def try_ntlm_bind(target: Target, username: str, password: str) -> tuple[bool, s
         )
         conn.unbind()
         return True, "ok"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return False, str(exc)[:200]
 
 

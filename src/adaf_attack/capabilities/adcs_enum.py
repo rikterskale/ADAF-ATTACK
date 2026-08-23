@@ -1,8 +1,9 @@
-"""AD CS enumeration — CAs, templates, ESC1–ESC9 candidates + enrollment rights."""
+"""AD CS enumeration - CAs, templates, ESC1-ESC9 candidates + enrollment rights."""
 
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from ldap3 import LEVEL
@@ -22,6 +23,7 @@ from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 console = Console()
+_logger = logging.getLogger(__name__)
 
 TEMPLATE_ATTRS = [
     "cn",
@@ -129,7 +131,7 @@ def _analyze_template(entry: Any) -> dict[str, Any]:
 
 @register_capability(
     id="adcs-enum",
-    summary="Enumerate AD CS CAs/templates, ESC1–ESC9 signals, and enrollment rights",
+    summary="Enumerate AD CS CAs/templates, ESC1-ESC9 signals, and enrollment rights",
     category="enumeration",
     tags=(
         "adcs",
@@ -157,7 +159,7 @@ class AdcsEnum:
     ) -> dict[str, Any]:
         console.print(f"[bold]ADCS enum[/bold] → {target.domain} @ {target.dc_ip}")
 
-        conn, default_nc, config_nc = ldap_connect(target)
+        conn, _default_nc, config_nc = ldap_connect(target)
         if not config_nc:
             conn.unbind()
             raise RuntimeError("Could not resolve configurationNamingContext")
@@ -252,12 +254,12 @@ class AdcsEnum:
                                         }
                                     )
                                     graph.add_edge(src, ca_id, "ESC7")
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         console.print(f"  [yellow]CA SD parse {ca['cn']}: {exc}[/yellow]")
 
                 result["cas"].append(ca)
                 console.print(f"  CA: [cyan]{ca['cn']}[/cyan]  ({ca['dns']})")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             console.print(f"[yellow]CA enumeration limited: {exc}[/yellow]")
 
         result.setdefault("esc5_pki_acl", [])
@@ -288,11 +290,11 @@ class AdcsEnum:
                             src = f"SID@{ace.principal_sid}"
                             graph.add_node(src, "Base", sid=ace.principal_sid)
                             graph.add_edge(src, f"PKI@{dn}", "ESC5", right=ace.right)
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception:
+                    _logger.debug("Could not parse ESC5 PKI ACL", exc_info=True)
             if result["esc5_pki_acl"]:
                 console.print(f"  [red]ESC5 PKI ACL hits[/red]: {len(result['esc5_pki_acl'])}")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             console.print(f"[yellow]ESC5 PKI ACL scan limited: {exc}[/yellow]")
 
         # Templates + enrollment rights + ESC1-4 / ESC9
@@ -335,7 +337,7 @@ class AdcsEnum:
                                 acl_dangerous.append({"sid": ace.principal_sid, "right": ace.right})
                     except RuntimeError:
                         raise
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         console.print(f"  [yellow]SD parse {tmpl['cn']}: {exc}[/yellow]")
 
                 tmpl["enroll_principals"] = enroll_principals
@@ -414,7 +416,7 @@ class AdcsEnum:
 
                 if not tmpl["esc_tags"] and not acl_dangerous:
                     console.print(f"  Template: {tmpl['cn']}  enroll_aces={len(enroll_principals)}")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             console.print(f"[yellow]Template enumeration limited: {exc}[/yellow]")
 
         ca_hosts = [c.get("dns") for c in result["cas"] if c.get("dns")]

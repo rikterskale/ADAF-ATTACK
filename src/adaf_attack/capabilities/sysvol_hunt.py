@@ -21,7 +21,7 @@ def _decrypt_cpassword(value: str) -> str | None:
         raw = base64.b64decode(value + "=" * (-len(value) % 4))
         decryptor = Cipher(algorithms.AES(key), modes.CBC(b"\x00" * 16)).decryptor()
         return decryptor.update(raw).decode("utf-16-le").rstrip("\x00")
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 

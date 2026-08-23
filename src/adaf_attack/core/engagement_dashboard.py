@@ -364,14 +364,10 @@ def inspect_edge(
     edges = []
     for position, edge in enumerate(graph.edges):
         if (
-            index is not None
-            and position != index
-            or source is not None
-            and edge.source != source
-            or target is not None
-            and edge.target != target
-            or relation is not None
-            and edge.kind != relation
+            (index is not None and position != index)
+            or (source is not None and edge.source != source)
+            or (target is not None and edge.target != target)
+            or (relation is not None and edge.kind != relation)
         ):
             continue
         profile = EXPLOIT_PROFILES.get(edge.kind, {})

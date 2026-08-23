@@ -5,6 +5,31 @@ declared in `pyproject.toml`.
 
 ## Unreleased
 
+### Operator hardening
+
+- Added a single-operator runbook, explicit proprietary license terms, and a
+  concrete private security-reporting channel.
+- Kept JSON stdout machine-readable when capability modules use Rich consoles;
+  capability diagnostics remain available through stderr and `--debug` logs.
+- Added shell-safe command-template fallbacks, evidence rationale, target
+  validation, and a registry self-check for built-in capability modules.
+
+## 0.10.1
+
+### Added
+
+- Single-operator runbook, proprietary license terms, and a concrete private
+  security-reporting channel.
+- Safe command-template enrichment, target validation, evidence rationale, and
+  built-in capability registration/docstring contract checks.
+
+### Fixed
+
+- JSON-mode capability runs no longer allow Rich progress output to corrupt the
+  stdout document; diagnostics remain on stderr or in debug logs.
+- Partial enumeration failures now leave debug breadcrumbs instead of being
+  silently swallowed.
+
 ### Added
 
 - Global `--debug` flag: routes diagnostic logging to stderr (never stdout/JSON)

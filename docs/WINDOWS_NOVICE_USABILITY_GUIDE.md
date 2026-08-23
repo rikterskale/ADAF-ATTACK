@@ -4,7 +4,7 @@ guide_schema_version: 1
 platform: windows
 canonical_path: docs/WINDOWS_NOVICE_USABILITY_GUIDE.md
 project_name: ADAF-ATTACK
-target_release: 0.10.0
+target_release: 0.10.1
 support_status: hosted_ci_artifact_and_installer_smoke
 primary_shells: ["Windows PowerShell 5.1", "PowerShell 7"]
 maintainer_source_of_truth: pyproject.toml
@@ -48,7 +48,7 @@ Place the wheel in `dist`, then run the PowerShell 5.1-compatible installer:
 
 ```powershell
 .\scripts\Install-AdafAttack.ps1 `
-  -Package .\dist\adaf_attack-0.10.0-py3-none-any.whl `
+  -Package .\dist\adaf_attack-0.10.1-py3-none-any.whl `
   -Extras full `
   -Python py `
   -PythonVersion 3.11
@@ -102,7 +102,7 @@ downgrades the existing venv and runs `pip check`:
 
 ```powershell
 .\scripts\Install-AdafAttack.ps1 `
-  -Package .\dist\adaf_attack-0.10.0-py3-none-any.whl `
+  -Package .\dist\adaf_attack-0.10.1-py3-none-any.whl `
   -Extras full `
   -Python py `
   -PythonVersion 3.11
@@ -162,7 +162,7 @@ approved data.
 
 ```powershell
 .\scripts\Install-AdafAttack.ps1 `
-  -Package .\dist\adaf_attack-0.10.0-py3-none-any.whl `
+  -Package .\dist\adaf_attack-0.10.1-py3-none-any.whl `
   -Extras full
 .\.venv\Scripts\Activate.ps1
 adaf-attack --version

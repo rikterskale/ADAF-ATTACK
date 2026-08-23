@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from urllib.parse import urljoin
 
@@ -24,6 +25,7 @@ from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
 console = Console()
+_logger = logging.getLogger(__name__)
 
 SCCM_FILTER = (
     "(|(objectClass=mSSMSManagementPoint)(objectClass=mSSMSSite)"
@@ -52,7 +54,8 @@ def _enum_sccm(conn: Any, base_dn: str) -> list[dict[str, Any]]:
                     "mSSMSDeviceManagementPoint",
                 ],
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
+            _logger.debug("SCCM LDAP search failed for %s", search_base, exc_info=True)
             continue
         for entry in conn.entries:
             dn = str(attr_value(entry, "distinguishedName") or "")
@@ -139,7 +142,7 @@ class SccmNaa:
                 url = urljoin(f"http://{mp}/", "SMS_MP/.sms_aut?MPKEYINFORMATION")
                 try:
                     status, body = _http_get(url)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     http_hits.append({"mp": mp, "url": url, "error": str(exc)})
                     continue
                 item: dict[str, Any] = {"mp": mp, "url": url, "status": status}

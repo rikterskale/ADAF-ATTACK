@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 # Access mask bits
 GENERIC_ALL = 0x10000000
@@ -67,7 +70,7 @@ def _sid_to_str(sid_bytes: bytes) -> str:
 
         sid = LDAP_SID(sid_bytes)
         return str(sid.formatCanonical())
-    except Exception:  # noqa: BLE001
+    except Exception:
         if len(sid_bytes) < 8:
             return sid_bytes.hex()
         revision = sid_bytes[0]
@@ -111,8 +114,8 @@ def parse_interesting_aces(sd_bytes: bytes) -> list[InterestingAce]:
                 flags = int(ace["Ace"]["Flags"])
                 if flags & 0x01:  # ACE_OBJECT_TYPE_PRESENT
                     object_guid = _guid_bytes_to_str(ace["Ace"]["ObjectType"]).lower()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                _logger.debug("Could not parse object ACE GUID", exc_info=True)
 
         rights = _mask_to_rights(mask, object_guid)
         for right in rights:

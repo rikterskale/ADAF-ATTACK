@@ -60,7 +60,7 @@ class TemplateMod:
         if not force:
             raise RuntimeError("template-mod modifies AD state; pass --force to run.")
 
-        conn, base_dn, config_nc = ldap_connect(target)
+        conn, _base_dn, config_nc = ldap_connect(target)
         templates_dn = f"CN=Certificate Templates,CN=Public Key Services,CN=Services,{config_nc}"
         console.print(f"[bold]template-mod[/bold] template={template}")
 

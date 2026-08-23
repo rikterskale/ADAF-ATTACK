@@ -55,9 +55,9 @@ class Dcsync:
         if just_dc_user:
             principals = [str(just_dc_user)]
         elif principals_source:
-            from pathlib import Path as _P
+            from pathlib import Path
 
-            path = _P(str(principals_source)).expanduser()
+            path = Path(str(principals_source)).expanduser()
             if path.is_file():
                 principals = [
                     line.strip()
