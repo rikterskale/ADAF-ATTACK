@@ -9,6 +9,7 @@ from ldap3 import MODIFY_REPLACE, SUBTREE
 
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.ldap_ops import ldap_filter_value
 from adaf_attack.core.ldap_util import ldap_connect
 from adaf_attack.core.registry import register_capability
 from adaf_attack.core.session import Session
@@ -85,7 +86,7 @@ class ComputerTakeover:
                 raise RuntimeError("Attribute is not approved for this capability")
             conn.search(
                 base_dn,
-                f"(sAMAccountName={change_target})",
+                f"(sAMAccountName={ldap_filter_value(change_target)})",
                 search_scope=SUBTREE,
                 attributes=["distinguishedName", attribute],
             )

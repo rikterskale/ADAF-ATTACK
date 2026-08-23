@@ -95,9 +95,8 @@ def _load_allowlist(kwargs: dict[str, Any], fallback_host: str | None) -> list[s
     explicit_host = kwargs.get("host")
     if explicit_host and not hosts:
         hosts.append(str(explicit_host))
-    elif fallback_host and not hosts:
-        # No allowlist source at all — reject later
-        hosts.append(fallback_host)
+    # A target/DC fallback is deliberately not accepted as authorization.
+    # The caller must provide an explicit host allowlist or a coercion map.
 
     # De-dupe preserving order
     seen: set[str] = set()
@@ -223,7 +222,7 @@ def _build_coercion_request(method: str, listener: str) -> Any:
     tags=("coerce", "petitpotam", "printerbug", "dfscoerce", "shadowcoerce", "allowlist"),
     safety=SafetyProfile(
         risk=RiskLevel.SIDE_EFFECT,
-        approval=ApprovalPolicy.FORCE_AND_ACK,
+        approval=ApprovalPolicy.SCOPED_TOKEN,
         rollback=RollbackClass.NONE,
         network_side_effect=True,
         exposes_credentials=True,

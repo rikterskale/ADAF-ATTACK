@@ -166,6 +166,7 @@ def execute_capability(
     force: bool = False,
     acknowledged: bool = False,
     approval_token: str | None = None,
+    approval_engagement_id: str | None = None,
     json_mode: bool = False,
     include_secrets: bool = False,
     workspace: Path | str | None = None,
@@ -211,6 +212,30 @@ def execute_capability(
         )
     except PolicyError as exc:
         raise RunError(str(exc)) from exc
+
+    if active_safety.requires_target_scope and active_safety.is_mutating:
+        if not approval_token or not approval_engagement_id:
+            raise RunError(
+                f"Capability '{capability_id}' requires a scoped approval token and "
+                "engagement ID for target-interacting execution."
+            )
+        try:
+            from adaf_attack.core.engagement import EngagementError, verify_scoped_approval
+
+            approval_parameters = {
+                key: value
+                for key, value in runner_kwargs.items()
+                if key not in {"opsec", "timeout", "retries"}
+            }
+            verify_scoped_approval(
+                approval_token,
+                engagement_id=approval_engagement_id,
+                dc_ip=target.dc_ip,
+                capability=capability_id,
+                parameters=approval_parameters,
+            )
+        except EngagementError as exc:
+            raise RunError(f"Scoped approval rejected: {exc}") from exc
 
     # Resolve working credentials (rotation / failover)
     try:

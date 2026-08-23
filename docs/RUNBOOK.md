@@ -33,7 +33,9 @@ adaf-attack run next-actions -d corp.example --dc-ip 10.0.0.10
 Use `-P key=value` for capability-specific options. Review the plan and the
 session artifacts before any operation requiring `--force`; destructive and
 network-side-effect operations also require the acknowledgement or scoped
-approval required by the capability safety profile.
+approval required by the capability safety profile. Direct target-interacting
+execution also requires `--approval-token` and its matching `--engagement-id`;
+the engagement workflow supplies these automatically after scope validation.
 
 Useful daily commands are `doctor`, `paths`, `capability-help`, `plan`,
 `run ldap-enum`, `run acl-enum`, `run adcs-enum`, `run attack-paths`, `run

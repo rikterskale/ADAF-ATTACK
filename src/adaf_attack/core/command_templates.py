@@ -10,6 +10,8 @@ import shlex
 import string
 from typing import Any
 
+from ldap3.utils.conv import escape_filter_chars as _ldap_filter_value
+
 from adaf_attack.core.target import Target
 
 # terminal_relation → list of command templates
@@ -666,7 +668,7 @@ def build_exploit_commands(
         "end": end_name,
         "target": _node_value(chain, "target", "target_sam") or end_name,
         "spn": spn or _derive_spn(chain, end_name),
-        "computer_filter": f"(sAMAccountName={sam})",
+        "computer_filter": f"(sAMAccountName={_ldap_filter_value(sam)})",
     }
     # Quote substituted values individually so generated examples remain safe
     # to paste when an operator name, domain, or filter contains whitespace or

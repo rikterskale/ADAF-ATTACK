@@ -217,7 +217,10 @@ def test_unpac_pac_parser_handles_imported_blob(monkeypatch: Any) -> None:
     pac.PAC_INFO_BUFFER = Info
     pac.PACTYPE = PacType
     monkeypatch.setitem(sys.modules, "impacket.krb5.pac", pac)
-    assert unpac._extract_nt_from_pac(b"blob") == "<credential-info-blob-present>"
+    assert unpac._extract_nt_from_pac(b"blob") == {
+        "status": "not_recovered",
+        "reason": "PAC_CREDENTIAL_INFO decryption is not implemented",
+    }
 
 
 def test_remaining_capability_guards_and_helpers(monkeypatch: Any, tmp_path: Path) -> None:
@@ -429,6 +432,10 @@ def test_mocked_remote_adapters(monkeypatch: Any) -> None:
 
     transport.DCERPCTransportFactory = lambda binding: Transport()
     rpcrt.uuidtup_to_bin = lambda value: b"uuid"
+    import impacket.dcerpc.v5 as v5
+
+    monkeypatch.setattr(v5, "rpcrt", rpcrt, raising=False)
+    monkeypatch.setattr(v5, "transport", transport, raising=False)
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.rpcrt", rpcrt)
     monkeypatch.setitem(sys.modules, "impacket.dcerpc.v5.transport", transport)
     monkeypatch.setattr(coerce, "_build_coercion_request", lambda method, listener: {})
@@ -789,6 +796,10 @@ def test_asreq_impacket_error_classification_and_empty_pac(monkeypatch: Any) -> 
     pac.PACTYPE = lambda data: {"Buffers": []}
     monkeypatch.setitem(sys.modules, "impacket.krb5.pac", pac)
     assert unpac_the_hash._extract_nt_from_pac(b"no-buffer") is None
+    monkeypatch.setenv("KRB5CCNAME", "old.ccache")
+    with unpac_the_hash._temporary_krb5ccname("new.ccache"):
+        assert unpac_the_hash.os.environ["KRB5CCNAME"] == "new.ccache"
+    assert unpac_the_hash.os.environ["KRB5CCNAME"] == "old.ccache"
 
 
 def test_remaining_capability_success_and_guard_branches(monkeypatch: Any, tmp_path: Path) -> None:
@@ -953,14 +964,15 @@ def test_more_evidence_and_recommendation_branches(monkeypatch: Any, tmp_path: P
     monkeypatch.setattr(password_spray, "_load_users", lambda *args: ["alice"])
     monkeypatch.setattr(password_spray, "_account_lockout_state", lambda *args: (0, None))
     monkeypatch.setattr(password_spray, "_try_bind", lambda *args: (False, "invalid"))
-    password_spray.PasswordSpray().run(
-        _target(),
-        Session(base_dir=tmp_path / "spray-delay"),
-        AttackGraph(),
-        spray_password="Secret123!",
-        delay_seconds=0.01,
-    )
-    assert sleeps == [0.01]
+    with pytest.raises(RuntimeError, match="non-zero lockoutThreshold"):
+        password_spray.PasswordSpray().run(
+            _target(),
+            Session(base_dir=tmp_path / "spray-delay"),
+            AttackGraph(),
+            spray_password="Secret123!",
+            delay_seconds=0.01,
+        )
+    assert sleeps == []
 
     class Part:
         def getComponentByName(self, name: str) -> Any:

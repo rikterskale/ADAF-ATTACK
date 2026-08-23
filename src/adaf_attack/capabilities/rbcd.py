@@ -19,6 +19,7 @@ from rich.console import Console
 
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.ldap_ops import ldap_filter_value
 from adaf_attack.core.ldap_util import ldap_connect
 from adaf_attack.core.registry import SafetyProfile, register_capability
 from adaf_attack.core.rollback import record_pre_state
@@ -281,7 +282,7 @@ class Rbcd:
         def _lookup(sam: str) -> tuple[str | None, str | None]:
             conn.search(
                 base_dn,
-                f"(sAMAccountName={sam})",
+                f"(sAMAccountName={ldap_filter_value(sam)})",
                 search_scope=SUBTREE,
                 attributes=["distinguishedName", "objectSid", ATTR_RBCD],
             )

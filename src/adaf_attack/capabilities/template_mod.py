@@ -15,6 +15,7 @@ from ldap3 import MODIFY_REPLACE, SUBTREE
 from rich.console import Console
 
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.ldap_ops import ldap_filter_value
 from adaf_attack.core.ldap_util import ldap_connect
 from adaf_attack.core.registry import register_capability
 from adaf_attack.core.session import Session
@@ -66,7 +67,7 @@ class TemplateMod:
 
         conn.search(
             templates_dn,
-            f"(&(objectClass=pKICertificateTemplate)(cn={template}))",
+            f"(&(objectClass=pKICertificateTemplate)(cn={ldap_filter_value(template)}))",
             search_scope=SUBTREE,
             attributes=TEMPLATE_ATTRS,
         )

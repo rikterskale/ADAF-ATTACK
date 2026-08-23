@@ -174,7 +174,7 @@ def test_coercion_allowlist_sources_and_host_guard(
     assert coerce._load_allowlist({"allow_hosts": "a,a,b"}, None) == ["a", "b"]
     assert coerce._load_allowlist({"hosts": ["a", "b"], "host": "c"}, None) == ["a", "b"]
     assert coerce._load_allowlist({"coercion_session": map_file}, None) == ["print.corp"]
-    assert coerce._load_allowlist({}, "dc.corp") == ["dc.corp"]
+    assert coerce._load_allowlist({}, "dc.corp") == []
     monkeypatch.setattr(coerce, "require_impacket", lambda name: None)
     monkeypatch.setattr(coerce, "_trigger", lambda *args: {"ok": True})
     with pytest.raises(RuntimeError, match="not in the approved"):

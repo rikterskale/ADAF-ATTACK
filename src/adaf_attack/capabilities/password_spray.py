@@ -17,8 +17,15 @@ from ldap3 import SUBTREE, Connection, Server
 from rich.console import Console
 
 from adaf_attack.core.graph import AttackGraph
+from adaf_attack.core.ldap_ops import ldap_filter_value
 from adaf_attack.core.ldap_util import ldap_connect
-from adaf_attack.core.registry import register_capability
+from adaf_attack.core.registry import (
+    ApprovalPolicy,
+    RiskLevel,
+    RollbackClass,
+    SafetyProfile,
+    register_capability,
+)
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -73,7 +80,7 @@ def _load_users(source: str | None, conn: Any, base_dn: str, filter_expr: str | 
 def _account_lockout_state(conn: Any, base_dn: str, sam: str) -> tuple[int, datetime | None]:
     conn.search(
         base_dn,
-        f"(sAMAccountName={sam})",
+        f"(sAMAccountName={ldap_filter_value(sam)})",
         search_scope=SUBTREE,
         attributes=["badPwdCount", "badPasswordTime"],
     )
@@ -103,6 +110,13 @@ def _try_bind(target: Target, username: str, password: str, ldaps: bool) -> tupl
     summary="Lockout-aware password spray against user accounts",
     category="credential-access",
     tags=("password-spray", "brute-force", "lockout"),
+    safety=SafetyProfile(
+        risk=RiskLevel.SIDE_EFFECT,
+        approval=ApprovalPolicy.SCOPED_TOKEN,
+        rollback=RollbackClass.NONE,
+        network_side_effect=True,
+        exposes_credentials=True,
+    ),
 )
 class PasswordSpray:
     def run(
@@ -139,12 +153,18 @@ class PasswordSpray:
         console.print(f"Users: {len(users)}")
 
         threshold = policy["lockout_threshold"]
+        if threshold <= 0:
+            conn.unbind()
+            raise RuntimeError(
+                "Password spray requires a verified non-zero lockoutThreshold; "
+                "refusing to continue when lockout policy is unavailable or disabled."
+            )
         attempts: list[dict[str, Any]] = []
         hits: list[dict[str, Any]] = []
 
         for sam in users:
             bad, _last_ts = _account_lockout_state(conn, base_dn, sam)
-            safe_ceiling = threshold - safety_margin if threshold else 999
+            safe_ceiling = threshold - safety_margin
             if threshold and bad >= safe_ceiling:
                 attempts.append(
                     {

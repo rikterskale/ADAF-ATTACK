@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from ldap3 import SUBTREE, Connection, Server
+from ldap3.utils.conv import escape_filter_chars
 
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.session import Session
@@ -36,6 +37,11 @@ def sam_variants(sam: str) -> list[str]:
     else:
         variants.append(text + "$")
     return list(dict.fromkeys(variants))
+
+
+def ldap_filter_value(value: Any) -> str:
+    """Escape an untrusted scalar before placing it in an LDAP filter."""
+    return str(escape_filter_chars(str(value)))
 
 
 def attr_value(entry: Any, name: str) -> Any:
@@ -104,7 +110,7 @@ def lookup_sam(
     for candidate in sam_variants(sam):
         conn.search(
             base_dn,
-            f"(sAMAccountName={candidate})",
+            f"(sAMAccountName={ldap_filter_value(candidate)})",
             search_scope=SUBTREE,
             attributes=fields,
         )

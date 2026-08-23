@@ -333,6 +333,7 @@ def run_engagement(
                     force=force,
                     acknowledged=True,
                     approval_token=approval_token,
+                    approval_engagement_id=plan.engagement_id,
                     include_secrets=False,
                     workspace=workspace,
                     session=session,

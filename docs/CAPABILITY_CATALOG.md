@@ -27,7 +27,7 @@ script (CI enforces parity).
 | `bloodhound-import` | export | implemented | unknown | - | - | - | observe | none | none | Import BloodHound-compatible JSON, enrich locally, and re-export |
 | `campaign-run` | analysis | implemented | unknown | - | - | - | destructive | force_and_ack | manual | Run ordered engagement phases with vault hand-off and purple package |
 | `cert-request` | credential-access | implemented | unknown | - | - | - | destructive | force_and_ack | manual | Request a certificate from AD CS (ESC1 enroll path); requires --force |
-| `coerce` | credential-access | implemented | unknown | - | - | - | side_effect | force_and_ack | none | Trigger coercion only against an approved host allowlist |
+| `coerce` | credential-access | implemented | unknown | - | - | - | side_effect | scoped_token | none | Trigger coercion only against an approved host allowlist |
 | `coercion-map` | discovery | implemented | unknown | - | - | - | observe | none | none | Map coercion surfaces (Spooler/EFSRPC) on domain computers — detect only |
 | `computer-takeover` | enumeration | implemented | unknown | - | - | - | observe | none | none | Identify writable computer SPN and DNS identity surfaces |
 | `constrained-delegation` | lateral-movement | fixture-tested | live-mutating | impacket | delegated-service | - | destructive | force_and_ack | manual | Abuse constrained delegation (msDS-AllowedToDelegateTo) |
@@ -55,7 +55,7 @@ script (CI enforces parity).
 | `gpo-sysvol` | privilege-escalation | implemented | unknown | - | - | - | observe | none | none | Probe SYSVOL GPO paths for write; optional stage requires --force |
 | `gpp-cpassword-hunt` | credential-access | implemented | unknown | - | - | - | observe | none | none | Discover and decrypt legacy GPP cpassword secrets under SYSVOL |
 | `hybrid-signals` | enumeration | implemented | unknown | - | - | - | observe | none | none | Detect on-prem hybrid identity / Entra-adjacent signals (read-only) |
-| `impacket-exec` | lateral-movement | implemented | unknown | - | - | - | destructive | force_and_ack | manual | Remote execute via wmiexec / smbexec / dcomexec / atexec |
+| `impacket-exec` | lateral-movement | implemented | unknown | - | - | - | destructive | scoped_token | manual | Scoped remote execute via wmiexec / smbexec / dcomexec / atexec with execution status |
 | `kerberoast` | credential-access | implemented | unknown | - | - | - | observe | none | none | Request TGS tickets for SPN-enabled accounts (Kerberoasting) |
 | `krb-relay` | lateral-movement | fixture-tested | live-mutating | impacket | relay-lab | - | destructive | force_and_ack | manual | Kerberos relay / reflection into LDAP, SMB, or HTTP |
 | `laps-read` | credential-access | implemented | unknown | - | - | - | observe | none | none | Read LAPS v1 (ms-Mcs-AdmPwd) and v2 (msLAPS-EncryptedPassword) passwords |
@@ -65,7 +65,7 @@ script (CI enforces parity).
 | `next-actions` | analysis | implemented | unknown | - | - | - | observe | none | none | Recommend policy-gated next actions from current graph evidence only |
 | `nopac-workflow` | privilege-escalation | fixture-tested | live-mutating | impacket | unpatched-dc | - | destructive | force_and_ack | manual | sAMAccountName spoof (noPac / CVE-2021-42278/42287) workflow |
 | `ntlm-relay` | lateral-movement | implemented | unknown | - | - | - | destructive | force_and_ack | manual | Run ntlmrelayx against a fixed allowlist; vault captured credentials |
-| `password-spray` | credential-access | implemented | unknown | - | - | - | observe | none | none | Lockout-aware password spray against user accounts |
+| `password-spray` | credential-access | implemented | unknown | - | - | - | side_effect | scoped_token | none | Lockout-aware password spray against user accounts |
 | `pkinit-auth` | credential-access | implemented | unknown | - | - | - | destructive | force_and_ack | manual | PKINIT TGT using shadow-cred key/cert from session (requires --force) |
 | `pre2k-spray` | credential-access | fixture-tested | live-read-only | - | baseline-directory | - | observe | none | none | Pre-Windows 2000 compatible computer accounts (password = sAMAccountName) |
 | `purple-feedback` | export | implemented | unknown | - | - | - | observe | none | none | Generate updated detection hypotheses from session events |
@@ -93,5 +93,5 @@ script (CI enforces parity).
 | `trusts-enum` | enumeration | implemented | unknown | - | - | - | observe | none | none | Deep trust enumeration with SID-filtering attack-path analysis |
 | `unconst-tgtdump-workflow` | credential-access | fixture-tested | live-mutating | impacket | unconstrained-computer | - | destructive | force_and_ack | manual | Unconstrained-delegation hunt then coerce to capture a TGT |
 | `unconstrained-delegation` | enumeration | fixture-tested | live-read-only | - | baseline-directory | - | observe | none | none | Hunt computers trusted for unconstrained delegation (TGT delegation) |
-| `unpac-the-hash` | credential-access | implemented | unknown | - | - | - | observe | none | none | Recover NT hash from a PKINIT-only cert by parsing PAC_CREDENTIAL_INFO |
+| `unpac-the-hash` | credential-access | implemented | unknown | - | - | - | observe | none | none | Inspect PAC_CREDENTIAL_INFO from a PKINIT-only cert without claiming hash recovery |
 | `write-spn` | credential-access | fixture-tested | live-mutating | - | delegated-acl-target | - | destructive | force_and_ack | manual | Set or clear servicePrincipalName for targeted Kerberoast |

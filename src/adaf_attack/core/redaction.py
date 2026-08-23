@@ -37,6 +37,9 @@ SENSITIVE_KEYS = {
     "secret",
     "cleartext",
     "credential",
+    "plaintext",
+    "decrypted_password",
+    "recovered_secret",
 }
 
 

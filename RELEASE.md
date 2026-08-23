@@ -9,7 +9,7 @@
 
 ## Installation and lifecycle
 
-- Supported runtime: Python 3.11-3.13.
+- Supported runtime: Python 3.11-3.14.
 - `full` is now an operator bundle (`tui`, `kerberos`, and `reports`) and no
   longer installs contributor-only test/lint/type-check tools.
 - Built wheels are smoked on Ubuntu, Windows, and macOS; the sdist is smoked on

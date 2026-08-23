@@ -20,14 +20,29 @@ def _target() -> Target:
     return Target(domain="corp.test", dc_ip="192.0.2.10")
 
 
-@pytest.mark.parametrize("capability", ["coerce", "esc-chain", "s4u-abuse", "dcsync"])
-def test_high_impact_capabilities_require_explicit_force(capability: str) -> None:
+@pytest.mark.parametrize(
+    ("capability", "approval"),
+    [
+        ("coerce", ApprovalPolicy.SCOPED_TOKEN),
+        ("esc-chain", ApprovalPolicy.FORCE_AND_ACK),
+        ("s4u-abuse", ApprovalPolicy.FORCE_AND_ACK),
+        ("dcsync", ApprovalPolicy.FORCE_AND_ACK),
+    ],
+)
+def test_high_impact_capabilities_require_explicit_force(
+    capability: str, approval: ApprovalPolicy
+) -> None:
     cap = capability_registry.get(capability)
     assert cap is not None and cap.safety is not None
-    assert cap.safety.approval == ApprovalPolicy.FORCE_AND_ACK
+    assert cap.safety.approval == approval
     assert cap.safety.risk in {RiskLevel.SIDE_EFFECT, RiskLevel.DESTRUCTIVE}
     with pytest.raises(RunError, match="requires explicit authorization"):
         execute_capability(capability, _target())
+
+
+def test_target_interacting_run_requires_scoped_approval_token() -> None:
+    with pytest.raises(RunError, match="scoped approval token"):
+        execute_capability("coerce", _target(), force=True, acknowledged=True)
 
 
 def test_engagement_rejects_secondary_target_outside_allowlist(tmp_path: Path) -> None:

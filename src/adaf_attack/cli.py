@@ -2073,6 +2073,17 @@ def run_capability(
     force: bool = typer.Option(
         False, "--force", help="Required for approved side-effect capabilities"
     ),
+    approval_token: str | None = typer.Option(
+        None,
+        "--approval-token",
+        envvar="ADAF_APPROVAL_TOKEN",
+        help="Scoped approval token required for target-interacting execution.",
+    ),
+    engagement_id: str | None = typer.Option(
+        None,
+        "--engagement-id",
+        help="Engagement ID bound to --approval-token.",
+    ),
     yes: bool = typer.Option(
         False, "--yes", "-y", help="Skip the interactive approved-run confirmation."
     ),
@@ -2364,6 +2375,8 @@ def run_capability(
                 acknowledged=True,
                 include_secrets=include_secrets,
                 json_mode=_json_mode(ctx),
+                approval_token=approval_token,
+                approval_engagement_id=engagement_id,
                 workspace=workspace,
                 creds_file=creds_file,
                 log=None if _json_mode(ctx) else lambda m: _console(ctx).print(m),
@@ -2371,7 +2384,16 @@ def run_capability(
             )
         else:
             out = _execute_with_spinner(
-                ctx, capability, target, force, include_secrets, workspace, creds_file, extra
+                ctx,
+                capability,
+                target,
+                force,
+                include_secrets,
+                workspace,
+                creds_file,
+                extra,
+                approval_token,
+                engagement_id,
             )
         if _json_mode(ctx):
             _emit(ctx, out, "")
@@ -2420,6 +2442,8 @@ def _execute_with_spinner(
     workspace: Path | None,
     creds_file: Path | None,
     extra: dict[str, Any],
+    approval_token: str | None = None,
+    engagement_id: str | None = None,
 ) -> dict[str, Any]:
     """Run a capability inside a Rich spinner, threading log messages into the status."""
     console_obj = _console(ctx)
@@ -2450,6 +2474,8 @@ def _execute_with_spinner(
             target,
             force=force,
             acknowledged=True,
+            approval_token=approval_token,
+            approval_engagement_id=engagement_id,
             include_secrets=include_secrets,
             json_mode=False,
             workspace=workspace,

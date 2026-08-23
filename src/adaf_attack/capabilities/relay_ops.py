@@ -78,7 +78,8 @@ class KrbRelay:
             rollback="Review LDAP/HTTP writes performed over Kerberos relay and revert them.",
         )
         result = {
-            "ok": True,
+            "ok": returncode == 0 and not truncated,
+            "status": "completed" if returncode == 0 and not truncated else "failed",
             "argv": argv,
             "return_code": returncode,
             "truncated": truncated,
@@ -91,7 +92,7 @@ class KrbRelay:
                 f"DOMAIN@{target.domain.upper()}",
                 "KrbRelayTarget",
             )
-        return finish(session, graph, "krb-relay", result, ok=True)
+        return finish(session, graph, "krb-relay", result, ok=result["ok"])
 
 
 @register_from_catalog("dcshadow")
@@ -158,7 +159,8 @@ class DcShadow:
                 encoding="utf-8",
             )
             result = {
-                "ok": bool(server_ok or ntds_ok),
+                "ok": bool(server_ok and ntds_ok),
+                "status": "prepared" if server_ok or ntds_ok else "failed",
                 "server_dn": server_dn,
                 "ntds_dn": ntds_dn,
                 "server_ok": server_ok,

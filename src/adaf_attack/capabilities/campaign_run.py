@@ -314,6 +314,7 @@ class CampaignRun:
                         force=bool(force and requires_approval),
                         acknowledged=True,
                         approval_token=approval_token or None,
+                        approval_engagement_id=engagement_id,
                         include_secrets=include_secrets,
                         workspace=session.base_dir,
                         session=session,

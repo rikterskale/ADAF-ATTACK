@@ -79,11 +79,11 @@ Credential access:
 | `kerberoast`, `asrep-roast` | hashcat `$krb5tgs$` / `$krb5asrep$` |
 | `dcsync` | MS-DRSR replication-based NT/LM/AES extraction |
 | `secretsdump-local` | SAM/LSA/DPAPI dump from a compromised host |
-| `password-spray` | Lockout-aware LDAP spray |
+| `password-spray` | Lockout-aware LDAP spray (scoped approval required; fails closed without verified lockout policy) |
 | `laps-read` | LAPS v1 + v2 password retrieval |
-| `gpp-cpassword-hunt` | Locate + decrypt legacy GPP cpassword (MS14-025) |
+| `gpp-cpassword-hunt` | Locate + decrypt legacy GPP cpassword (MS14-025); plaintext is redacted by default |
 | `shadow-creds` | Enumerate + write `msDS-KeyCredentialLink` |
-| `unpac-the-hash` | Recover NT hash from a PKINIT-only cert |
+| `unpac-the-hash` | Inspect PAC credential information from a PKINIT-only cert; does not claim hash recovery without verified decryption |
 
 Kerberos operations:
 
@@ -105,7 +105,7 @@ Privilege escalation / lateral movement:
 | `template-mod` | Flip AD CS template to ESC1-vulnerable with rollback |
 | `esc-chain` | Guided ESC1-ESC8 chain; ends in generated playbooks/handoff (external provider required) |
 | `computer-takeover` | Full computer-object takeover recipe |
-| `impacket-exec` | wmiexec / smbexec / dcomexec / atexec |
+| `impacket-exec` | Scoped remote execution via wmiexec / smbexec / dcomexec / atexec; reports actual execution status |
 | `coerce` | PetitPotam / PrinterBug / DFSCoerce / ShadowCoerce triggers |
 | `ntlm-relay` | Managed ntlmrelayx run with fixed target allowlist |
 | `rollback` | Apply an approved recorded rollback operation |

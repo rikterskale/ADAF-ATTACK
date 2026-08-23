@@ -203,6 +203,7 @@ def test_coercion_request_builders_and_run(monkeypatch: Any, tmp_path: Path) -> 
         session,
         AttackGraph(),
         listener="listener",
+        allow_hosts="dc.corp.test",
         methods="petitpotam,invalid,printerbug",
     )
     assert len(result["results"]) == 2 and session.path("coerce.json").is_file()
@@ -223,7 +224,7 @@ def test_gpp_capability_redacts_and_records(monkeypatch: Any, tmp_path: Path) ->
         _target(), Session(tmp_path / "session"), AttackGraph(), sysvol=source
     )
     assert result["decrypted"] == 1
-    assert result["entries"][0]["plaintext"] == "secret"
+    assert result["entries"][0]["plaintext"] == "[REDACTED]"
     included = gpp_cpassword.GppCpasswordHunt().run(
         _target(),
         Session(tmp_path / "included"),
@@ -259,7 +260,41 @@ def test_impacket_exec_safe_script_modes(monkeypatch: Any, tmp_path: Path) -> No
             method=method,
             command="whoami",
         )
-        assert result["method"] == method and result["outcome"]["note"]
+        assert result["method"] == method
+        assert result["ok"] is False
+        assert result["status"] == "failed"
+
+
+def test_impacket_exec_script_reports_real_subprocess_status(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    class Completed:
+        returncode = 0
+        stdout = "executed"
+        stderr = ""
+
+    monkeypatch.setattr(impacket_exec, "require_impacket", lambda _name: None)
+    monkeypatch.setattr(impacket_exec.shutil, "which", lambda _name: "/usr/bin/impacket-atexec")
+    monkeypatch.setattr(impacket_exec.subprocess, "run", lambda *args, **kwargs: Completed())
+    result = impacket_exec.ImpacketExec().run(
+        Target(domain="corp.test", dc_ip="192.0.2.10", hashes=":112233"),
+        Session(tmp_path / "script-success"),
+        AttackGraph(),
+        force=True,
+        method="atexec",
+        command="whoami",
+    )
+    assert result["ok"] is True
+    assert result["status"] == "completed"
+    assert result["outcome"]["return_code"] == 0
+
+
+def test_ldap_identifier_values_are_escaped() -> None:
+    from adaf_attack.core.ldap_ops import ldap_filter_value
+
+    assert (
+        ldap_filter_value("user*)(|(objectClass=*)") == "user\\2a\\29\\28|\\28objectClass=\\2a\\29"
+    )
 
 
 def test_report_pdf_and_html_branches(tmp_path: Path) -> None:
