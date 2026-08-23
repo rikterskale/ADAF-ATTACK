@@ -11,8 +11,8 @@ script (CI enforces parity).
 | `acl-enum` | enumeration | implemented | unknown | - | - | - | observe | none | none | Enumerate interesting ACL edges (high-value or domain-wide scope) |
 | `acl-write` | privilege-escalation | implemented | unknown | - | - | - | destructive | force_and_ack | manual | Apply an approved raw ACL descriptor with rollback capture |
 | `ad-cve-scan` | enumeration | implemented | unknown | - | - | - | observe | none | none | Non-exploiting scan for Zerologon / noPAC / Certifried / signing posture |
-| `adcs-enum` | enumeration | implemented | unknown | - | - | - | observe | none | none | Enumerate AD CS CAs/templates, ESC1–ESC9 signals, and enrollment rights |
-| `adcs-policy-probe` | enumeration | implemented | unknown | - | - | - | observe | none | none | Evaluate CA/DC policy evidence for ESC10–ESC15 |
+| `adcs-enum` | enumeration | implemented | unknown | - | - | - | observe | none | none | Enumerate AD CS CAs/templates, ESC1-ESC9 signals, and enrollment rights |
+| `adcs-policy-probe` | enumeration | implemented | unknown | - | - | - | observe | none | none | Evaluate CA/DC policy evidence for ESC10-ESC15 |
 | `add-member` | privilege-escalation | fixture-tested | live-mutating | - | delegated-acl-target | - | destructive | force_and_ack | manual | Add a principal to a group (AddMember / GenericAll on group) |
 | `add-self` | privilege-escalation | fixture-tested | live-mutating | - | delegated-acl-target | - | destructive | force_and_ack | manual | Add the current principal to a group (AddSelf) |
 | `adidns-wpad` | lateral-movement | fixture-tested | live-mutating | - | dns-lab | - | destructive | force_and_ack | manual | Plant WPAD / wildcard records in AD-integrated DNS |
@@ -38,7 +38,7 @@ script (CI enforces parity).
 | `dmsa-ouroboros` | credential-access | fixture-tested | live-mutating | - | dmsa-lab | - | destructive | force_and_ack | manual | Post-patch dMSA Ouroboros credential extraction (Server 2025) |
 | `dnsadmin-srv` | privilege-escalation | fixture-tested | live-mutating | - | dns-lab | - | destructive | force_and_ack | manual | DNSAdmins name-abuse (SRV / WPAD) without a server DLL drop |
 | `dpapi-domain-backup` | credential-access | fixture-tested | live-read-only | impacket | delegated-replication | - | observe | none | none | Retrieve the domain DPAPI backup key via replication rights |
-| `esc-chain` | privilege-escalation | implemented | unknown | - | - | - | destructive | force_and_ack | manual | Automated ESC1–ESC15 exploit chain: template → cert → PKINIT → TGT |
+| `esc-chain` | privilege-escalation | implemented | unknown | - | - | - | destructive | force_and_ack | manual | Automated ESC1-ESC15 exploit chain: template -> cert -> PKINIT -> TGT |
 | `esc10` | adcs | fixture-tested | live-mutating | certipy | adcs-lab | - | destructive | force_and_ack | manual | AD CS ESC10: weak certificate mapping |
 | `esc13` | adcs | fixture-tested | live-mutating | certipy | adcs-lab | - | destructive | force_and_ack | manual | AD CS ESC13: issuance policy linked to a privileged group |
 | `esc14` | adcs | fixture-tested | live-mutating | certipy | adcs-lab | - | destructive | force_and_ack | manual | AD CS ESC14: weak explicit certificate mapping |
