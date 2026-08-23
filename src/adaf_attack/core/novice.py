@@ -21,9 +21,14 @@ _GLOSSARY = {
 
 def safety_summary(cap: Capability) -> dict[str, str | bool]:
     """Return independent safety facts rather than a misleading single color."""
-    network = cap.category not in {"analysis", "export"}
-    if cap.destructive:
-        level, plain = "RED", "Can change a target when its write options are used."
+    network = bool(cap.safety and cap.safety.network_side_effect) or cap.category not in {
+        "analysis",
+        "export",
+    }
+    if cap.safety and cap.safety.modifies_directory:
+        level, plain = "RED", "Can change target state and requires explicit approval."
+    elif cap.requires_force:
+        level, plain = "RED", "Causes an approved network side effect or credential exposure."
     elif network:
         level, plain = (
             "YELLOW",
@@ -55,9 +60,9 @@ def beginner_next_actions(cap: Capability) -> list[dict[str, str]]:
 
 def capability_difficulty(cap: Capability) -> dict[str, str]:
     """Classify a capability with labels a first-time operator can use."""
-    spec = capability_option_spec(cap.id, cap.destructive)
+    spec = capability_option_spec(cap.id, cap.requires_force)
     required_count = len(spec.required)
-    if cap.destructive or required_count >= 5:
+    if cap.requires_force or required_count >= 5:
         level = "Advanced"
         reason = "Requires extra approval, exact target values, or target-state changes."
     elif cap.category in {"credential-access", "privilege-escalation", "lateral-movement"}:
@@ -120,7 +125,7 @@ def home_actions(*, first_run: bool) -> list[dict[str, str]]:
 
 def command_option_explanations(cap: Capability) -> list[dict[str, str]]:
     """Explain every option shown in the beginner command builder."""
-    spec = capability_option_spec(cap.id, cap.destructive)
+    spec = capability_option_spec(cap.id, cap.requires_force)
     explanations: list[dict[str, str]] = []
     for option in list(spec.required) + list(spec.optional):
         prompt = prompt_spec_for_option(option)
@@ -307,7 +312,7 @@ def required_prompts(cap: Capability) -> list[dict[str, str]]:
     Each entry is {option, label, help, is_param, param_key}. `is_param`
     marks entries that must be forwarded via -P key=value.
     """
-    spec = capability_option_spec(cap.id, cap.destructive)
+    spec = capability_option_spec(cap.id, cap.requires_force)
     prompts: list[dict[str, str]] = []
     for option in spec.required:
         info = prompt_spec_for_option(option)

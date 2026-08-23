@@ -14,6 +14,7 @@ import time
 from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
+from contextlib import closing
 from dataclasses import dataclass
 from importlib.metadata import entry_points
 from pathlib import Path
@@ -123,7 +124,7 @@ class SessionStore:
         return connection
 
     def _initialize(self) -> None:
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             db.executescript(
                 """
                 PRAGMA journal_mode=WAL;
@@ -157,7 +158,7 @@ class SessionStore:
         findings: Iterable[Mapping[str, Any]] = (),
     ) -> None:
         session = validate_session(migrate_document(metadata, kind="session"))
-        with self._lock, self._connect() as db:
+        with self._lock, closing(self._connect()) as db, db:
             db.execute(
                 """
                 INSERT INTO sessions(session_id, root, created_at, capability, schema_version)
@@ -202,7 +203,7 @@ class SessionStore:
             clauses.append("status = ?")
             params.append(status)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-        with self._connect() as db:
+        with closing(self._connect()) as db, db:
             rows = db.execute(
                 # nosec B608 - `where` is composed only from a fixed allowlist of
                 # column names ("severity", "status"); all values bind through

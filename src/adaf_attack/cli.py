@@ -72,6 +72,8 @@ def _unknown_capability_error(value: str) -> ActionableError:
 
 
 def _destructive_ack_path(root: Path) -> Path:
+    # Keep the historical filename so existing operator workspaces retain
+    # their acknowledgement state while the policy now covers side effects.
     return root.expanduser().resolve() / ".adaf-attack-destructive-ack.json"
 
 
@@ -83,7 +85,7 @@ def _require_destructive_ack(
     explicit: bool,
     interactive: bool,
 ) -> None:
-    """Require a one-time, workspace-local acknowledgement for destructive use."""
+    """Require a one-time, workspace-local acknowledgement for approved use."""
     marker = _destructive_ack_path(root)
     try:
         acknowledged = json.loads(marker.read_text(encoding="utf-8")) if marker.is_file() else {}
@@ -95,14 +97,14 @@ def _require_destructive_ack(
         if not interactive:
             error = ActionableError(
                 "FIRST_DESTRUCTIVE_USE_CONFIRMATION_REQUIRED",
-                f"First destructive use of '{capability}' in this workspace requires acknowledgement.",
+                f"First approved use of '{capability}' in this workspace requires acknowledgement.",
                 f"Run `adaf-attack plan {capability} ...` first, then re-run with --i-understand.",
                 suggested_command=f"adaf-attack plan {capability} --domain <domain> --dc-ip <dc>",
             )
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code)
         answer = typer.prompt(
-            f"Type the capability name '{capability}' to confirm first destructive use",
+            f"Type the capability name '{capability}' to confirm first approved use",
             default="",
             show_default=False,
         )
@@ -133,9 +135,11 @@ def _why_text(cap: Any) -> str:
         if cap.category not in {"analysis", "export"}
         else "does not contact a target"
     )
+    safety = getattr(cap, "safety", None)
+    destructive = bool(getattr(cap, "destructive", False))
     mutation = (
-        "It may modify target state when write options are used."
-        if cap.destructive
+        "It may modify target state or cause an approved network side effect."
+        if destructive or (safety is not None and safety.risk.value != "observe")
         else "It is read-only with respect to target state."
     )
     evidence = f"Evidence is written to the session as {cap.id}.json plus the session event log."
@@ -966,7 +970,8 @@ def list_capabilities(
         else caps
     )
     for cap in display_caps:
-        flags = ["[red]DESTRUCTIVE[/red]"] if cap.destructive else []
+        risk_label = cap.safety.risk.value.upper() if cap.safety else "APPROVAL REQUIRED"
+        flags = [f"[red]{risk_label}[/red]"] if cap.requires_force else []
         row = [cap.id]
         if by_phase:
             row.append(phase_label(capability_phase(cap)))
@@ -1225,11 +1230,11 @@ def support_bundle(
 
 
 def _capability_payload(cap: Any) -> dict[str, Any]:
-    spec = capability_option_spec(cap.id, cap.destructive)
+    spec = capability_option_spec(cap.id, cap.requires_force)
     example = f"adaf-attack run {cap.id}"
     if "--domain" in spec.required:
         example += " --domain corp.example --dc-ip 10.0.0.10"
-    if cap.destructive:
+    if cap.requires_force:
         example += " --force"
     from adaf_attack.core.engagement_dashboard import capability_review
     from adaf_attack.core.novice import capability_difficulty
@@ -1245,6 +1250,8 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
         "category": cap.category,
         "summary": cap.summary,
         "destructive": cap.destructive,
+        "requires_force": cap.requires_force,
+        "safety": cap.safety.as_dict() if cap.safety else {},
         "maturity": cap.maturity,
         "environment": cap.environment,
         "tools": list(cap.tools),
@@ -1296,13 +1303,14 @@ def capability_help(
             cap.id,
             domain="<domain>" if "--domain" in item["required_options"] else None,
             dc_ip="<dc-ip>" if "--dc-ip" in item["required_options"] else None,
-            force=cap.destructive,
+            force=cap.requires_force,
         )
         required = " ".join(item["required_options"]) or "(none)"
         optional = " ".join(item["optional_options"]) or "(none)"
         lines = [
             item["summary"],
-            f"Risk: {'destructive; --force required' if item['destructive'] else 'network enumeration or offline analysis'}",
+            f"Risk: {item['safety'].get('risk', 'unknown')}; "
+            f"{'--force required' if item.get('requires_force') else 'no force required'}",
             f"Required: {required}",
             f"Optional: {optional}",
             "Checklist: "
@@ -1327,7 +1335,13 @@ def capability_help(
     table.add_column("Risk")
     table.add_column("Summary")
     for cap in caps:
-        table.add_row(cap.id, "destructive" if cap.destructive else "standard", cap.summary)
+        table.add_row(
+            cap.id,
+            cap.safety.risk.value
+            if cap.safety
+            else ("destructive" if cap.destructive else "standard"),
+            cap.summary,
+        )
     _emit(ctx, payload, table)
 
 
@@ -1358,8 +1372,8 @@ def plan(
         )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
-    risk = "high" if cap.destructive else "moderate"
-    requires_force = cap.destructive
+    risk = "high" if cap.destructive else (cap.safety.risk.value if cap.safety else "moderate")
+    requires_force = cap.requires_force
     from adaf_attack.core.ux import build_ready_command, format_stages_progress, risk_checklist
 
     checklist = risk_checklist(cap)
@@ -1412,7 +1426,7 @@ def plan(
         "\n".join(
             [
                 f"Target: {domain} @ {dc_ip}",
-                f"Risk: {risk}; {'may modify target state' if cap.destructive else 'performs network/offline analysis only'}",
+                f"Risk: {risk}; {'may modify target state' if risk != 'observe' else 'observation-only'}",
                 f"--force: {'provided' if force else 'not provided'}",
                 f"Opsec: {checklist['opsec_hint']}",
                 "Preflight: "
@@ -1909,7 +1923,7 @@ def _interactive_run_prompts(
     extra_params: list[str] = []
     for prompt in required_prompts(cap):
         option = prompt["option"]
-        # Only ask for --force explicitly for destructive capabilities.
+        # Only ask for --force explicitly for approved side-effect capabilities.
         if option == "--force":
             if force_already:
                 continue
@@ -2011,9 +2025,11 @@ def run_capability(
         False, "-k", "--kerberos", help="Prefer Kerberos ticket auth (ccache / KRB5CCNAME)"
     ),
     ldaps: bool = typer.Option(False, "--ldaps", help="Use LDAPS"),
-    force: bool = typer.Option(False, "--force", help="Required for destructive capabilities"),
+    force: bool = typer.Option(
+        False, "--force", help="Required for approved side-effect capabilities"
+    ),
     yes: bool = typer.Option(
-        False, "--yes", "-y", help="Skip the interactive destructive-run confirmation."
+        False, "--yes", "-y", help="Skip the interactive approved-run confirmation."
     ),
     interactive: bool = typer.Option(
         False,
@@ -2030,7 +2046,7 @@ def run_capability(
         help="Explain purpose, network contact, mutation risk, and evidence before running.",
     ),
     i_understand: bool = typer.Option(
-        False, "--i-understand", help="Acknowledge first destructive use in this workspace."
+        False, "--i-understand", help="Acknowledge first approved use in this workspace."
     ),
     include_secrets: bool = typer.Option(
         False, "--include-secrets", help="Do not redact tickets/hashes in output"
@@ -2186,13 +2202,58 @@ def run_capability(
 
     cap = capability_registry.get(capability)
 
+    extra: dict[str, Any] = {}
+    if graph is not None:
+        extra["graph_path"] = graph
+    if start is not None:
+        extra["start"] = start
+    extra["max_depth"] = max_depth
+    extra["limit"] = limit
+    extra["scope"] = scope
+    extra["max_objects"] = max_objects
+    for name, val in (
+        ("template", template),
+        ("ca", ca),
+        ("alt_name", alt_name),
+        ("write_target", write_target),
+        ("attribute", attribute),
+        ("value", value),
+        ("descriptor_hex", descriptor_hex),
+        ("set_on", set_on),
+        ("set_from", set_from),
+        ("sam", sam),
+        ("key", key),
+        ("cert", cert),
+        ("pfx", pfx),
+        ("gpo", gpo),
+        ("operation", operation),
+        ("artifact", artifact),
+        ("impersonate", impersonate),
+        ("spn", spn),
+    ):
+        if val:
+            extra[name] = val
+    if payload is not None:
+        extra["payload"] = _parse_payload(payload)
+
+    # -P/--param overrides take precedence over legacy flags and are included
+    # in the safety decision before any approval prompt is shown.
+    extra.update(_parse_extra_params(param))
+    from adaf_attack.core.execution_policy import safety_for_operation
+
+    active_safety = (
+        safety_for_operation(cap, {**extra, "_force": force}) if cap is not None else None
+    )
+    requires_force = bool(active_safety and active_safety.requires_force)
+    requires_ack = bool(active_safety and active_safety.requires_ack)
+
     guided_mode = bool(interactive)
     non_interactive = ctx.ensure_object(dict).get("non_interactive")
     interactive = (not non_interactive) and sys.stdout.isatty() and not _json_mode(ctx)
 
     if cap is not None and why and not _json_mode(ctx):
         _console(ctx).print(Panel(_why_text(cap), title=f"Why: {capability}"))
-    if cap is not None and cap.destructive and force and interactive and not yes:
+    if cap is not None and requires_force and force and interactive and not yes:
         _console(ctx).print(
             Panel(
                 f"[bold red]DESTRUCTIVE[/bold red] {capability} against {domain} @ {dc_ip}\n"
@@ -2209,7 +2270,7 @@ def run_capability(
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code)
 
-    if cap is not None and cap.destructive and force:
+    if cap is not None and requires_ack and force:
         # The existing interactive "Continue?" confirmation is itself an
         # explicit acknowledgement; --yes bypasses it and therefore requires
         # the stronger capability-name acknowledgement.
@@ -2250,50 +2311,15 @@ def run_capability(
             )
         )
 
-    extra: dict[str, Any] = {}
-    if graph is not None:
-        extra["graph_path"] = graph
-    if start is not None:
-        extra["start"] = start
-    extra["max_depth"] = max_depth
-    extra["limit"] = limit
-    extra["scope"] = scope
-    extra["max_objects"] = max_objects
-    for name, val in (
-        ("template", template),
-        ("ca", ca),
-        ("alt_name", alt_name),
-        ("write_target", write_target),
-        ("attribute", attribute),
-        ("value", value),
-        ("descriptor_hex", descriptor_hex),
-        ("set_on", set_on),
-        ("set_from", set_from),
-        ("sam", sam),
-        ("key", key),
-        ("cert", cert),
-        ("pfx", pfx),
-        ("gpo", gpo),
-        ("operation", operation),
-        ("artifact", artifact),
-        ("impersonate", impersonate),
-        ("spn", spn),
-    ):
-        if val:
-            extra[name] = val
-    if payload is not None:
-        extra["payload"] = _parse_payload(payload)
-
-    # -P/--param overrides take precedence over legacy flags.
-    extra.update(_parse_extra_params(param))
-
     try:
         if _json_mode(ctx) or not interactive:
             out = execute_capability(
                 capability,
                 target,
                 force=force,
+                acknowledged=True,
                 include_secrets=include_secrets,
+                json_mode=_json_mode(ctx),
                 workspace=workspace,
                 creds_file=creds_file,
                 log=None if _json_mode(ctx) else lambda m: _console(ctx).print(m),
@@ -2379,7 +2405,9 @@ def _execute_with_spinner(
             capability,
             target,
             force=force,
+            acknowledged=True,
             include_secrets=include_secrets,
+            json_mode=False,
             workspace=workspace,
             creds_file=creds_file,
             log=_log,
@@ -3140,7 +3168,7 @@ def command_builder_cmd(
         domain=domain or "<domain>",
         dc_ip=dc_ip or "<dc-ip>",
         username=username,
-        force=force or cap.destructive,
+        force=force or cap.requires_force,
     )
     explanations = command_option_explanations(cap)
     payload = {

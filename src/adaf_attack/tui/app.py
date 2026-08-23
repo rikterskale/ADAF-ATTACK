@@ -77,13 +77,25 @@ class CapabilityItem(ListItem):  # type: ignore[misc,unused-ignore]
         self.cap_id = cap.id
         self.category = cap.category
         self.summary = cap.summary
-        self.destructive = cap.destructive
+        self.requires_force = cap.requires_force
+        self.requires_ack = cap.requires_ack
+        self.safety_profile = cap.safety
         self.phase_header = phase_header
 
     def compose(self) -> ComposeResult:
-        risk = " [red]DESTRUCTIVE[/]" if self.destructive else ""
+        risk = (
+            f" [red]{self.safety_profile.risk.value.upper()}[/]"
+            if self.safety_profile and self.requires_force
+            else ""
+        )
         safety = safety_summary(
-            Capability(self.cap_id, self.summary, self.destructive, self.category)
+            Capability(
+                self.cap_id,
+                self.summary,
+                self.safety_profile.risk.value == "destructive" if self.safety_profile else False,
+                self.category,
+                safety=self.safety_profile,
+            )
         )
         if self.phase_header:
             yield Label(f"[bold yellow]{self.phase_header}[/]")
@@ -175,6 +187,41 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._workflow: WorkflowEngine | None = None
         self._selected_attack_edge: dict[str, Any] | None = None
         self._operation_mode = "OBSERVE"
+        self._worker_thread: threading.Thread | None = None
+
+    def on_unmount(self) -> None:
+        """Ask background work to stop before the screen is torn down."""
+        self._cancel_requested.set()
+
+    def _post_ui(self, callback: Any, *args: Any, **kwargs: Any) -> None:
+        """Schedule a UI callback without allowing teardown to crash a worker."""
+        loop = getattr(self, "_loop", None)
+        if loop is None or loop.is_closed() or not loop.is_running():
+            return
+        try:
+            self.call_from_thread(callback, *args, **kwargs)
+        except Exception:  # noqa: BLE001 - callback may fail during teardown
+            # Textual can close the message pump while a network worker is
+            # unwinding. The capability result remains in its session.
+            return
+
+    def _set_button_disabled(self, widget_id: str, disabled: bool) -> None:
+        try:
+            self.query_one(f"#{widget_id}", Button).disabled = disabled
+        except Exception:  # noqa: BLE001 - widget may have been unmounted
+            return
+
+    def _set_button_label(self, widget_id: str, label: str) -> None:
+        try:
+            self.query_one(f"#{widget_id}", Button).label = label
+        except Exception:  # noqa: BLE001 - widget may have been unmounted
+            return
+
+    def _safe_update_status(self) -> None:
+        try:
+            self._update_status()
+        except Exception:  # noqa: BLE001 - screen may have been unmounted
+            return
 
     def compose(self) -> ComposeResult:
         defaults = load_user_config()
@@ -389,8 +436,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 log.write(line)
 
     def _write_run_log(self, message: str) -> None:
-        self.call_from_thread(self._show_log, message)
-        self.call_from_thread(self._update_progress)
+        self._post_ui(self._show_log, message)
+        self._post_ui(self._update_progress)
 
     def _populate_capabilities(self, query: str = "") -> None:
         import adaf_attack.capabilities  # noqa: F401
@@ -778,7 +825,11 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
         target = self.query_one("#domain", Input).value.strip() or "(missing)"
         dc = self.query_one("#dc_ip", Input).value.strip() or "(missing)"
-        risk = "destructive" if cap.destructive else "read-only"
+        risk = (
+            cap.safety.risk.value
+            if cap.safety
+            else ("destructive" if cap.destructive else "read-only")
+        )
         estimate = "1–3 minutes" if cap.category in {"discovery", "analysis"} else "3–10 minutes"
         self.query_one("#summary-panel", Static).update(
             f"[bold]Run summary[/bold] · {cap.id} · {risk}\n"
@@ -848,7 +899,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         elif self._wizard_step == 3:
             self._review_run()
             cap = self._selected()
-            if cap and (not cap.destructive or self._reviewed_cap == cap.id):
+            if cap and (not cap.requires_ack or self._reviewed_cap == cap.id):
                 self._set_wizard_step(4)
                 self._show_run_summary()
             else:
@@ -956,7 +1007,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         cap = self._selected()
         if not cap:
             return
-        spec = capability_option_spec(cap.id, cap.destructive)
+        spec = capability_option_spec(cap.id, cap.requires_force)
         required = ", ".join(spec.required) or "none (offline/session input)"
         optional = ", ".join(spec.optional[:6]) or "none"
         notes = f"\n[italic]{spec.notes}[/]" if spec.notes else ""
@@ -1047,9 +1098,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         cap = self._selected()
         if not cap:
             authorization = "No capability selected"
-        elif cap.destructive and self._reviewed_cap != cap.id:
+        elif cap.requires_ack and self._reviewed_cap != cap.id:
             authorization = "Review acknowledgement required"
-        elif cap.destructive:
+        elif cap.requires_force:
             authorization = "Reviewed for selected capability"
         else:
             authorization = "Read-only capability selected"
@@ -1142,7 +1193,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     def _update_run_gate(self) -> None:
         cap = self._selected()
         enabled = not self._capability_running
-        if cap and cap.destructive:
+        if cap and cap.requires_ack:
             required = risk_checklist(cap)["items"]
             complete = all(
                 not item["required"] or self.query_one(f"#check-{item['id']}", Checkbox).value
@@ -1260,14 +1311,15 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if target is None:
             return
         self._reviewed_cap = None
-        spec = capability_option_spec(cap.id, cap.destructive)
+        spec = capability_option_spec(cap.id, cap.requires_force)
         force = self.query_one("#force", Switch).value
+        risk_label = cap.safety.risk.value.upper() if cap.safety else "APPROVAL REQUIRED"
         risk = (
-            "DESTRUCTIVE — Force is enabled."
-            if cap.destructive and force
-            else "DESTRUCTIVE — Force is required."
-            if cap.destructive
-            else "Read-only / non-destructive"
+            f"{risk_label} — Force is enabled."
+            if cap.requires_force and force
+            else f"{risk_label} — Force is required."
+            if cap.requires_force
+            else "Read-only / no approval required"
         )
         checklist = risk_checklist(cap)
         for item in checklist["items"]:
@@ -1284,7 +1336,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "Check required items, then acknowledge the review."
         )
         self._update_run_gate()
-        if cap.destructive and not force:
+        if cap.requires_force and not force:
             self.notify(
                 "Review shows a destructive capability; enable Force only when authorized.",
                 severity="warning",
@@ -1337,7 +1389,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if not cap:
             self.notify("Select a capability first.", severity="warning")
             return
-        spec = capability_option_spec(cap.id, cap.destructive)
+        spec = capability_option_spec(cap.id, cap.requires_force)
         self._review_run()
         self._show_log(
             f"[yellow]DRY RUN[/] {cap.id}: no network action started.\n"
@@ -1361,7 +1413,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self.notify("Select a capability first", severity="warning")
             return
         cap = self._selected()
-        if cap and cap.destructive and self._reviewed_cap != cap.id:
+        if cap and cap.requires_ack and self._reviewed_cap != cap.id:
             self.notify(
                 "Review and acknowledge required checklist items before running.",
                 severity="warning",
@@ -1436,6 +1488,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     capability_id,
                     target,
                     force=force,
+                    acknowledged=self._reviewed_cap == capability_id,
                     include_secrets=include_secrets,
                     creds_file=creds_file,
                     log=log_fn,
@@ -1443,22 +1496,18 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     **extra,
                 )
                 self._last_session = Path(out["session_path"])
-                self.call_from_thread(self._update_engagement_dashboard)
+                self._post_ui(self._update_engagement_dashboard)
                 summary = out.get("graph_summary") or {}
                 self._write_run_log(
                     f"[green]Done[/] session={out['session_id']}  nodes={summary.get('nodes', 0)} edges={summary.get('edges', 0)}"
                 )
-                self.call_from_thread(self._load_findings, Path(out["session_path"]))
-                self.call_from_thread(self._ingest_session_findings, Path(out["session_path"]))
-                self.call_from_thread(self._show_next_actions, capability_id)
-                self.call_from_thread(self._set_wizard_step, 5)
-                self.call_from_thread(
-                    self.query_one("#reports-btn", Button).__setattr__, "disabled", False
-                )
-                self.call_from_thread(
-                    self.query_one("#package-btn", Button).__setattr__, "disabled", False
-                )
-                self.call_from_thread(
+                self._post_ui(self._load_findings, Path(out["session_path"]))
+                self._post_ui(self._ingest_session_findings, Path(out["session_path"]))
+                self._post_ui(self._show_next_actions, capability_id)
+                self._post_ui(self._set_wizard_step, 5)
+                self._post_ui(self._set_button_disabled, "reports-btn", False)
+                self._post_ui(self._set_button_disabled, "package-btn", False)
+                self._post_ui(
                     self.notify,
                     f"Completed {capability_id}; session ready",
                     severity="information",
@@ -1467,26 +1516,21 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 self._write_run_log(
                     f"[red]Error:[/] {exc}\n[dim]Check the review panel and capability prerequisites.[/]"
                 )
-                self.call_from_thread(self.notify, str(exc), severity="error")
+                self._post_ui(self.notify, str(exc), severity="error")
             finally:
                 self._capability_running = False
                 self._active_stage = "next-actions"
-                self.call_from_thread(
-                    self.query_one("#cancel-btn", Button).__setattr__, "disabled", True
-                )
-                self.call_from_thread(
-                    self.query_one("#pause-btn", Button).__setattr__, "disabled", True
-                )
-                self.call_from_thread(
-                    self.query_one("#pause-btn", Button).__setattr__, "label", "Pause"
-                )
-                self.call_from_thread(self._update_status)
-                self.call_from_thread(self._update_progress)
-                self.call_from_thread(self._update_run_gate)
-                self.call_from_thread(self._update_engagement_dashboard)
-                self.call_from_thread(self._refresh_first_launch_panel)
+                self._post_ui(self._set_button_disabled, "cancel-btn", True)
+                self._post_ui(self._set_button_disabled, "pause-btn", True)
+                self._post_ui(self._set_button_label, "pause-btn", "Pause")
+                self._post_ui(self._safe_update_status)
+                self._post_ui(self._update_progress)
+                self._post_ui(self._update_run_gate)
+                self._post_ui(self._update_engagement_dashboard)
+                self._post_ui(self._refresh_first_launch_panel)
 
-        threading.Thread(target=worker, daemon=True).start()
+        self._worker_thread = threading.Thread(target=worker, daemon=True, name="adaf-tui-run")
+        self._worker_thread.start()
 
     def _cancel(self) -> None:
         if self._capability_running:
@@ -1809,7 +1853,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"[bold]Edge validation handoff — review required[/bold]\n"
             f"Edge: {edge.get('source', '?')} --{relation or 'unknown'}--> {edge.get('target', '?')}\n"
             f"Suggested capability: {capability.id} — {capability.summary}\n"
-            f"Risk: {'destructive; Force and acknowledgement required' if capability.destructive else 'read-only'}\n"
+            f"Risk: {'approval required; Force and acknowledgement required' if capability.requires_force else 'read-only'}\n"
             f"Ready command: [dim]{self._ready_command(capability.id)}[/]\n"
             "Select Review to inspect prerequisites and success criteria before any execution."
         )

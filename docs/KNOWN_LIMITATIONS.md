@@ -23,7 +23,18 @@
 - Docker is not a live-AD release surface. It is suitable only for offline
   development/reporting because live Kerberos, DNS, SMB, and target-network
   behavior requires host integration.
+- Capability safety is enforced from registered profiles, not from engagement
+  plan labels. Side-effect operations such as coercion, DCSync, S4U abuse, and
+  certificate chains require explicit approval even when they do not directly
+  mutate LDAP.
 - Destructive capabilities record rollback pre-state in the session
-  (`cleanup.json`) and `adaf-attack rollback` reverses pending changes;
-  target-side cleanup still needs operator validation against an authorized
+  (`cleanup.json`) and `adaf-attack rollback` reverses supported pending
+  changes. Advisory effects such as coercion, certificate enrollment, relay,
+  and remote execution still require operator validation against an authorized
   target.
+- A generic execution timeout bounds how long the caller waits; it cannot
+  force-kill an arbitrary Python or network worker. Timeouts and retries are
+  rejected for registered target-mutating or network-side-effect operations.
+- Kerberos ccache environment state is scoped to the TGT acquisition call and
+  is restored afterward. Long-running integrations should still prefer
+  explicit cache paths over process-global environment configuration.

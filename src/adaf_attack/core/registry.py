@@ -1,8 +1,9 @@
-"""Capability registry.
+"""Capability registry and operator safety metadata.
 
-Capabilities are registered at import time. There are no lab_certified or
-containment gates — only a lightweight `destructive` flag that requires
-`--force` at execution time.
+Capabilities are registered at import time. The legacy ``destructive`` flag
+is retained for compatibility, but new code should use :class:`SafetyProfile`.
+The safety profile is authoritative for execution policy and is owned by the
+capability registration rather than by engagement input.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 from builtins import list as builtin_list
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Any, Protocol, cast
 
 from adaf_attack.core.graph import AttackGraph
@@ -30,6 +32,97 @@ class CapabilityRunner(Protocol):
     ) -> dict[str, Any]: ...
 
 
+class RiskLevel(StrEnum):
+    """Operator-visible risk class for a capability or operation."""
+
+    OBSERVE = "observe"
+    SENSITIVE = "sensitive"
+    SIDE_EFFECT = "side_effect"
+    DESTRUCTIVE = "destructive"
+
+
+class ApprovalPolicy(StrEnum):
+    """Approval required before the capability may execute."""
+
+    NONE = "none"
+    CONFIRM = "confirm"
+    FORCE_AND_ACK = "force_and_ack"
+    SCOPED_TOKEN = "scoped_token"
+
+
+class RollbackClass(StrEnum):
+    """How much cleanup the toolkit can guarantee after execution."""
+
+    NONE = "none"
+    MANUAL = "manual"
+    AUTOMATIC = "automatic"
+
+
+@dataclass(frozen=True)
+class SafetyProfile:
+    """Machine-readable safety contract for one capability.
+
+    ``destructive`` is not synonymous with dangerous. For example,
+    authentication coercion may not mutate LDAP state but still causes a
+    network side effect and may expose credentials.
+    """
+
+    risk: RiskLevel = RiskLevel.OBSERVE
+    approval: ApprovalPolicy = ApprovalPolicy.NONE
+    rollback: RollbackClass = RollbackClass.NONE
+    network_side_effect: bool = False
+    modifies_directory: bool = False
+    exposes_credentials: bool = False
+    requires_target_scope: bool = True
+
+    @property
+    def requires_force(self) -> bool:
+        return self.approval in {
+            ApprovalPolicy.FORCE_AND_ACK,
+            ApprovalPolicy.SCOPED_TOKEN,
+        }
+
+    @property
+    def requires_ack(self) -> bool:
+        return self.approval == ApprovalPolicy.FORCE_AND_ACK
+
+    @property
+    def is_mutating(self) -> bool:
+        # A network side effect is not necessarily an LDAP mutation, but it
+        # still cannot be safely retried or abandoned while the worker runs.
+        return (
+            self.modifies_directory
+            or self.network_side_effect
+            or self.risk == RiskLevel.DESTRUCTIVE
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "risk": self.risk.value,
+            "approval": self.approval.value,
+            "rollback": self.rollback.value,
+            "network_side_effect": self.network_side_effect,
+            "modifies_directory": self.modifies_directory,
+            "exposes_credentials": self.exposes_credentials,
+            "requires_target_scope": self.requires_target_scope,
+            "requires_force": self.requires_force,
+            "requires_ack": self.requires_ack,
+        }
+
+
+def default_safety_profile(destructive: bool) -> SafetyProfile:
+    """Convert legacy registrations to an explicit safety profile."""
+    if destructive:
+        return SafetyProfile(
+            risk=RiskLevel.DESTRUCTIVE,
+            approval=ApprovalPolicy.FORCE_AND_ACK,
+            rollback=RollbackClass.MANUAL,
+            network_side_effect=True,
+            modifies_directory=True,
+        )
+    return SafetyProfile()
+
+
 @dataclass(frozen=True)
 class Capability:
     id: str
@@ -42,6 +135,23 @@ class Capability:
     tools: tuple[str, ...] = field(default_factory=tuple)
     fixture: str | None = None
     runner: CapabilityRunner | None = None
+    safety: SafetyProfile | None = None
+
+    def __post_init__(self) -> None:
+        if self.safety is None:
+            object.__setattr__(self, "safety", default_safety_profile(self.destructive))
+        elif self.safety.risk == RiskLevel.DESTRUCTIVE and not self.destructive:
+            # Keep legacy callers and downstream documentation in sync with
+            # explicit profiles. The profile remains the source of truth.
+            object.__setattr__(self, "destructive", True)
+
+    @property
+    def requires_force(self) -> bool:
+        return bool(self.safety and self.safety.requires_force)
+
+    @property
+    def requires_ack(self) -> bool:
+        return bool(self.safety and self.safety.requires_ack)
 
 
 class CapabilityRegistry:
@@ -71,6 +181,7 @@ def register_capability(
     summary: str,
     *,
     destructive: bool = False,
+    safety: SafetyProfile | None = None,
     category: str = "general",
     tags: tuple[str, ...] = (),
     maturity: str = "implemented",
@@ -88,6 +199,7 @@ def register_capability(
                 id=id,
                 summary=summary,
                 destructive=destructive,
+                safety=safety or default_safety_profile(destructive),
                 category=category,
                 tags=tags,
                 maturity=maturity,

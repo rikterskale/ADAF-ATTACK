@@ -57,7 +57,8 @@ def capability_review(
 ) -> dict[str, Any]:
     """Common pre-execution review contract, including success and telemetry."""
     phase = capability_phase(cap)
-    destructive = bool(cap.destructive)
+    destructive = bool(cap.safety and cap.safety.modifies_directory)
+    requires_force = cap.requires_force
     feasibility = evaluate_prerequisites(cap.id, session=session)
     prereqs = capability_prerequisites(cap.id)
     prereqs["best_run_after"] = feasibility["required"]
@@ -67,13 +68,14 @@ def capability_review(
         "plain_language": f"{cap.summary}. Review scope and authorization before continuing.",
         "phase": phase,
         "risk": {
-            "level": "R3" if destructive else "R1",
+            "level": "R3" if destructive else ("R2" if requires_force else "R1"),
             "destructive": destructive,
+            "safety": cap.safety.as_dict() if cap.safety else {},
             "noise": "high"
             if destructive
             else ("low" if phase in {"analysis", "export"} else "medium"),
         },
-        "operational_modes": list(MODES) if destructive else ["OBSERVE", "VALIDATE"],
+        "operational_modes": list(MODES) if requires_force else ["OBSERVE", "VALIDATE"],
         "prerequisites": prereqs,
         "feasibility": {
             "available": True,

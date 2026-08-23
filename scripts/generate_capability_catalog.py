@@ -20,8 +20,8 @@ This document is regenerated from the running package by
 `scripts/generate_capability_catalog.py`. Do not edit by hand; run the
 script (CI enforces parity).
 
-| ID | Category | Maturity | Environment | Tools | Fixture | Difficulty | Destructive | Summary |
-|----|----------|----------|-------------|-------|---------|------------|-------------|---------|
+| ID | Category | Maturity | Environment | Tools | Fixture | Difficulty | Risk | Approval | Rollback | Summary |
+|----|----------|----------|-------------|-------|---------|------------|------|----------|----------|---------|
 """
 
 
@@ -35,7 +35,18 @@ def _rows() -> list[str]:
         if cap is None:
             continue
         summary = (cap.summary or "").replace("|", "\\|")
-        destructive = "yes" if getattr(cap, "destructive", False) else "no"
+        safety = getattr(cap, "safety", None)
+        risk = (
+            safety.risk.value
+            if safety is not None
+            else ("destructive" if cap.destructive else "observe")
+        )
+        approval = (
+            safety.approval.value
+            if safety is not None
+            else ("force_and_ack" if cap.destructive else "none")
+        )
+        rollback = safety.rollback.value if safety is not None else "unknown"
         difficulty = getattr(cap, "difficulty", "-") or "-"
         category = getattr(cap, "category", "-") or "-"
         maturity = getattr(cap, "maturity", "implemented") or "implemented"
@@ -44,7 +55,7 @@ def _rows() -> list[str]:
         fixture = getattr(cap, "fixture", None) or "-"
         lines.append(
             f"| `{cap.id}` | {category} | {maturity} | {environment} | {tools} | "
-            f"{fixture} | {difficulty} | {destructive} | {summary} |"
+            f"{fixture} | {difficulty} | {risk} | {approval} | {rollback} | {summary} |"
         )
     return lines
 

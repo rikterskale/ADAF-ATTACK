@@ -80,9 +80,12 @@ def risk_checklist(cap: Capability) -> dict[str, Any]:
         "privilege-escalation",
         "lateral-movement",
     } or cap.category in {"enumeration", "credential-access"}
-    requires_force = bool(cap.destructive)
-    network_contact = phase not in {"analysis", "export"}
-    may_modify = bool(cap.destructive)
+    requires_force = cap.requires_force
+    network_contact = bool(cap.safety and cap.safety.network_side_effect) or phase not in {
+        "analysis",
+        "export",
+    }
+    may_modify = bool(cap.safety and cap.safety.modifies_directory)
 
     items = [
         {"id": "scope", "label": "Engagement scope confirmed", "required": True},
@@ -93,7 +96,7 @@ def risk_checklist(cap: Capability) -> dict[str, Any]:
         },
         {
             "id": "force",
-            "label": "--force supplied for destructive action",
+            "label": "--force supplied for approved side effect",
             "required": requires_force,
         },
         {
@@ -108,6 +111,7 @@ def risk_checklist(cap: Capability) -> dict[str, Any]:
         "phase": phase,
         "phase_label": PHASE_LABELS.get(phase, phase),
         "destructive": cap.destructive,
+        "safety": cap.safety.as_dict() if cap.safety else {},
         "requires_domain_user": requires_domain_user,
         "requires_force": requires_force,
         "network_contact": network_contact,
@@ -336,7 +340,7 @@ def unified_search(query: str, *, session: Path | None = None, limit: int = 25) 
                 cap.summary,
                 cap.category,
                 " ".join(cap.tags or ()),
-                "destructive" if cap.destructive else "",
+                cap.safety.risk.value if cap.safety and cap.requires_force else "",
             ]
         ).lower()
         if q in hay:
@@ -347,6 +351,7 @@ def unified_search(query: str, *, session: Path | None = None, limit: int = 25) 
                     "phase": capability_phase(cap),
                     "summary": cap.summary,
                     "destructive": cap.destructive,
+                    "safety": cap.safety.as_dict() if cap.safety else {},
                 }
             )
     results: list[dict[str, Any]] = [

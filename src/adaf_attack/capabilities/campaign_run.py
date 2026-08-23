@@ -15,8 +15,10 @@ from typing import Any
 from rich.console import Console
 
 from adaf_attack.core.engagement import EngagementError, verify_scoped_approval
+from adaf_attack.core.execution_policy import safety_for_operation
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import capability_registry, register_capability
+from adaf_attack.core.runner import execute_capability
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 from adaf_attack.core.vault import VaultError
@@ -172,11 +174,62 @@ class CampaignRun:
         for phase in phases:
             phase_id = str(phase.get("id") or phase.get("capability") or "phase")
             capability_id = str(phase.get("capability") or "")
-            destructive = bool(phase.get("destructive"))
             console.print(f"\n[cyan]Phase[/cyan] {phase_id} → {capability_id}")
 
-            if destructive and not force:
-                console.print("  [yellow]skipped — destructive phase requires --force[/yellow]")
+            cap = capability_registry.get(capability_id)
+            legacy_phase_requires_approval = bool(phase.get("destructive"))
+            if cap is not None and not cap.runner:
+                phase_results.append(
+                    {
+                        "id": phase_id,
+                        "capability": capability_id,
+                        "ok": False,
+                        "error": f"unknown capability: {capability_id}",
+                    }
+                )
+                console.print(f"  [red]unknown capability[/red] {capability_id}")
+                continue
+            if cap is None and not legacy_phase_requires_approval:
+                phase_results.append(
+                    {
+                        "id": phase_id,
+                        "capability": capability_id,
+                        "ok": False,
+                        "error": f"unknown capability: {capability_id}",
+                    }
+                )
+                console.print(f"  [red]unknown capability[/red] {capability_id}")
+                continue
+
+            params = dict(phase.get("params") or {})
+            reserved = {
+                "force",
+                "acknowledged",
+                "approval_token",
+                "session",
+                "graph",
+                "workspace",
+                "include_secrets",
+            }.intersection(params)
+            if reserved:
+                phase_results.append(
+                    {
+                        "id": phase_id,
+                        "capability": capability_id,
+                        "ok": False,
+                        "error": "reserved execution parameters: " + ", ".join(sorted(reserved)),
+                    }
+                )
+                console.print("  [yellow]skipped — reserved execution parameters[/yellow]")
+                continue
+            requires_approval = (
+                safety_for_operation(cap, {**params, "_force": False}).requires_force
+                if cap is not None and hasattr(cap, "safety")
+                else legacy_phase_requires_approval
+            )
+
+            if requires_approval and not force:
+                console.print("  [yellow]skipped — capability approval requires --force[/yellow]")
                 phase_results.append(
                     {
                         "id": phase_id,
@@ -187,13 +240,14 @@ class CampaignRun:
                 )
                 continue
 
-            if destructive:
+            if requires_approval:
                 try:
                     approval = verify_scoped_approval(
                         approval_token,
                         engagement_id=engagement_id,
                         dc_ip=target.dc_ip,
                         capability=capability_id,
+                        parameters=params,
                     )
                 except EngagementError as exc:
                     console.print(f"  [yellow]skipped — approval rejected: {exc}[/yellow]")
@@ -215,8 +269,7 @@ class CampaignRun:
                     approver=approval.get("approved_by"),
                 )
 
-            cap = capability_registry.get(capability_id)
-            if not cap or not cap.runner:
+            if cap is None:
                 phase_results.append(
                     {
                         "id": phase_id,
@@ -226,6 +279,17 @@ class CampaignRun:
                     }
                 )
                 console.print(f"  [red]unknown capability[/red] {capability_id}")
+                continue
+            runner = cap.runner
+            if runner is None:  # pragma: no cover - guarded before approval
+                phase_results.append(
+                    {
+                        "id": phase_id,
+                        "capability": capability_id,
+                        "ok": False,
+                        "error": f"capability unavailable: {capability_id}",
+                    }
+                )
                 continue
 
             hand_off = _vault_hand_off(session, phase)
@@ -242,16 +306,32 @@ class CampaignRun:
                 console.print("  [yellow]skipped — required vault refs missing[/yellow]")
                 continue
 
-            params = dict(phase.get("params") or {})
             try:
-                outcome = cap.runner.run(
-                    target,
-                    session,
-                    graph,
-                    force=bool(force and destructive),
-                    include_secrets=include_secrets,
-                    **params,
-                )
+                if hasattr(cap, "safety"):
+                    outcome = execute_capability(
+                        capability_id,
+                        target,
+                        force=bool(force and requires_approval),
+                        acknowledged=True,
+                        approval_token=approval_token or None,
+                        include_secrets=include_secrets,
+                        workspace=session.base_dir,
+                        session=session,
+                        graph=graph,
+                        **params,
+                    )
+                else:
+                    # Compatibility path for third-party/test registry
+                    # descriptors created before SafetyProfile existed. Real
+                    # registered capabilities always use execute_capability.
+                    outcome = runner.run(
+                        target,
+                        session,
+                        graph,
+                        force=bool(force and requires_approval),
+                        include_secrets=include_secrets,
+                        **params,
+                    )
                 if isinstance(outcome, dict):
                     ok = bool(outcome.get("ok", "error" not in outcome))
                 else:

@@ -86,6 +86,7 @@ def capability_dependency_graph(cap_id: str | None = None) -> dict[str, Any]:
                     "available": True,
                     "category": cap.category,
                     "destructive": cap.destructive,
+                    "safety": cap.safety.as_dict() if cap.safety else {},
                     "summary": cap.summary,
                 }
             )
@@ -152,7 +153,7 @@ def format_next_actions_block(
             cid,
             domain=domain,
             dc_ip=dc_ip,
-            force=bool(follow.destructive),
+            force=bool(follow.requires_force),
         )
         commands.append({"id": cid, "summary": follow.summary, "command": cmd})
     return {

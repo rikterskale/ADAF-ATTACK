@@ -56,24 +56,31 @@ def get_kerberos_tgt(target: Target) -> tuple[Any, Any, Any, Any]:
     # Prefer explicit ccache / -k
     if target.use_kerberos or target.ccache:
         ccache_path = target.resolved_ccache()
+        previous_ccache = os.environ.get("KRB5CCNAME")
         if ccache_path:
             os.environ["KRB5CCNAME"] = ccache_path
             console.print(f"[dim]Using ccache: {ccache_path}[/dim]")
         # Empty password + useCache path inside Impacket when KRB5CCNAME set
         user = target.username or ""
         principal = Principal(user, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-        return cast(
-            tuple[Any, Any, Any, Any],
-            getKerberosTGT(
-                principal,
-                "",
-                target.domain.upper(),
-                lmhash,
-                nthash,
-                aes_key,
-                target.dc_ip,
-            ),
-        )
+        try:
+            return cast(
+                tuple[Any, Any, Any, Any],
+                getKerberosTGT(
+                    principal,
+                    "",
+                    target.domain.upper(),
+                    lmhash,
+                    nthash,
+                    aes_key,
+                    target.dc_ip,
+                ),
+            )
+        finally:
+            if previous_ccache is None:
+                os.environ.pop("KRB5CCNAME", None)
+            else:
+                os.environ["KRB5CCNAME"] = previous_ccache
 
     if not target.username:  # pragma: no cover - unreachable guard; narrows type for the call below
         raise RuntimeError("Username required for password/hash/AES Kerberos auth")

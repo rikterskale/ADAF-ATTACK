@@ -19,7 +19,13 @@ from rich.console import Console
 
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.impacket_helper import require_impacket
-from adaf_attack.core.registry import register_capability
+from adaf_attack.core.registry import (
+    ApprovalPolicy,
+    RiskLevel,
+    RollbackClass,
+    SafetyProfile,
+    register_capability,
+)
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -215,7 +221,13 @@ def _build_coercion_request(method: str, listener: str) -> Any:
     summary="Trigger coercion only against an approved host allowlist",
     category="credential-access",
     tags=("coerce", "petitpotam", "printerbug", "dfscoerce", "shadowcoerce", "allowlist"),
-    destructive=False,
+    safety=SafetyProfile(
+        risk=RiskLevel.SIDE_EFFECT,
+        approval=ApprovalPolicy.FORCE_AND_ACK,
+        rollback=RollbackClass.NONE,
+        network_side_effect=True,
+        exposes_credentials=True,
+    ),
 )
 class Coerce:
     def run(

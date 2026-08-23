@@ -16,7 +16,7 @@ from rich.console import Console
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_util import ldap_connect
-from adaf_attack.core.registry import register_capability
+from adaf_attack.core.registry import SafetyProfile, register_capability
 from adaf_attack.core.rollback import record_pre_state
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
@@ -43,7 +43,9 @@ def _list_attr(entry: Any, name: str) -> list[Any]:
     summary="Enumerate msDS-KeyCredentialLink; optional write requires --force",
     category="credential-access",
     tags=("shadow-credentials", "keycredentiallink", "pkinit", "adcs", "rollback"),
-    destructive=True,  # write path is destructive; enum still runs without force
+    safety=SafetyProfile(
+        exposes_credentials=True,
+    ),
 )
 class ShadowCreds:
     def run(

@@ -405,6 +405,17 @@ dedicated venv) when you need live enrollment:
 pip install "adaf-attack[certipy]"
 ```
 
+If the primary operator environment already contains the pinned runtime, use a
+separate venv for Certipy and expose only its executable to the operator shell:
+
+```bash
+python -m venv .venv-certipy
+.venv-certipy/bin/python -m pip install "adaf-attack[certipy]"
+export PATH="$PWD/.venv-certipy/bin:$PATH"
+```
+
+On Windows, prepend `.venv-certipy\\Scripts` to `PATH` instead.
+
 The AD CS capabilities shell out to the `certipy` binary, so it must be on
 `PATH` when they run. If you install Certipy into a dedicated venv, activate
 that venv (or prepend its `bin`/`Scripts` directory to `PATH`) in the same
@@ -504,10 +515,17 @@ adaf-attack engagement validate engagement.yaml
 adaf-attack engagement run engagement.yaml --workspace ./workspaces -u <authorized-user>
 ```
 
-The plan permits only the listed targets and capabilities. Destructive
-capabilities additionally require an approval token issued by your internal
-authorization service. Tokens are short-lived, target- and capability-scoped,
-and logged as `approval.accepted` events. The minimal verifier uses
+The plan permits only the listed targets and capabilities. Every target-bearing
+phase option (including secondary hosts, listeners, and relay destinations) is
+checked against `allowed_targets`; unknown or reserved execution options are
+rejected. Any phase with network side effects, credential exposure, or target
+mutation uses the capability's registered safety profile rather than a
+plan-supplied risk flag.
+
+Approved side-effect and destructive capabilities additionally require an
+approval token issued by your internal authorization service. Tokens are
+short-lived, target-, capability-, and phase-parameter-scoped, and logged as
+`approval.accepted` events. The minimal verifier uses
 `ADAF_APPROVAL_HMAC_KEY`; replace it with your internal service's asymmetric
 JWKS verifier for production deployment.
 
@@ -589,7 +607,7 @@ engagements:
       item: tgt
 ```
 
-Supply a separate approval-token mapping with `campaign-run --approval-tokens` for engagements that include destructive phases. Ticket lifecycle operations include `import-ccache`, `export-ccache`, `import-pfx`, `export-pfx`, `pem-to-pfx`, and `pfx-to-pem`.
+Supply a separate approval-token mapping with `campaign-run --approval-tokens` for engagements that include approved side-effect or destructive phases. The token must cover the normalized phase parameters as well as the engagement, capability, and target. Ticket lifecycle operations include `import-ccache`, `export-ccache`, `import-pfx`, `export-pfx`, `pem-to-pfx`, and `pfx-to-pem`.
 
 Default workspaces:
 

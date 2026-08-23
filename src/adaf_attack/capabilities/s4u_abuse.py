@@ -19,7 +19,13 @@ from rich.console import Console
 
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.impacket_helper import require_impacket
-from adaf_attack.core.registry import register_capability
+from adaf_attack.core.registry import (
+    ApprovalPolicy,
+    RiskLevel,
+    RollbackClass,
+    SafetyProfile,
+    register_capability,
+)
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -68,7 +74,13 @@ def _precondition_evidence(graph: AttackGraph, controller: str | None) -> dict[s
     summary="Full S4U2Self + S4U2Proxy chain (constrained delegation / RBCD abuse)",
     category="privilege-escalation",
     tags=("kerberos", "s4u", "constrained-delegation", "rbcd", "multi-hop"),
-    destructive=False,
+    safety=SafetyProfile(
+        risk=RiskLevel.SIDE_EFFECT,
+        approval=ApprovalPolicy.FORCE_AND_ACK,
+        rollback=RollbackClass.NONE,
+        network_side_effect=True,
+        exposes_credentials=True,
+    ),
 )
 class S4uAbuse:
     def run(

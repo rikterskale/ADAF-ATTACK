@@ -20,7 +20,7 @@ from rich.console import Console
 from rich.table import Table
 
 from adaf_attack.core.graph import AttackGraph
-from adaf_attack.core.registry import register_capability
+from adaf_attack.core.registry import SafetyProfile, register_capability
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 from adaf_attack.core.vault import VaultError
@@ -271,7 +271,9 @@ def _mark_rotation(session: Session, names: list[str]) -> dict[str, Any]:
     summary="Inventory, export, purge, or mark-for-rotation session credential material",
     category="credential-access",
     tags=("vault", "inventory", "export", "purge", "rotation", "credentials"),
-    destructive=True,  # purge path is destructive
+    safety=SafetyProfile(
+        exposes_credentials=True,
+    ),
 )
 class CredentialInventory:
     def run(

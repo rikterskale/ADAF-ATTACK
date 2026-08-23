@@ -17,7 +17,7 @@ from rich.console import Console
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_util import ldap_connect
-from adaf_attack.core.registry import register_capability
+from adaf_attack.core.registry import SafetyProfile, register_capability
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -73,7 +73,7 @@ def _parse_sysvol_unc(unc: str) -> tuple[str, str] | None:
     summary="Probe SYSVOL GPO paths for write; optional stage requires --force",
     category="privilege-escalation",
     tags=("gpo", "sysvol", "scheduled-task", "abuse"),
-    destructive=True,
+    safety=SafetyProfile(),
 )
 class GpoSysvol:
     def run(

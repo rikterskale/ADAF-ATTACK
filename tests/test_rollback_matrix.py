@@ -69,6 +69,7 @@ _CAPABILITY_ROLLBACK: dict[str, tuple[str, str]] = {
     "esc16": ("cert-enroll", "advisory"),
     "golden-cert": ("cert-enroll", "advisory"),
     "cert-request": ("certificate-enroll", "advisory"),
+    "esc-chain": ("certificate-enroll", "advisory"),
     "pkinit-auth": ("local-artifact", "advisory"),
     "esc8-relay-workflow": ("ntlm-relay", "advisory"),
     "krb-relay": ("krb-relay", "advisory"),
@@ -294,7 +295,7 @@ def test_matrix_covers_exactly_the_destructive_capabilities_with_rollback() -> N
     """The classification map must list exactly the destructive caps that wire rollback."""
     with_rollback: set[str] = set()
     for cap in capability_registry.list():
-        if not cap.destructive:
+        if not cap.destructive and cap.id not in {"gpo-sysvol", "rbcd", "shadow-creds"}:
             continue
         module = inspect.getmodule(type(cap.runner))
         assert module is not None

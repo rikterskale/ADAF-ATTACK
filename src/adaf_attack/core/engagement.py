@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,91 @@ from adaf_attack.core.target import Target
 
 class EngagementError(ValueError):
     pass
+
+
+_TARGET_OPTION_KEYS = {
+    "host",
+    "target",
+    "target_host",
+    "target_ip",
+    "remote_host",
+    "remote_ip",
+    "dc_ip",
+    "set_on",
+    "set_from",
+    "listener",
+    "relay_target",
+    "relay_targets",
+    "write_target",
+}
+_RESERVED_PHASE_OPTIONS = {
+    "force",
+    "acknowledged",
+    "approval_token",
+    "session",
+    "graph",
+    "workspace",
+    "include_secrets",
+}
+
+
+def _normalize_target(value: Any) -> str:
+    return str(value).strip().lower().rstrip(".")
+
+
+def parameters_digest(parameters: Mapping[str, Any]) -> str:
+    """Return the canonical digest bound into scoped approvals."""
+    encoded = json.dumps(dict(parameters), sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _validate_phase(phase: Any, index: int) -> dict[str, Any]:
+    if not isinstance(phase, dict):
+        raise EngagementError(f"Phase {index} must be a mapping")
+    raw_caps = phase.get("capabilities", [])
+    if not isinstance(raw_caps, list) or any(not isinstance(item, str) for item in raw_caps):
+        raise EngagementError(f"Phase {index}.capabilities must be a list of strings")
+    options = phase.get("options", {})
+    if not isinstance(options, dict):
+        raise EngagementError(f"Phase {index}.options must be a mapping")
+    reserved = sorted(_RESERVED_PHASE_OPTIONS.intersection(options))
+    if reserved:
+        raise EngagementError(
+            f"Phase {index}.options contains reserved execution fields: {', '.join(reserved)}"
+        )
+    return {
+        "name": str(phase.get("name", "unnamed")),
+        "capabilities": list(raw_caps),
+        "options": dict(options),
+    }
+
+
+def _validate_phase_targets(options: Mapping[str, Any], allowed_targets: tuple[str, ...]) -> None:
+    allowed = {_normalize_target(item) for item in allowed_targets}
+    for key, raw_value in options.items():
+        if key not in _TARGET_OPTION_KEYS:
+            continue
+        values = raw_value if isinstance(raw_value, list) else [raw_value]
+        for value in values:
+            normalized = _normalize_target(value)
+            if normalized and normalized not in allowed:
+                raise EngagementError(
+                    f"Phase option '{key}' targets '{value}', which is outside allowed_targets"
+                )
+
+
+def _validate_approved_parameters(parameters: Mapping[str, Any], targets: list[Any]) -> None:
+    allowed = {_normalize_target(item) for item in targets}
+    for key, raw_value in parameters.items():
+        if key not in _TARGET_OPTION_KEYS:
+            continue
+        values = raw_value if isinstance(raw_value, list) else [raw_value]
+        for value in values:
+            normalized = _normalize_target(value)
+            if normalized and normalized not in allowed:
+                raise EngagementError(
+                    f"Approval token does not permit phase target '{value}' from option '{key}'"
+                )
 
 
 @dataclass(frozen=True)
@@ -43,17 +129,43 @@ def load_plan(path: Path) -> EngagementPlan:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError) as exc:
         raise EngagementError(f"Cannot load engagement YAML: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise EngagementError("Engagement YAML root must be a mapping")
     required = ("engagement_id", "target", "allowed_capabilities", "phases")
     missing = [key for key in required if key not in raw]
     if missing:
         raise EngagementError(f"Missing required keys: {', '.join(missing)}")
     target = raw["target"] or {}
+    if not isinstance(target, dict):
+        raise EngagementError("target must be a mapping")
     if not target.get("domain") or not target.get("dc_ip"):
         raise EngagementError("target.domain and target.dc_ip are required")
+    if not isinstance(raw["allowed_capabilities"], list) or any(
+        not isinstance(item, str) for item in raw["allowed_capabilities"]
+    ):
+        raise EngagementError("allowed_capabilities must be a list of strings")
     caps = tuple(str(item) for item in raw["allowed_capabilities"])
     invalid = [item for item in caps if capability_registry.get(item) is None]
     if invalid:
         raise EngagementError(f"Unknown allowed capabilities: {', '.join(invalid)}")
+    if not isinstance(raw["phases"], list):
+        raise EngagementError("phases must be a list")
+    phases = tuple(_validate_phase(phase, index) for index, phase in enumerate(raw["phases"]))
+    for phase in phases:
+        invalid_phase_caps = [item for item in phase["capabilities"] if item not in caps]
+        if invalid_phase_caps:
+            raise EngagementError(
+                "Phase capabilities are not allowed by engagement scope: "
+                + ", ".join(invalid_phase_caps)
+            )
+    allowed_targets_raw = raw.get("allowed_targets", [target["dc_ip"]])
+    if not isinstance(allowed_targets_raw, list) or any(
+        not isinstance(item, str) for item in allowed_targets_raw
+    ):
+        raise EngagementError("allowed_targets must be a list of strings")
+    allowed_targets = tuple(str(x) for x in allowed_targets_raw)
+    for phase in phases:
+        _validate_phase_targets(phase["options"], allowed_targets)
     from adaf_attack.core.control_plane import resolve_opsec
 
     profile = str(raw.get("opsec_profile", "balanced"))
@@ -63,8 +175,8 @@ def load_plan(path: Path) -> EngagementPlan:
         str(target["domain"]),
         str(target["dc_ip"]),
         caps,
-        tuple(raw["phases"]),
-        tuple(str(x) for x in raw.get("allowed_targets", [target["dc_ip"]])),
+        phases,
+        allowed_targets,
         profile,
     )
 
@@ -79,6 +191,7 @@ def verify_scoped_approval(
     engagement_id: str,
     dc_ip: str,
     capability: str,
+    parameters: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Verify an HMAC-signed approval scoped to one campaign and target.
 
@@ -112,8 +225,13 @@ def verify_scoped_approval(
         raise EngagementError("Approval token scope fields are malformed")
     if payload.get("engagement_id") != engagement_id or capability not in capabilities:
         raise EngagementError("Approval token scope does not match the requested action")
-    if dc_ip not in targets:
+    if _normalize_target(dc_ip) not in {_normalize_target(item) for item in targets}:
         raise EngagementError("Approval token does not permit this target")
+    if parameters:
+        _validate_approved_parameters(parameters, targets)
+        expected_digest = parameters_digest(parameters)
+        if payload.get("parameters_sha256") != expected_digest:
+            raise EngagementError("Approval token does not match the requested parameters")
     try:
         expires_at = int(payload.get("exp", 0))
     except (TypeError, ValueError) as exc:
@@ -144,7 +262,9 @@ def run_engagement(
 ) -> dict[str, Any]:
     import adaf_attack.capabilities  # noqa: F401
 
-    if plan.dc_ip not in plan.allowed_targets:
+    if _normalize_target(plan.dc_ip) not in {
+        _normalize_target(item) for item in plan.allowed_targets
+    }:
         raise EngagementError("The domain controller is not in allowed_targets")
     session = Session(base_dir=workspace)
     target = Target(
@@ -167,6 +287,8 @@ def run_engagement(
         opsec=opsec,
     )
     complete: list[str] = []
+    from adaf_attack.core.runner import RunError, execute_capability
+
     for phase in plan.phases:
         name = str(phase.get("name", "unnamed"))
         for capability in phase.get("capabilities", []):
@@ -176,13 +298,28 @@ def run_engagement(
             cap = capability_registry.get(capability)
             if cap is None or cap.runner is None:
                 raise EngagementError(f"Capability unavailable: {capability}")
+            options = phase.get("options", {})
+            if not isinstance(options, dict):
+                raise EngagementError(f"Phase '{name}' options must be a mapping")
+            _validate_phase_targets(options, plan.allowed_targets)
+            from adaf_attack.core.execution_policy import safety_for_operation
+
+            requires_approval = safety_for_operation(
+                cap, {**options, "_force": False}
+            ).requires_force
             force = False
-            if cap.destructive:
+            if requires_approval:
                 if not approval_token:
                     raise EngagementError(
-                        f"Approval token required for destructive capability: {capability}"
+                        f"Approval token required for approved capability: {capability}"
                     )
-                approval = verify_approval(approval_token, plan, capability)
+                approval = verify_scoped_approval(
+                    approval_token,
+                    engagement_id=plan.engagement_id,
+                    dc_ip=plan.dc_ip,
+                    capability=capability,
+                    parameters=options,
+                )
                 session.log(
                     "approval.accepted",
                     approval_id=approval.get("approval_id"),
@@ -191,15 +328,22 @@ def run_engagement(
                 )
                 force = True
             session.log("phase.start", phase=name, capability=capability)
-            cap.runner.run(
-                target,
-                session,
-                graph,
-                force=force,
-                include_secrets=False,
-                opsec=opsec,
-                **dict(phase.get("options", {})),
-            )
+            try:
+                execute_capability(
+                    capability,
+                    target,
+                    force=force,
+                    acknowledged=True,
+                    approval_token=approval_token,
+                    include_secrets=False,
+                    workspace=workspace,
+                    session=session,
+                    graph=graph,
+                    opsec=opsec,
+                    **options,
+                )
+            except RunError as exc:
+                raise EngagementError(f"Phase '{name}' failed: {exc}") from exc
             session.log("phase.complete", phase=name, capability=capability)
             complete.append(capability)
     graph.resolve_dn_edges()

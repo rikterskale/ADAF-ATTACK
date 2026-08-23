@@ -146,7 +146,7 @@ def register_ux_commands(
             raise typer.Exit(code=error.exit_code)
         safety = safety_summary(cap)
         difficulty = capability_difficulty(cap)
-        spec = capability_option_spec(cap.id, cap.destructive)
+        spec = capability_option_spec(cap.id, cap.requires_force)
         prerequisites = capability_prerequisites(cap.id)
         payload = {
             "ok": True,

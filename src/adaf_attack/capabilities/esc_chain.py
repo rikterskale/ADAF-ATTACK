@@ -14,7 +14,14 @@ from rich.console import Console
 
 from adaf_attack.core.confidence import score_chain
 from adaf_attack.core.graph import AttackGraph
-from adaf_attack.core.registry import register_capability
+from adaf_attack.core.registry import (
+    ApprovalPolicy,
+    RiskLevel,
+    RollbackClass,
+    SafetyProfile,
+    register_capability,
+)
+from adaf_attack.core.rollback import record_pre_state
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
@@ -99,7 +106,14 @@ def _pick_template(adcs_json: dict[str, Any]) -> dict[str, Any] | None:
     summary="Automated ESC1–ESC15 exploit chain: template → cert → PKINIT → TGT",
     category="privilege-escalation",
     tags=("adcs", "esc1", "esc2", "esc3", "esc6", "esc8", "esc9", "chain"),
-    destructive=False,
+    safety=SafetyProfile(
+        risk=RiskLevel.DESTRUCTIVE,
+        approval=ApprovalPolicy.FORCE_AND_ACK,
+        rollback=RollbackClass.MANUAL,
+        network_side_effect=True,
+        modifies_directory=True,
+        exposes_credentials=True,
+    ),
 )
 class EscChain:
     def run(
@@ -168,6 +182,15 @@ class EscChain:
             template=template,
             ca=ca,
             alt_name=alt_name,
+        )
+        # The nested certificate runner records its own pre-state when
+        # possible; retain a chain-level advisory so the operator sees that
+        # CA-issued material and PKINIT artifacts may require manual cleanup.
+        record_pre_state(
+            session,
+            kind="certificate-enroll",
+            target=f"{ca}/{template}",
+            extra={"advisory": True, "operation": "esc-chain"},
         )
         pfx = cert_result.get("pfx") or cert_result.get("pfx_path")
 

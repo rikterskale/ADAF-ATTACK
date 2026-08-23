@@ -7,6 +7,8 @@ works is used for the capability run.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import logging
 from collections.abc import Callable
@@ -16,6 +18,12 @@ from typing import Any
 from adaf_attack.core.auth import describe_auth
 from adaf_attack.core.creds import CredentialSet, load_credentials_json
 from adaf_attack.core.engineering import SessionStore, execute_with_controls
+from adaf_attack.core.execution_policy import (
+    ExecutionRequest,
+    PolicyError,
+    enforce_execution_policy,
+    safety_for_operation,
+)
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.outcomes import build_post_execution_outcome, normalize_capability_result
 from adaf_attack.core.paths import atomic_write_text, default_workspace_dir, normalize_path
@@ -120,8 +128,13 @@ def execute_capability(
     target: Target,
     *,
     force: bool = False,
+    acknowledged: bool = False,
+    approval_token: str | None = None,
+    json_mode: bool = False,
     include_secrets: bool = False,
     workspace: Path | str | None = None,
+    session: Session | None = None,
+    graph: AttackGraph | None = None,
     log: Callable[[str], None] | None = None,
     creds_file: str | Path | None = None,
     credential_set: CredentialSet | None = None,
@@ -143,14 +156,26 @@ def execute_capability(
     if cap is None:
         raise RunError(f"Unknown capability: {capability_id}")
 
-    if cap.destructive and not force:
-        raise RunError(
-            f"Capability '{capability_id}' is DESTRUCTIVE. Pass force=True / --force to proceed."
-        )
-
     if cap.runner is None:
         raise RunError(f"Capability '{capability_id}' has no runner implemented yet.")
     runner = cap.runner
+
+    safety_parameters = dict(runner_kwargs)
+    safety_parameters["_force"] = force
+    active_safety = safety_for_operation(cap, safety_parameters)
+    try:
+        enforce_execution_policy(
+            ExecutionRequest(
+                capability=cap,
+                target=target,
+                safety=active_safety,
+                force=force,
+                acknowledged=acknowledged,
+                approval_token=approval_token,
+            )
+        )
+    except PolicyError as exc:
+        raise RunError(str(exc)) from exc
 
     # Resolve working credentials (rotation / failover)
     try:
@@ -166,8 +191,8 @@ def execute_capability(
         raise RunError(f"Credential resolution failed: {exc}") from exc
 
     ws = normalize_path(workspace) if workspace else default_workspace_dir()
-    session = Session(base_dir=ws)
-    graph = AttackGraph()
+    session = session or Session(base_dir=ws)
+    graph = graph or AttackGraph()
 
     _log(f"Running {capability_id} against {resolved_target.domain} @ {resolved_target.dc_ip}")
     _log(f"Auth: {describe_auth(resolved_target)}")
@@ -209,12 +234,16 @@ def execute_capability(
                 **runner_kwargs,
             )
 
-        result = execute_with_controls(
-            _run,
-            timeout=timeout,
-            retries=retries,
-            mutating=cap.destructive,
+        output_context: Any = (
+            contextlib.redirect_stdout(io.StringIO()) if json_mode else contextlib.nullcontext()
         )
+        with output_context:
+            result = execute_with_controls(
+                _run,
+                timeout=timeout,
+                retries=retries,
+                mutating=active_safety.is_mutating,
+            )
         result = normalize_capability_result(result)
         resolved = graph.resolve_dn_edges()
         if resolved:

@@ -41,7 +41,6 @@ _ROLLBACK_PRIMITIVES = (
 _ROLLBACK_EXEMPT: dict[str, str] = {
     "rollback": "executes the revert itself; there is no prior state to record",
     "campaign-run": "orchestrator; each sub-capability registers its own rollback",
-    "credential-inventory": "purges local session/vault material, not remote AD state",
     "rbcd-ticket-workflow": "composite delegating to rbcd, which records the rollback",
     "shadow-pkinit-workflow": "composite delegating to shadow-creds, which records the rollback",
 }

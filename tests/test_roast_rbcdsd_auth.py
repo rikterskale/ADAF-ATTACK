@@ -176,6 +176,7 @@ def test_get_kerberos_tgt_password_path(monkeypatch: Any) -> None:
 def test_get_kerberos_tgt_ccache_path(monkeypatch: Any, tmp_path: Any) -> None:
     import impacket.krb5.kerberosv5 as kv5
 
+    previous_ccache = auth.os.environ.get("KRB5CCNAME")
     monkeypatch.setattr(kv5, "getKerberosTGT", lambda *a, **k: ("tgt", "c", "o", "s"))
     ccache = tmp_path / "krb5cc"
     ccache.write_text("x", encoding="utf-8")
@@ -184,4 +185,4 @@ def test_get_kerberos_tgt_ccache_path(monkeypatch: Any, tmp_path: Any) -> None:
     )
     result = get_kerberos_tgt(t)
     assert result[0] == "tgt"
-    assert auth.os.environ["KRB5CCNAME"] == str(ccache)
+    assert auth.os.environ.get("KRB5CCNAME") == previous_ccache

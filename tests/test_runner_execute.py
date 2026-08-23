@@ -95,6 +95,22 @@ def test_execute_happy_path(cleanup_registry: list[str], tmp_path: Any) -> None:
     assert (out["session_path"]) and "cred_attempts" in out
 
 
+def test_execute_json_mode_suppresses_runner_progress(
+    cleanup_registry: list[str], tmp_path: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cleanup_registry.append("t-noisy")
+
+    class _NoisyRunner(_FakeRunner):
+        def run(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            print("human progress must not corrupt JSON")
+            return super().run(*args, **kwargs)
+
+    _register("t-noisy", runner=_NoisyRunner())
+    out = execute_capability("t-noisy", _target(), workspace=tmp_path, json_mode=True)
+    assert out["ok"] is True
+    assert "human progress" not in capsys.readouterr().out
+
+
 def test_execute_capability_error_wrapped(cleanup_registry: list[str], tmp_path: Any) -> None:
     cleanup_registry.append("t-boom")
     _register("t-boom", runner=_FakeRunner(raises=True))

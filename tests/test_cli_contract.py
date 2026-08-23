@@ -26,7 +26,7 @@ def test_doctor_json_has_stable_remediation_contract() -> None:
     )
 
 
-def test_plan_json_explicitly_reports_destructive_risk() -> None:
+def test_plan_json_reports_read_only_default_for_mixed_capability() -> None:
     result = runner.invoke(
         app,
         [
@@ -46,12 +46,12 @@ def test_plan_json_explicitly_reports_destructive_risk() -> None:
     assert payload["mode"] == "preview"
     assert payload["risk"] == {
         "force_provided": False,
-        "level": "high",
-        "may_modify_target": True,
+        "level": "observe",
+        "may_modify_target": False,
         "network_contact": True,
-        "requires_force": True,
+        "requires_force": False,
     }
-    assert payload["next_step"].endswith(" --force")
+    assert not payload["next_step"].endswith(" --force")
 
 
 def test_unknown_capability_uses_actionable_json_error() -> None:

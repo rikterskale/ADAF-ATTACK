@@ -52,6 +52,19 @@ class SessionVault:
     def _save(self, index: dict[str, Any]) -> None:
         atomic_write_text(self.index_path, json.dumps(index, indent=2) + "\n")
 
+    def _safe_blob_path(self, file_name: Any) -> Path:
+        """Resolve an index path and prove it remains inside the vault."""
+        if not isinstance(file_name, str) or not file_name:
+            raise VaultError("Vault index contains an invalid secret file path")
+        root = self.root.resolve()
+        unresolved = self.root / file_name
+        if unresolved.is_symlink():
+            raise VaultError("Vault secret files may not be symlinks")
+        candidate = unresolved.resolve()
+        if not candidate.is_relative_to(root):
+            raise VaultError("Vault index contains a path outside the vault")
+        return candidate
+
     def put(
         self,
         name: str,
@@ -91,7 +104,9 @@ class SessionVault:
         if not self._key:
             raise VaultError("Set ADAF_SESSION_VAULT_KEY before reading secret material")
         try:
-            raw = Fernet(self._key.encode()).decrypt((self.root / record["file"]).read_bytes())
+            raw = Fernet(self._key.encode()).decrypt(
+                self._safe_blob_path(record.get("file")).read_bytes()
+            )
             return json.loads(raw)
         except (InvalidToken, OSError, json.JSONDecodeError) as exc:
             raise VaultError("Unable to decrypt vault item") from exc
@@ -111,7 +126,7 @@ class SessionVault:
             return False
         file_name = record.get("file")
         if file_name:
-            blob = self.root / str(file_name)
+            blob = self._safe_blob_path(file_name)
             if blob.is_file():
                 blob.unlink()
         self._save(index)
@@ -122,12 +137,14 @@ class SessionVault:
         index = self._index()
         items = index.get("items", {})
         count = len(items)
-        for _name, record in list(items.items()):
-            file_name = record.get("file")
-            if file_name:
-                blob = self.root / str(file_name)
-                if blob.is_file():
-                    blob.unlink()
+        blobs = [
+            self._safe_blob_path(record.get("file"))
+            for record in items.values()
+            if record.get("file")
+        ]
+        for blob in blobs:
+            if blob.is_file():
+                blob.unlink()
         index["items"] = {}
         self._save(index)
         return count
