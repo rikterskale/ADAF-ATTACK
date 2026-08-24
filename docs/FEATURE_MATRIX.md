@@ -28,8 +28,10 @@ not claim live AD validation by itself.
 - **Operator-verified**: exercised against an authorized target by the
   operator.
 - **Experimental**: not currently a release claim; document the limitation in
-  the release record before use. The 40 catalog IDs that were previously
-  experimental tracking stubs are now `supported`.
+  the release record before use. The 40 catalog IDs added in 0.10.0 that
+  were previously experimental tracking stubs are now `supported`; the full
+  catalog contains 90+ capabilities (see
+  [CAPABILITY_CATALOG.md](CAPABILITY_CATALOG.md)).
 
 ## Offline 10-minute acceptance path
 

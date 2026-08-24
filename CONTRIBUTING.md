@@ -53,6 +53,9 @@ When adding or renaming a CLI command, update `docs/CLI_REFERENCE.md` in the
 same change. The parity check compares the table with the registered Typer
 commands and fails on missing, duplicate, or stale entries.
 
+When bumping the version in `pyproject.toml`, also update the supported-version
+table in `SECURITY.md` so the documented support range stays accurate.
+
 On Windows, if pytest reports `PermissionError` for a global
 `AppData\Local\Temp\pytest-of-*` directory, run tests through the repository
 wrapper instead:

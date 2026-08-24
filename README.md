@@ -45,6 +45,16 @@ should start from their platform guide below rather than pip directly.
 - [New-user readiness guide](docs/USER_READINESS.md) ·
   [Feature and support matrix](docs/FEATURE_MATRIX.md) ·
   [Supported platforms and architectures](docs/SUPPORTED_PLATFORMS.md)
+- Architecture and internals:
+  [Architecture](docs/ARCHITECTURE.md) ·
+  [Environment variables](docs/ENVIRONMENT_VARIABLES.md) ·
+  [Session data model](docs/SESSION_DATA_MODEL.md) ·
+  [Engagement schema](docs/ENGAGEMENT_SCHEMA.md) ·
+  [Approval tokens](docs/APPROVAL_TOKENS.md) ·
+  [Vault operations](docs/VAULT_OPERATIONS.md) ·
+  [Rollback matrix](docs/ROLLBACK_MATRIX.md) ·
+  [Plugin authoring](docs/PLUGIN_AUTHORING.md) ·
+  [Engineering](docs/ENGINEERING.md)
 
 ## Philosophy
 
@@ -52,6 +62,10 @@ should start from their platform guide below rather than pip directly.
 - Lightweight controls: `--force`, redaction by default, session logging
 
 ## Capabilities
+
+> The tables below highlight commonly used capabilities. For the complete
+> catalog of 90+ registered capabilities with maturity, risk, and approval
+> metadata, see [docs/CAPABILITY_CATALOG.md](docs/CAPABILITY_CATALOG.md).
 
 Discovery / enumeration:
 
@@ -544,7 +558,10 @@ adaf-attack engagement report --session ./workspaces/<session-id> --engagement-i
 
 The bundle contains print-ready HTML and, when installed with
 `pip install "adaf-attack[reports]"`, PDF reports. Findings map to MITRE ATT&CK and
-NIS2 Article 21 themes in `src/adaf_attack/mappings/`. These mappings support
+NIS2 Article 21 themes in `src/adaf_attack/mappings/`. The ATT&CK mapping currently
+covers 8 technique IDs (T1003.006, T1098, T1134.001, T1222.001, T1484.001,
+T1558.003, T1558.004, T1649); coverage will expand as capabilities mature. The NIS2
+mapping covers 4 themes with 9 finding-ID mappings. These mappings support
 assessment and remediation; they do not constitute a compliance certification.
 
 For a deterministic, no-network demonstration of the reporting pipeline from a

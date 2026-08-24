@@ -43,7 +43,7 @@ with “improve everything.”
 Copy the command below into the window and press **Enter**:
 
 ```powershell
-cd C:\Users\tripp\Documents\GitHub\ADAF-ATTACK
+cd C:\path\to\ADAF-ATTACK
 ```
 
 This moves PowerShell into the ADAF-ATTACK project folder. If you see a red

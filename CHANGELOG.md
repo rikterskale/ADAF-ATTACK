@@ -5,15 +5,6 @@ declared in `pyproject.toml`.
 
 ## Unreleased
 
-### Operator hardening
-
-- Added a single-operator runbook, explicit proprietary license terms, and a
-  concrete private security-reporting channel.
-- Kept JSON stdout machine-readable when capability modules use Rich consoles;
-  capability diagnostics remain available through stderr and `--debug` logs.
-- Added shell-safe command-template fallbacks, evidence rationale, target
-  validation, and a registry self-check for built-in capability modules.
-
 ## 0.10.1
 
 ### Added
