@@ -545,13 +545,13 @@ def guided_tour_payload() -> dict[str, Any]:
         {
             "id": "plan",
             "title": "Preview a run without touching the target",
-            "command": "adaf-attack plan ldap-enum -d corp.lab --dc-ip 10.0.0.10",
+            "command": "adaf-attack plan ldap-enum -d corp.example --dc-ip 10.0.0.10",
             "why": "Plan shows opsec profile, stages, and the exact command you will execute.",
         },
         {
             "id": "profile",
             "title": "Save a named target profile",
-            "command": "adaf-attack profile set lab --domain corp.lab --dc-ip 10.0.0.10 --opsec stealth --default",
+            "command": "adaf-attack profile set engagement --domain corp.example --dc-ip 10.0.0.10 --opsec stealth --default",
             "why": "Profiles keep domain, DC, and opsec settings so you type less on subsequent runs.",
         },
         {

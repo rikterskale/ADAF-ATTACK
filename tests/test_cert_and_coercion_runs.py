@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+import adaf_attack.capabilities.adcs_esc as adcs_esc
 import adaf_attack.capabilities.cert_request as cert_request
 import adaf_attack.capabilities.coercion_map as coercion_map
 from adaf_attack.core.graph import AttackGraph
@@ -48,6 +49,59 @@ def test_cert_request_writes_redacted_playbook_when_certipy_is_unavailable(
     assert result["method"] == "playbook-only"
     assert "secret" not in Path(result["playbook"]).read_text(encoding="utf-8")
     assert json.loads(session.path("cert-request.json").read_text(encoding="utf-8"))["ok"] is False
+
+
+def test_cert_request_keeps_password_out_of_certipy_argv(monkeypatch: Any, tmp_path: Path) -> None:
+    captured: dict[str, Any] = {}
+
+    class _Completed:
+        returncode = 1
+        stdout = ""
+        stderr = ""
+
+    def fake_run(*args: Any, **kwargs: Any) -> _Completed:
+        captured["argv"] = args[0]
+        captured["input"] = kwargs.get("input")
+        return _Completed()
+
+    monkeypatch.setattr(cert_request.subprocess, "run", fake_run)
+    session = Session(tmp_path)
+    cert_request.CertRequest().run(
+        Target(domain="corp.test", dc_ip="192.0.2.10", username="alice", password="secret"),
+        session,
+        AttackGraph(),
+        force=True,
+        template="UserTemplate",
+    )
+
+    assert "secret" not in captured["argv"]
+    assert captured["input"] == "secret\n"
+
+
+def test_adcs_esc_keeps_password_out_of_certipy_argv(monkeypatch: Any, tmp_path: Path) -> None:
+    captured: dict[str, Any] = {}
+
+    class _Completed:
+        returncode = 1
+        stdout = ""
+        stderr = ""
+
+    def fake_run(*args: Any, **kwargs: Any) -> _Completed:
+        captured["argv"] = args[0]
+        captured["input"] = kwargs.get("input")
+        return _Completed()
+
+    monkeypatch.setattr(adcs_esc.subprocess, "run", fake_run)
+    session = Session(tmp_path)
+    result = adcs_esc._run_certipy(
+        ["python", "-m", "certipy", "req", "-u", "alice@corp.test"],
+        session,
+        password="secret",
+    )
+
+    assert result["ok"] is False
+    assert "secret" not in captured["argv"]
+    assert captured["input"] == "secret\n"
 
 
 class _Connection:

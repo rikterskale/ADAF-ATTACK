@@ -762,7 +762,7 @@ def _doctor_payload(
                         "domain-dns",
                         "error",
                         f"{domain}: {type(exc).__name__}: {exc}",
-                        "Configure DNS for the authorized domain or use the lab DNS server, then rerun doctor.",
+                        "Configure DNS for the authorized domain, then rerun doctor.",
                         scope="live-ad",
                     )
                 )
@@ -775,7 +775,7 @@ def _doctor_payload(
                         f"{dc_ip}:{port}" if status == "ok" else detail,
                         None
                         if status == "ok"
-                        else f"Verify the authorized DC address, firewall, and lab network for {service} ({dc_ip}:{port}).",
+                        else f"Verify the authorized DC address and firewall for {service} ({dc_ip}:{port}).",
                         scope="live-ad",
                         severity="advisory" if status == "warning" else None,
                     )

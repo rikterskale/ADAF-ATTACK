@@ -13,6 +13,19 @@ from adaf_attack.core.rollback import classification_for_kind
 from adaf_attack.core.target import Target
 
 
+def _session_artifact(session: Path, value: Any) -> Path:
+    """Resolve a recorded artifact without permitting access outside session."""
+    root = session.resolve()
+    artifact = Path(str(value or "")).expanduser()
+    candidate = artifact if artifact.is_absolute() else session / artifact
+    resolved = candidate.resolve(strict=False)
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("Rollback artifact must remain inside the session") from exc
+    return resolved
+
+
 def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
     """Apply pending LDAP-backed cleanup actions in a recorded session."""
     path = session / "cleanup.json"
@@ -41,7 +54,7 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
                     {item["attribute"]: [(MODIFY_REPLACE, item.get("previous", []))]},
                 )
             elif kind in {"shadow-credential", "keycred-write", "shadow-creds"}:
-                artifact = Path(str(item["artifact"]))
+                artifact = _session_artifact(session, item["artifact"])
                 value = artifact.read_text(encoding="utf-8").strip()
                 ok = conn.modify(
                     item["target"],
@@ -65,7 +78,7 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
                     {"gPLink": [(MODIFY_REPLACE, [item.get("previous", "")])]},
                 )
             elif kind == "template-mod":
-                artifact = Path(str(item.get("artifact") or ""))
+                artifact = _session_artifact(session, item.get("artifact"))
                 if not artifact.is_file():
                     item["status"] = "failed"
                     item["result"] = "Missing template-mod rollback artifact"
@@ -123,6 +136,14 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
                     ok = True
                 finally:
                     smb.logoff()
+            elif kind == "local-artifact":
+                artifact = _session_artifact(session, item.get("artifact"))
+                if not artifact.is_file():
+                    item["status"] = "failed"
+                    item["result"] = "Missing local rollback artifact"
+                    continue
+                artifact.unlink()
+                ok = True
             else:
                 continue
             item["status"] = "completed" if ok else "failed"

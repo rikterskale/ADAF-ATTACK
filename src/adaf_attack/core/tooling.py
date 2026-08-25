@@ -150,13 +150,13 @@ def detection_export(session: Path) -> dict[str, Any]:
     }
 
 
-def lab_manifest_summary(path: Path) -> dict[str, Any]:
-    """Validate and summarize a disposable lab manifest without network access."""
+def scope_manifest_summary(path: Path) -> dict[str, Any]:
+    """Validate and summarize a disposable scope manifest without network access."""
     document = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
-        raise ValueError("Lab manifest must contain a JSON object")
+        raise ValueError("Scope manifest must contain a JSON object")
     domain = str(document.get("domain", "")).lower()
-    reserved = domain.endswith((".lab", ".test", ".example"))
+    reserved = domain.endswith((".test", ".example"))
     return {
         "path": str(path),
         "domain": domain,

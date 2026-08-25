@@ -283,7 +283,7 @@ def register_ux_commands(
         }
         if not profiles:
             human: Any = Panel(
-                "No profiles saved.\nCreate one with: adaf-attack profile set lab --domain corp.lab --dc-ip 10.0.0.10",
+                "No profiles saved.\nCreate one with: adaf-attack profile set engagement --domain corp.example --dc-ip 10.0.0.10",
                 title="Profiles",
             )
         else:
@@ -361,7 +361,7 @@ def register_ux_commands(
                 "INVALID_OPSEC_PROFILE",
                 f"Invalid opsec profile: {opsec}",
                 f"Choose one of: {', '.join(VALID_OPSEC)}",
-                suggested_command="adaf-attack profile set lab --opsec balanced",
+                suggested_command="adaf-attack profile set engagement --opsec balanced",
             )
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code)

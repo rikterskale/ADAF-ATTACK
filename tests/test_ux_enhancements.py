@@ -43,7 +43,7 @@ def test_risk_checklist_and_ready_command() -> None:
     checklist = risk_checklist(cap)
     assert checklist["id"] == "ldap-enum"
     assert checklist["requires_domain_user"] is True
-    cmd = build_ready_command("ldap-enum", domain="corp.lab", dc_ip="10.0.0.1")
+    cmd = build_ready_command("ldap-enum", domain="corp.example", dc_ip="10.0.0.1")
     assert "adaf-attack run ldap-enum" in cmd
 
 
@@ -104,10 +104,12 @@ def test_profiles_roundtrip(tmp_path: Path, monkeypatch) -> None:
 
     monkeypatch.setattr(paths_mod, "user_config_dir", lambda: tmp_path / "cfg")
     monkeypatch.setattr(profiles_mod, "profiles_path", lambda: tmp_path / "cfg" / "profiles.json")
-    set_profile("lab", {"domain": "corp.lab", "dc_ip": "10.0.0.5", "opsec_profile": "stealth"})
-    assert get_profile("lab")["domain"] == "corp.lab"
-    assert any(p["name"] == "lab" for p in list_profiles())
-    assert delete_profile("lab") is True
+    set_profile(
+        "engagement", {"domain": "corp.example", "dc_ip": "10.0.0.5", "opsec_profile": "stealth"}
+    )
+    assert get_profile("engagement")["domain"] == "corp.example"
+    assert any(p["name"] == "engagement" for p in list_profiles())
+    assert delete_profile("engagement") is True
 
 
 def test_guided_tour_payload() -> None:
@@ -192,7 +194,7 @@ def test_cli_novice_journey_aliases(tmp_path: Path) -> None:
 
 
 def test_cli_plan_shows_opsec_and_copy() -> None:
-    result = runner.invoke(app, ["plan", "ldap-enum", "-d", "corp.lab", "--dc-ip", "10.0.0.1"])
+    result = runner.invoke(app, ["plan", "ldap-enum", "-d", "corp.example", "--dc-ip", "10.0.0.1"])
     assert result.exit_code == 0
     assert "Copy-ready" in result.stdout
     assert "Opsec" in result.stdout
@@ -231,7 +233,7 @@ def test_capability_payload_has_beginner_metadata() -> None:
 def test_plan_contains_preflight_and_stages() -> None:
     result = runner.invoke(
         app,
-        ["--format", "json", "plan", "ldap-enum", "-d", "corp.lab", "--dc-ip", "10.0.0.10"],
+        ["--format", "json", "plan", "ldap-enum", "-d", "corp.example", "--dc-ip", "10.0.0.10"],
     )
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
@@ -252,7 +254,7 @@ def test_home_and_command_builder_json() -> None:
             "command",
             "ldap-enum",
             "-d",
-            "corp.lab",
+            "corp.example",
             "--dc-ip",
             "10.0.0.10",
         ],

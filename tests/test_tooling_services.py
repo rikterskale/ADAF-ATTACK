@@ -10,7 +10,7 @@ from adaf_attack.core.tooling import (
     detection_export,
     graph_explorer,
     import_evidence,
-    lab_manifest_summary,
+    scope_manifest_summary,
     verify_finding,
 )
 
@@ -49,25 +49,25 @@ def test_import_evidence_and_verify_finding(tmp_path: Path) -> None:
     assert json.loads(findings.read_text(encoding="utf-8"))["findings"][0]["status"] == "remediated"
 
 
-def test_detection_export_and_lab_manifest(tmp_path: Path) -> None:
+def test_detection_export_and_scope_manifest(tmp_path: Path) -> None:
     session = tmp_path / "session"
     session.mkdir()
     (session / "graph.json").write_text(
         json.dumps({"nodes": [], "edges": [{"kind": "DCSync"}, {"kind": "WriteGPO"}]}),
         encoding="utf-8",
     )
-    manifest = tmp_path / "lab.json"
+    manifest = tmp_path / "scope.json"
     manifest.write_text(
-        json.dumps({"domain": "lab.example", "snapshot": "clean", "fixtures": ["baseline"]}),
+        json.dumps({"domain": "corp.example", "snapshot": "clean", "fixtures": ["baseline"]}),
         encoding="utf-8",
     )
 
     detections = detection_export(session)
-    lab = lab_manifest_summary(manifest)
+    scope = scope_manifest_summary(manifest)
 
     assert detections["count"] == 2
-    assert lab["reserved_domain"] is True
-    assert lab["ready_for_review"] is True
+    assert scope["reserved_domain"] is True
+    assert scope["ready_for_review"] is True
 
 
 def test_import_evidence_error_branches(tmp_path: Path) -> None:
@@ -180,12 +180,12 @@ def test_detection_export_skips_malformed_and_duplicate_edges(tmp_path: Path) ->
     assert detections["rules"][0]["source_relation"] == "DCSync"
 
 
-def test_lab_manifest_summary_rejects_non_mapping(tmp_path: Path) -> None:
+def test_scope_manifest_summary_rejects_non_mapping(tmp_path: Path) -> None:
     import pytest
 
-    from adaf_attack.core.tooling import lab_manifest_summary
+    from adaf_attack.core.tooling import scope_manifest_summary
 
-    manifest = tmp_path / "lab.json"
+    manifest = tmp_path / "scope.json"
     manifest.write_text("[]", encoding="utf-8")
     with pytest.raises(ValueError, match="JSON object"):
-        lab_manifest_summary(manifest)
+        scope_manifest_summary(manifest)

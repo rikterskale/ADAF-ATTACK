@@ -107,12 +107,19 @@ def _pick_ca(adcs: dict[str, Any] | None) -> str | None:
     return str(first)
 
 
-def _run_certipy(argv: list[str], session: Session) -> dict[str, Any]:
+def _run_certipy(
+    argv: list[str], session: Session, *, password: str | None = None
+) -> dict[str, Any]:
     playbook = " ".join("***" if i and argv[i - 1] == "-p" else c for i, c in enumerate(argv))
     session.path("certipy.playbook.txt").write_text(playbook + "\n", encoding="utf-8")
     try:
         proc = subprocess.run(
-            argv, cwd=str(session.root), capture_output=True, text=True, timeout=180
+            argv,
+            cwd=str(session.root),
+            capture_output=True,
+            text=True,
+            input=(password + "\n") if password else None,
+            timeout=180,
         )
     except FileNotFoundError:
         return {"ok": False, "method": "playbook-only", "playbook": playbook}
@@ -160,15 +167,22 @@ def _enroll(
         str(template),
     ]
     if target.password:
-        argv.extend(["-p", target.password])
-    elif target.hashes:
+        # Certipy prompts when -p is omitted. Keep the secret out of argv.
+        password = target.password
+    else:
+        password = None
+    if target.hashes:
         argv.extend(["-hashes", target.hashes])
     if ca:
         argv.extend(["-ca", str(ca)])
     if alt_name:
         argv.extend(["-upn", str(alt_name)])
     argv.extend(extra)
-    enrolled = _run_certipy(argv, session)
+    enrolled = (
+        _run_certipy(argv, session)
+        if password is None
+        else _run_certipy(argv, session, password=password)
+    )
     session.path(f"{cap_id}.conditions.txt").write_text(_conditions_text(cap_id), encoding="utf-8")
     register_advisory_rollback(
         session,

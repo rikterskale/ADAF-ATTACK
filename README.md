@@ -58,7 +58,7 @@ should start from their platform guide below rather than pip directly.
 
 ## Philosophy
 
-- No plan-only / lab-cert / containment gates
+- No plan-only or containment gates
 - Lightweight controls: `--force`, redaction by default, session logging
 
 ## Capabilities
@@ -257,7 +257,7 @@ profile when checking a broader workflow:
 adaf-attack --format json doctor --profile operator
 adaf-attack --format json doctor --profile certipy
 adaf-attack --format json doctor --profile live-ad \
-  --domain lab.example --dc-ip 10.0.0.10
+  --domain corp.example --dc-ip 10.0.0.10
 ```
 
 The default `offline` profile never performs network probes. The `live-ad`
@@ -336,7 +336,7 @@ state that `adaf-attack rollback` can reverse.
 | Demo sessions, findings, reports, packaging | Yes | Base install; reports extra for PDF output |
 | LDAP and AD reconnaissance | No | Authorized account, DNS, DC reachability |
 | Kerberos and Impacket adapters | No | `[kerberos]`, DNS, synchronized clocks |
-| AD CS workflows | No | Separate `[certipy]` environment and test CA |
+| AD CS workflows | No | Separate `[certipy]` environment and approved CA |
 | Relay, coercion, and destructive operations | No | Authorized target and rollback state |
 
 ## Offline and air-gapped installation
@@ -505,7 +505,7 @@ adaf-attack --format json sessions
 | Reports, evidence correlation, engagement packaging | Saved session or demo fixture |
 | LDAP/AD reconnaissance | Authorized account, DNS, network path to the DC |
 | Kerberos/Impacket | `[kerberos]`, correct DNS and synchronized clocks |
-| AD CS workflows | Separate `[certipy]` environment and test CA |
+| AD CS workflows | Separate `[certipy]` environment and approved CA |
 | Relay/coercion/destructive operations | Explicit authorization, rollback state |
 
 ## Offline correlation workflows

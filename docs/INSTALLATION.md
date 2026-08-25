@@ -284,7 +284,7 @@ Kerberos, and an engagement workspace. Run the explicit target preflight:
 
 ```bash
 adaf-attack --format json doctor --profile live-ad \
-  --domain lab.example \
+  --domain corp.example \
   --dc-ip 10.0.0.10
 ```
 
@@ -292,7 +292,7 @@ Then inspect the generated plan before running anything:
 
 ```bash
 adaf-attack plan ldap-enum \
-  --domain lab.example \
+  --domain corp.example \
   --dc-ip 10.0.0.10 \
   --export ./ldap-enum-plan.md
 ```

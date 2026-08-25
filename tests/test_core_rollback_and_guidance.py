@@ -40,12 +40,12 @@ def test_cleanup_all_ldap_paths_and_registry(
 
     conn = Conn()
     monkeypatch.setattr(cleanup, "ldap_connect", lambda target: (conn, "DC=x", None))
-    artifact = tmp_path / "key.txt"
-    artifact.write_text("value", encoding="utf-8")
-    template = tmp_path / "template.json"
-    template.write_text(json.dumps({"attrs": {"flags": 1}}), encoding="utf-8")
     session_dir = tmp_path / "cleanup"
     session_dir.mkdir()
+    artifact = session_dir / "key.txt"
+    artifact.write_text("value", encoding="utf-8")
+    template = session_dir / "template.json"
+    template.write_text(json.dumps({"attrs": {"flags": 1}}), encoding="utf-8")
     entries = [
         {"status": "pending", "kind": "computer-identity", "target": "a", "attribute": "x"},
         {"status": "pending", "kind": "keycred-write", "target": "b", "artifact": str(artifact)},

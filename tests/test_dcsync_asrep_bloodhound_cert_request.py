@@ -53,25 +53,25 @@ def test_profiles_all_persistence_validation_and_opsec_branches(
     with pytest.raises(ValueError, match="non-empty"):
         profiles.set_profile("bad name", {})
     with pytest.raises(ValueError, match="Unknown profile field"):
-        profiles.set_profile("lab", {"unknown": "value"})
+        profiles.set_profile("engagement", {"unknown": "value"})
     with pytest.raises(ValueError, match="opsec_profile"):
-        profiles.set_profile("lab", {"opsec_profile": "unsafe"})
+        profiles.set_profile("engagement", {"opsec_profile": "unsafe"})
 
     saved = profiles.set_profile(
-        "lab",
+        "engagement",
         {"domain": "corp.test", "ldaps": "yes", "kerberos": "0", "opsec_profile": "stealth"},
     )
     assert saved["ldaps"] is True and saved["kerberos"] is False
-    assert profiles.get_profile("lab") == saved
-    assert profiles.list_profiles() == [{"name": "lab", **saved}]
-    assert profiles.apply_profile_to_defaults("lab")["target.domain"] == "corp.test"
+    assert profiles.get_profile("engagement") == saved
+    assert profiles.list_profiles() == [{"name": "engagement", **saved}]
+    assert profiles.apply_profile_to_defaults("engagement")["target.domain"] == "corp.test"
     assert profiles.active_opsec("loud") == "loud"
-    assert profiles.active_opsec(profile_name="lab") == "stealth"
+    assert profiles.active_opsec(profile_name="engagement") == "stealth"
     assert profiles.active_opsec("invalid", "missing") == "stealth"
-    assert profiles.delete_profile("lab") is True
-    assert profiles.delete_profile("lab") is False
+    assert profiles.delete_profile("engagement") is True
+    assert profiles.delete_profile("engagement") is False
     with pytest.raises(ValueError, match="Unknown profile"):
-        profiles.apply_profile_to_defaults("lab")
+        profiles.apply_profile_to_defaults("engagement")
 
 
 def test_profile_cli_errors_and_secondary_commands(
@@ -83,7 +83,9 @@ def test_profile_cli_errors_and_secondary_commands(
     runner = CliRunner()
     missing = runner.invoke(app, ["--format", "json", "profile", "show", "missing"])
     assert missing.exit_code == 1
-    invalid = runner.invoke(app, ["--format", "json", "profile", "set", "lab", "--opsec", "bad"])
+    invalid = runner.invoke(
+        app, ["--format", "json", "profile", "set", "engagement", "--opsec", "bad"]
+    )
     assert invalid.exit_code == 1
     assert runner.invoke(app, ["--format", "json", "profile", "default"]).exit_code == 0
     assert runner.invoke(app, ["--format", "json", "profile", "delete", "missing"]).exit_code == 1
@@ -106,7 +108,7 @@ def test_profile_and_session_human_output_paths(
             [
                 "profile",
                 "set",
-                "lab",
+                "engagement",
                 "--domain",
                 "corp.test",
                 "--dc-ip",
@@ -118,8 +120,8 @@ def test_profile_and_session_human_output_paths(
         == 0
     )
     assert runner.invoke(app, ["profile", "list"]).exit_code == 0
-    assert runner.invoke(app, ["profile", "show", "lab"]).exit_code == 0
-    assert runner.invoke(app, ["profile", "default", "lab"]).exit_code == 0
+    assert runner.invoke(app, ["profile", "show", "engagement"]).exit_code == 0
+    assert runner.invoke(app, ["profile", "default", "engagement"]).exit_code == 0
     assert runner.invoke(app, ["profile", "use", "missing"]).exit_code == 1
     assert runner.invoke(app, ["profile", "default", "missing"]).exit_code == 1
     assert runner.invoke(app, ["profile", "set", "bad name"]).exit_code == 1

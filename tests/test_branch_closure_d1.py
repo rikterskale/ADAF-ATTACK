@@ -127,7 +127,7 @@ def test_export_plan_markdown_prerequisite_variants() -> None:
 
     base = {
         "capability_id": "shadow-creds",
-        "domain": "corp.lab",
+        "domain": "corp.example",
         "dc_ip": "10.0.0.10",
         "risk": {"level": "high"},
         "checklist": {"opsec_hint": "Stay quiet"},

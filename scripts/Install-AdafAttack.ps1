@@ -17,13 +17,13 @@
   Version passed to the Windows py launcher. Default: 3.11.
 
 .EXAMPLE
-  .\scripts\Install-AdafAttack.ps1 -Package .\dist\adaf_attack-0.10.0-py3-none-any.whl
+  .\scripts\Install-AdafAttack.ps1 -Package .\dist\adaf_attack-0.10.1-py3-none-any.whl
 
 .EXAMPLE
   .\scripts\Install-AdafAttack.ps1 -Uninstall
 
 .EXAMPLE
-  .\scripts\Install-AdafAttack.ps1 -Json -Package .\dist\adaf_attack-0.10.0-py3-none-any.whl
+  .\scripts\Install-AdafAttack.ps1 -Json -Package .\dist\adaf_attack-0.10.1-py3-none-any.whl
 #>
 [CmdletBinding()]
 param(

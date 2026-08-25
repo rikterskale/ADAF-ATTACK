@@ -86,7 +86,7 @@ capability tests for the harness patterns.
 > **Note on what green means.** Because the suite mocks LDAP/Kerberos/impacket,
 > a passing run verifies control flow, parsing, redaction, and evidence
 > handling — it does **not** guarantee behavior against a live domain
-> controller. Validate live paths in an authorized lab before relying on them.
+> controller. Validate live paths against the engagement scope before relying on them.
 
 ## 4. Pull requests
 

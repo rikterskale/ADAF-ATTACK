@@ -60,7 +60,7 @@ def test_query_findings_supports_operational_filters(tmp_path: Path) -> None:
 
 
 def test_engine_drives_finding_lifecycle_and_persists(tmp_path: Path) -> None:
-    engine = WorkflowEngine(tmp_path, title="Lab assessment")
+    engine = WorkflowEngine(tmp_path, title="Engagement assessment")
     engine.start()
     assert engine.state.pending_actions["authorize-scope"].kind == "required"
 

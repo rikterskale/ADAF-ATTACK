@@ -1,6 +1,6 @@
 """Build operator-facing example commands from exploit-chain evidence.
 
-Commands are templates for authorized lab/operator use. They never auto-execute.
+Commands are templates for authorized operator use. They never auto-execute.
 """
 
 from __future__ import annotations

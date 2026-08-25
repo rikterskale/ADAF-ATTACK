@@ -91,7 +91,7 @@ def test_profile_delete_clears_default_key(tmp_path: Path) -> None:
             "json",
             "profile",
             "set",
-            "lab",
+            "engagement",
             "--domain",
             "corp.test",
             "--dc-ip",
@@ -101,7 +101,7 @@ def test_profile_delete_clears_default_key(tmp_path: Path) -> None:
     )
     assert saved.exit_code == 0, saved.output
 
-    deleted = runner.invoke(app, ["--format", "json", "profile", "delete", "lab"])
+    deleted = runner.invoke(app, ["--format", "json", "profile", "delete", "engagement"])
 
     assert deleted.exit_code == 0, deleted.output
     config = json.loads((tmp_path / "config" / "config.json").read_text())

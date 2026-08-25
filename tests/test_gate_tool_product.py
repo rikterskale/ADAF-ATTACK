@@ -166,30 +166,30 @@ def test_tool_detect_failure(tmp_path: Path, monkeypatch) -> None:
     assert payload["error"]["code"] == "INPUT_FILE_INVALID"
 
 
-def test_tool_lab_success(tmp_path: Path, monkeypatch) -> None:
-    manifest = tmp_path / "lab.json"
+def test_tool_manifest_success(tmp_path: Path, monkeypatch) -> None:
+    manifest = tmp_path / "scope.json"
     manifest.write_text("{}", encoding="utf-8")
     _patch(
         monkeypatch,
         "tooling",
-        "lab_manifest_summary",
+        "scope_manifest_summary",
         {
-            "domain": "lab.example",
+            "domain": "corp.example",
             "reserved_domain": True,
             "snapshot": "snap-1",
             "fixtures": ["f"],
             "ready_for_review": False,
         },
     )
-    payload = _invoke_json("tool", "lab", str(manifest))
-    assert payload["domain"] == "lab.example"
+    payload = _invoke_json("tool", "manifest", str(manifest))
+    assert payload["domain"] == "corp.example"
 
 
-def test_tool_lab_failure(tmp_path: Path, monkeypatch) -> None:
-    manifest = tmp_path / "lab.json"
+def test_tool_manifest_failure(tmp_path: Path, monkeypatch) -> None:
+    manifest = tmp_path / "scope.json"
     manifest.write_text("{}", encoding="utf-8")
-    _patch(monkeypatch, "tooling", "lab_manifest_summary", ValueError("bad"))
-    _code, payload = _invoke_error("tool", "lab", str(manifest))
+    _patch(monkeypatch, "tooling", "scope_manifest_summary", ValueError("bad"))
+    _code, payload = _invoke_error("tool", "manifest", str(manifest))
     assert payload["error"]["code"] == "INPUT_FILE_INVALID"
 
 

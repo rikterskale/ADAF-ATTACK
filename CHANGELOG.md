@@ -66,7 +66,7 @@ declared in `pyproject.toml`.
 - Platform onboarding, offline installation, lifecycle, troubleshooting, and
   known-limitations documentation.
 - Portable approved-wheel bootstrap, explicit data/config directory overrides,
-  architecture support guidance, and machine-readable disposable-lab evidence.
+  architecture support guidance, and machine-readable disposable evidence.
 
 ### Changed
 

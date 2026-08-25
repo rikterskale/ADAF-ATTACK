@@ -64,7 +64,7 @@ authorized target, run the explicit live preflight instead:
 
 ```bash
 adaf-attack --format json doctor --profile live-ad \
-  --domain lab.example --dc-ip 10.0.0.10
+  --domain corp.example --dc-ip 10.0.0.10
 ```
 
 To attach diagnostics to a support request, export a redacted bundle and
@@ -247,7 +247,7 @@ command. Use the code to choose the recovery path:
 | Error code | First recovery action |
 |---|---|
 | `AUTHENTICATION_FAILED` | Recheck the account, secret source, DNS, and clock; never add a password to shell history. |
-| `TARGET_UNREACHABLE` | Run the explicit live-AD doctor profile and verify private-lab routing/firewall rules. |
+| `TARGET_UNREACHABLE` | Run the explicit live-AD doctor profile and verify routing and firewall rules for the authorized network. |
 | `REQUIRED_INPUT_MISSING` | Run `adaf-attack capability-help <capability>` and provide the named option or `-P` parameter. |
 | `INPUT_FILE_INVALID` | Confirm the path exists, is readable, and matches the documented artifact format. |
 | `PERMISSION_DENIED` | Select writable per-user data/config/workspace directories with `adaf-attack paths`. |

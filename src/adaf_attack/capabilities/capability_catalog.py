@@ -93,7 +93,7 @@ CAPABILITY_CATALOG: tuple[
         ("dmsa", "windows-server-2025"),
         "live-mutating",
         (),
-        "dmsa-lab",
+        "dmsa-fixture",
     ),
     (
         "dmsa-ouroboros",
@@ -103,7 +103,7 @@ CAPABILITY_CATALOG: tuple[
         ("dmsa", "windows-server-2025"),
         "live-mutating",
         (),
-        "dmsa-lab",
+        "dmsa-fixture",
     ),
     (
         "esc9",
@@ -113,7 +113,7 @@ CAPABILITY_CATALOG: tuple[
         ("adcs", "esc"),
         "live-mutating",
         ("certipy",),
-        "adcs-lab",
+        "adcs-fixture",
     ),
     (
         "esc10",
@@ -123,7 +123,7 @@ CAPABILITY_CATALOG: tuple[
         ("adcs", "esc"),
         "live-mutating",
         ("certipy",),
-        "adcs-lab",
+        "adcs-fixture",
     ),
     (
         "esc13",
@@ -133,7 +133,7 @@ CAPABILITY_CATALOG: tuple[
         ("adcs", "esc"),
         "live-mutating",
         ("certipy",),
-        "adcs-lab",
+        "adcs-fixture",
     ),
     (
         "esc14",
@@ -143,7 +143,7 @@ CAPABILITY_CATALOG: tuple[
         ("adcs", "esc"),
         "live-mutating",
         ("certipy",),
-        "adcs-lab",
+        "adcs-fixture",
     ),
     (
         "esc15",
@@ -153,7 +153,7 @@ CAPABILITY_CATALOG: tuple[
         ("adcs", "esc"),
         "live-mutating",
         ("certipy",),
-        "adcs-lab",
+        "adcs-fixture",
     ),
     (
         "esc16",
@@ -163,7 +163,7 @@ CAPABILITY_CATALOG: tuple[
         ("adcs", "esc"),
         "live-mutating",
         ("certipy",),
-        "adcs-lab",
+        "adcs-fixture",
     ),
     (
         "krb-relay",
@@ -173,7 +173,7 @@ CAPABILITY_CATALOG: tuple[
         ("kerberos", "relay"),
         "live-mutating",
         ("impacket",),
-        "relay-lab",
+        "relay-fixture",
     ),
     (
         "golden-cert",
@@ -183,7 +183,7 @@ CAPABILITY_CATALOG: tuple[
         ("adcs", "certificate"),
         "live-mutating",
         ("certipy",),
-        "adcs-lab",
+        "adcs-fixture",
     ),
     (
         "dpapi-domain-backup",
@@ -243,7 +243,7 @@ CAPABILITY_CATALOG: tuple[
         ("adcs", "esc8", "relay", "workflow"),
         "live-mutating",
         ("impacket", "certipy"),
-        "adcs-lab",
+        "adcs-fixture",
     ),
     (
         "unconst-tgtdump-workflow",
@@ -263,7 +263,7 @@ CAPABILITY_CATALOG: tuple[
         ("acl", "adminsdholder"),
         "live-mutating",
         (),
-        "domain-admin-lab",
+        "domain-admin-fixture",
     ),
     (
         "sidhistory-inject",
@@ -273,7 +273,7 @@ CAPABILITY_CATALOG: tuple[
         ("sidhistory", "trust"),
         "live-mutating",
         (),
-        "trust-lab",
+        "trust-fixture",
     ),
     (
         "pre2k-spray",
@@ -343,7 +343,7 @@ CAPABILITY_CATALOG: tuple[
         ("dns", "wpad"),
         "live-mutating",
         (),
-        "dns-lab",
+        "dns-fixture",
     ),
     (
         "dnsadmin-srv",
@@ -353,7 +353,7 @@ CAPABILITY_CATALOG: tuple[
         ("dns", "dnsadmins"),
         "live-mutating",
         (),
-        "dns-lab",
+        "dns-fixture",
     ),
     (
         "sccm-enum",
@@ -363,7 +363,7 @@ CAPABILITY_CATALOG: tuple[
         ("sccm",),
         "live-read-only",
         (),
-        "sccm-lab",
+        "sccm-fixture",
     ),
     (
         "sccm-naa",
@@ -373,7 +373,7 @@ CAPABILITY_CATALOG: tuple[
         ("sccm", "naa"),
         "live-read-only",
         (),
-        "sccm-lab",
+        "sccm-fixture",
     ),
     (
         "sccm-takeover",
@@ -383,7 +383,7 @@ CAPABILITY_CATALOG: tuple[
         ("sccm", "relay"),
         "live-mutating",
         ("impacket",),
-        "sccm-lab",
+        "sccm-fixture",
     ),
     (
         "sccm-client-push",
@@ -393,7 +393,7 @@ CAPABILITY_CATALOG: tuple[
         ("sccm",),
         "live-mutating",
         (),
-        "sccm-lab",
+        "sccm-fixture",
     ),
     (
         "azureadssoacc-roast",
@@ -403,7 +403,7 @@ CAPABILITY_CATALOG: tuple[
         ("hybrid", "kerberoast", "seamless-sso"),
         "live-read-only",
         ("impacket",),
-        "hybrid-lab",
+        "hybrid-fixture",
     ),
     (
         "aadconnect-dcsync",
@@ -413,7 +413,7 @@ CAPABILITY_CATALOG: tuple[
         ("hybrid", "dcsync", "aadconnect"),
         "live-read-only",
         ("impacket",),
-        "hybrid-lab",
+        "hybrid-fixture",
     ),
 )
 

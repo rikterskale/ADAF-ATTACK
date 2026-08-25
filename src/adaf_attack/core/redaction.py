@@ -1,7 +1,7 @@
 """Lightweight secret redaction.
 
 By default all results are redacted. Operators can pass --include-secrets
-to keep sensitive material (intended for isolated lab use only).
+to keep sensitive material out of ordinary operator output.
 
 Redaction works on two independent layers:
 

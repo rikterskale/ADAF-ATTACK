@@ -148,7 +148,7 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
     ),
     "TARGET_UNREACHABLE": (
         "The target could not be reached from this operator environment.",
-        "Verify DNS, routing, firewall rules, the private lab network, and the DC address before retrying.",
+        "Verify DNS, routing, firewall rules, and the authorized DC address before retrying.",
         "adaf-attack doctor --profile live-ad --domain <domain> --dc-ip <dc>",
     ),
     "REQUIRED_INPUT_MISSING": (
@@ -184,7 +184,7 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
     "INVALID_OPSEC_PROFILE": (
         "The opsec profile value is not recognized.",
         "Choose stealth, balanced, or loud.",
-        "adaf-attack profile set lab --opsec balanced",
+        "adaf-attack profile set engagement --opsec balanced",
     ),
     "DEMO_FIXTURES_MISSING": (
         "Demo session fixtures are not available in this install.",

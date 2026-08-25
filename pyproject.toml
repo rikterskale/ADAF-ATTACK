@@ -53,10 +53,10 @@ dev = [
     "types-requests",
 ]
 ci = [
-    "bandit>=1.7.9",
-    "build>=1.2.0",
-    "pip-audit>=2.7.0",
-    "twine>=5.0.0",
+    "bandit==1.9.4",
+    "build==1.5.0",
+    "pip-audit==2.10.1",
+    "twine==7.0.0",
 ]
 tui = [
     "textual==8.2.8",

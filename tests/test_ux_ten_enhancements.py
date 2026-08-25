@@ -51,9 +51,9 @@ def test_profile_set_list_use_delete(tmp_path: Path, monkeypatch) -> None:
             "json",
             "profile",
             "set",
-            "lab",
+            "engagement",
             "--domain",
-            "corp.lab",
+            "corp.example",
             "--dc-ip",
             "10.0.0.10",
             "--opsec",
@@ -63,7 +63,7 @@ def test_profile_set_list_use_delete(tmp_path: Path, monkeypatch) -> None:
     )
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["profile"]["domain"] == "corp.lab"
+    assert payload["profile"]["domain"] == "corp.example"
     assert payload["profile"]["opsec_profile"] == "stealth"
     assert payload["default"] is True
 
@@ -71,12 +71,12 @@ def test_profile_set_list_use_delete(tmp_path: Path, monkeypatch) -> None:
     assert listed.exit_code == 0
     listed_payload = json.loads(listed.output)
     assert listed_payload["count"] == 1
-    assert listed_payload["default"] == "lab"
+    assert listed_payload["default"] == "engagement"
 
-    used = runner.invoke(app, ["--format", "json", "profile", "use", "lab"])
+    used = runner.invoke(app, ["--format", "json", "profile", "use", "engagement"])
     assert used.exit_code == 0
 
-    deleted = runner.invoke(app, ["--format", "json", "profile", "delete", "lab"])
+    deleted = runner.invoke(app, ["--format", "json", "profile", "delete", "engagement"])
     assert deleted.exit_code == 0
 
 
@@ -202,11 +202,11 @@ def test_ux_helpers_prereqs_and_stages() -> None:
     assert "best_run_after" in prereqs
     stages = format_stages_progress(cap, current="execute")
     assert stages["stages"]
-    nxt = format_next_actions_block(cap, domain="corp.lab", dc_ip="10.0.0.10")
+    nxt = format_next_actions_block(cap, domain="corp.example", dc_ip="10.0.0.10")
     assert "suggestions" in nxt
     md = export_plan_markdown(
         capability_id="shadow-creds",
-        domain="corp.lab",
+        domain="corp.example",
         dc_ip="10.0.0.10",
         risk={"level": "high", "may_modify_target": True, "requires_force": True},
         checklist={"opsec_hint": "Prefer stealth", "items": [{"label": "Scope", "required": True}]},

@@ -157,7 +157,7 @@ def test_config_set_permission_error_is_actionable(monkeypatch) -> None:
         raise PermissionError("profile is locked")
 
     monkeypatch.setattr(user_config, "set_key", fail)
-    result = runner.invoke(app, ["--format", "json", "config", "set", "workspace", "./lab"])
+    result = runner.invoke(app, ["--format", "json", "config", "set", "workspace", "./engagement"])
     assert result.exit_code == 1
     payload = json.loads(result.output)
     assert payload["error"]["code"] == "CONFIG_WRITE_FAILED"

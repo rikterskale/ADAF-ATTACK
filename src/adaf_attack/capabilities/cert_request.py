@@ -104,8 +104,11 @@ class CertRequest:
             "-template",
             template,
         ]
+        password_input: str | None = None
         if target.password:
-            cmd.extend(["-p", target.password])
+            # Certipy prompts when -p is omitted. Keep the secret out of argv,
+            # where it would be visible to local process inspection.
+            password_input = target.password + "\n"
         elif target.hashes:
             cmd.extend(["-hashes", target.hashes])
         if ca:
@@ -138,6 +141,7 @@ class CertRequest:
                 cwd=str(session.root),
                 capture_output=True,
                 text=True,
+                input=password_input,
                 timeout=180,
             )
             result["method"] = "certipy"

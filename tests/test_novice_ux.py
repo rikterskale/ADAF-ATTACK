@@ -135,7 +135,7 @@ def test_run_interactive_prompts_for_required_and_aborts_on_no() -> None:
     result = runner.invoke(
         app,
         ["run", "ldap-enum", "--interactive"],
-        input="corp.lab\n10.0.0.10\n\nn\n",
+        input="corp.example\n10.0.0.10\n\nn\n",
     )
     assert result.exit_code != 0
     assert "USER_ABORTED" in result.output or "declined" in result.output.lower()
@@ -175,7 +175,7 @@ def test_interactive_run_confirms_destructive_yes(monkeypatch) -> None:
     # Destructive capability with force NOT already provided, user answers YES.
     result = runner.invoke(
         app,
-        ["run", "shadow-creds", "--interactive", "-d", "corp.lab", "--dc-ip", "10.0.0.10"],
+        ["run", "shadow-creds", "--interactive", "-d", "corp.example", "--dc-ip", "10.0.0.10"],
         # order: --sam prompt (blank), --force prompt (YES), confirm (n → abort)
         input="\nYES\nn\n",
     )
@@ -188,7 +188,7 @@ def test_interactive_run_confirms_destructive_no() -> None:
     # Destructive capability, force NOT already, user answers NO → aborts.
     result = runner.invoke(
         app,
-        ["run", "shadow-creds", "--interactive", "-d", "corp.lab", "--dc-ip", "10.0.0.10"],
+        ["run", "shadow-creds", "--interactive", "-d", "corp.example", "--dc-ip", "10.0.0.10"],
         input="\nNO\n",
     )
     assert result.exit_code != 0
@@ -199,7 +199,15 @@ def test_interactive_run_prompts_for_param_style() -> None:
     # gpp-cpassword-hunt requires a -P sysvol=<path> parameter.
     result = runner.invoke(
         app,
-        ["run", "gpp-cpassword-hunt", "--interactive", "-d", "corp.lab", "--dc-ip", "10.0.0.10"],
+        [
+            "run",
+            "gpp-cpassword-hunt",
+            "--interactive",
+            "-d",
+            "corp.example",
+            "--dc-ip",
+            "10.0.0.10",
+        ],
         input="/mnt/sysvol\nn\n",
     )
     assert result.exit_code != 0
@@ -210,7 +218,7 @@ def test_interactive_run_notes_already_provided_options() -> None:
     # --domain and --dc-ip provided via flags → skipped in the prompt loop.
     result = runner.invoke(
         app,
-        ["run", "ldap-enum", "--interactive", "-d", "corp.lab", "--dc-ip", "10.0.0.10"],
+        ["run", "ldap-enum", "--interactive", "-d", "corp.example", "--dc-ip", "10.0.0.10"],
         input="n\n",
     )
     assert result.exit_code != 0
@@ -223,7 +231,7 @@ def test_interactive_run_prints_glossary_hint_for_known_capability() -> None:
     result = runner.invoke(
         app,
         ["run", "kerberoast", "--interactive"],
-        input="corp.lab\n10.0.0.10\n\nn\n",
+        input="corp.example\n10.0.0.10\n\nn\n",
     )
     assert result.exit_code != 0
     assert "Glossary" in result.output
@@ -245,7 +253,7 @@ def test_interactive_run_full_pipeline_yes_executes(monkeypatch) -> None:
 
     result = runner.invoke(
         app,
-        ["run", "ldap-enum", "--interactive", "-d", "corp.lab", "--dc-ip", "10.0.0.10"],
+        ["run", "ldap-enum", "--interactive", "-d", "corp.example", "--dc-ip", "10.0.0.10"],
         input="y\n",
     )
     assert result.exit_code == 0, result.output
@@ -352,7 +360,7 @@ def test_interactive_run_force_already_skips_prompt_and_forwards(monkeypatch) ->
             "--interactive",
             "--force",
             "-d",
-            "corp.lab",
+            "corp.example",
             "--dc-ip",
             "10.0.0.10",
         ],
@@ -388,7 +396,7 @@ def test_interactive_run_yes_force_sets_flag_and_merges_params(monkeypatch) -> N
             "template-mod",
             "--interactive",
             "-d",
-            "corp.lab",
+            "corp.example",
             "--dc-ip",
             "10.0.0.10",
         ],

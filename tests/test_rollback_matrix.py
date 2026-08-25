@@ -231,6 +231,43 @@ def test_execute_cleanup_reverts_ldap_object(
     assert conn.deletes == ["CN=NEW,CN=Computers,DC=corp,DC=test"]
 
 
+def test_execute_cleanup_removes_local_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = _Conn()
+    monkeypatch.setattr(cleanup, "ldap_connect", lambda target: (conn, "", None))
+    artifact = tmp_path / "issued.ccache"
+    artifact.write_bytes(b"credential material")
+    _write_cleanup(
+        tmp_path,
+        {"kind": "local-artifact", "status": "pending", "artifact": str(artifact)},
+    )
+
+    result = cleanup.execute_cleanup(tmp_path, _target())
+
+    assert result["completed"] == 1
+    assert not artifact.exists()
+    assert json.loads((tmp_path / "cleanup.json").read_text())[0]["status"] == "completed"
+
+
+def test_execute_cleanup_rejects_artifact_outside_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = _Conn()
+    monkeypatch.setattr(cleanup, "ldap_connect", lambda target: (conn, "", None))
+    outside = tmp_path.parent / "not-a-session-artifact"
+    outside.write_text("must remain", encoding="utf-8")
+    _write_cleanup(
+        tmp_path,
+        {"kind": "local-artifact", "status": "pending", "artifact": str(outside)},
+    )
+
+    with pytest.raises(ValueError, match="inside the session"):
+        cleanup.execute_cleanup(tmp_path, _target())
+
+    assert outside.read_text(encoding="utf-8") == "must remain"
+
+
 def test_execute_cleanup_reverts_gpo_sysvol(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

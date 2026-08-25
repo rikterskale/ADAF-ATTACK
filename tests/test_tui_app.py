@@ -424,7 +424,7 @@ def test_tui_operator_safety_and_profile_controls(
             app.notify = notices  # type: ignore[method-assign]
             monkeypatch.setattr(tui_app, "default_workspace_dir", lambda: tmp_path / "workspace")
             monkeypatch.setattr(tui_app, "active_opsec", lambda: "stealth")
-            monkeypatch.setattr(tui_app, "list_profiles", lambda: [{"name": "lab"}])
+            monkeypatch.setattr(tui_app, "list_profiles", lambda: [{"name": "engagement"}])
             monkeypatch.setattr(tui_app, "load_user_config", dict)
             saved_config: list[dict[str, object]] = []
             monkeypatch.setattr(
@@ -456,7 +456,7 @@ def test_tui_operator_safety_and_profile_controls(
                 "kerberos": True,
                 "ldaps": True,
             }
-            profile_name.value = "lab"
+            profile_name.value = "engagement"
             monkeypatch.setattr(tui_app, "get_profile", lambda name: profile)
             app._apply_profile()
             assert app.query_one("#domain", Input).value == "corp.test"
@@ -464,13 +464,13 @@ def test_tui_operator_safety_and_profile_controls(
 
             profile_name.value = ""
             app._save_profile()
-            profile_name.value = "lab"
+            profile_name.value = "engagement"
             stored: list[tuple[str, dict[str, object]]] = []
             monkeypatch.setattr(
                 tui_app, "set_profile", lambda name, value: stored.append((name, value))
             )
             app._save_profile(make_default=True)
-            assert stored and saved_config == [{"profile.default": "lab"}]
+            assert stored and saved_config == [{"profile.default": "engagement"}]
             monkeypatch.setattr(
                 tui_app,
                 "set_profile",

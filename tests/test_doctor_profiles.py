@@ -65,7 +65,7 @@ def test_live_profile_runs_explicit_dns_and_port_probes(monkeypatch, tmp_path: P
         return Connection()
 
     monkeypatch.setattr(cli.socket, "create_connection", connect)
-    payload = cli._doctor_payload("live-ad", domain="lab.test", dc_ip="10.0.0.10", timeout=1.5)
+    payload = cli._doctor_payload("live-ad", domain="corp.example", dc_ip="10.0.0.10", timeout=1.5)
 
     assert payload["ok"] is True
     assert next(item for item in payload["checks"] if item["id"] == "domain-dns")["status"] == "ok"
@@ -124,7 +124,7 @@ def test_live_profile_reports_dns_and_port_failures(monkeypatch, tmp_path: Path)
         "create_connection",
         lambda *args, **kwargs: (_ for _ in ()).throw(OSError("refused")),
     )
-    payload = cli._doctor_payload("live-ad", domain="lab.test", dc_ip="10.0.0.10")
+    payload = cli._doctor_payload("live-ad", domain="corp.example", dc_ip="10.0.0.10")
     assert (
         next(item for item in payload["checks"] if item["id"] == "domain-dns")["status"] == "error"
     )
@@ -231,6 +231,6 @@ def test_support_bundle_redacts_sensitive_values(monkeypatch, tmp_path: Path) ->
 
 
 def test_support_identifier_replacement() -> None:
-    value = {"value": "dc=10.0.0.10 domain=lab.test", "nested": ["lab.test"]}
-    sanitized = cli._replace_support_identifiers(value, ("lab.test", "10.0.0.10"))
+    value = {"value": "dc=10.0.0.10 domain=corp.example", "nested": ["corp.example"]}
+    sanitized = cli._replace_support_identifiers(value, ("corp.example", "10.0.0.10"))
     assert sanitized == {"value": "dc=<TARGET> domain=<TARGET>", "nested": ["<TARGET>"]}

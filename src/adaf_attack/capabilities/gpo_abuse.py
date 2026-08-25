@@ -29,7 +29,7 @@ GPO_ATTRS = [
     "versionNumber",
 ]
 
-# AD permits non-GUID CNs in test/lab fixtures and legacy environments.
+# AD permits non-GUID CNs in fixtures and legacy environments.
 GUID_RE = re.compile(r"CN=\{([^}]+)\}", re.IGNORECASE)
 
 

@@ -127,6 +127,6 @@ def active_opsec(explicit: str | None = None, profile_name: str | None = None) -
 
 OPSEC_HINTS = {
     "stealth": "Prefer low-and-slow queries; avoid spray/coerce by default.",
-    "balanced": "Standard lab/internal tempo with moderate request rates.",
+    "balanced": "Standard internal tempo with moderate request rates.",
     "loud": "Aggressive enumeration acceptable only when explicitly authorized.",
 }

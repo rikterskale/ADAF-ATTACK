@@ -13,7 +13,7 @@ external operator tools are available.
 | LDAP/AD reconnaissance | Base | Authorized account, DNS, DC access | Yes | No | Operator-verified |
 | Kerberos and Impacket adapters | `[kerberos]` / `[full]` | DNS, synchronized clock, realm | Usually | Depends on capability | Operator-verified |
 | TUI | `[tui]` / `[full]` | Interactive terminal | No | No | CI/source tests |
-| AD CS enrollment | `[certipy]` | Certipy on PATH, test CA | Yes | Depends on capability | Operator-verified |
+| AD CS enrollment | `[certipy]` | Certipy on PATH, approved CA | Yes | Depends on capability | Operator-verified |
 | Relay, coercion, credential-exposure, destructive workflows | Base plus capability dependencies | Registered safety profile, approval token, rollback, authorized target | Yes | Depends on operation | Operator-verified |
 | Promoted offensive IDs (capability catalog) | Base plus capability tools | Authorized account / test fixtures | Usually | Depends on capability | Operator-verified |
 

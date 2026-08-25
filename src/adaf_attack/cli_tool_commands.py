@@ -18,7 +18,7 @@ def register_tool_commands(
     emit_error: Callable[..., None],
 ) -> None:
     """Register tool-oriented aliases without changing execution safeguards."""
-    tool_app = typer.Typer(help="Offline graph, evidence, scope, detection, and lab tools.")
+    tool_app = typer.Typer(help="Offline graph, evidence, scope, detection, and manifest tools.")
     app.add_typer(tool_app, name="tool")
 
     @tool_app.command("graph")
@@ -167,19 +167,19 @@ def register_tool_commands(
             ),
         )
 
-    @tool_app.command("lab")
-    def tool_lab(
+    @tool_app.command("manifest")
+    def tool_manifest(
         ctx: typer.Context,
-        manifest: Path = typer.Argument(..., help="Disposable lab manifest JSON."),
+        manifest: Path = typer.Argument(..., help="Disposable scope manifest JSON."),
     ) -> None:
-        """Inspect a disposable lab manifest without network access."""
-        from adaf_attack.core.tooling import lab_manifest_summary
+        """Inspect a disposable scope manifest without network access."""
+        from adaf_attack.core.tooling import scope_manifest_summary
 
         try:
-            payload = lab_manifest_summary(manifest)
+            payload = scope_manifest_summary(manifest)
         except (OSError, ValueError) as exc:
             error = ActionableError(
-                "INPUT_FILE_INVALID", str(exc), "Pass a valid disposable lab manifest JSON file."
+                "INPUT_FILE_INVALID", str(exc), "Pass a valid disposable scope manifest JSON file."
             )
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from exc
@@ -190,7 +190,7 @@ def register_tool_commands(
                 f"Domain: {payload['domain']}\nReserved domain: {'yes' if payload['reserved_domain'] else 'no'}\n"
                 f"Snapshot: {payload.get('snapshot') or '-'}\nFixtures: {len(payload['fixtures'])}\n"
                 f"Ready for review: {'yes' if payload['ready_for_review'] else 'no'}",
-                title="Disposable lab manager",
+                title="Scope manifest",
             ),
         )
 
