@@ -126,12 +126,16 @@ def _run_script_exec(
         timeout=timeout,
         check=False,
     )
+    redacted_argv = list(argv)
+    for option in ("-hashes", "-aesKey"):
+        with contextlib.suppress(ValueError, IndexError):
+            redacted_argv[redacted_argv.index(option) + 1] = "[REDACTED]"
     return {
         "status": "executed" if completed.returncode == 0 else "failed",
         "return_code": completed.returncode,
         "stdout": completed.stdout[-4000:],
         "stderr": completed.stderr[-4000:],
-        "argv": [item if item != target.password else "[REDACTED]" for item in argv],
+        "argv": [item if item != target.password else "[REDACTED]" for item in redacted_argv],
     }
 
 
@@ -214,5 +218,5 @@ class ImpacketExec:
         )
         session.log("impacket-exec.complete", host=host, method=method)
         graph.save(session.path("graph.json"))
-        console.print(f"[green]Done[/green]  outcome={outcome}")
+        console.print(f"[green]Done[/green]  outcome={safe_result.get('outcome', {})}")
         return cast(dict[str, Any], safe_result)

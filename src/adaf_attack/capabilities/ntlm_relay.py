@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -29,6 +30,41 @@ HASH_LINE_RE = re.compile(
     r"(?P<user>[^:\s]+)::(?P<domain>[^:\s]+):(?P<lm>[0-9A-Fa-f]{32})?:?(?P<nt>[0-9A-Fa-f]{32})?"
 )
 NTLM_RE = re.compile(r"(?P<label>NTLMv[12])\s+(?P<body>.+)", re.IGNORECASE)
+_SAFE_EXTRA_OPTIONS = {"--http-port": 1, "--https-port": 1, "-c": 1, "--command": 1}
+
+
+def _validate_extras(extras: list[str]) -> list[str]:
+    """Allow only non-scope-changing ntlmrelayx options.
+
+    The fixed target list and listener-disabling defaults are security
+    invariants.  Free-form passthrough would let callers override them with
+    duplicate ``-t``, ``-tf``, or server-enable flags.
+    """
+    validated: list[str] = []
+    index = 0
+    while index < len(extras):
+        option = extras[index]
+        arity = _SAFE_EXTRA_OPTIONS.get(option)
+        if arity is None:
+            raise RuntimeError(
+                f"ntlm-relay extra {option!r} is not allowed; supported extras are "
+                "--http-port, --https-port, -c, and --command"
+            )
+        if index + arity >= len(extras):
+            raise RuntimeError(f"ntlm-relay extra {option!r} requires a value")
+        value = extras[index + 1]
+        if not value or value.startswith("-"):
+            raise RuntimeError(f"ntlm-relay extra {option!r} requires a non-option value")
+        if option in {"--http-port", "--https-port"}:
+            try:
+                port = int(value)
+            except ValueError as exc:
+                raise RuntimeError(f"ntlm-relay extra {option!r} requires an integer port") from exc
+            if not 1 <= port <= 65535:
+                raise RuntimeError(f"ntlm-relay extra {option!r} port must be 1-65535")
+        validated.extend([option, value])
+        index += arity + 1
+    return validated
 
 
 def _build_argv(
@@ -48,7 +84,7 @@ def _build_argv(
     ]
     for host in relay_targets:
         argv.extend(["-t", host])
-    argv.extend(extras or [])
+    argv.extend(_validate_extras(extras or []))
     return argv
 
 
@@ -137,7 +173,10 @@ class NtlmRelay:
         listen_port = int(kwargs.get("listen_port", 445))
         duration_seconds = int(kwargs.get("duration_seconds", 60))
         extras_str = kwargs.get("extras") or ""
-        extras = extras_str.split() if extras_str else []
+        try:
+            extras = shlex.split(str(extras_str)) if extras_str else []
+        except ValueError as exc:
+            raise RuntimeError(f"invalid ntlm-relay extras: {exc}") from exc
 
         binary = shutil.which("impacket-ntlmrelayx") or shutil.which("ntlmrelayx.py")
         if not binary:
