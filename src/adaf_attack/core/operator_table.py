@@ -59,8 +59,6 @@ def adaptive_widths(
         candidates = [
             index for index, column in enumerate(columns) if widths[index] > column.min_width
         ]
-        if not candidates:
-            break
         index = max(candidates, key=lambda item: widths[item] - columns[item].min_width)
         widths[index] -= 1
     return widths
