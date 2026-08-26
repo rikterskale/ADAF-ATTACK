@@ -173,5 +173,6 @@ if ((install_completion)); then
 fi
 
 echo "Install complete. Activate with: source $venv_path/bin/activate"
-echo "Verify with: adaf-attack doctor --explain"
+echo "Verify with: adaf-attack doctor --profile user-readiness"
+echo "Then run:    adaf-attack guide"
 echo "Uninstall (workspace preserved): bash scripts/install-kali.sh --uninstall"

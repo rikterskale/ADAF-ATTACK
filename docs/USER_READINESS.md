@@ -30,6 +30,7 @@ python -m pip check
 adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace ./quickstart
+adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
 adaf-attack --format json list-capabilities
 adaf-attack --format json paths
 adaf-attack --format json workflow-profiles
@@ -41,10 +42,14 @@ installed runtime modules, writable application directories, and packaged demo
 fixtures. Optional warnings are expected when TUI,
 Kerberos, reporting, Certipy, or Impacket command-line tools were not selected.
 
+When lost at any point, run `adaf-attack guide`. It is the single authoritative
+next step from install through closeout (CLI and TUI share the same journey).
+
 For the shortest safe first run, use the bundled quickstart:
 
 ```bash
 adaf-attack quickstart --workspace ./quickstart
+adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
 ```
 
 It runs the user-readiness doctor and creates a disposable offline demo session.

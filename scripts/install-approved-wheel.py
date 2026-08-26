@@ -123,9 +123,10 @@ def main() -> int:
     )
     _run([str(python), "-m", "adaf_attack.cli", "--format", "json", "list-capabilities"])
     _run([str(python), "-m", "adaf_attack.cli", "--format", "json", "paths"])
-    print(
-        f"Install complete. Activate: {venv_root / ('Scripts/Activate.ps1' if sys.platform == 'win32' else 'bin/activate')}"
-    )
+    activate = venv_root / ("Scripts/Activate.ps1" if sys.platform == "win32" else "bin/activate")
+    print(f"Install complete. Activate: {activate}")
+    print("Verify with: adaf-attack doctor --profile user-readiness")
+    print("Then run:    adaf-attack guide")
     return 0
 
 

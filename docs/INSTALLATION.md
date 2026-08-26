@@ -220,6 +220,7 @@ Active Directory and do not modify a target:
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack --format json paths
 adaf-attack quickstart --workspace ./quickstart
+adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
 adaf-attack session show --session ./quickstart/demo-session
 adaf-attack --format json list-capabilities
 ```

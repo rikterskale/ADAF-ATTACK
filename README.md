@@ -17,11 +17,12 @@ Four commands from an approved wheel to a rendered offline demo session:
 python -m pip install "./adaf_attack-0.10.1-py3-none-any.whl[full]"
 adaf-attack doctor --profile user-readiness
 adaf-attack quickstart --workspace ./quickstart
-adaf-attack session show --session ./quickstart/demo-session
+adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
 ```
 
-Never contacts a domain controller. If any step fails, run
-`adaf-attack --format json doctor --explain` and see
+When lost, run `adaf-attack guide` — it is the single authoritative next step
+from install through closeout. Never contacts a domain controller. If any step
+fails, run `adaf-attack --format json doctor --explain` and see
 [Troubleshooting](docs/TROUBLESHOOTING.md). Windows and Kali operators
 should start from their platform guide below rather than pip directly.
 

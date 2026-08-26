@@ -137,7 +137,7 @@ def test_returning_workspace_and_redaction_branches(monkeypatch, tmp_path: Path)
     _localize_paths(monkeypatch, tmp_path)
     monkeypatch.setattr(cli, "_workspace_is_empty", lambda path: False)
     payload = cli._doctor_payload("offline")
-    assert "capability-help" in payload["next_step"]
+    assert "guide" in payload["next_step"]
     assert cli._package_version("package-that-does-not-exist") is None
     assert cli._sanitize_support_value({"password": "secret"}) == {"password": "<redacted>"}
 

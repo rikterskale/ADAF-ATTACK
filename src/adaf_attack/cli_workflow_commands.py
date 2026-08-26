@@ -24,6 +24,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from adaf_attack.core.cli_contract import ActionableError, error_for
+from adaf_attack.core.journey import enrich_action, find_recent_session
 from adaf_attack.core.paths import default_workspace_dir
 from adaf_attack.core.workflow_engine import (
     WorkflowEngine,
@@ -80,9 +81,25 @@ def register_workflow_commands(
         except WorkflowError as exc:
             raise error_for("WORKFLOW_TRANSITION_INVALID", message=str(exc)) from exc
 
-    def _guidance_payload(engine: WorkflowEngine) -> dict[str, Any]:
+    def _session_hint(workspace: Path | None) -> Path | None:
+        root = _resolve_workspace(workspace)
+        return find_recent_session(root)
+
+    def _guidance_payload(
+        engine: WorkflowEngine, *, workspace: Path | None = None
+    ) -> dict[str, Any]:
         guidance = engine.guidance()
-        recs = engine.recommendations(limit=5)
+        root = _resolve_workspace(workspace)
+        session = _session_hint(workspace)
+        recs = [
+            enrich_action(action, session=session, workspace=root)
+            for action in engine.recommendations(limit=5)
+        ]
+        primary = (
+            recs[0]["suggested_command"]
+            if recs
+            else f"adaf-attack workflow close --workspace {root}"
+        )
         return {
             "ok": True,
             "workflow_id": engine.state.workflow_id,
@@ -90,22 +107,21 @@ def register_workflow_commands(
             "guidance": guidance.document(),
             "open_findings": len(engine.state.open_findings),
             "total_findings": len(engine.state.findings),
-            "recommendations": [
-                {
-                    "id": action.id,
-                    "kind": action.kind,
-                    "title": action.title,
-                    "phase": action.phase,
-                    "consequence": action.consequence,
-                    "finding_ids": action.finding_ids,
-                }
-                for action in recs
-            ],
+            "recommendations": recs,
+            "next_step": primary,
+            "suggested_command": primary,
         }
 
-    def _guidance_panel(engine: WorkflowEngine, *, title: str) -> Panel:
+    def _guidance_panel(
+        engine: WorkflowEngine, *, title: str, workspace: Path | None = None
+    ) -> Panel:
         g = engine.guidance()
-        recs = engine.recommendations(limit=3)
+        root = _resolve_workspace(workspace)
+        session = _session_hint(workspace)
+        recs = [
+            enrich_action(action, session=session, workspace=root)
+            for action in engine.recommendations(limit=3)
+        ]
         lines = [
             f"Phase:    {g.phase}",
             f"Status:   {g.status}",
@@ -116,25 +132,36 @@ def register_workflow_commands(
         ]
         if recs:
             lines.append("")
+            lines.append(f"Copy-ready: {recs[0]['suggested_command']}")
+            lines.append("")
             lines.append("Recommended next actions:")
             for action in recs:
                 marker = (
                     "!"
-                    if action.kind == "required"
-                    else ("?" if action.kind == "decision" else "-")
+                    if action["kind"] == "required"
+                    else ("?" if action["kind"] == "decision" else "-")
                 )
-                lines.append(f"  [{marker}] {action.id}  ({action.kind})")
-                lines.append(f"        {action.title}")
+                lines.append(f"  [{marker}] {action['id']}  ({action['kind']})")
+                lines.append(f"        {action['title']}")
+                lines.append(f"        {action['suggested_command']}")
         elif engine.state.status in {"complete", "archived"}:
             lines.append("")
             lines.append(f"Workflow {engine.state.status}; retained for review.")
         else:
             lines.append("")
             lines.append("No pending actions. Run `workflow close` to finish.")
+        lines.append("")
+        lines.append("When lost: adaf-attack guide")
         return Panel("\n".join(lines), title=title)
 
-    def _emit_guidance(ctx: typer.Context, engine: WorkflowEngine, *, title: str) -> None:
-        emit(ctx, _guidance_payload(engine), _guidance_panel(engine, title=title))
+    def _emit_guidance(
+        ctx: typer.Context, engine: WorkflowEngine, *, title: str, workspace: Path | None = None
+    ) -> None:
+        emit(
+            ctx,
+            _guidance_payload(engine, workspace=workspace),
+            _guidance_panel(engine, title=title, workspace=workspace),
+        )
 
     # --- read / guidance -----------------------------------------------------
 
@@ -151,7 +178,7 @@ def register_workflow_commands(
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
-        _emit_guidance(ctx, engine, title="Guided workflow status")
+        _emit_guidance(ctx, engine, title="Guided workflow status", workspace=workspace)
 
     @workflow_app.command("next")
     def workflow_next(
@@ -165,32 +192,28 @@ def register_workflow_commands(
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
-        recs = engine.recommendations(limit=max(0, limit))
+        root = _resolve_workspace(workspace)
+        session = _session_hint(workspace)
+        recs = [
+            enrich_action(action, session=session, workspace=root)
+            for action in engine.recommendations(limit=max(0, limit))
+        ]
         payload = {
             "ok": True,
             "count": len(recs),
-            "recommendations": [
-                {
-                    "id": a.id,
-                    "kind": a.kind,
-                    "title": a.title,
-                    "description": a.description,
-                    "phase": a.phase,
-                    "consequence": a.consequence,
-                    "capability_id": a.capability_id,
-                    "finding_ids": a.finding_ids,
-                    "unlock_conditions": a.unlock_conditions,
-                    "priority": a.priority,
-                }
-                for a in recs
-            ],
+            "recommendations": recs,
+            "next_step": (
+                recs[0]["suggested_command"]
+                if recs
+                else f"adaf-attack workflow close --workspace {root}"
+            ),
         }
         table = Table(title="Ranked next actions")
         table.add_column("Action")
         table.add_column("Kind")
-        table.add_column("Consequence if ignored")
+        table.add_column("Copy-ready command")
         for a in recs:
-            table.add_row(a.id, a.kind, a.consequence or a.description)
+            table.add_row(a["id"], a["kind"], a["suggested_command"])
         if not recs:
             table.add_row("(none)", "-", "No action pending; the workflow can be closed.")
         emit(ctx, payload, table)
@@ -211,7 +234,7 @@ def register_workflow_commands(
         emit(
             ctx,
             document,
-            _guidance_panel(engine, title="Workflow snapshot"),
+            _guidance_panel(engine, title="Workflow snapshot", workspace=workspace),
         )
 
     @workflow_app.command("findings")
@@ -363,7 +386,7 @@ def register_workflow_commands(
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
-        _emit_guidance(ctx, engine, title="Scope authorized")
+        _emit_guidance(ctx, engine, title="Scope authorized", workspace=workspace)
 
     @workflow_app.command("inject")
     def workflow_inject(
@@ -396,9 +419,13 @@ def register_workflow_commands(
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
-        payload = _guidance_payload(engine)
+        payload = _guidance_payload(engine, workspace=workspace)
         payload["finding"] = {"id": record.id, "priority": record.priority}
-        emit(ctx, payload, _guidance_panel(engine, title=f"Finding injected: {record.id}"))
+        emit(
+            ctx,
+            payload,
+            _guidance_panel(engine, title=f"Finding injected: {record.id}", workspace=workspace),
+        )
 
     @workflow_app.command("import-session")
     def workflow_import_session(
@@ -426,13 +453,15 @@ def register_workflow_commands(
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
-        payload = _guidance_payload(engine)
+        payload = _guidance_payload(engine, workspace=workspace)
         payload["imported"] = imported
         payload["imported_count"] = len(imported)
         emit(
             ctx,
             payload,
-            _guidance_panel(engine, title=f"Imported {len(imported)} session finding(s)"),
+            _guidance_panel(
+                engine, title=f"Imported {len(imported)} session finding(s)", workspace=workspace
+            ),
         )
 
     @workflow_app.command("enrich")
@@ -470,7 +499,7 @@ def register_workflow_commands(
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
-        _emit_guidance(ctx, engine, title=f"Finding enriched: {finding_id}")
+        _emit_guidance(ctx, engine, title=f"Finding enriched: {finding_id}", workspace=workspace)
 
     @workflow_app.command("correlate")
     def workflow_correlate(
@@ -492,7 +521,7 @@ def register_workflow_commands(
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
-        _emit_guidance(ctx, engine, title="Findings correlated")
+        _emit_guidance(ctx, engine, title="Findings correlated", workspace=workspace)
 
     @workflow_app.command("transition")
     def workflow_transition(
@@ -554,7 +583,7 @@ def register_workflow_commands(
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
-        _emit_guidance(ctx, engine, title=f"{finding_id} -> {status}")
+        _emit_guidance(ctx, engine, title=f"{finding_id} -> {status}", workspace=workspace)
 
     @workflow_app.command("decide")
     def workflow_decide(
@@ -572,7 +601,7 @@ def register_workflow_commands(
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
-        _emit_guidance(ctx, engine, title="Decision recorded")
+        _emit_guidance(ctx, engine, title="Decision recorded", workspace=workspace)
 
     @workflow_app.command("do")
     def workflow_do(
@@ -594,7 +623,7 @@ def register_workflow_commands(
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
-        _emit_guidance(ctx, engine, title=f"Action completed: {action_id}")
+        _emit_guidance(ctx, engine, title=f"Action completed: {action_id}", workspace=workspace)
 
     @workflow_app.command("close")
     def workflow_close(
@@ -610,12 +639,12 @@ def register_workflow_commands(
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
-        payload = _guidance_payload(engine)
+        payload = _guidance_payload(engine, workspace=workspace)
         payload["final_status"] = engine.state.status
         emit(
             ctx,
             payload,
-            _guidance_panel(engine, title=f"Workflow {engine.state.status}"),
+            _guidance_panel(engine, title=f"Workflow {engine.state.status}", workspace=workspace),
         )
 
 

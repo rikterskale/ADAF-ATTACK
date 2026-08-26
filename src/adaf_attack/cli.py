@@ -793,12 +793,12 @@ def _doctor_payload(
         )
     elif first_run:
         next_step = (
-            "First run detected. Try `adaf-attack quickstart` for a safe, offline demo, "
-            "then run `adaf-attack list-capabilities --novice`. When you are ready for an "
+            "First run detected. Run `adaf-attack guide` for the authoritative next step, "
+            "or `adaf-attack quickstart` for a safe offline demo. When you are ready for an "
             "authorized engagement, use `adaf-attack engagement init --output engagement.yaml`."
         )
     else:
-        next_step = "Run `adaf-attack capability-help` to choose a capability."
+        next_step = "Run `adaf-attack guide` for the next copy-ready step."
     return {
         "ok": blocking is None,
         "profile": profile,
@@ -813,7 +813,7 @@ def _doctor_payload(
             "ready": not blocking_checks,
             "install_verification": "adaf-attack doctor --profile user-readiness --explain",
             "safe_first_run": "adaf-attack quickstart",
-            "next_command": "adaf-attack list-capabilities --novice",
+            "next_command": "adaf-attack guide",
         },
     }
 
@@ -1491,15 +1491,60 @@ def plan(
 
 @app.command("tour", rich_help_panel="Guidance & UX helpers")
 def tour(ctx: typer.Context) -> None:
-    """Show the guided operator tour."""
+    """Show the guided operator tour with progress against the current journey."""
+    from adaf_attack.core.journey import snapshot
     from adaf_attack.core.ux import guided_tour_payload
 
-    payload = guided_tour_payload()
+    doctor = _doctor_payload("user-readiness")
+    journey = snapshot(doctor=doctor)
+    done_stages = {item["id"] for item in journey.get("breadcrumb") or [] if item.get("done")}
+    past_orient = bool(
+        done_stages & {"orient", "discover", "operate", "deliver", "closeout", "complete"}
+    )
+    past_discover = bool(done_stages & {"discover", "operate", "deliver", "closeout", "complete"})
+    past_operate = bool(done_stages & {"operate", "deliver", "closeout", "complete"})
+    tour_payload = guided_tour_payload()
+    steps = []
+    for step in tour_payload["steps"]:
+        step_id = str(step["id"])
+        if step_id == "doctor":
+            completed = bool(doctor.get("ok"))
+        elif step_id == "demo":
+            completed = bool(journey["context"].get("demo_available"))
+        elif step_id in {"list", "help", "profile"}:
+            completed = past_orient
+        elif step_id == "plan":
+            completed = past_discover
+        elif step_id in {"search", "sessions"}:
+            completed = past_operate
+        elif step_id == "tui":
+            completed = bool(journey["context"].get("tui_available")) and past_orient
+        else:
+            completed = False
+        annotated = {**step, "done": completed, "marker": "✓" if completed else "○"}
+        steps.append(annotated)
+    primary = journey["primary_action"]
+    payload = {
+        "ok": True,
+        "title": tour_payload["title"],
+        "steps": steps,
+        "next_step": primary["suggested_command"],
+        "stage": journey["stage"],
+        "journey": {
+            "stage": journey["stage"],
+            "stage_label": journey["stage_label"],
+            "progress_pct": journey["progress_pct"],
+            "primary_action": primary,
+        },
+    }
     human = Panel(
-        "\n".join(f"{step['title']}: {step['command']}" for step in payload["steps"]),
+        "\n".join(
+            [f"{step['marker']} {step['title']}: {step['command']}" for step in steps]
+            + ["", f"Next: {primary['suggested_command']}", "Continue with: adaf-attack guide"]
+        ),
         title="Operator tour",
     )
-    _emit(ctx, {"ok": True, **payload}, human)
+    _emit(ctx, payload, human)
 
 
 @app.command("check", rich_help_panel="Setup & diagnostics")
@@ -2093,6 +2138,14 @@ def run_capability(
         "-i",
         help="Guided run: prompt for required options in plain language and preview the command.",
     ),
+    import_workflow: bool | None = typer.Option(
+        None,
+        "--import-workflow/--no-import-workflow",
+        help=(
+            "Import session findings into the guided workflow after a successful run. "
+            "Defaults on for --interactive; off for scripts/JSON."
+        ),
+    ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Preview the plan and exit without contacting a target."
     ),
@@ -2395,6 +2448,39 @@ def run_capability(
                 approval_token,
                 engagement_id,
             )
+        session_path = Path(str(out.get("session_path") or ""))
+        should_import = (
+            bool(import_workflow)
+            if import_workflow is not None
+            else bool(guided_mode and not _json_mode(ctx))
+        )
+        workflow_import: dict[str, Any] | None = None
+        if should_import and session_path.is_dir():
+            from adaf_attack.core.journey import import_session_findings
+            from adaf_attack.core.workflow_engine import WorkflowError
+
+            try:
+                workflow_import = import_session_findings(
+                    workspace or default_workspace_dir(),
+                    session_path,
+                    actor="run",
+                )
+            except (OSError, FileNotFoundError, ValueError, WorkflowError) as exc:
+                workflow_import = {"ok": False, "error": str(exc)}
+        next_steps = [
+            f"adaf-attack guide --session {session_path}" if session_path else "adaf-attack guide",
+            f"adaf-attack workflow import-session --session {session_path}"
+            if session_path and not (workflow_import and workflow_import.get("ok"))
+            else None,
+            f"adaf-attack session show --session {session_path}" if session_path else None,
+        ]
+        out = {
+            **out,
+            "ok": True,
+            "workflow_import": workflow_import,
+            "next_step": next_steps[0],
+            "next_steps": [item for item in next_steps if item],
+        }
         if _json_mode(ctx):
             _emit(ctx, out, "")
             return None
@@ -2417,6 +2503,11 @@ def run_capability(
         session_id = out.get("session_id")
         if session_id:
             typer.echo(f"Inspect: adaf-attack sessions --session {session_id}")
+        typer.echo(f"Next: {out['next_step']}")
+        if workflow_import and workflow_import.get("ok"):
+            typer.echo(
+                f"Workflow imported {workflow_import.get('count', 0)} finding(s) into the guided journey."
+            )
     except RunError as exc:
         text = str(exc)
         code = classify_run_error(text)
@@ -3213,15 +3304,38 @@ def glossary_cmd(
 @app.command("home", hidden=True)
 def home_cmd(ctx: typer.Context) -> None:
     """Show plain-language goals for users who do not know the command names."""
+    from adaf_attack.core.journey import snapshot
     from adaf_attack.core.novice import home_actions
 
-    doctor_payload = _doctor_payload("offline")
-    actions = home_actions(first_run=bool(doctor_payload["first_run"]))
+    doctor_payload = _doctor_payload("user-readiness")
+    journey = snapshot(doctor=doctor_payload)
+    primary = journey["primary_action"]
+    actions = [
+        {
+            "goal": primary["title"],
+            "command": primary["suggested_command"],
+            "why": primary["why"],
+        }
+    ]
+    for item in home_actions(first_run=bool(journey["context"].get("first_run"))):
+        if item["command"] not in {entry["command"] for entry in actions}:
+            actions.append(item)
+    # Prefer the canonical guide entry at the top of the goal list.
+    actions.insert(
+        1,
+        {
+            "goal": "Ask the guided journey what to do next",
+            "command": "adaf-attack guide",
+            "why": "One authoritative next step from install through closeout.",
+        },
+    )
     payload = {
         "ok": True,
-        "first_run": doctor_payload["first_run"],
+        "first_run": journey["context"].get("first_run"),
+        "stage": journey["stage"],
         "actions": actions,
-        "next_step": actions[0]["command"],
+        "primary_action": primary,
+        "next_step": primary["suggested_command"],
     }
     table = Table(title="What should I do?", show_header=True)
     table.add_column("Goal", style="cyan")
@@ -3978,11 +4092,12 @@ def init_cmd(
     )
 
     next_steps = [
+        "adaf-attack guide",
         "adaf-attack list-capabilities --novice",
         "adaf-attack list-capabilities --novice --safe-only",
     ]
     if not skip_quickstart:
-        next_steps.append("adaf-attack quickstart")
+        next_steps.insert(1, "adaf-attack quickstart")
     next_steps.append("adaf-attack tour")
 
     payload = {
@@ -4036,9 +4151,10 @@ def setup_cmd(
         console = _console(ctx)
         console.print(
             "\n[dim]Recommended next commands:[/dim]\n"
-            "  1. [cyan]adaf-attack doctor --profile user-readiness[/cyan]\n"
-            "  2. [cyan]adaf-attack quickstart --workspace ./quickstart[/cyan]\n"
-            "  3. [cyan]adaf-attack list-capabilities --novice[/cyan]"
+            "  1. [cyan]adaf-attack guide[/cyan]\n"
+            "  2. [cyan]adaf-attack doctor --profile user-readiness[/cyan]\n"
+            "  3. [cyan]adaf-attack quickstart --workspace ./quickstart[/cyan]\n"
+            "  4. [cyan]adaf-attack list-capabilities --novice[/cyan]"
         )
 
 

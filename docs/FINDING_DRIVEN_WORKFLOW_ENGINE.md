@@ -187,7 +187,8 @@ canonical `core.findings.Finding` through `finding_from_document`.
 
 | Command | Engine method |
 |---|---|
-| `workflow status` / `next` | `guidance()` / `recommendations()` |
+| `workflow status` / `next` | `guidance()` / `recommendations()` (+ `suggested_command` via `core.journey.enrich_action`) |
+| `guide` | `core.journey.snapshot()` composing doctor + workflow + session hints |
 | `workflow snapshot` | `snapshot()` |
 | `workflow authorize` / `do` | `complete_action()` |
 | `workflow inject` / `enrich` / `correlate` | `inject_finding()` / `enrich_finding()` / `correlate()` |

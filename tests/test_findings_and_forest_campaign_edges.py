@@ -628,7 +628,7 @@ def test_doctor_reports_returning_workspace(
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["first_run"] is False
-    assert "capability-help" in payload["next_step"]
+    assert "guide" in payload["next_step"]
 
 
 # ---------------------------------------------------------------------------

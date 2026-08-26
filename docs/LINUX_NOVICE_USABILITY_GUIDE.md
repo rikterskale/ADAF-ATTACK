@@ -68,9 +68,12 @@ python -m pip check
 adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace ./quickstart
+adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
 adaf-attack list-capabilities
 adaf-attack paths
 ```
+
+When lost, run `adaf-attack guide`. It always returns one copy-ready next step.
 
 ## First safe offline run
 

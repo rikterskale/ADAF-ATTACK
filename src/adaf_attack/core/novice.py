@@ -87,6 +87,11 @@ def home_actions(*, first_run: bool) -> list[dict[str, str]]:
     """Plain-language starting points for users who do not know the command names."""
     actions = [
         {
+            "goal": "Ask what to do next",
+            "command": "adaf-attack guide",
+            "why": "One authoritative next step from install through closeout.",
+        },
+        {
             "goal": "Check my installation",
             "command": "adaf-attack doctor --profile user-readiness --explain",
             "why": "Verifies Python, paths, and packaged demo files without touching a network.",

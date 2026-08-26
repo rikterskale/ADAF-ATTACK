@@ -5,6 +5,20 @@ declared in `pyproject.toml`.
 
 ## Unreleased
 
+### Added
+
+- `adaf-attack guide`: authoritative next-step command for the full operator
+  journey (install → offline first success → authorize → operate → report →
+  closeout), shared by CLI and TUI via `core.journey`.
+- Workflow recommendations now include copy-ready `suggested_command` values.
+- `run --import-workflow` (default on for `--interactive`) adapts session
+  findings into the guided workflow after a successful run.
+
+### Changed
+
+- `what-next`, `home`, and `tour` converge on the shared journey snapshot.
+- Quickstart, init/setup, installers, and readiness docs hand off to `guide`.
+
 ## 0.10.1
 
 ### Added

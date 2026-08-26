@@ -24,6 +24,7 @@ rollback requirements.
 | 13 | Target and OPSEC profiles | `profile` command group | Profile load/save/default controls | `tests/test_ux_ten_enhancements.py` |
 | 14 | Favorites, recents, completions, and shortcuts | `favorites`, `recent`, `completions` | Pinning, recent targets, key help | `tests/test_ux_enhancements.py`, `tests/test_tui_app.py` |
 | 15 | Timeline, rollback visibility, and redacted packaging | `timeline`, `cleanup-status`, `engagement package` | Timeline, reports, package evidence | `tests/test_standout_ux.py`, `tests/test_core_rollback_and_guidance.py` |
+| 16 | Unified guided journey (install→closeout) | `guide`, `what-next`, `tour`, `workflow next` | Home / wizard complete / workflow panel | `tests/test_journey.py`, `tests/test_cli_ux.py` |
 
 ## Release acceptance
 

@@ -32,6 +32,8 @@ from adaf_attack import __version__
 from adaf_attack.core.capability_help_data import capability_option_spec
 from adaf_attack.core.control_plane import package_evidence
 from adaf_attack.core.engagement_dashboard import MODES, inspect_edge
+from adaf_attack.core.journey import enrich_action, import_session_findings
+from adaf_attack.core.journey import snapshot as journey_snapshot
 from adaf_attack.core.novice import (
     beginner_next_actions,
     capability_difficulty,
@@ -69,7 +71,7 @@ from adaf_attack.core.ux import (
     session_findings_dashboard,
     suggested_next_actions,
 )
-from adaf_attack.core.workflow_engine import WorkflowEngine, finding_from_document
+from adaf_attack.core.workflow_engine import WorkflowEngine, WorkflowError, finding_from_document
 
 
 class CapabilityItem(ListItem):  # type: ignore[misc,unused-ignore]
@@ -600,6 +602,18 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             ),
         )
         title, guide = steps[self._wizard_step]
+        if self._wizard_step >= 5:
+            try:
+                journey = journey_snapshot(session=self._last_session)
+                primary = journey["primary_action"]
+                guide = (
+                    f"{guide}\n\n"
+                    f"Journey stage: {journey['stage_label']} ({journey['progress_pct']}%)\n"
+                    f"Next: {primary['title']}\n"
+                    f"Cmd:  {primary['suggested_command']}"
+                )
+            except (OSError, ValueError):
+                pass
         self.query_one("#wizard-step", Static).update(title)
         self.query_one("#wizard-guide", Static).update(guide)
         back = self.query_one("#wizard-back", Button)
@@ -763,7 +777,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         lines = [
             f"Setup readiness: {done}/{len(checklist)}",
             f"Next: {next_item}",
-            "Use Setup for first-run defaults or What should I do? for goal-based commands.",
+            "When lost: run `adaf-attack guide` or press Home for the guided next step.",
         ]
         try:
             self.query_one("#first-launch-panel", Static).update(
@@ -773,13 +787,20 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
 
     def _show_home(self) -> None:
-        first_run = self._last_session is None and not list_profiles()
-        actions = home_actions(first_run=first_run)
-        lines = [f"{item['goal']}: {item['command']}" for item in actions[:6]]
+        journey = journey_snapshot(session=self._last_session)
+        primary = journey["primary_action"]
+        actions = home_actions(first_run=bool(journey["context"].get("first_run")))
+        lines = [
+            f"Stage: {journey['stage_label']} ({journey['progress_pct']}%)",
+            f"Next: {primary['title']}",
+            f"Cmd:  {primary['suggested_command']}",
+            "",
+        ]
+        lines.extend(f"{item['goal']}: {item['command']}" for item in actions[:5])
         self.query_one("#first-launch-panel", Static).update(
             "[bold]What should I do?[/bold]\n" + "\n".join(lines)
         )
-        self.notify("Goal-based starting points are shown above.", severity="information")
+        self.notify("Guided journey next step is shown above.", severity="information")
 
     def _show_setup_wizard(self) -> None:
         self._set_wizard_step(0)
@@ -791,17 +812,19 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         )
 
     def _show_recommendations(self) -> None:
+        journey = journey_snapshot(session=self._last_session)
+        primary = journey["primary_action"]
+        lines = [
+            f"[bold]Journey[/bold] · {journey['stage_label']} ({journey['progress_pct']}%)",
+            f"Next: {primary['title']}",
+            f"Cmd:  {primary['suggested_command']}",
+        ]
         cap = self._selected()
         if cap:
             suggestions = suggested_next_actions(cap)[:3]
-            text = "Recommended next actions: " + (
-                ", ".join(suggestions)
-                if suggestions
-                else "run the selected capability and inspect findings"
-            )
-        else:
-            text = "Recommended starting point: ldap-enum for safe directory reconnaissance."
-        self.query_one("#recommendations-panel", Static).update(text)
+            if suggestions:
+                lines.append("Capability follow-ups: " + ", ".join(suggestions))
+        self.query_one("#recommendations-panel", Static).update("\n".join(lines))
 
     def _apply_template(self, template: str) -> None:
         choices = {
@@ -858,11 +881,20 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
         state = self._workflow.state
         recommendations = self._workflow.recommendations(limit=3)
-        next_action = recommendations[0].title if recommendations else "No pending actions"
+        if recommendations:
+            enriched = enrich_action(
+                recommendations[0],
+                session=self._last_session,
+                workspace=default_workspace_dir(),
+            )
+            next_action = f"{enriched['title']}\nCmd: {enriched['suggested_command']}"
+        else:
+            next_action = "No pending actions · adaf-attack guide"
         self.query_one("#workflow-state-panel", Static).update(
             f"Workflow: {state.phase} · {state.status} · {state.progress:.0f}% · "
             f"risk {state.risk_score:.0f}\n"
-            f"Findings: {len(state.findings)} total / {len(state.open_findings)} open · Next: {next_action}"
+            f"Findings: {len(state.findings)} total / {len(state.open_findings)} open\n"
+            f"Next: {next_action}"
         )
 
     def _ensure_workflow_started(self) -> None:
@@ -877,23 +909,43 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     def _ingest_session_findings(self, session: Path) -> None:
         if not self._workflow:
             return
+        # Prefer the live in-memory engine first so review/TUI mocks and raw
+        # findings.json documents continue to drive the current panel.
+        ingested = 0
         try:
             payload = json.loads((session / "findings.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            payload = None
+        if payload is not None:
+            documents = payload.get("findings", []) if isinstance(payload, dict) else payload
+            if isinstance(documents, list):
+                for document in documents:
+                    if isinstance(document, dict) and document.get("id") and document.get("title"):
+                        self._workflow.ingest_finding(
+                            finding_from_document(document), actor="session"
+                        )
+                        ingested += 1
+        if ingested:
+            try:
+                self._workflow.complete_step("discovery-complete", actor="tui", phase="validation")
+                self._refresh_workflow_panel()
+            except OSError as exc:
+                # Findings remain available in the session even when the optional
+                # workflow checkpoint cannot be persisted (e.g. read-only home).
+                self._show_log(f"[yellow]Workflow checkpoint unavailable:[/] {exc}")
             return
-        documents = payload.get("findings", []) if isinstance(payload, dict) else payload
-        if not isinstance(documents, list):
-            return
-        for document in documents:
-            if isinstance(document, dict) and document.get("id") and document.get("title"):
-                self._workflow.ingest_finding(finding_from_document(document), actor="session")
+        # Artifact-backed sessions (demo/capability JSON) use the shared journey importer.
         try:
-            self._workflow.complete_step("discovery-complete", actor="tui", phase="validation")
-            self._refresh_workflow_panel()
-        except OSError as exc:
-            # Findings remain available in the session even when the optional
-            # workflow checkpoint cannot be persisted (e.g. read-only home).
-            self._show_log(f"[yellow]Workflow checkpoint unavailable:[/] {exc}")
+            result = import_session_findings(default_workspace_dir(), session, actor="tui-session")
+            if int(result.get("count") or 0):
+                self._workflow = WorkflowEngine(default_workspace_dir())
+                self._refresh_workflow_panel()
+                self._show_recommendations()
+                self._show_log(
+                    f"[green]Workflow imported {result.get('count', 0)} finding(s) from session.[/]"
+                )
+        except (OSError, FileNotFoundError, WorkflowError) as exc:
+            self._show_log(f"[yellow]Workflow import unavailable:[/] {exc}")
 
     def _wizard_next(self) -> None:
         if self._wizard_step == 0:

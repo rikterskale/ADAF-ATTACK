@@ -332,7 +332,8 @@ def test_what_next_without_context_is_dependency_light() -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["ok"] is True
-    assert payload["context"] == "new-user"
+    assert payload["context"] == "journey"
+    assert payload["primary_action"]["suggested_command"]
     assert payload["suggestions"]
 
 

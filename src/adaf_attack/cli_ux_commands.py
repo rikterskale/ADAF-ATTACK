@@ -83,6 +83,7 @@ def register_ux_commands(
             raise typer.Exit(code=error.exit_code) from exc
 
         dashboard = session_findings_dashboard(dest)
+        guide_workspace = dest_root
         payload = {
             "ok": True,
             "stage": "complete",
@@ -94,7 +95,9 @@ def register_ux_commands(
             "doctor": doctor,
             "session_path": str(dest),
             "dashboard": dashboard,
+            "next_step": f"adaf-attack guide --workspace {guide_workspace} --session {dest}",
             "next_steps": [
+                f"adaf-attack guide --workspace {guide_workspace} --session {dest}",
                 f"adaf-attack session show --session {dest}",
                 f"adaf-attack engagement report --session {dest} --engagement-id QUICKSTART-2026-001",
                 "Read docs/USER_READINESS.md before connecting to an authorized target.",
@@ -107,7 +110,7 @@ def register_ux_commands(
                 "Installation and offline demo passed.\n"
                 f"Session: {dest}\n"
                 f"Findings: {dashboard.get('finding_count', 0)}\n"
-                f"Next: adaf-attack session show --session {dest}",
+                f"Next: adaf-attack guide --workspace {guide_workspace} --session {dest}",
                 title="ADAF-ATTACK quickstart",
             ),
         )
@@ -121,6 +124,135 @@ def register_ux_commands(
     ) -> None:
         """Beginner-friendly alias for the safe first-install flow."""
         quickstart_cmd(ctx, workspace)
+
+    @app.command("guide", rich_help_panel="Guidance & UX helpers")
+    def guide_cmd(
+        ctx: typer.Context,
+        workspace: Path | None = typer.Option(
+            None, "--workspace", help="Workflow workspace (defaults to the shared workspace)."
+        ),
+        session: Path | None = typer.Option(
+            None, "--session", help="Bias operate/deliver stages toward this session."
+        ),
+        advance: bool = typer.Option(
+            False,
+            "--advance",
+            help="TTY-only: complete the safe primary offline step when allowed.",
+        ),
+    ) -> None:
+        """Show where you are and the one copy-ready next step for the guided journey."""
+        from adaf_attack.core.journey import import_session_findings, snapshot
+        from adaf_attack.core.workflow_engine import WorkflowEngine, WorkflowError
+        from adaf_attack.demo import materialize_demo_session
+
+        doctor = doctor_payload("user-readiness")
+        root = Path(workspace) if workspace is not None else default_workspace_dir()
+        payload = snapshot(workspace=root, session=session, doctor=doctor)
+
+        if advance:
+            non_interactive = bool(ctx.ensure_object(dict).get("non_interactive"))
+            primary = payload["primary_action"]
+            if non_interactive or _json_mode(ctx):
+                error = ActionableError(
+                    "INTERACTIVE_MODE_DISABLED",
+                    "`guide --advance` requires an interactive TTY.",
+                    "Run `adaf-attack guide` and copy the suggested command, or omit `--format json`.",
+                    suggested_command="adaf-attack guide",
+                )
+                _emit_error(ctx, error)
+                raise typer.Exit(code=error.exit_code)
+            if not primary.get("advance_safe"):
+                error = ActionableError(
+                    "GUIDE_ADVANCE_UNSAFE",
+                    f"The primary step `{primary['id']}` cannot be auto-advanced.",
+                    "Copy and run the suggested command after review (live or destructive steps stay manual).",
+                    suggested_command=str(primary.get("suggested_command") or "adaf-attack guide"),
+                )
+                _emit_error(ctx, error)
+                raise typer.Exit(code=error.exit_code)
+            action_id = str(primary["id"])
+            try:
+                if action_id == "quickstart":
+                    dest_root = root / "quickstart"
+                    dest = dest_root / "demo-session"
+                    if not dest.exists():
+                        materialize_demo_session(dest)
+                    payload = snapshot(workspace=dest_root, session=dest, doctor=doctor)
+                    payload["advanced"] = {"id": action_id, "session_path": str(dest)}
+                elif action_id == "authorize-scope":
+                    engine = WorkflowEngine(root, mode="interactive")
+                    if not engine.state.audit_log:
+                        engine.start(actor="guide")
+                    engine.complete_action("authorize-scope", actor="guide")
+                    payload = snapshot(workspace=root, session=session, doctor=doctor)
+                    payload["advanced"] = {"id": action_id}
+                elif action_id == "import-session":
+                    target = session or Path(str(payload["context"].get("session_hint") or ""))
+                    if not target or not target.is_dir():
+                        raise FileNotFoundError("No session available to import")
+                    imported = import_session_findings(root, target, actor="guide")
+                    payload = snapshot(workspace=root, session=target, doctor=doctor)
+                    payload["advanced"] = imported
+                elif action_id == "workflow-close":
+                    engine = WorkflowEngine(root, mode="interactive")
+                    engine.close(actor="guide")
+                    payload = snapshot(workspace=root, session=session, doctor=doctor)
+                    payload["advanced"] = {"id": action_id}
+                elif action_id in {"run-discovery", "generate-report"} or action_id.startswith(
+                    ("validate:", "response:", "verify:")
+                ):
+                    engine = WorkflowEngine(root, mode="interactive")
+                    if not engine.state.audit_log:
+                        engine.start(actor="guide")
+                    engine.complete_action(action_id, actor="guide")
+                    payload = snapshot(workspace=root, session=session, doctor=doctor)
+                    payload["advanced"] = {"id": action_id}
+                else:
+                    error = ActionableError(
+                        "GUIDE_ADVANCE_UNSAFE",
+                        f"No safe advance handler for `{action_id}`.",
+                        "Copy and run the suggested command after review.",
+                        suggested_command=str(
+                            primary.get("suggested_command") or "adaf-attack guide"
+                        ),
+                    )
+                    _emit_error(ctx, error)
+                    raise typer.Exit(code=error.exit_code)
+            except (OSError, FileNotFoundError, WorkflowError) as exc:
+                error = error_for(
+                    "WORKFLOW_TRANSITION_INVALID",
+                    message=str(exc),
+                    details={"action": action_id, "workspace": str(root)},
+                )
+                _emit_error(ctx, error)
+                raise typer.Exit(code=error.exit_code) from exc
+
+        primary = payload["primary_action"]
+        breadcrumb = " → ".join(
+            ("✓ " if item["done"] else ("● " if item["current"] else "○ ")) + item["label"]
+            for item in payload.get("breadcrumb") or []
+        )
+        secondary_lines = [
+            f"- {item['title']}: {item['suggested_command']}"
+            for item in payload.get("secondary_actions") or []
+        ]
+        human = Panel(
+            "\n".join(
+                [
+                    f"Stage: {payload['stage_label']} ({payload['progress_pct']}%)",
+                    breadcrumb,
+                    "",
+                    f"Next: {primary['title']}",
+                    f"Why:  {primary['why']}",
+                    f"Cmd:  {primary['suggested_command']}",
+                    *(["", "Also:", *secondary_lines] if secondary_lines else []),
+                    "",
+                    "Tip: `adaf-attack guide --advance` runs safe offline steps only.",
+                ]
+            ),
+            title="ADAF-ATTACK guide",
+        )
+        _emit(ctx, payload, human)
 
     @app.command("explain", rich_help_panel="Guidance & UX helpers")
     def explain_cmd(
@@ -220,12 +352,43 @@ def register_ux_commands(
             return
 
         if capability is None:
-            actions = home_actions(first_run=True)
-            payload = {"ok": True, "context": "new-user", "suggestions": actions}
+            from adaf_attack.core.journey import snapshot
+
+            doctor = doctor_payload("user-readiness")
+            journey = snapshot(session=session, doctor=doctor)
+            primary = journey["primary_action"]
+            actions = [
+                {
+                    "goal": primary["title"],
+                    "command": primary["suggested_command"],
+                    "why": primary["why"],
+                }
+            ]
+            for item in journey.get("secondary_actions") or []:
+                actions.append(
+                    {
+                        "goal": item["title"],
+                        "command": item["suggested_command"],
+                        "why": item["why"],
+                    }
+                )
+            # Keep classic goal list as additional suggestions for discoverability.
+            for item in home_actions(first_run=bool(journey["context"].get("first_run"))):
+                if item["command"] not in {entry["command"] for entry in actions}:
+                    actions.append(item)
+            payload = {
+                "ok": True,
+                "context": "journey",
+                "stage": journey["stage"],
+                "suggestions": actions,
+                "primary_action": primary,
+                "next_step": primary["suggested_command"],
+                "journey": journey,
+            }
             human = Panel(
                 "\n".join(
                     f"{i + 1}. {item['goal']}\n   {item['command']}\n   {item['why']}"
-                    for i, item in enumerate(actions)
+                    for i, item in enumerate(actions[:6])
                 ),
                 title="What should I do next?",
             )

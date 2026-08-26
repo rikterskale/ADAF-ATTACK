@@ -70,6 +70,7 @@ its shim directory to the user PATH. Open a new terminal after installation.
 adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace .\quickstart
+adaf-attack guide --workspace .\quickstart --session .\quickstart\demo-session
 adaf-attack list-capabilities
 adaf-attack paths
 ```

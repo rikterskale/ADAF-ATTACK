@@ -343,6 +343,7 @@ if (-not $SkipCompletion) {
 
 Write-Ok "Install complete."
 Write-Host "  Activate now: $venv\Scripts\Activate.ps1"
-Write-Host "  New terminal:  adaf-attack doctor --explain"
+Write-Host "  Verify:        adaf-attack doctor --profile user-readiness"
+Write-Host "  Next:          adaf-attack guide"
 Write-Host "  Workspace:     $workspace"
 Write-Host "  Uninstall:     .\scripts\Install-AdafAttack.ps1 -Uninstall"

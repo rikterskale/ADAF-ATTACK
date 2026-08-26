@@ -12,20 +12,26 @@ PyPI. From the installed environment:
 adaf-attack doctor --profile user-readiness
 adaf-attack --format json doctor --explain > doctor.json
 adaf-attack quickstart --workspace ./adaf-workspace
+adaf-attack guide --workspace ./adaf-workspace
 ```
 
 The quickstart is offline. Before a live command, verify the target, account,
-scope, and approval token in the engagement paperwork.
+scope, and approval token in the engagement paperwork. When lost, run
+`adaf-attack guide` — it returns one copy-ready next step for the current
+journey stage (install → authorize → operate → report → closeout).
 
 ## 2. Discover, plan, then run
 
 The normal solo workflow is:
 
 ```bash
+adaf-attack guide
 adaf-attack list-capabilities --by-phase
 adaf-attack capability-help ldap-enum
 adaf-attack plan ldap-enum -d corp.example --dc-ip 10.0.0.10
 adaf-attack run ldap-enum -d corp.example --dc-ip 10.0.0.10 -u operator
+adaf-attack workflow import-session --session <session>
+adaf-attack guide
 adaf-attack run attack-paths -d corp.example --dc-ip 10.0.0.10
 adaf-attack run next-actions -d corp.example --dc-ip 10.0.0.10
 ```
