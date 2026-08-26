@@ -97,7 +97,7 @@ Credential access:
 | `laps-read` | LAPS v1 + v2 password retrieval |
 | `gpp-cpassword-hunt` | Locate + decrypt legacy GPP cpassword (MS14-025); plaintext is redacted by default |
 | `shadow-creds` | Enumerate + write `msDS-KeyCredentialLink` |
-| `unpac-the-hash` | Inspect PAC credential information from a PKINIT-only cert; does not claim hash recovery without verified decryption |
+| `unpac-the-hash` | Recover NT hash from PAC_CREDENTIAL_INFO after PKINIT (Certipy UnPAC or U2U + AS-REP key) |
 
 Kerberos operations:
 
@@ -603,10 +603,11 @@ and converts PEM key/certificate pairs to PFX for approved follow-on use.
 
 The force-gated `shadow-pkinit-workflow` joins an approved Shadow Credentials
 write with PKINIT TGT acquisition. `rbcd-ticket-workflow` joins an approved
-RBCD write with a scoped S4U ticket-request handoff; the workflow itself ends
-in a generated playbook — a configured provider and controlled-computer
-credential are still required before an actual ticket request is made. Both
-workflows log their artifacts and decisions in the session.
+RBCD write with a native S4U ticket request (`s4u-abuse` / Impacket `getST`)
+when controlled-computer credentials are supplied
+(`-P computer_password=` / `computer_hashes=` / `computer_ccache=`); without
+those credentials it still writes a scoped playbook handoff. Both workflows
+log their artifacts and decisions in the session.
 
 The force-gated `unconst-tgtdump-workflow` (Kerberos section) hunts
 unconstrained-delegation hosts and coerces a machine authentication. With

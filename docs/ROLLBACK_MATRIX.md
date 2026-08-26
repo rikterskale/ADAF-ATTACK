@@ -46,6 +46,7 @@ attempt automated reversal.
 | `ntlm-challenge` | NTLM challenge captured | Hash was exposed; password rotation required | `coerce` variants |
 | `ntlm-hash` | NT hash extracted via DCSync or dump | Hash was exposed; password rotation required | `dcsync`, `secretsdump-local` |
 | `ntlm-relay` | NTLM relay executed | Relayed authentication cannot be recalled | `ntlm-relay`, `esc8-relay-workflow` |
+| `dcshadow-push` | Attribute change pushed via IDL_DRSAddEntry | Replication write must be reverted manually on the object | `dcshadow` |
 | `password-reset` | User password forcibly changed | Original password is unknown; coordinate with the account owner | `force-change-password` |
 | `remote-exec` | Remote command executed on a host | Cannot undo arbitrary command effects | `impacket-exec` |
 | `rodc` | RODC delegation exposure read | Read-only; rotation is the mitigation | `rodc-delegation` |

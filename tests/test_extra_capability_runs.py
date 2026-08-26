@@ -199,6 +199,41 @@ def test_rbcd_ticket_workflow_requires_inputs_and_writes_playbook(
     assert Path(result["ticket"]["playbook"]).is_file()
 
 
+def test_rbcd_ticket_workflow_runs_s4u_with_computer_creds(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        workflow_wrappers.Rbcd,
+        "run",
+        lambda self, *args, **kwargs: {"set_attempt": {"ok": True, "set_on_dn": "CN=APP01"}},
+    )
+
+    class _S4u:
+        def run(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+            return {
+                "impersonate": kwargs.get("impersonate"),
+                "spn": kwargs.get("spn"),
+                "ccache_paths": [str(tmp_path / "admin.ccache")],
+            }
+
+    monkeypatch.setattr(workflow_wrappers, "S4uAbuse", _S4u)
+    session = Session(tmp_path)
+    result = workflow_wrappers.RbcdTicketWorkflow().run(
+        _target(),
+        session,
+        AttackGraph(),
+        force=True,
+        set_on="APP01$",
+        set_from="CONTROL$",
+        impersonate="administrator",
+        computer_password="Computer1!",
+    )
+    assert result["ok"] is True
+    assert result["ticket"]["requested"] is True
+    assert result["ticket"]["ccache_paths"]
+    assert "handoff_complete" not in result
+
+
 def test_pkinit_auth_validates_force_and_missing_material(tmp_path: Path) -> None:
     capability = pkinit_auth.PkinitAuth()
     with pytest.raises(RuntimeError, match="requires --force"):

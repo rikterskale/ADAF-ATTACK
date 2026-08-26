@@ -397,10 +397,10 @@ def test_unpac_pac_parser_skips_a_mocked_malformed_buffer(monkeypatch: pytest.Mo
     assert unpac_the_hash._extract_nt_from_pac(b"malformed") is None
 
 
-def test_unpac_uses_mocked_ccache_and_tgs_without_network(
+def test_unpac_uses_mocked_u2u_recovery_without_network(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A complete UnPAC parse path can be exercised with only local stand-ins."""
+    """UnPAC recovers via the U2U helper when an AS-REP key is available."""
     from adaf_attack.capabilities import unpac_the_hash
     from adaf_attack.core.graph import AttackGraph
     from adaf_attack.core.session import Session
@@ -408,50 +408,24 @@ def test_unpac_uses_mocked_ccache_and_tgs_without_network(
 
     class _Pkinit:
         def run(self, *args: object, **kwargs: object) -> dict[str, str]:
-            return {"ccache": str(tmp_path / "ticket.ccache")}
+            return {
+                "ccache": str(tmp_path / "ticket.ccache"),
+                "asrep_key": "aa" * 32,
+            }
 
-    class _Client:
-        def prettyPrint(self) -> bytes:  # noqa: N802
-            return b"alice@CORP.TEST"
-
-    class _Credential:
-        def __getitem__(self, key: str) -> _Client:
-            assert key == "client"
-            return _Client()
-
-        def toTGT(self) -> dict[str, object]:  # noqa: N802
-            return {"KDC_REP": b"rep", "cipher": object(), "sessionKey": object()}
-
-    class _CCache:
-        credentials = [_Credential()]
-
-        @classmethod
-        def loadFile(cls, path: str) -> _CCache:  # noqa: N802
-            return cls()
-
-    pkinit_module = ModuleType("adaf_attack.capabilities.pkinit_auth")
-    pkinit_module.PkinitAuth = _Pkinit
-    constants = ModuleType("impacket.krb5.constants")
-    constants.PrincipalNameType = type(
-        "Types", (), {"NT_SRV_INST": type("Value", (), {"value": 2})}
-    )
-    ccache = ModuleType("impacket.krb5.ccache")
-    ccache.CCache = _CCache
-    kerberos = ModuleType("impacket.krb5.kerberosv5")
-    kerberos.getKerberosTGS = lambda *args: (b"mocked-tgs", object(), object(), object())
-    types_module = ModuleType("impacket.krb5.types")
-    types_module.Principal = lambda name, type: (name, type)
-    krb5 = ModuleType("impacket.krb5")
-    krb5.constants = constants
+    import adaf_attack.capabilities.pkinit_auth as pkinit_mod
 
     monkeypatch.setattr(unpac_the_hash, "require_impacket", lambda _: None)
-    monkeypatch.setattr(unpac_the_hash, "_extract_nt_from_pac", lambda data: "mocked-pac")
-    monkeypatch.setitem(sys.modules, "adaf_attack.capabilities.pkinit_auth", pkinit_module)
-    monkeypatch.setitem(sys.modules, "impacket.krb5", krb5)
-    monkeypatch.setitem(sys.modules, "impacket.krb5.constants", constants)
-    monkeypatch.setitem(sys.modules, "impacket.krb5.ccache", ccache)
-    monkeypatch.setitem(sys.modules, "impacket.krb5.kerberosv5", kerberos)
-    monkeypatch.setitem(sys.modules, "impacket.krb5.types", types_module)
+    monkeypatch.setattr(pkinit_mod, "PkinitAuth", _Pkinit)
+    monkeypatch.setattr(
+        unpac_the_hash,
+        "request_u2u_pac",
+        lambda **kwargs: {
+            "ok": True,
+            "nt_hash": "31d6cfe0d16ae931b73c59d7e0c089c0",
+            "lm_hash": "aad3b435b51404eeaad3b435b51404ee",
+        },
+    )
     result = unpac_the_hash.UnpacTheHash().run(
         Target(domain="corp.test", dc_ip="192.0.2.10"),
         Session(tmp_path / "session"),
@@ -459,7 +433,9 @@ def test_unpac_uses_mocked_ccache_and_tgs_without_network(
         sam="alice",
         pfx="cert.pfx",
     )
-    assert result["pac_credential_info"] == "mocked-pac"
+    assert result["status"] == "recovered"
+    assert result["pac_credential_info"]["method"] == "u2u-pac"
+    assert result["pac_credential_info"]["nt_hash"] == "31d6cfe0d16ae931b73c59d7e0c089c0"
 
 
 def test_core_configuration_and_dependency_errors_are_safe_offline(

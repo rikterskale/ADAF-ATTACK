@@ -71,6 +71,9 @@ class _Conn:
     def add(self, dn: str, attributes: Any = None) -> bool:
         return self.add_ok
 
+    def modify(self, dn: str, changes: Any = None) -> bool:
+        return True
+
     def unbind(self) -> None:
         self.unbound = True
 

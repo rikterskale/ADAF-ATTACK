@@ -305,7 +305,9 @@ def test_s4u_ticket_and_unpac_guards(monkeypatch: Any, tmp_path: Path) -> None:
         unpac_the_hash.UnpacTheHash().run(_target(), session, AttackGraph())
 
 
-def test_unpac_delegates_pkinit_and_records_parse_failure(monkeypatch: Any, tmp_path: Path) -> None:
+def test_unpac_delegates_pkinit_and_records_missing_asrep_key(
+    monkeypatch: Any, tmp_path: Path
+) -> None:
     monkeypatch.setattr(unpac_the_hash, "require_impacket", lambda name: None)
 
     class Pkinit:
@@ -318,7 +320,9 @@ def test_unpac_delegates_pkinit_and_records_parse_failure(monkeypatch: Any, tmp_
     result = unpac_the_hash.UnpacTheHash().run(
         _target(), Session(base_dir=tmp_path), AttackGraph(), sam="alice", pfx="cert.pfx"
     )
-    assert result["sam"] == "alice" and result["pac_credential_info"].startswith("parse-failed:")
+    assert result["sam"] == "alice"
+    assert result["status"] == "not_recovered"
+    assert "AS-REP key unavailable" in result["pac_credential_info"]["reason"]
 
 
 def test_esc_chain_delegates_cert_and_pkinit(monkeypatch: Any, tmp_path: Path) -> None:

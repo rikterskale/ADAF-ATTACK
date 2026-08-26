@@ -327,7 +327,7 @@ CAPABILITY_CATALOG: tuple[
     ),
     (
         "dcshadow",
-        "DCShadow replication-based directory modification",
+        "DCShadow: plant rogue DC objects, register SPNs, optional DRSAddEntry push",
         True,
         "persistence",
         ("replication", "dcshadow"),

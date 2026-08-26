@@ -204,6 +204,8 @@ def test_unpac_pac_parser_handles_imported_blob(monkeypatch: Any) -> None:
             self.buffers = [{"Offset": 0, "cbBufferSize": 2}]
 
         def __getitem__(self, key: str) -> Any:
+            if key == "cBuffers":
+                return 1
             return self.buffers
 
     class Info:
@@ -213,13 +215,16 @@ def test_unpac_pac_parser_handles_imported_blob(monkeypatch: Any) -> None:
         def __getitem__(self, key: str) -> Any:
             return 2 if key == "ulType" else (0 if key == "Offset" else 2)
 
+        def __len__(self) -> int:
+            return 1
+
     pac.PAC_CREDENTIAL_INFO = lambda data: object()
     pac.PAC_INFO_BUFFER = Info
     pac.PACTYPE = PacType
     monkeypatch.setitem(sys.modules, "impacket.krb5.pac", pac)
     assert unpac._extract_nt_from_pac(b"blob") == {
         "status": "not_recovered",
-        "reason": "PAC_CREDENTIAL_INFO decryption is not implemented",
+        "reason": "PAC_CREDENTIAL_INFO present; pass asrep_key to decrypt",
     }
 
 

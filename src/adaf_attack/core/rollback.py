@@ -47,6 +47,7 @@ ADVISORY_KINDS = {
     "sccm-push",
     "cert-enroll",
     "certificate-enroll",
+    "dcshadow-push",
 }
 
 SUPPORTED_KINDS = REVERTABLE_KINDS | ADVISORY_KINDS

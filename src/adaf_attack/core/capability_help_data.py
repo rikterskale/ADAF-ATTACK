@@ -113,8 +113,16 @@ _SPEC: dict[str, OptionSpec] = {
     ),
     "rbcd-ticket-workflow": OptionSpec(
         (*_UNIVERSAL_REQUIRED, "--set-on", "--set-from", "--spn", "--impersonate", "--force"),
-        _UNIVERSAL_OPTIONAL,
-        notes="Joined RBCD + S4U ticket handoff; --force required.",
+        (
+            *_UNIVERSAL_OPTIONAL,
+            "-P computer_password=<pass>",
+            "-P computer_hashes=<LM:NT>",
+            "-P computer_ccache=<path>",
+        ),
+        notes=(
+            "Joined RBCD + native S4U via s4u-abuse; supply controlled-computer "
+            "creds (-P computer_password=/hashes=/ccache=). --force required."
+        ),
     ),
     # 15 offensive-capability additions
     "dcsync": OptionSpec(
@@ -145,8 +153,17 @@ _SPEC: dict[str, OptionSpec] = {
     ),
     "unpac-the-hash": OptionSpec(
         (*_UNIVERSAL_REQUIRED, "-P sam=<user>"),
-        (*_UNIVERSAL_OPTIONAL, "-P pfx=<path>", "-P key=<pem>", "-P cert=<pem>"),
-        notes="Cert -> PKINIT -> PAC parse; NT hash recovery on modern KDCs.",
+        (
+            *_UNIVERSAL_OPTIONAL,
+            "-P pfx=<path>",
+            "-P key=<pem>",
+            "-P cert=<pem>",
+            "-P asrep_key=<hex>",
+        ),
+        notes=(
+            "Cert -> PKINIT -> U2U UnPAC; recovers NT hash when Certipy prints it "
+            "or when -P asrep_key=<hex> is supplied from gettgtpkinit."
+        ),
     ),
     "ticket-forge": OptionSpec(
         (
@@ -377,7 +394,17 @@ _SPEC: dict[str, OptionSpec] = {
     ),
     "dcshadow": OptionSpec(
         (*_UNIVERSAL_REQUIRED, "-P computer=<sam>", "--force"),
-        (*_UNIVERSAL_OPTIONAL, "-P site=Default-First-Site-Name"),
+        (
+            *_UNIVERSAL_OPTIONAL,
+            "-P site=Default-First-Site-Name",
+            "-P object=<dn>",
+            "-P attribute=<name|oid>",
+            "-P value=<data>",
+        ),
+        notes=(
+            "Plants rogue DC objects, registers replication SPNs, and optionally "
+            "pushes via IDL_DRSAddEntry (-P object/attribute/value)."
+        ),
     ),
     "adidns-wpad": OptionSpec(
         (*_UNIVERSAL_REQUIRED, "-P ip=<attacker-ip>", "--force"),
