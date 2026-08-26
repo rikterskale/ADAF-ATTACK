@@ -60,14 +60,13 @@ def test_ready_command_includes_required_param_placeholders() -> None:
 
 
 def test_specialized_stages_and_outcome_handoff(tmp_path: Path) -> None:
+    import adaf_attack.capabilities  # noqa: F401
     from adaf_attack.core.graph import AttackGraph
     from adaf_attack.core.novice import glossary_items
     from adaf_attack.core.outcomes import build_post_execution_outcome
     from adaf_attack.core.registry import capability_registry
     from adaf_attack.core.ux import stages_for_capability
     from adaf_attack.core.ux_extra import capability_prerequisites
-
-    import adaf_attack.capabilities  # noqa: F401
 
     unpac = capability_registry.get("unpac-the-hash")
     assert unpac is not None
