@@ -1,0 +1,21 @@
+{
+  "template": "DemoESC1",
+  "ca": "DEMO-CA",
+  "alt_name": "administrator@corp.demo",
+  "sam": "alice",
+  "esc": "ESC1",
+  "picked": {"signals": ["ESC1"], "confidence": "high"},
+  "confidence": {"confidence": "high"},
+  "cert_request": {
+    "ok": true,
+    "method": "demo-fixture",
+    "pfx": "demo-issued.pfx",
+    "note": "Offline demo artifact; not a live enrollment."
+  },
+  "pkinit_auth": {
+    "ok": true,
+    "method": "demo-fixture",
+    "ccache": "demo-alice.ccache",
+    "note": "Offline demo TGT placeholder for what-next / session show."
+  }
+}

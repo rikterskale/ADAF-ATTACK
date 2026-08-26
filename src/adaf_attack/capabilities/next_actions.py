@@ -27,9 +27,21 @@ ACTION_MAP: dict[str, tuple[str, str, bool, frozenset[str]]] = {
     ),
     "HasKeyCredentialLink": (
         "pkinit-auth",
-        "medium",
-        False,
+        "high",
+        True,
         frozenset({"HasKeyCredentialLink"}),
+    ),
+    "HasNTHash": (
+        "impacket-exec",
+        "high",
+        True,
+        frozenset({"HasNTHash"}),
+    ),
+    "EnrolledCertificate": (
+        "pkinit-auth",
+        "high",
+        True,
+        frozenset({"EnrolledCertificate"}),
     ),
     "WriteRBCD": (
         "rbcd-ticket-workflow",
@@ -94,20 +106,26 @@ ACTION_MAP: dict[str, tuple[str, str, bool, frozenset[str]]] = {
     "ESC1Enrollable": (
         "esc-chain",
         "high",
-        False,
+        True,
         frozenset({"ESC1", "ESC1Enrollable", "ESC2", "ESC6"}),
     ),
     "ESC1": (
         "esc-chain",
         "high",
-        False,
+        True,
         frozenset({"ESC1", "ESC1Enrollable"}),
     ),
     "ESC6": (
         "esc-chain",
         "high",
-        False,
+        True,
         frozenset({"ESC6"}),
+    ),
+    "ESC9": (
+        "esc-chain",
+        "high",
+        True,
+        frozenset({"ESC9"}),
     ),
     "ReadGMSAPassword": (
         "laps-read",

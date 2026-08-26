@@ -55,8 +55,13 @@ _SPEC: dict[str, OptionSpec] = {
         (*_UNIVERSAL_OPTIONAL, "--alt-name"),
     ),
     "pkinit-auth": OptionSpec(
-        (*_UNIVERSAL_REQUIRED, "--sam"),
-        (*_UNIVERSAL_OPTIONAL, "--key", "--cert", "--pfx"),
+        (*_UNIVERSAL_REQUIRED, "--sam", "--force"),
+        (*_UNIVERSAL_OPTIONAL, "--key", "--cert", "--pfx", "-P pfx=<path>"),
+        notes=(
+            "Obtains a TGT via Certipy auth, then gettgtpkinit if available; "
+            "otherwise writes a PKINIT playbook. Capture the AS-REP key for "
+            "unpac-the-hash (-P asrep_key=<hex>)."
+        ),
     ),
     # Destructive writes
     "acl-write": OptionSpec(
@@ -112,16 +117,24 @@ _SPEC: dict[str, OptionSpec] = {
         notes="Joined write + PKINIT; --force required.",
     ),
     "rbcd-ticket-workflow": OptionSpec(
-        (*_UNIVERSAL_REQUIRED, "--set-on", "--set-from", "--spn", "--impersonate", "--force"),
+        (
+            *_UNIVERSAL_REQUIRED,
+            "--set-on",
+            "--set-from",
+            "--impersonate",
+            "--force",
+        ),
         (
             *_UNIVERSAL_OPTIONAL,
+            "--spn",
             "-P computer_password=<pass>",
             "-P computer_hashes=<LM:NT>",
             "-P computer_ccache=<path>",
         ),
         notes=(
-            "Joined RBCD + native S4U via s4u-abuse; supply controlled-computer "
-            "creds (-P computer_password=/hashes=/ccache=). --force required."
+            "Joined RBCD + native S4U via s4u-abuse. Supply controlled-computer "
+            "creds (-P computer_password=/hashes=/ccache=) for in-process ticket "
+            "request; otherwise a playbook handoff is written. --force required."
         ),
     ),
     # 15 offensive-capability additions
@@ -152,17 +165,17 @@ _SPEC: dict[str, OptionSpec] = {
         notes="Pure-offline SYSVOL scan; no LDAP required.",
     ),
     "unpac-the-hash": OptionSpec(
-        (*_UNIVERSAL_REQUIRED, "-P sam=<user>"),
+        (*_UNIVERSAL_REQUIRED, "-P sam=<user>", "-P pfx=<path>"),
         (
             *_UNIVERSAL_OPTIONAL,
-            "-P pfx=<path>",
             "-P key=<pem>",
             "-P cert=<pem>",
             "-P asrep_key=<hex>",
         ),
         notes=(
-            "Cert -> PKINIT -> U2U UnPAC; recovers NT hash when Certipy prints it "
-            "or when -P asrep_key=<hex> is supplied from gettgtpkinit."
+            "Requires -P pfx=<path> (or both -P key=<pem> and -P cert=<pem>). "
+            "Recovers NT hash when Certipy auth prints it, or via U2U when "
+            "-P asrep_key=<hex> is supplied from gettgtpkinit."
         ),
     ),
     "ticket-forge": OptionSpec(
@@ -215,16 +228,21 @@ _SPEC: dict[str, OptionSpec] = {
         notes="Destructive: writes to relayed services. Requires --force.",
     ),
     "esc-chain": OptionSpec(
-        _UNIVERSAL_REQUIRED,
+        (*_UNIVERSAL_REQUIRED, "--force"),
         (
             *_UNIVERSAL_OPTIONAL,
             "-P adcs_session=<prior-session-dir>",
             "-P template=<name>",
             "-P ca=<name>",
+            "-P esc=<1-16>",
             "-P sam=<user>",
             "-P alt_name=<upn-or-dns>",
         ),
-        notes="Orchestrates cert-request + pkinit-auth end-to-end.",
+        notes=(
+            "Orchestrates enroll (cert-request or esc9-16 / ESC8 relay) then "
+            "pkinit-auth. Pass -P template= and -P ca=, or -P adcs_session=; "
+            "optional -P esc=N selects the ESC path. --force required."
+        ),
     ),
     "template-mod": OptionSpec(
         (*_UNIVERSAL_REQUIRED, "-P template=<name>", "--force"),

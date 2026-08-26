@@ -39,6 +39,7 @@ from adaf_attack.core.novice import (
     glossary_definition,
     home_actions,
     plain_description,
+    required_prompts,
     safety_summary,
 )
 from adaf_attack.core.paths import default_workspace_dir
@@ -188,6 +189,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._selected_attack_edge: dict[str, Any] | None = None
         self._operation_mode = "OBSERVE"
         self._worker_thread: threading.Thread | None = None
+        # Dynamic capability-parameter slots (see #param-form). Each entry is
+        # {"option", "param_key", "is_param", "label"} for one visible input.
+        self._param_bindings: list[dict[str, str]] = []
 
     def on_unmount(self) -> None:
         """Ask background work to stop before the screen is torn down."""
@@ -348,6 +352,15 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     )
                     yield Label("Attack-path start", classes="field-label")
                     yield Input(placeholder="Attack-path start principal (optional)", id="start")
+                    with Vertical(id="param-form"):
+                        yield Static(
+                            "[bold]Capability parameters[/bold]\n"
+                            "Select a capability to enter required -P / flag values.",
+                            id="param-title",
+                        )
+                        for index in range(8):
+                            yield Label("", id=f"param-label-{index}", classes="field-label")
+                            yield Input(placeholder="", id=f"param-input-{index}")
                     with Horizontal():
                         yield Label("Kerberos")
                         yield Switch(id="kerberos", value=bool(defaults.get("target.kerberos")))
@@ -395,6 +408,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._populate_capabilities()
         self._refresh_profile_hint()
         self._refresh_pin_button()
+        self._refresh_param_form()
         self._update_credential_strip()
         self._set_advanced_credentials_visible(False)
         self._apply_beginner_mode(self._safe_mode)
@@ -440,6 +454,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._post_ui(self._update_progress)
 
     def _populate_capabilities(self, query: str = "") -> None:
+        # Ensure capability runners are registered even when the TUI is the
+        # first ADAF-ATTACK import in the process (isolated pytest / cold start).
+        import adaf_attack.capabilities  # noqa: F401
 
         self._capabilities = capability_registry.list()
         needle = query.strip().lower()
@@ -518,6 +535,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._reviewed_cap = None
             self._update_status()
             self._update_help()
+            self._refresh_param_form()
             self._update_run_gate()
             self._update_readiness()
             self._update_engagement_dashboard()
@@ -1023,6 +1041,101 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Recent: {recent}\nPinned: {pinned}"
         )
 
+    _TARGET_FORM_OPTIONS: ClassVar[frozenset[str]] = frozenset(
+        {
+            "--domain",
+            "--dc-ip",
+            "--username",
+            "--password",
+            "--hashes",
+            "--aes-key",
+            "--ccache",
+            "--kerberos",
+            "--ldaps",
+            "--force",
+            "--workspace",
+            "--creds-file",
+        }
+    )
+
+    def _capability_param_prompts(self, cap: Capability) -> list[dict[str, str]]:
+        """Required prompts that are not already covered by the target form."""
+        prompts: list[dict[str, str]] = []
+        for entry in required_prompts(cap):
+            option = entry["option"]
+            if option in self._TARGET_FORM_OPTIONS:
+                continue
+            prompts.append(entry)
+        return prompts[:8]
+
+    def _refresh_param_form(self) -> None:
+        """Show/hide labeled inputs for the selected capability's required params."""
+        cap = self._selected()
+        title = self.query_one("#param-title", Static)
+        bindings: list[dict[str, str]] = []
+        prompts = self._capability_param_prompts(cap) if cap else []
+        if not cap:
+            title.update(
+                "[bold]Capability parameters[/bold]\n"
+                "Select a capability to enter required -P / flag values."
+            )
+        elif not prompts:
+            title.update(
+                f"[bold]Capability parameters[/bold]\n"
+                f"{cap.id} needs no extra parameters beyond the target form."
+            )
+        else:
+            title.update(
+                f"[bold]Capability parameters[/bold] for {cap.id}\n"
+                "Fill required values before Review / Run."
+            )
+        for index in range(8):
+            label = self.query_one(f"#param-label-{index}", Label)
+            field = self.query_one(f"#param-input-{index}", Input)
+            if index < len(prompts):
+                entry = prompts[index]
+                label.update(entry["label"])
+                label.display = True
+                field.placeholder = entry["help"]
+                field.value = ""
+                field.password = (
+                    "password" in entry["option"].lower()
+                    or "password" in entry["param_key"].lower()
+                )
+                field.display = True
+                bindings.append(
+                    {
+                        "option": entry["option"],
+                        "param_key": entry["param_key"],
+                        "is_param": entry["is_param"],
+                        "label": entry["label"],
+                    }
+                )
+            else:
+                label.update("")
+                label.display = False
+                field.value = ""
+                field.placeholder = ""
+                field.password = False
+                field.display = False
+        self._param_bindings = bindings
+
+    def _collect_capability_params(self) -> tuple[dict[str, Any], list[str]]:
+        """Return (runner_kwargs, missing_labels) from the dynamic param form."""
+        values: dict[str, Any] = {}
+        missing: list[str] = []
+        for index, binding in enumerate(self._param_bindings):
+            raw = self.query_one(f"#param-input-{index}", Input).value.strip()
+            if not raw:
+                missing.append(binding["label"])
+                continue
+            if binding["is_param"]:
+                values[binding["param_key"]] = raw
+            else:
+                flag = binding["option"].lstrip("-").replace("-", "_")
+                values[flag] = raw
+        return values, missing
+
     def _refresh_pin_button(self) -> None:
         button = self.query_one("#pin-selected-btn", Button)
         button.disabled = self.selected_cap is None
@@ -1364,13 +1477,42 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self.notify("Review acknowledged. Run is enabled when permitted.")
 
     def _ready_command(self, capability_id: str | None = None) -> str:
+        params, _missing = self._collect_capability_params()
+        extra = {
+            "scope": self.query_one("#scope", Input).value.strip() or "high-value",
+            **{key: str(value) for key, value in params.items() if not key.startswith("_")},
+        }
+        # Flag-style params (--set-on) are already named kwargs-ish; keep -P keys in extra.
+        param_extra = {
+            key: value
+            for key, value in extra.items()
+            if key
+            not in {
+                "set_on",
+                "set_from",
+                "impersonate",
+                "spn",
+                "sam",
+                "template",
+                "ca",
+                "write_target",
+            }
+        }
+        # Also surface flag-style values as -P when that is how OptionSpec lists them;
+        # for named CLI flags, build_ready_command placeholders cover gaps.
+        for key in ("sam", "template", "ca"):
+            if key in params:
+                param_extra[key] = str(params[key])
+        for binding in self._param_bindings:
+            if binding["is_param"] and binding["param_key"] in params:
+                param_extra[binding["param_key"]] = str(params[binding["param_key"]])
         return build_ready_command(
             capability_id or self.selected_cap or "<capability>",
             domain=self.query_one("#domain", Input).value.strip() or None,
             dc_ip=self.query_one("#dc_ip", Input).value.strip() or None,
             username=self.query_one("#username", Input).value.strip() or None,
             force=self.query_one("#force", Switch).value,
-            extra={"scope": self.query_one("#scope", Input).value.strip() or "high-value"},
+            extra=param_extra,
         )
 
     def _copy_ready_command(self) -> None:
@@ -1389,11 +1531,19 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self.notify("Select a capability first.", severity="warning")
             return
         spec = capability_option_spec(cap.id, cap.requires_force)
+        _params, missing = self._collect_capability_params()
         self._review_run()
+        missing_line = (
+            f"Missing required parameters: {', '.join(missing)}\n"
+            if missing
+            else "Required capability parameters: complete\n"
+        )
         self._show_log(
             f"[yellow]DRY RUN[/] {cap.id}: no network action started.\n"
+            f"{missing_line}"
             f"Required: {', '.join(spec.required) or 'workspace/session'}\n"
-            f"Optional: {', '.join(spec.optional) or 'none'}"
+            f"Optional: {', '.join(spec.optional) or 'none'}\n"
+            f"Ready command: {self._ready_command(cap.id)}"
         )
 
     def _quickstart(self) -> None:
@@ -1421,6 +1571,14 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         capability_id = self.selected_cap
         target_values = self._validate_target()
         if target_values is None:
+            return
+        param_values, missing = self._collect_capability_params()
+        if missing:
+            self.notify(
+                "Fill required capability parameters before running: " + ", ".join(missing),
+                severity="error",
+            )
+            self._show_log("[red]Missing required parameters:[/] " + ", ".join(missing))
             return
         domain, dc_ip = target_values
         username = self.query_one("#username", Input).value.strip() or None
@@ -1482,6 +1640,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             extra: dict[str, Any] = {"scope": scope}
             if start:
                 extra["start"] = start
+            extra.update(param_values)
             try:
                 out = execute_capability(
                     capability_id,

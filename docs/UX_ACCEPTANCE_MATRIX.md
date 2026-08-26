@@ -35,9 +35,14 @@ Before a release is marked UX-complete:
    registered.
 4. Exercise the TUI at both a normal terminal width and a narrow terminal
    width. The compact layout must keep search, capability selection, review,
-   and execution controls reachable.
+   and execution controls reachable. Selecting a `-P`-heavy capability
+   (for example `unpac-the-hash`, `golden-cert`, `dcshadow`, or
+   `rbcd-ticket-workflow`) must show the dynamic parameter form before Run.
 5. Confirm that generated commands quote values containing spaces or shell
-   metacharacters.
+   metacharacters, and that `capability-help` / `command` include required
+   `-P` placeholders from the capability OptionSpec.
 6. Confirm that timeline output contains status, duration, correlation, and
-   safe detail fields without exposing secrets.
+   safe detail fields without exposing secrets. Offline demo fixtures now
+   include redacted `esc-chain.json` and `unpac.json` samples for day-2
+   narrative review without live AD.
 

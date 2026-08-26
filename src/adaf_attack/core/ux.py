@@ -13,8 +13,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, cast
 
+from adaf_attack.core.capability_help_data import capability_option_spec
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import Capability, capability_registry
+
+_READY_COMMAND_KWARG_FLAGS = frozenset({"--domain", "--dc-ip", "--username", "--force"})
 
 # ---------------------------------------------------------------------------
 # 1. Kill-chain phase labels & grouping
@@ -138,8 +141,15 @@ def build_ready_command(
     username: str | None = None,
     force: bool = False,
     extra: dict[str, str] | None = None,
+    include_required_placeholders: bool = True,
 ) -> str:
-    """Build a copy-pasteable CLI invocation."""
+    """Build a copy-pasteable CLI invocation.
+
+    When ``include_required_placeholders`` is true (default), required options
+    from ``capability_option_spec`` that were not supplied are appended as
+    clear placeholders (``--set-on <set-on>``, ``-P sam=<user>``, etc.) so
+    ``capability-help``, ``plan``, and TUI copy-ready commands stay complete.
+    """
     parts = ["adaf-attack", "run", capability_id]
     if domain:
         parts.extend(["--domain", shlex.quote(domain)])
@@ -149,9 +159,47 @@ def build_ready_command(
         parts.extend(["--username", shlex.quote(username)])
     if force:
         parts.append("--force")
+
+    provided_params = {str(k) for k in (extra or {})}
+    emitted_flags: set[str] = set()
+    if domain:
+        emitted_flags.add("--domain")
+    if dc_ip:
+        emitted_flags.add("--dc-ip")
+    if username:
+        emitted_flags.add("--username")
+    if force:
+        emitted_flags.add("--force")
+
+    if include_required_placeholders:
+        spec = capability_option_spec(capability_id, force)
+        for option in spec.required:
+            if option == "--force":
+                if "--force" not in emitted_flags:
+                    parts.append("--force")
+                    emitted_flags.add("--force")
+                continue
+            if option.startswith("-P "):
+                remainder = option[3:]
+                key, _, sample = remainder.partition("=")
+                if key in provided_params:
+                    continue
+                placeholder = f"{key}={sample or 'VALUE'}"
+                parts.extend(["-P", shlex.quote(placeholder)])
+                provided_params.add(key)
+                continue
+            if option.startswith("--"):
+                flag = option.split("=", 1)[0]
+                if flag in emitted_flags or flag in _READY_COMMAND_KWARG_FLAGS:
+                    continue
+                # Capability-specific flags (--set-on, --sam, ...) get placeholders.
+                name = flag.lstrip("-").replace("-", "_")
+                parts.extend([flag, shlex.quote(f"<{name}>")])
+                emitted_flags.add(flag)
+
     if extra:
-        for k, v in extra.items():
-            parts.extend(["-P", shlex.quote(f"{k}={v}")])
+        for key, value in extra.items():
+            parts.extend(["-P", shlex.quote(f"{key}={value}")])
     return " ".join(parts)
 
 
@@ -162,6 +210,17 @@ def build_ready_command(
 
 def stages_for_capability(cap: Capability) -> list[str]:
     """Return ordered progress stage names for a capability run."""
+    specialized = {
+        "esc-chain": ["prepare", "select-template", "enroll", "pkinit", "next-actions"],
+        "rbcd-ticket-workflow": ["prepare", "set-rbcd", "s4u", "ticket", "next-actions"],
+        "shadow-pkinit-workflow": ["prepare", "write-shadow", "pkinit", "next-actions"],
+        "unpac-the-hash": ["prepare", "pkinit", "u2u-pac", "recover-hash", "next-actions"],
+        "dcshadow": ["prepare", "plant-objects", "register-spns", "drsuapi-push", "next-actions"],
+        "golden-cert": ["prepare", "forge", "export-pfx", "next-actions"],
+        "pkinit-auth": ["prepare", "load-cert", "pkinit", "export-ccache", "next-actions"],
+    }
+    if cap.id in specialized:
+        return list(specialized[cap.id])
     base = ["prepare", "connect", "execute"]
     phase = capability_phase(cap)
     if phase in {"credential-access", "privilege-escalation"}:

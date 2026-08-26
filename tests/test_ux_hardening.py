@@ -36,6 +36,69 @@ def test_copy_ready_command_quotes_shell_sensitive_values() -> None:
     assert "'computer_filter=(sAMAccountName=DC 01$)'" in command
 
 
+def test_ready_command_includes_required_param_placeholders() -> None:
+    unpac = build_ready_command("unpac-the-hash", domain="corp.test", dc_ip="10.0.0.1")
+    assert "-P" in unpac and "sam=" in unpac and "pfx=" in unpac
+
+    rbcd = build_ready_command(
+        "rbcd-ticket-workflow", domain="corp.test", dc_ip="10.0.0.1", force=True
+    )
+    assert "--set-on" in rbcd and "--set-from" in rbcd and "--impersonate" in rbcd
+    assert "--force" in rbcd
+
+    golden = build_ready_command("golden-cert", domain="corp.test", dc_ip="10.0.0.1", force=True)
+    assert "ca_pfx=" in golden and "upn=" in golden
+
+    # Explicit extras suppress matching placeholders.
+    filled = build_ready_command(
+        "unpac-the-hash",
+        domain="corp.test",
+        dc_ip="10.0.0.1",
+        extra={"sam": "alice", "pfx": "alice.pfx"},
+    )
+    assert filled.count("sam=") == 1 and "alice" in filled
+
+
+def test_specialized_stages_and_outcome_handoff(tmp_path: Path) -> None:
+    from adaf_attack.core.graph import AttackGraph
+    from adaf_attack.core.novice import glossary_items
+    from adaf_attack.core.outcomes import build_post_execution_outcome
+    from adaf_attack.core.registry import capability_registry
+    from adaf_attack.core.ux import stages_for_capability
+    from adaf_attack.core.ux_extra import capability_prerequisites
+
+    import adaf_attack.capabilities  # noqa: F401
+
+    unpac = capability_registry.get("unpac-the-hash")
+    assert unpac is not None
+    stages = stages_for_capability(unpac)
+    assert stages[0] == "prepare" and "u2u-pac" in stages
+
+    session = tmp_path / "sess"
+    session.mkdir()
+    (session / "unpac.json").write_text("{}", encoding="utf-8")
+    outcome = build_post_execution_outcome(
+        session,
+        capability="rbcd-ticket-workflow",
+        result={
+            "ok": False,
+            "handoff_complete": True,
+            "playbook": str(session / "rbcd-s4u.playbook.txt"),
+            "method": "playbook",
+        },
+        graph=AttackGraph(),
+        auth="password",
+    )
+    assert outcome["status"] == "handoff"
+    assert outcome["playbook"].endswith("rbcd-s4u.playbook.txt")
+    assert "next_command" in outcome
+
+    glossary = glossary_items()
+    assert "unpac" in glossary and "dcshadow" in glossary and "pkinit" in glossary
+    deps = capability_prerequisites("pkinit-auth")
+    assert "unpac-the-hash" in deps["produces_artifacts_for"]
+
+
 def test_evidence_command_templates_quote_substituted_values() -> None:
     target = Target(domain="corp example", dc_ip="10.0.0.10", username="operator one")
     commands = build_exploit_commands(

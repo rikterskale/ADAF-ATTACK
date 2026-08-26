@@ -33,8 +33,11 @@ def test_prompt_spec_falls_back_for_unknown_flag() -> None:
 
 def test_prompt_spec_handles_param_style() -> None:
     spec = prompt_spec_for_option("-P sam=<user>")
-    assert "sam" in spec["label"]
-    assert "sam" in spec["help"]
+    assert "sAMAccountName" in spec["label"]
+    assert "UnPAC" in spec["help"] or "PKINIT" in spec["help"]
+    # Unknown -P keys still get a usable generic label.
+    generic = prompt_spec_for_option("-P custom_field=<value>")
+    assert "custom_field" in generic["label"]
 
 
 def test_required_prompts_for_destructive_capability() -> None:

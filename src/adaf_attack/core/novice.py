@@ -16,6 +16,12 @@ _GLOSSARY = {
     "opsec": "Operational security: reducing unnecessary noise, exposure, and detectable activity.",
     "s4u": "A Kerberos protocol extension used to request a service ticket on behalf of another user.",
     "esc": "An AD CS escalation path caused by certificate-template or CA configuration weaknesses.",
+    "pkinit": "Certificate-based Kerberos pre-authentication that yields a TGT from a client cert.",
+    "unpac": "Recovering an NT hash from PAC_CREDENTIAL_INFO after a PKINIT TGT (UnPAC-the-Hash).",
+    "asrep key": "The AS-REP encryption key from PKINIT; needed to decrypt PAC credential material.",
+    "dcshadow": "Registering a rogue DC object and pushing directory changes via DRSUAPI replication.",
+    "golden cert": "A client certificate forged with a stolen CA key, usually for PKINIT as any user.",
+    "pac_credential_info": "PAC buffer type 2 that can carry NT/LM hashes after PKINIT authentication.",
 }
 
 
@@ -196,7 +202,25 @@ def remediation_checklist(finding: dict[str, Any]) -> dict[str, Any]:
 
 
 def glossary_definition(term: str) -> str | None:
-    return _GLOSSARY.get(term.strip().lower())
+    """Resolve a glossary entry by short term or capability id."""
+    key = term.strip().lower()
+    if key in _GLOSSARY:
+        return _GLOSSARY[key]
+    # Capability ids → nearest glossary term (TUI help panel uses cap.id).
+    aliases = {
+        "unpac-the-hash": "unpac",
+        "pkinit-auth": "pkinit",
+        "shadow-pkinit-workflow": "pkinit",
+        "dcshadow": "dcshadow",
+        "golden-cert": "golden cert",
+        "esc-chain": "esc",
+        "rbcd-ticket-workflow": "rbcd",
+        "s4u-abuse": "s4u",
+        "dcsync": "dcsync",
+        "kerberoast": "kerberoast",
+    }
+    mapped = aliases.get(key)
+    return _GLOSSARY.get(mapped) if mapped else None
 
 
 def glossary_items() -> dict[str, str]:
@@ -279,6 +303,74 @@ _PROMPT_LABELS: dict[str, dict[str, str]] = {
     "--force": {
         "label": "Type YES to confirm this destructive capability",
         "help": "Destructive capabilities require explicit acknowledgement.",
+    },
+    "--impersonate": {
+        "label": "User to impersonate (S4U)",
+        "help": "sAMAccountName of the principal the service ticket should represent.",
+    },
+    "--spn": {
+        "label": "Target SPN (e.g. cifs/app01.corp.local)",
+        "help": "Service principal the S4U ticket will be requested for.",
+    },
+    "-P sam=<user>": {
+        "label": "Certificate / account sAMAccountName",
+        "help": "Subject account for PKINIT / UnPAC (usually matches the cert identity).",
+    },
+    "-P pfx=<path>": {
+        "label": "PFX / PKCS#12 path",
+        "help": "Client certificate+key bundle used for PKINIT or UnPAC.",
+    },
+    "-P asrep_key=<hex>": {
+        "label": "AS-REP encryption key (hex)",
+        "help": "Printed by gettgtpkinit after PKINIT; required for native U2U UnPAC.",
+    },
+    "-P ca_pfx=<stolen-ca.pfx>": {
+        "label": "Stolen CA PFX path",
+        "help": "CA private key material used to forge a golden certificate.",
+    },
+    "-P upn=<user@domain>": {
+        "label": "UPN to forge into the certificate",
+        "help": "Usually a privileged user@domain for PKINIT afterwards.",
+    },
+    "-P computer=<sam>": {
+        "label": "Rogue / planted computer sAMAccountName",
+        "help": "Computer account that will be registered as a temporary DC (DCShadow).",
+    },
+    "-P object=<dn>": {
+        "label": "Directory object DN to push",
+        "help": "Target DN for IDL_DRSAddEntry remote modify.",
+    },
+    "-P attribute=<name|oid>": {
+        "label": "Attribute name or OID to push",
+        "help": "LDAP display name (e.g. description) or dotted OID.",
+    },
+    "-P value=<data>": {
+        "label": "Attribute value to push",
+        "help": "New value written via DCShadow DRSAddEntry.",
+    },
+    "-P computer_password=<pass>": {
+        "label": "Controlled computer password",
+        "help": "Password for the RBCD source computer used to request S4U tickets.",
+    },
+    "-P computer_hashes=<LM:NT>": {
+        "label": "Controlled computer NT hash (LM:NT or :NT)",
+        "help": "Hash for the RBCD source computer when password is unavailable.",
+    },
+    "-P computer_ccache=<path>": {
+        "label": "Controlled computer Kerberos ccache",
+        "help": "Existing TGT for the RBCD source computer account.",
+    },
+    "-P esc=<1-16>": {
+        "label": "ESC technique number (optional)",
+        "help": "Force a specific ESC path (9-16 enroll, 8 relay, else cert-request).",
+    },
+    "-P template=<name>": {
+        "label": "AD CS certificate template name",
+        "help": "Must match a published template on the CA.",
+    },
+    "-P ca=<name>": {
+        "label": "Certificate Authority name",
+        "help": "e.g. CORP-CA. Discover with adcs-enum when unknown.",
     },
 }
 

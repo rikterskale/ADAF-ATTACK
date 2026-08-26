@@ -61,10 +61,15 @@ def build_post_execution_outcome(
         rollback_status = "verified"
     else:
         rollback_status = "not-required"
-    return {
+    method = normalized.get("method")
+    playbook = normalized.get("playbook")
+    next_command = normalized.get("next_command")
+    handoff = bool(normalized.get("handoff_complete"))
+    status = "success" if success else ("handoff" if handoff or playbook else "partial")
+    outcome: dict[str, Any] = {
         "schema_version": 1,
         "capability": capability,
-        "status": "success" if success else "partial",
+        "status": status,
         "offensive_success": success,
         "validation": {
             "status": "passed" if success else "needs-review",
@@ -85,6 +90,17 @@ def build_post_execution_outcome(
         "detection": {"status": "not-recorded", "expected_telemetry": [], "operator_notes": None},
         "auth_context": auth,
     }
+    if method:
+        outcome["method"] = method
+    if playbook:
+        outcome["playbook"] = playbook
+    if next_command:
+        outcome["next_command"] = next_command
+    elif playbook:
+        outcome["next_command"] = f"Review playbook at {playbook}"
+    if handoff:
+        outcome["handoff_complete"] = True
+    return outcome
 
 
 def _load_cleanup(path: Path) -> list[dict[str, Any]]:

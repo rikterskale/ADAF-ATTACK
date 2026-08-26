@@ -1,0 +1,13 @@
+{
+  "sam": "alice",
+  "pkinit_ccache": "demo-alice.ccache",
+  "asrep_key_present": true,
+  "pac_credential_info": {
+    "status": "recovered",
+    "method": "demo-fixture",
+    "note": "NT hash redacted in demo fixtures; use --include-secrets only on authorized live runs."
+  },
+  "status": "recovered",
+  "ok": true,
+  "nt_hash_present": true
+}

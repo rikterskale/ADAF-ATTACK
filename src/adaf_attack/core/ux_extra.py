@@ -20,20 +20,31 @@ def _load_json(path: Path) -> dict[str, Any]:
 _PRODUCERS: dict[str, list[str]] = {
     "ldap-enum": ["acl-enum", "adcs-enum", "attack-paths", "bloodhound-export", "gmsa-laps-enum"],
     "trusts-enum": ["forest-campaign", "trust-correlation", "attack-paths"],
-    "adcs-enum": ["cert-request", "esc-chain", "adcs-validation", "template-mod"],
+    "adcs-enum": [
+        "cert-request",
+        "esc-chain",
+        "adcs-validation",
+        "template-mod",
+        "golden-cert",
+    ],
     "acl-enum": ["acl-write", "rbcd", "shadow-creds", "gpo-abuse", "attack-paths"],
     "gmsa-laps-enum": ["laps-read"],
     "kerberoast": ["ticket-lifecycle", "impacket-exec"],
     "asrep-roast": ["ticket-lifecycle"],
-    "shadow-creds": ["pkinit-auth", "unpac-the-hash"],
-    "pkinit-auth": ["ticket-lifecycle", "impacket-exec"],
-    "rbcd": ["s4u-abuse", "computer-takeover"],
+    "shadow-creds": ["shadow-pkinit-workflow", "pkinit-auth", "unpac-the-hash"],
+    "shadow-pkinit-workflow": ["pkinit-auth", "unpac-the-hash", "ticket-lifecycle"],
+    "pkinit-auth": ["unpac-the-hash", "ticket-lifecycle", "impacket-exec"],
+    "cert-request": ["pkinit-auth", "unpac-the-hash"],
+    "esc-chain": ["pkinit-auth", "unpac-the-hash", "ticket-lifecycle"],
+    "golden-cert": ["pkinit-auth", "unpac-the-hash"],
+    "rbcd": ["rbcd-ticket-workflow", "s4u-abuse", "computer-takeover"],
+    "rbcd-ticket-workflow": ["impacket-exec", "ticket-lifecycle"],
+    "dcshadow": ["rollback", "report"],
     "gpo-sysvol": ["gpo-abuse", "gpp-cpassword-hunt"],
     "coercion-map": ["coerce", "ntlm-relay"],
     "bloodhound-export": ["bloodhound-reconcile", "attack-paths"],
     "attack-paths": ["next-actions", "report", "campaign-analysis"],
 }
-
 _PREREQUISITES: dict[str, list[str]] = {}
 for producer, consumers in _PRODUCERS.items():
     for consumer in consumers:

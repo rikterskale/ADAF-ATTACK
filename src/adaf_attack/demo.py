@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from importlib.resources import files
 from pathlib import Path
 
-_DEMO_FILES = ("acl-enum.json", "adcs-enum.json")
+_DEMO_FILES = ("acl-enum.json", "adcs-enum.json", "esc-chain.json", "unpac.json")
 
 
 def materialize_demo_session(destination: Path) -> Path:

@@ -31,6 +31,26 @@ MISSIONS = (
         "Validate credential exposure",
         ("asrep-roast", "kerberoast", "gmsa-laps-enum"),
     ),
+    (
+        "adcs-to-tgt",
+        "AD CS to TGT",
+        ("adcs-enum", "esc-chain", "pkinit-auth", "unpac-the-hash"),
+    ),
+    (
+        "shadow-to-hash",
+        "Shadow Credentials to NT hash",
+        ("shadow-creds", "shadow-pkinit-workflow", "unpac-the-hash"),
+    ),
+    (
+        "rbcd-to-ticket",
+        "RBCD to service ticket",
+        ("rbcd", "rbcd-ticket-workflow", "impacket-exec"),
+    ),
+    (
+        "persistence-dcshadow",
+        "DCShadow persistence",
+        ("ldap-enum", "dcshadow", "rollback"),
+    ),
     ("adcs-validation", "Validate AD CS", ("adcs-enum", "adcs-validation", "esc-chain")),
     ("lateral-movement", "Test lateral movement", ("attack-paths", "impacket-exec", "s4u-abuse")),
     (
