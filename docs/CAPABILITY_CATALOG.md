@@ -70,7 +70,7 @@ script (CI enforces parity).
 | `pre2k-spray` | credential-access | fixture-tested | live-read-only | - | baseline-directory | - | observe | none | none | Pre-Windows 2000 compatible computer accounts (password = sAMAccountName) |
 | `purple-feedback` | export | implemented | unknown | - | - | - | observe | none | none | Generate updated detection hypotheses from session events |
 | `rbcd` | lateral-movement | implemented | unknown | - | - | - | observe | none | none | Enumerate RBCD + constrained delegation; optional set requires --force |
-| `rbcd-ticket-workflow` | lateral-movement | implemented | unknown | impacket | - | - | destructive | force_and_ack | manual | Set RBCD then request an S4U service ticket as the controlled computer |
+| `rbcd-ticket-workflow` | lateral-movement | implemented | unknown | - | - | - | destructive | force_and_ack | manual | Set RBCD then request an S4U service ticket as the controlled computer |
 | `report` | export | implemented | unknown | - | - | - | observe | none | none | Generate operator Markdown/HTML report from current session artifacts |
 | `rodc-delegation` | enumeration | implemented | unknown | - | - | - | observe | none | none | Enumerate RODC password-replication policy, KRBTGT, and delegation exposure |
 | `rollback` | analysis | implemented | unknown | - | - | - | destructive | force_and_ack | manual | Reverse pending destructive changes recorded in a session (requires --force) |
@@ -93,5 +93,5 @@ script (CI enforces parity).
 | `trusts-enum` | enumeration | implemented | unknown | - | - | - | observe | none | none | Deep trust enumeration with SID-filtering attack-path analysis |
 | `unconst-tgtdump-workflow` | credential-access | fixture-tested | live-mutating | impacket | unconstrained-computer | - | destructive | force_and_ack | manual | Unconstrained-delegation hunt then coerce to capture a TGT |
 | `unconstrained-delegation` | enumeration | fixture-tested | live-read-only | - | baseline-directory | - | observe | none | none | Hunt computers trusted for unconstrained delegation (TGT delegation) |
-| `unpac-the-hash` | credential-access | implemented | unknown | impacket | - | - | observe | none | none | Recover NT hash from PAC_CREDENTIAL_INFO after PKINIT (UnPAC-the-Hash) |
+| `unpac-the-hash` | credential-access | implemented | unknown | - | - | - | observe | none | none | Recover NT hash from PAC_CREDENTIAL_INFO after PKINIT (UnPAC-the-Hash) |
 | `write-spn` | credential-access | fixture-tested | live-mutating | - | delegated-acl-target | - | destructive | force_and_ack | manual | Set or clear servicePrincipalName for targeted Kerberoast |
