@@ -97,7 +97,7 @@ Published artifact smoke: PASS / FAIL / NOT YET PUBLISHED
 Also record the candidate hashes, `release-manifest.json`,
 `requirements-operator.txt`, and supported OS/Python matrix.
 
-Do not claim overall **10/10** or matrix row **10** without completed MANUAL
-rows above and a green AGENTS.md CI mirror for the release commit. Current
-vendor overall after the UX pass is **~9.0** (see
-[docs/VENDOR_SCORECARD.md](docs/VENDOR_SCORECARD.md)).
+Private cut `v0.10.1` records overall **10/10** with completed MANUAL evidence
+and published-artifact-smoke green (see
+[docs/VENDOR_SCORECARD.md](docs/VENDOR_SCORECARD.md)). Future cuts must refill
+[docs/RELEASE_EVIDENCE.md](docs/RELEASE_EVIDENCE.md) before claiming 10 again.

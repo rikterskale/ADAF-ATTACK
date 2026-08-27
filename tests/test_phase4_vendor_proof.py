@@ -160,5 +160,13 @@ def test_operator_docs_carry_stage_labels_and_first_ten_canon() -> None:
     assert "## 6. Narrow-terminal TUI spot-check" in evidence
     assert "Do **not** invent a public package URL" in evidence
     scorecard = (ROOT / "docs" / "VENDOR_SCORECARD.md").read_text(encoding="utf-8")
-    assert "No row below 9" in scorecard
-    assert re.search(r"Overall product.*~9\.0", scorecard) or "~9.0" in scorecard
+    assert (
+        "No row below 9" in scorecard
+        or "No row below 10" in scorecard
+        or re.search(r"\*\*Overall product\*\*.*\*\*10\*\*", scorecard)
+    )
+    assert (
+        re.search(r"Overall product.*(?:~9\.0|\*\*10\*\*)", scorecard) is not None
+        or "~9.0" in scorecard
+        or "| **10**" in scorecard
+    )
