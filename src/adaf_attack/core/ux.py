@@ -128,6 +128,87 @@ def risk_checklist(cap: Capability) -> dict[str, Any]:
     }
 
 
+def operator_approvals(cap: Capability) -> list[str]:
+    """Return the explicit approvals an operator must satisfy before running."""
+    safety = cap.safety
+    if safety is None:
+        return ["Review plan output before any live run"]
+    approvals: list[str] = []
+    if safety.requires_force:
+        approvals.append("--force")
+    if safety.requires_ack:
+        approvals.append("--i-understand (first use in workspace)")
+    if safety.approval.value == "scoped_token":
+        approvals.append("--approval-token with matching --engagement-id")
+    if not approvals and safety.network_side_effect:
+        approvals.append("Written authorization for the target scope")
+    return approvals
+
+
+def operator_rollback_contract(cap: Capability) -> dict[str, str]:
+    """Return rollback class and plain-language implication for operators."""
+    safety = cap.safety
+    rollback = safety.rollback.value if safety is not None else "manual"
+    if rollback == "automatic":
+        implication = (
+            "Mutations record pre-state in session cleanup.json; use `adaf-attack rollback`."
+        )
+    elif rollback == "manual":
+        implication = "Operator must verify and reverse residual effects on the authorized target."
+    else:
+        implication = "No automatic rollback; treat as read/observe or advisory."
+    return {"rollback": rollback, "rollback_implication": implication}
+
+
+def operator_capability_contract(cap: Capability) -> dict[str, Any]:
+    """Self-explaining contract shared by capability-help, explain, plan, and review."""
+    from adaf_attack.core.ux_extra import capability_prerequisites, format_stages_progress
+
+    spec = capability_option_spec(cap.id, cap.requires_force)
+    checklist = risk_checklist(cap)
+    prerequisites = capability_prerequisites(cap.id)
+    rollback = operator_rollback_contract(cap)
+    required_params = [option[3:] for option in spec.required if option.startswith("-P ")]
+    evidence_produced = ["session.json", "events.jsonl", "findings.json"]
+    if "graph" in (cap.tags or ()) or capability_phase(cap) in {
+        "discovery",
+        "enumeration",
+        "analysis",
+    }:
+        evidence_produced.append("graph.json")
+    if cap.fixture:
+        evidence_produced.append(str(cap.fixture))
+    if cap.safety and cap.safety.modifies_directory:
+        evidence_produced.append("cleanup.json (rollback pre-state)")
+    for downstream in prerequisites.get("produces_artifacts_for") or []:
+        label = f"evidence for {downstream}"
+        if label not in evidence_produced:
+            evidence_produced.append(label)
+    return {
+        "id": cap.id,
+        "risk": (
+            cap.safety.risk.value
+            if cap.safety
+            else ("destructive" if cap.destructive else "observe")
+        ),
+        "approvals": operator_approvals(cap),
+        "rollback": rollback["rollback"],
+        "rollback_implication": rollback["rollback_implication"],
+        "required_options": list(spec.required),
+        "optional_options": list(spec.optional),
+        "required_params": required_params,
+        "prerequisites": prerequisites,
+        "evidence_produced": evidence_produced,
+        "stages": format_stages_progress(cap)["stages"],
+        "preflight_checklist": checklist,
+        "copy_ready_command": build_ready_command(
+            cap.id,
+            force=cap.requires_force,
+            include_required_placeholders=True,
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # 13. Copy-ready command generation
 # ---------------------------------------------------------------------------
@@ -672,6 +753,9 @@ __all__ = [
     "format_stages_progress",
     "group_capabilities_by_phase",
     "guided_tour_payload",
+    "operator_approvals",
+    "operator_capability_contract",
+    "operator_rollback_contract",
     "phase_label",
     "risk_checklist",
     "session_findings_dashboard",

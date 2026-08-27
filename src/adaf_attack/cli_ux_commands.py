@@ -299,10 +299,13 @@ def register_ux_commands(
             )
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code)
+        from adaf_attack.core.ux import operator_capability_contract
+
         safety = safety_summary(cap)
         difficulty = capability_difficulty(cap)
         spec = capability_option_spec(cap.id, cap.requires_force)
         prerequisites = capability_prerequisites(cap.id)
+        contract = operator_capability_contract(cap)
         payload = {
             "ok": True,
             "capability": {
@@ -314,15 +317,28 @@ def register_ux_commands(
                 "difficulty": difficulty,
                 "required_options": list(spec.required),
                 "optional_options": list(spec.optional),
+                "required_params": list(contract["required_params"]),
                 "prerequisites": prerequisites,
-                "next_command": build_ready_command(cap.id),
+                "risk": contract["risk"],
+                "approvals": list(contract["approvals"]),
+                "rollback": contract["rollback"],
+                "rollback_implication": contract["rollback_implication"],
+                "evidence_produced": list(contract["evidence_produced"]),
+                "stages": list(contract["stages"]),
+                "next_command": contract["copy_ready_command"] or build_ready_command(cap.id),
+                "operator_contract": contract,
             },
         }
         human = Panel(
             f"{plain_description(cap)}\n\n"
             f"Safety: {safety['level']} — {safety['plain']}\n"
+            f"Risk: {contract['risk']}\n"
+            f"Approvals: {', '.join(contract['approvals']) or 'none (observe / review-only)'}\n"
+            f"Rollback: {contract['rollback_implication']}\n"
             f"Difficulty: {difficulty['level']} — {difficulty['reason']}\n"
             f"Required information: {', '.join(spec.required) or 'none'}\n"
+            f"Required -P: {', '.join(contract['required_params']) or 'none'}\n"
+            f"Evidence produced: {', '.join(contract['evidence_produced'])}\n"
             f"Best run after: {', '.join(prerequisites['best_run_after']) or 'none'}\n\n"
             "Next: review the plan with `adaf-attack plan <id> -d <domain> --dc-ip <dc>`.",
             title=f"Plain-language explanation: {cap.id}",

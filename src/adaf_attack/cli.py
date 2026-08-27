@@ -795,6 +795,8 @@ def _doctor_payload(
                     )
                 )
 
+    _ensure_doctor_repair_text(checks, profile=profile)
+
     blocking = next((check for check in checks if check["status"] == "error"), None)
     blocking_checks = [check["id"] for check in checks if check["status"] == "error"]
     advisory_checks = [check["id"] for check in checks if check["status"] == "warning"]
@@ -832,6 +834,38 @@ def _doctor_payload(
             "next_command": "adaf-attack guide",
         },
     }
+
+
+def _ensure_doctor_repair_text(checks: list[dict[str, Any]], *, profile: str) -> None:
+    """Guarantee every doctor check carries operator-facing repair/keep text."""
+    ok_repairs = {
+        "python": "Keep using Python 3.11-3.14 for this install.",
+        "virtual-environment": "Keep installing into an isolated venv for upgrades and uninstalls.",
+        "packaged-demo": "Packaged demo fixtures are present; rerun quickstart when you need a fresh offline session.",
+        "target-arguments": "Live-AD preflight arguments are present.",
+        "domain-dns": "DNS for the authorized domain resolved; continue with plan before any run.",
+    }
+    for check in checks:
+        remediation = check.get("remediation")
+        if isinstance(remediation, str) and remediation.strip():
+            continue
+        check_id = str(check.get("id") or "")
+        status = str(check.get("status") or "ok")
+        if status == "ok":
+            check["remediation"] = ok_repairs.get(
+                check_id,
+                f"No action needed; `{check_id}` is healthy for profile `{profile}`.",
+            )
+        elif status == "warning":
+            check["remediation"] = (
+                f"Optional gap for `{check_id}`. Install the matching extra or tool, "
+                f"then rerun `adaf-attack doctor --profile {profile} --explain`."
+            )
+        else:
+            check["remediation"] = (
+                f"Repair `{check_id}`, then rerun "
+                f"`adaf-attack doctor --profile {profile} --explain`."
+            )
 
 
 @app.command("doctor", rich_help_panel="Setup & diagnostics")
@@ -1303,12 +1337,11 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
     from adaf_attack.core.engagement_dashboard import capability_review
     from adaf_attack.core.novice import capability_difficulty
     from adaf_attack.core.ux import (
-        capability_prerequisites,
         format_next_actions_block,
-        format_stages_progress,
-        risk_checklist,
+        operator_capability_contract,
     )
 
+    contract = operator_capability_contract(cap)
     return {
         "id": cap.id,
         "category": cap.category,
@@ -1322,20 +1355,28 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
         "fixture": cap.fixture,
         "difficulty": capability_difficulty(cap),
         "tags": list(cap.tags),
-        "required_options": list(spec.required),
-        "optional_options": list(spec.optional),
+        "required_options": list(contract["required_options"]),
+        "optional_options": list(contract["optional_options"]),
+        "required_params": list(contract["required_params"]),
         "notes": spec.notes,
         "example": example,
-        "preflight_checklist": risk_checklist(cap),
-        "stages": format_stages_progress(cap)["stages"],
+        "risk": contract["risk"],
+        "approvals": list(contract["approvals"]),
+        "rollback": contract["rollback"],
+        "rollback_implication": contract["rollback_implication"],
+        "evidence_produced": list(contract["evidence_produced"]),
+        "preflight_checklist": contract["preflight_checklist"],
+        "stages": list(contract["stages"]),
         "next_step": (
             f"Run `adaf-attack plan {cap.id}"
             + (" --domain <domain> --dc-ip <host>" if "--domain" in spec.required else "")
             + "` before execution."
         ),
-        "prerequisites": capability_prerequisites(cap.id),
+        "prerequisites": contract["prerequisites"],
         "suggested_next": format_next_actions_block(cap)["suggestions"],
         "pre_execution_review": capability_review(cap),
+        "copy_ready_command": contract["copy_ready_command"],
+        "operator_contract": contract,
     }
 
 
@@ -1362,7 +1403,7 @@ def capability_help(
         from adaf_attack.core.ux import build_ready_command, risk_checklist
 
         checklist = risk_checklist(cap)
-        ready = build_ready_command(
+        ready = item.get("copy_ready_command") or build_ready_command(
             cap.id,
             domain="<domain>" if "--domain" in item["required_options"] else None,
             dc_ip="<dc-ip>" if "--dc-ip" in item["required_options"] else None,
@@ -1370,12 +1411,20 @@ def capability_help(
         )
         required = " ".join(item["required_options"]) or "(none)"
         optional = " ".join(item["optional_options"]) or "(none)"
+        params = ", ".join(item.get("required_params") or []) or "(none)"
+        approvals = ", ".join(item.get("approvals") or []) or "none (observe / review-only)"
         lines = [
             item["summary"],
-            f"Risk: {item['safety'].get('risk', 'unknown')}; "
-            f"{'--force required' if item.get('requires_force') else 'no force required'}",
+            f"Risk: {item.get('risk') or item['safety'].get('risk', 'unknown')}",
+            f"Approvals: {approvals}",
+            f"Rollback: {item.get('rollback_implication') or item.get('rollback')}",
             f"Required: {required}",
+            f"Required -P: {params}",
             f"Optional: {optional}",
+            "Evidence: "
+            + (", ".join(item.get("evidence_produced") or []) or "(session artifacts)"),
+            "Prerequisites: "
+            + (", ".join((item.get("prerequisites") or {}).get("best_run_after") or []) or "none"),
             "Checklist: "
             + ", ".join(entry["label"] for entry in checklist["items"] if entry["required"]),
             f"Copy-ready: {ready}",
@@ -1434,21 +1483,29 @@ def plan(
         )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
-    risk = "high" if cap.destructive else (cap.safety.risk.value if cap.safety else "moderate")
-    requires_force = cap.requires_force
-    from adaf_attack.core.ux import build_ready_command, format_stages_progress, risk_checklist
+    from adaf_attack.core.ux import (
+        build_ready_command,
+        format_stages_progress,
+        operator_capability_contract,
+        risk_checklist,
+    )
 
+    contract = operator_capability_contract(cap)
+    risk = contract["risk"]
+    requires_force = cap.requires_force
     checklist = risk_checklist(cap)
     stages = format_stages_progress(cap)
-    next_step = f"adaf-attack run {cap.id} --domain {domain} --dc-ip {dc_ip}" + (
-        " --force" if requires_force else ""
-    )
+    ready = build_ready_command(cap.id, domain=domain, dc_ip=dc_ip, force=requires_force)
+    next_step = ready
     risk_payload: dict[str, Any] = {
         "level": risk,
-        "network_contact": True,
-        "may_modify_target": cap.destructive,
+        "network_contact": bool(checklist.get("network_contact")),
+        "may_modify_target": bool(checklist.get("may_modify_target")),
         "force_provided": force,
         "requires_force": requires_force,
+        "approvals": list(contract["approvals"]),
+        "rollback": contract["rollback"],
+        "rollback_implication": contract["rollback_implication"],
     }
     payload: dict[str, Any] = {
         "ok": True,
@@ -1456,9 +1513,15 @@ def plan(
         "capability": _capability_payload(cap),
         "target": {"domain": domain, "dc_ip": dc_ip},
         "risk": risk_payload,
+        "approvals": list(contract["approvals"]),
+        "rollback": contract["rollback"],
+        "rollback_implication": contract["rollback_implication"],
+        "required_params": list(contract["required_params"]),
+        "evidence_produced": list(contract["evidence_produced"]),
         "preflight_checklist": checklist,
         "stages": stages,
         "next_step": next_step,
+        "suggested_command": ready,
     }
     from adaf_attack.core.engagement_dashboard import capability_review
 
@@ -1476,9 +1539,7 @@ def plan(
                 dc_ip=dc_ip,
                 risk=risk_payload,
                 checklist=checklist,
-                ready_command=build_ready_command(
-                    cap.id, domain=domain, dc_ip=dc_ip, force=requires_force
-                ),
+                ready_command=ready,
                 prerequisites=capability_prerequisites(cap.id),
             ),
             encoding="utf-8",
@@ -1488,7 +1549,11 @@ def plan(
         "\n".join(
             [
                 f"Target: {domain} @ {dc_ip}",
-                f"Risk: {risk}; {'may modify target state' if risk != 'observe' else 'observation-only'}",
+                f"Risk: {risk}; {'may modify target state' if checklist.get('may_modify_target') else 'observation-oriented'}",
+                f"Approvals: {', '.join(contract['approvals']) or 'none (observe / review-only)'}",
+                f"Rollback: {contract['rollback_implication']}",
+                f"Required -P: {', '.join(contract['required_params']) or '(none)'}",
+                f"Evidence: {', '.join(contract['evidence_produced'])}",
                 f"--force: {'provided' if force else 'not provided'}",
                 f"Opsec: {checklist['opsec_hint']}",
                 "Preflight: "
@@ -1496,7 +1561,7 @@ def plan(
                 "Prerequisites: "
                 + payload["pre_execution_review"]["feasibility"]["prerequisites"]["status"],
                 "Stages: " + " -> ".join(item["id"] for item in stages["stages"]),
-                f"Copy-ready: {build_ready_command(cap.id, domain=domain, dc_ip=dc_ip, force=requires_force)}",
+                f"Copy-ready: {ready}",
                 f"Next step: {next_step}",
             ]
         ),
@@ -2409,18 +2474,28 @@ def run_capability(
     if not _json_mode(ctx):
         if cap is not None:
             from adaf_attack.core.novice import capability_difficulty
-            from adaf_attack.core.ux import format_stages_progress, risk_checklist
+            from adaf_attack.core.ux import (
+                format_stages_progress,
+                operator_capability_contract,
+                risk_checklist,
+            )
 
             checklist = risk_checklist(cap)
             stages = format_stages_progress(cap)
+            contract = operator_capability_contract(cap)
             required_items = [item["label"] for item in checklist["items"] if item["required"]]
             _console(ctx).print(
                 Panel(
                     "\n".join(
                         [
                             f"Difficulty: {capability_difficulty(cap)['level']}",
+                            f"Risk: {contract['risk']}",
+                            f"Approvals: {', '.join(contract['approvals']) or 'none'}",
+                            f"Rollback: {contract['rollback_implication']}",
+                            f"Required -P: {', '.join(contract['required_params']) or '(none)'}",
                             "Preflight: " + ", ".join(required_items),
                             "Stages: " + " -> ".join(item["id"] for item in stages["stages"]),
+                            f"Evidence: {', '.join(contract['evidence_produced'])}",
                         ]
                     ),
                     title="Preflight checklist",

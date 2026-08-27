@@ -76,12 +76,15 @@ def capability_review(
     session: Path | None = None,
 ) -> dict[str, Any]:
     """Common pre-execution review contract, including success and telemetry."""
+    from adaf_attack.core.ux import operator_capability_contract
+
     phase = capability_phase(cap)
     destructive = bool(cap.safety and cap.safety.modifies_directory)
     requires_force = cap.requires_force
     feasibility = evaluate_prerequisites(cap.id, session=session)
     prereqs = capability_prerequisites(cap.id)
     prereqs["best_run_after"] = feasibility["required"]
+    contract = operator_capability_contract(cap)
     return {
         "id": cap.id,
         "summary": cap.summary,
@@ -89,12 +92,17 @@ def capability_review(
         "phase": phase,
         "risk": {
             "level": "R3" if destructive else ("R2" if requires_force else "R1"),
+            "class": contract["risk"],
             "destructive": destructive,
             "safety": cap.safety.as_dict() if cap.safety else {},
             "noise": "high"
             if destructive
             else ("low" if phase in {"analysis", "export"} else "medium"),
         },
+        "approvals": list(contract["approvals"]),
+        "required_params": list(contract["required_params"]),
+        "evidence_produced": list(contract["evidence_produced"]),
+        "stages": list(contract["stages"]),
         "operational_modes": list(MODES) if requires_force else ["OBSERVE", "VALIDATE"],
         "prerequisites": prereqs,
         "feasibility": {
@@ -119,6 +127,8 @@ def capability_review(
         ],
         "rollback": {
             "required": destructive,
+            "kind": contract["rollback"],
+            "implication": contract["rollback_implication"],
             "readiness": "recorded before execution" if destructive else "not applicable",
             "verification": "required after cleanup" if destructive else "not applicable",
         },
