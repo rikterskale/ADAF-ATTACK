@@ -79,6 +79,24 @@ def _value_is_secret(value: str) -> bool:
     return any(pattern.search(value) for pattern in _SECRET_VALUE_PATTERNS)
 
 
+def unredacted_secret_hits(text: str, *, limit: int = 5) -> list[str]:
+    """Return sample high-confidence secret shapes still present in text.
+
+    Used after redaction to fail closed on support bundles / client packages
+    instead of shipping a leak as a silent success.
+    """
+    hits: list[str] = []
+    for pattern in _SECRET_VALUE_PATTERNS:
+        for match in pattern.finditer(text):
+            snippet = match.group(0)
+            if snippet == REDACTED or snippet in hits:
+                continue
+            hits.append(snippet)
+            if len(hits) >= limit:
+                return hits
+    return hits
+
+
 def redact(obj: Any, include_secrets: bool = False, profile: str = "operator") -> Any:
     """Recursively redact sensitive values unless include_secrets is True."""
     if include_secrets:

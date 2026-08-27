@@ -48,6 +48,21 @@ closeout (CLI and TUI share the same journey). `tour` and `home` use the
 default workspace only; for a custom workspace or session, call `guide` with
 those flags.
 
+Journey stage labels match CLI and TUI character-for-character:
+
+| Stage id | Label |
+|---|---|
+| `install-blocked` | Install readiness |
+| `first-success` | Safe offline first success |
+| `orient` | Authorize scope |
+| `discover` | Baseline discovery |
+| `operate` | Finding-driven operations |
+| `deliver` | Reporting and packaging |
+| `closeout` | Engagement closeout |
+| `complete` | Complete |
+
+Status language across surfaces: Ready / Blocked / Failed / Done.
+
 If a managed workstation blocks the default application directories, repair
 missing directories and retry:
 

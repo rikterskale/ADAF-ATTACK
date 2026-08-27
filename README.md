@@ -43,6 +43,22 @@ Expect every command to exit `0`, doctor `"ready": true`, and one copy-ready
 `--session`). It is the single authoritative next step from install through
 closeout. CLI and TUI share the same journey snapshot.
 
+Journey stage labels (character-for-character with `guide` / TUI Home):
+
+| Stage id | Label |
+|---|---|
+| `install-blocked` | Install readiness |
+| `first-success` | Safe offline first success |
+| `orient` | Authorize scope |
+| `discover` | Baseline discovery |
+| `operate` | Finding-driven operations |
+| `deliver` | Reporting and packaging |
+| `closeout` | Engagement closeout |
+| `complete` | Complete |
+
+Surfaces use Ready / Blocked / Failed / Done. Empty findings dashboards name the
+same next command `guide` would print.
+
 If any step fails: `adaf-attack --format json doctor --profile user-readiness --explain`,
 then `adaf-attack --format json support-bundle --output adaf-support-bundle.json`.
 See [Troubleshooting](docs/TROUBLESHOOTING.md). Windows and Kali operators should

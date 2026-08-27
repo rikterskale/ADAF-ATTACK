@@ -1,6 +1,6 @@
 """Redaction tests."""
 
-from adaf_attack.core.redaction import redact
+from adaf_attack.core.redaction import redact, unredacted_secret_hits
 
 
 def test_redact_sensitive_keys() -> None:
@@ -56,3 +56,9 @@ def test_value_redaction_catches_cloud_tokens() -> None:
     redacted = redact(data)
     assert redacted["env"] == "[REDACTED]"
     assert redacted["vcs"] == "[REDACTED]"
+
+
+def test_unredacted_secret_hits_detects_leaks() -> None:
+    hits = unredacted_secret_hits("note password=hunter2 end")
+    assert hits
+    assert unredacted_secret_hits("clean support bundle") == []
