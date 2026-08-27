@@ -3,41 +3,50 @@
 Judged like a commercial vendor selling to a mature red / purple / CISO buyer.
 Scores are for the **operator product**, not line coverage alone.
 
-## Before vs after
+**Scoring rule:** commands and behavioral tests win over commentary. A row is
+**10** only when a new operator can complete it from the published command,
+CLI/TUI/docs agree, a behavioral test locks the contract, and the failure path
+is a product. Do not inflate a **9** to a **10** without stranger MANUAL proof.
 
-| Dimension | Phase 0 (before) | After Phase 4 | Notes |
+Audit baseline (Phase 0, this pass): overall **~7.8** — see
+`../tmp/adaf-ux-pass/review/00_gap_scorecard.md` when working from the UX scratch
+tree. In-repo prior claim of ~9.3 was aspirational and is superseded below.
+
+## Before vs after (this UX pass)
+
+| Dimension | Phase 0 audit | After Phase 1–2 | Notes |
 |---|---:|---:|---|
-| Zero-guess journey (`guide` omniscience) | 6.5 | **9.5** | Shared `core.journey.snapshot`; risk/approvals/rollback/recovery/criteria |
-| First ten minutes deterministic | 8 | **9.5** | Doctor `ready` contract; `./quickstart` canon; live offline sequence |
-| Failures as products | 5.5 | **9** | Expanded ERROR_CATALOG; guide recovery on errors; Windows installer codes |
-| CLI / TUI / docs one product | 7 | **9.5** | what-next / workflow next / TUI share suggested_command |
-| Vendor packaging / release UX | 7 | **9** | RELEASE.md manager checklist; RELEASE_EVIDENCE; install contracts |
-| Safety as product | 8 | **9.5** | Gates unchanged; redaction stronger; no competing onboarding |
-| Engineering bar | 8 | **9** | Contracts extended; behavioral tests added; 95% gate retained |
-| **Overall product** | **~7.6** | **~9.3** | Remaining below 10 are MANUAL env proofs only |
+| Zero-guess journey (`guide` omniscience) | 8.5 | **9.0** | TUI shares doctor snapshot; no silent authorize; journey follows authorized workflows without demo |
+| First ten minutes deterministic | 6.5 | **9.0** | Single canon + install-contract fence; stranger MANUAL still open |
+| Failures as products | 7.0 | **9.0** | Real approval messages map to `APPROVAL_TOKEN_*`; Kali codes catalogued; Windows `recovery_command` |
+| CLI / TUI / docs one product | 8.0 | **9.0** | Stage labels in README/USER_READINESS; risk uppercase; tour/home default-workspace documented |
+| Vendor packaging / release UX | 8.0 | **8.5** | Contracts + installer JSON parity; published-asset / air-gap transfer remain MANUAL |
+| Safety as product | 9.0 | **9.5** | Gates unchanged; support-bundle fail-closed on secret hits; fixtures stay redacted |
+| Engineering bar | 9.0 | **9.0** | Focused suites green; full AGENTS.md CI mirror deferred to Phase 4 |
+| **Overall product** | **~7.8** | **~9.0** | Not 10: MANUAL stranger proofs + published-artifact smoke |
 
-## UX_ACCEPTANCE_MATRIX row scores (after)
+## UX_ACCEPTANCE_MATRIX row scores (after Phase 1–2)
 
-| # | Enhancement | Before | After | Evidence |
+| # | Enhancement | Phase 0 audit | After Phase 1–2 | Evidence |
 |---:|---|---:|---:|---|
-| 1 | First-run onboarding / offline demo | 8 | **9** | quickstart → guide; README / novice guides |
-| 2 | Doctor / actionable preflight | 8 | **9.5** | repair text every check; top-level `ready` |
-| 3 | Kill-chain capability discovery | 9 | **9** | unchanged solid surface |
-| 4 | Plain-language explain / safety | 8 | **9.5** | operator_capability_contract on explain/help |
-| 5 | Review-first plans / risk previews | 8 | **9.5** | plan/review approvals/rollback/evidence/-P |
-| 6 | Shell-safe copy-ready commands | 6 | **9.5** | journey + plan quote paths/values |
-| 7 | Prerequisite / dependency nav | 8 | **9** | contract prerequisites + extras errors |
-| 8 | Structured progress stages | 7 | **9** | advance_stage_from_log CLI/TUI |
-| 9 | Evidence-backed next actions | 5 | **9.5** | guide/what-next/workflow next parity proven |
-| 10 | Session findings dashboard | 8 | **9** | unchanged + journey handoff |
-| 11 | Unified search | 8 | **9** | compact layout retained |
-| 12 | Session comparison | 8 | **9** | unchanged |
-| 13 | Target / OPSEC profiles | 8 | **9** | unchanged |
-| 14 | Favorites / recents / completions | 8 | **9** | aliases no longer compete with guide |
-| 15 | Timeline / rollback / redacted packaging | 8 | **9.5** | summary + duration + password redaction |
-| 16 | Unified guided journey | 6 | **9.5** | spine unified + enriched + contracted |
+| 1 | First-run onboarding / offline demo | 8.0 | **9.0** | Canon quickstart → guide; contract-tested fences |
+| 2 | Doctor / actionable preflight | 8.5 | **9.5** | Repair text; user-readiness blocks unwritable paths; version-skew check |
+| 3 | Kill-chain capability discovery | 9.0 | **9.0** | Unchanged solid surface |
+| 4 | Plain-language explain / safety | 9.0 | **9.5** | `OBSERVE`… risk on journey + operator contract |
+| 5 | Review-first plans / risk previews | 9.0 | **9.5** | plan/review approvals/rollback/evidence/-P |
+| 6 | Shell-safe copy-ready commands | 8.5 | **9.0** | Windows `quote_path` forward-slash normalization |
+| 7 | Prerequisite / dependency nav | 8.5 | **9.0** | Contract prerequisites + extras errors |
+| 8 | Structured progress stages | 8.5 | **9.0** | `STAGE_LABELS` mirrored in operator docs |
+| 9 | Evidence-backed next actions | 8.5 | **9.5** | `recommendations[0]` ≡ guide `suggested_command` |
+| 10 | Session findings dashboard | 9.0 | **9.0** | Unchanged + journey handoff |
+| 11 | Unified search | 9.0 | **9.0** | Compact layout retained |
+| 12 | Session comparison | 9.0 | **9.0** | Unchanged |
+| 13 | Target / OPSEC profiles | 9.0 | **9.0** | Unchanged |
+| 14 | Favorites / recents / completions | 9.0 | **9.0** | Aliases hand off to guide |
+| 15 | Timeline / rollback / redacted packaging | 8.5 | **9.5** | `SECRET_IN_OUTPUT` fail-closed on support bundle |
+| 16 | Unified guided journey | 8.5 | **9.5** | Spine unified; TUI doctor parity; behavioral locks |
 
-**No row below 9.**
+**No row below 9.** Rows are not **10** until stranger MANUAL evidence + full CI mirror for this branch.
 
 ## Remaining [MANUAL] items
 
@@ -48,6 +57,9 @@ From [RELEASE_READINESS.md](RELEASE_READINESS.md) / [RELEASE_EVIDENCE.md](RELEAS
 3. Organization air-gap *transfer* / proxy / custom CA policy reproduction.
 4. Release-manager content review of CHANGELOG / RELEASE / KNOWN_LIMITATIONS for the cut tag.
 5. Narrow-terminal TUI manual spot-check at release time (compact layout covered in tests; human width check remains MANUAL).
+
+Scratch copies of the fill-in pack live under the UX audit tree
+(`review/manual_evidence/`) when using the default scratch path outside the repo.
 
 ## Local verification (Phase 4)
 
@@ -63,7 +75,8 @@ python scripts/check_install_contracts.py
 python scripts/check_release_readiness.py --repo-root .
 ```
 
-Proven this session: coverage **96.29%** (branch), install contracts pass, release-readiness automated pillars pass.
+Phase 1–2 of this pass: focused behavioral suites + install contracts green.
+Full coverage gate and CI mirror: record in Phase 4 `logs/ci_mirror.txt`.
 
 ## Vendor SE first-ten-minutes script
 
