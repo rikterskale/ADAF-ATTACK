@@ -62,5 +62,15 @@ Install used `--no-index --find-links`: YES / NO
 | CHANGELOG / RELEASE.md / KNOWN_LIMITATIONS reviewed | PASS / FAIL |
 | Rollback/recovery location for exact assets recorded | PASS / FAIL |
 | requirements-operator.txt / wheelhouse lock attached | PASS / FAIL |
+| Version triple matches (pyproject / `__version__` / CHANGELOG) | PASS / FAIL |
+| `guide` suggested_command works after quickstart | PASS / FAIL |
+
+## 5. Security disclosure path check
+
+| Check | Result |
+|---|---|
+| SECURITY.md private advisory link still valid | PASS / FAIL |
+| No secrets in demo fixtures / release notes | PASS / FAIL |
 
 Signer / attestor: __________
+Date signed (UTC): __________

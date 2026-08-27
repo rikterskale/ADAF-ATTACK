@@ -134,5 +134,9 @@ release record with artifact hashes.
 
 ## Remaining automation gaps
 
-1. Reproducible validation of organization-specific proxy, CA, endpoint, and
-   air-gap transfer policies.
+1. Organization-specific proxy, CA, endpoint, and air-gap *transfer* policies
+   remain **[MANUAL]** (see [RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md) §3).
+   The wheelhouse *build + offline install recipe* is documented and
+   contract-tested; CI cannot reproduce each customer's media controls.
+2. Published-artifact proof still requires a private release asset plus the
+   scheduled/manual workflow (**[MANUAL]** until first successful publish).
