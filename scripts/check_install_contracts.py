@@ -452,12 +452,14 @@ def _check_release_evidence_template() -> None:
         "## 3. Air-gapped wheelhouse",
         "## 4. Readiness summary attachment",
         "## 5. Security disclosure path check",
+        "## 6. Narrow-terminal TUI spot-check",
     ):
         _require(heading in text, f"RELEASE_EVIDENCE.md missing section {heading!r}")
     for token in (
         "guide --workspace ./quickstart",
         "doctor --profile user-readiness",
         "adaf-attack --format json paths",
+        "Do **not** invent a public package URL",
         "Signer / attestor",
     ):
         _require(token in text, f"RELEASE_EVIDENCE.md missing required token {token!r}")

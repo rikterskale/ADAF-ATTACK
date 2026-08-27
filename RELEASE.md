@@ -89,8 +89,15 @@ Published artifact smoke: PASS / FAIL / NOT YET PUBLISHED
 [ ] Published-artifact smoke recorded once the private release asset exists
 [ ] Air-gapped wheelhouse transfer reproduced with org controls
 [ ] CHANGELOG / RELEASE / KNOWN_LIMITATIONS content reviewed for honesty
+[ ] Narrow-terminal TUI spot-check (RELEASE_EVIDENCE §6)
+[ ] SECURITY.md advisory link still valid
 [ ] Rollback/recovery location for the exact release assets recorded
 ```
 
 Also record the candidate hashes, `release-manifest.json`,
 `requirements-operator.txt`, and supported OS/Python matrix.
+
+Do not claim overall **10/10** or matrix row **10** without completed MANUAL
+rows above and a green AGENTS.md CI mirror for the release commit. Current
+vendor overall after the UX pass is **~9.0** (see
+[docs/VENDOR_SCORECARD.md](docs/VENDOR_SCORECARD.md)).

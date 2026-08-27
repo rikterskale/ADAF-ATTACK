@@ -26,6 +26,9 @@ Only the latest minor release line receives security fixes. See
 
 Please **do not** open a public GitHub issue for security reports.
 
+Release managers: before each private cut, confirm this advisory link still
+opens (see [docs/RELEASE_EVIDENCE.md](docs/RELEASE_EVIDENCE.md) §5).
+
 Report privately through the repository's
 [GitHub private vulnerability reporting channel](https://github.com/rikterskale/ADAF-ATTACK/security/advisories/new).
 If repository access is unavailable, use the private security contact named in
