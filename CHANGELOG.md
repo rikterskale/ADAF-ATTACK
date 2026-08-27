@@ -18,6 +18,11 @@ declared in `pyproject.toml`.
 - Doctor profiles now attach repair/keep text to every check.
 - Timeline summary with status counts, duration/correlation coverage, and
   stronger free-text password redaction.
+- Progress stages advance from runner log lines (CLI spinner and TUI).
+- TUI parameter form preserves values across refresh and warns when more than
+  eight required extras need CLI `-P` values.
+- Scoped-token capabilities require an explicit review-checklist approval item.
+- Session audit events stamp incremental `duration_ms` when callers omit it.
 - Install/guide error catalog codes for advance-unsafe, approval tokens,
   Python/venv/PATH, execution policy, proxy TLS, missing extras, and
   secret-in-output mishaps.
