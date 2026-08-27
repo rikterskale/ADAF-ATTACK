@@ -48,7 +48,7 @@ function Invoke-AdafRun {
       Wrapper for `adaf-attack run`.
 
     .EXAMPLE
-      Invoke-AdafRun -Capability ldap-enum -Domain corp.local -DcIp 10.0.0.10 -Username alice -Password 'P@ss'
+      Invoke-AdafRun -Capability ldap-enum -Domain <authorized-domain> -DcIp <authorized-dc> -Username <authorized-user>
     #>
     [CmdletBinding()]
     param(

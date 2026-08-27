@@ -66,7 +66,8 @@ Import-Module .\scripts\AdafAttack.psm1
 
 Invoke-AdafDoctor
 Invoke-AdafList
-Invoke-AdafRun -Capability ldap-enum -Domain corp.local -DcIp 10.0.0.10 -Username alice -Password 'P@ssw0rd'
+# Supply -Password only from an approved secret source; never put secrets in shell history or docs.
+Invoke-AdafRun -Capability ldap-enum -Domain <authorized-domain> -DcIp <authorized-dc> -Username <authorized-user>
 Get-AdafSessions
 ```
 
@@ -94,10 +95,10 @@ Classic NT services need extra packaging. For recurring internal jobs, use a **S
 ```powershell
 .\scripts\Register-AdafAttackTask.ps1 `
   -Capability ldap-enum `
-  -Domain corp.local `
-  -DcIp 10.0.0.10 `
-  -Username svc_adaf `
-  -PasswordFile C:\secure\svc_adaf.pass `
+  -Domain <authorized-domain> `
+  -DcIp <authorized-dc> `
+  -Username <authorized-service-account> `
+  -PasswordFile C:\secure\authorized.pass `
   -IntervalMinutes 1440
 ```
 

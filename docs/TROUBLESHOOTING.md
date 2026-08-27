@@ -290,8 +290,8 @@ $env:ADAF_ATTACK_WORKSPACE = "D:\adaf-workspaces"
 adaf-attack --format json doctor --explain
 ```
 
-If the directories are simply missing, the non-destructive repair command can
-create them for you:
+If the directories are missing, the non-destructive repair command can create
+them for you:
 
 ```bash
 adaf-attack paths --repair
