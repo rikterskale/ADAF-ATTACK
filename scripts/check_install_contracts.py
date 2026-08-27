@@ -352,9 +352,65 @@ def _check_docs() -> None:
         "docs/KNOWN_LIMITATIONS.md",
         "docs/USER_READINESS.md",
         "docs/SUPPORTED_PLATFORMS.md",
+        "docs/RELEASE_EVIDENCE.md",
+        "SECURITY.md",
         "CHANGELOG.md",
     ):
         _require(link in readme, f"README.md: missing prominent link to {link}")
+    for phrase in (
+        "When lost",
+        "adaf-attack guide",
+        "adaf-attack paths",
+        "support-bundle",
+        "Who this is for",
+        "Not on PyPI",
+    ):
+        _require(phrase in readme, f"README.md: missing operator spine phrase {phrase!r}")
+
+
+def _check_release_evidence_template() -> None:
+    """Release managers need a complete MANUAL evidence pack, not a stub."""
+    path = ROOT / "docs" / "RELEASE_EVIDENCE.md"
+    text = path.read_text(encoding="utf-8")
+    for heading in (
+        "## 1. First-ten-minutes (new operator)",
+        "## 2. Published-artifact smoke",
+        "## 3. Air-gapped wheelhouse",
+        "## 4. Readiness summary attachment",
+        "## 5. Security disclosure path check",
+    ):
+        _require(heading in text, f"RELEASE_EVIDENCE.md missing section {heading!r}")
+    for token in (
+        "guide --workspace ./quickstart",
+        "doctor --profile user-readiness",
+        "Signer / attestor",
+    ):
+        _require(token in text, f"RELEASE_EVIDENCE.md missing required token {token!r}")
+    release_md = (ROOT / "RELEASE.md").read_text(encoding="utf-8")
+    _require(
+        "Release manager checklist" in release_md,
+        "RELEASE.md must include a non-author release manager checklist",
+    )
+    _require(
+        "docs/RELEASE_EVIDENCE.md" in release_md,
+        "RELEASE.md must link the MANUAL evidence pack",
+    )
+
+
+def _check_windows_installer_error_codes() -> None:
+    """Windows installer JSON failures must map to stable operator codes."""
+    text = (ROOT / "scripts" / "Install-AdafAttack.ps1").read_text(encoding="utf-8")
+    for token in (
+        "function Resolve-AdafInstallerError",
+        "function Fail-Adaf",
+        "PYTHON_UNSUPPORTED",
+        "PATH_NOT_FOUND",
+        "EXECUTION_POLICY_BLOCKED",
+        "PROXY_TLS_FAILED",
+        "INSTALLER_OWNERSHIP",
+        "INSTALLER_FAILURE",
+    ):
+        _require(token in text, f"Install-AdafAttack.ps1 missing {token!r}")
 
 
 def _check_metadata_and_versions() -> None:
@@ -527,6 +583,8 @@ def main() -> int:
         _check_published_workflow,
         _check_markdown_links,
         _check_docs,
+        _check_release_evidence_template,
+        _check_windows_installer_error_codes,
         _check_metadata_and_versions,
         _check_changelog_version,
         _check_front_matter,

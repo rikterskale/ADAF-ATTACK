@@ -28,6 +28,9 @@ declared in `pyproject.toml`.
   secret-in-output mishaps.
 - `docs/RELEASE_EVIDENCE.md` fill-in templates for MANUAL release checks.
 - GitHub issue templates for bugs and operator UX gaps.
+- Operator-first README orientation table, expanded RELEASE.md checklist for
+  non-author release managers, and Windows installer JSON codes for common
+  setup failures.
 
 ### Changed
 
