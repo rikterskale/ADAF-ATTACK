@@ -35,6 +35,16 @@ Row 16 acceptance extras (Phase 1 spine):
 - Path-bearing suggested commands are shell-quoted.
 - Failures include a `recovery_command` pointing at `adaf-attack guide`.
 
+Phase 2 self-explain extras:
+
+- Every doctor check includes remediation/repair text (keep-healthy for `ok`).
+- `capability-help` / `explain` / `plan` / `review` expose the shared operator
+  contract: risk, approvals, rollback implication, required `-P`, prerequisites,
+  evidence produced, and stages.
+- TUI help, review gate, readiness panel, and parameter form surface the same
+  contract language before Run.
+- Timeline events include status, duration, correlation, and a redacted summary.
+
 ## Release acceptance
 
 Before a release is marked UX-complete:

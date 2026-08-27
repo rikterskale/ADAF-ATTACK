@@ -1,0 +1,130 @@
+"""Behavioral coverage for Phase 2 self-explaining operator surfaces."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from typer.testing import CliRunner
+
+import adaf_attack.capabilities  # noqa: F401  # register capabilities
+from adaf_attack.cli import _doctor_payload, app
+from adaf_attack.core.registry import capability_registry
+from adaf_attack.core.standout_ux import session_timeline
+from adaf_attack.core.ux import operator_capability_contract
+from adaf_attack.demo import materialize_demo_session
+
+runner = CliRunner()
+
+
+def _json(result: Any) -> dict[str, Any]:
+    assert result.exit_code == 0, result.output
+    return json.loads(result.output)
+
+
+def test_doctor_every_check_has_repair_text() -> None:
+    for profile in ("offline", "user-readiness", "operator", "certipy"):
+        payload = _doctor_payload(profile)
+        assert payload["checks"]
+        for check in payload["checks"]:
+            assert isinstance(check.get("remediation"), str) and check["remediation"].strip(), check
+
+
+def test_operator_capability_contract_covers_help_fields() -> None:
+    cap = capability_registry.get("ldap-enum")
+    assert cap is not None
+    contract = operator_capability_contract(cap)
+    assert contract["risk"]
+    assert "approvals" in contract
+    assert contract["rollback"]
+    assert contract["rollback_implication"]
+    assert contract["evidence_produced"]
+    assert contract["stages"]
+    assert "session.json" in contract["evidence_produced"]
+
+
+def test_capability_help_and_explain_include_operator_contract() -> None:
+    help_payload = _json(runner.invoke(app, ["--format", "json", "capability-help", "ldap-enum"]))
+    capability = help_payload["capability"]
+    assert capability["risk"]
+    assert "approvals" in capability
+    assert capability["rollback_implication"]
+    assert capability["required_params"] is not None
+    assert capability["evidence_produced"]
+    assert capability["copy_ready_command"].startswith("adaf-attack run ldap-enum")
+
+    explain = _json(runner.invoke(app, ["--format", "json", "explain", "ldap-enum"]))
+    explained = explain["capability"]
+    assert explained["risk"] == capability["risk"]
+    assert explained["rollback_implication"]
+    assert explained["evidence_produced"]
+
+
+def test_plan_and_review_share_quoted_ready_command() -> None:
+    plan = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "plan",
+                "ldap-enum",
+                "-d",
+                "corp.example",
+                "--dc-ip",
+                "10.0.0.10",
+            ],
+        )
+    )
+    assert plan["suggested_command"] == plan["next_step"]
+    assert "corp.example" in plan["next_step"]
+    assert plan["approvals"] is not None
+    assert plan["rollback_implication"]
+    assert plan["evidence_produced"]
+    assert plan["required_params"] is not None
+
+    review = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "review",
+                "ldap-enum",
+                "-d",
+                "corp.example",
+                "--dc-ip",
+                "10.0.0.10",
+            ],
+        )
+    )
+    assert review["suggested_command"] == plan["suggested_command"]
+
+
+def test_timeline_summary_is_redacted_and_structured(tmp_path: Path) -> None:
+    session = tmp_path / "demo-session"
+    materialize_demo_session(session)
+    events = session / "events.jsonl"
+    events.write_text(
+        json.dumps(
+            {
+                "ts": "2026-01-01T00:00:00Z",
+                "type": "run.complete",
+                "capability": "ldap-enum",
+                "status": "ok",
+                "duration_ms": 12,
+                "correlation_id": "corr-1",
+                "message": "password=SuperSecret123!",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    payload = session_timeline(session, limit=10)
+    assert payload["ok"] is True
+    assert payload["summary"]["secrets_redacted"] is True
+    assert payload["summary"]["with_duration"] >= 1
+    assert payload["summary"]["with_correlation"] >= 1
+    assert payload["events"][0]["status"] == "ok"
+    assert "SuperSecret123!" not in json.dumps(payload)

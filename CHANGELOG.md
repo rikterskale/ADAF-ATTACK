@@ -12,6 +12,12 @@ declared in `pyproject.toml`.
   closeout), shared by CLI and TUI via `core.journey`.
 - Journey actions now include risk, approvals, rollback implication,
   recovery command, and stage entry/exit criteria.
+- Shared operator capability contract (risk, approvals, rollback, required
+  `-P`, prerequisites, evidence produced, stages) on capability-help,
+  explain, plan, review, and TUI help/review panels.
+- Doctor profiles now attach repair/keep text to every check.
+- Timeline summary with status counts, duration/correlation coverage, and
+  stronger free-text password redaction.
 - Install/guide error catalog codes for advance-unsafe, approval tokens,
   Python/venv/PATH, execution policy, proxy TLS, missing extras, and
   secret-in-output mishaps.
