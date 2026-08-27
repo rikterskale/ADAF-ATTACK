@@ -7,6 +7,11 @@ private release record with wheel hashes and `release-manifest.json`.
 Do **not** invent a public package URL. Operators install from the private
 GitHub release channel or an approved internal index / wheelhouse only.
 
+For the `v0.10.1` private cut, a filled pack is retained outside the git tree
+with the release rehearsal artifacts (scratch
+`evidence/RELEASE_EVIDENCE_FILLED.md`). Published smoke:
+https://github.com/rikterskale/ADAF-ATTACK/actions/runs/33112303284
+
 ```text
 Version: __________
 Release manager: __________
