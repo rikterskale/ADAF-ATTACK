@@ -507,7 +507,7 @@ def _sam_from_node_id(node_id: str | None) -> str:
 _SAFE_COMMAND_VALUE = re.compile(r"^[A-Za-z0-9_./:@%+=,-]+\$?$")
 
 
-def _shell_quote(value: str) -> str:
+def shell_quote(value: str) -> str:
     """Quote a value unless it is a safe shell token.
 
     Computer accounts conventionally end in ``$``. A trailing dollar has no
@@ -517,6 +517,10 @@ def _shell_quote(value: str) -> str:
     if _SAFE_COMMAND_VALUE.fullmatch(value):
         return value
     return shlex.quote(value)
+
+
+# Backward-compatible alias for in-module call sites.
+_shell_quote = shell_quote
 
 
 def _approval_required(template: dict[str, Any]) -> bool:
@@ -707,4 +711,5 @@ __all__ = [
     "SECONDARY_COMMAND_TEMPLATES",
     "build_exploit_commands",
     "emit_ranked_paths",
+    "shell_quote",
 ]

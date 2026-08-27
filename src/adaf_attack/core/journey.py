@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from adaf_attack.core.command_templates import shell_quote
 from adaf_attack.core.paths import default_workspace_dir
 from adaf_attack.core.user_config import load_user_config
 from adaf_attack.core.workflow_engine import (
@@ -43,11 +44,66 @@ STAGE_PROGRESS: dict[str, float] = {
     "complete": 100.0,
 }
 
+# Entry/exit criteria for each journey stage (operator-facing, offline-safe).
+STAGE_CRITERIA: dict[str, dict[str, list[str]]] = {
+    "install-blocked": {
+        "entry": ["doctor profile user-readiness reports a blocking error"],
+        "exit": ["doctor --profile user-readiness reports ready with no blocking checks"],
+    },
+    "first-success": {
+        "entry": ["local install is ready", "no demo session under the workspace yet"],
+        "exit": ["quickstart or demo created a session with session.json"],
+    },
+    "orient": {
+        "entry": ["demo or engagement session exists", "workflow scope is not yet authorized"],
+        "exit": ["workflow completed authorize-scope / scope-authorized"],
+    },
+    "discover": {
+        "entry": ["scope authorized", "findings not yet adapted into the workflow"],
+        "exit": ["discovery-complete recorded or session findings imported"],
+    },
+    "operate": {
+        "entry": ["findings available in the guided workflow"],
+        "exit": ["required validation/decision/response actions completed or deferred"],
+    },
+    "deliver": {
+        "entry": ["reporting action is the top workflow recommendation"],
+        "exit": ["engagement report generated and optional client package built"],
+    },
+    "closeout": {
+        "entry": ["no required workflow actions remain"],
+        "exit": ["workflow closed; cleanup-status reviewed"],
+    },
+    "complete": {
+        "entry": ["workflow status is complete or archived"],
+        "exit": ["evidence retained; next engagement uses a fresh workspace or session"],
+    },
+}
+
 # Workflow bookkeeping actions that ``guide --advance`` may complete offline.
 SAFE_ADVANCE_ACTIONS = frozenset(
     {
         "authorize-scope",
         "run-discovery",
+        "generate-report",
+    }
+)
+
+_OFFLINE_BOOKKEEPING = frozenset(
+    {
+        "repair-install",
+        "doctor-explain",
+        "doctor",
+        "quickstart",
+        "tour",
+        "authorize-scope",
+        "import-session",
+        "session-show",
+        "workflow-close",
+        "cleanup-status",
+        "workflow-audit",
+        "new-engagement",
+        "engagement-package",
         "generate-report",
     }
 )
@@ -64,9 +120,151 @@ class JourneyAction:
     kind: str = "required"
     unlock_conditions: list[str] = field(default_factory=list)
     advance_safe: bool = False
+    risk: str = "observe"
+    approvals: list[str] = field(default_factory=list)
+    rollback: str = "none"
+    rollback_implication: str = "No directory mutation; safe to re-run."
+    recovery_command: str = "adaf-attack guide"
+    blocked_because: str | None = None
+    entry_criteria: list[str] = field(default_factory=list)
+    exit_criteria: list[str] = field(default_factory=list)
 
     def document(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        if payload.get("blocked_because") is None:
+            payload.pop("blocked_because", None)
+        return payload
+
+
+def quote_path(path: Path | str) -> str:
+    """Return a shell-safe path token for copy-ready commands."""
+    return shell_quote(str(path))
+
+
+def guide_recovery_command(
+    *,
+    workspace: Path | str | None = None,
+    session: Path | str | None = None,
+) -> str:
+    """Copy-ready guide invocation for the current workspace/session."""
+    parts = ["adaf-attack", "guide"]
+    if workspace is not None:
+        parts.extend(["--workspace", quote_path(workspace)])
+    if session is not None:
+        parts.extend(["--session", quote_path(session)])
+    return " ".join(parts)
+
+
+def _action_safety_metadata(
+    action_id: str,
+    *,
+    capability_id: str | None = None,
+) -> dict[str, Any]:
+    """Derive risk/approval/rollback metadata for a journey or workflow action."""
+    if action_id in _OFFLINE_BOOKKEEPING or action_id.startswith(
+        ("validate:", "response:", "verify:", "decision:", "mitigate:")
+    ):
+        # Workflow bookkeeping and decision records are local JSON only.
+        if action_id.startswith(("decision:", "mitigate:")):
+            return {
+                "risk": "observe",
+                "approvals": [],
+                "rollback": "none",
+                "rollback_implication": "Records an offline decision only; no target change.",
+            }
+        if action_id.startswith(("validate:", "response:", "verify:")):
+            return {
+                "risk": "observe",
+                "approvals": [],
+                "rollback": "none",
+                "rollback_implication": "Marks workflow progress offline; live runs stay separate.",
+            }
+        return {
+            "risk": "observe",
+            "approvals": [],
+            "rollback": "none",
+            "rollback_implication": "Offline bookkeeping only; guidance never contacts a DC.",
+        }
+
+    cap_id = capability_id or (
+        action_id if not action_id.startswith(("validate:", "decision:")) else None
+    )
+    if not cap_id:
+        return {
+            "risk": "observe",
+            "approvals": [],
+            "rollback": "none",
+            "rollback_implication": "Review the suggested command before running.",
+        }
+    try:
+        from adaf_attack.core.registry import capability_registry
+
+        cap = capability_registry.get(cap_id)
+    except Exception:  # pragma: no cover - registry import edge
+        cap = None
+    if cap is None or cap.safety is None:
+        return {
+            "risk": "sensitive",
+            "approvals": ["Review plan output before any live run"],
+            "rollback": "manual",
+            "rollback_implication": "Confirm rollback coverage with capability-help before --force.",
+        }
+    safety = cap.safety
+    approvals: list[str] = []
+    if safety.requires_force:
+        approvals.append("--force")
+    if safety.requires_ack:
+        approvals.append("--i-understand (first use in workspace)")
+    if safety.approval.value == "scoped_token":
+        approvals.append("--approval-token with matching --engagement-id")
+    if not approvals and safety.network_side_effect:
+        approvals.append("Written authorization for the target scope")
+    rollback = safety.rollback.value
+    if rollback == "automatic":
+        implication = (
+            "Mutations record pre-state in session cleanup.json; use `adaf-attack rollback`."
+        )
+    elif rollback == "manual":
+        implication = "Operator must verify and reverse residual effects on the authorized target."
+    else:
+        implication = "No automatic rollback; treat as read/observe or advisory."
+    return {
+        "risk": safety.risk.value,
+        "approvals": approvals,
+        "rollback": rollback,
+        "rollback_implication": implication,
+    }
+
+
+def _decorate_action(
+    action: JourneyAction,
+    *,
+    workspace: Path,
+    session: Path | None,
+    stage: str,
+    blocked_because: str | None = None,
+) -> JourneyAction:
+    """Fill safety + criteria + recovery fields on a journey action."""
+    criteria = STAGE_CRITERIA.get(stage, {"entry": [], "exit": []})
+    safety = _action_safety_metadata(action.id)
+    recovery = guide_recovery_command(workspace=workspace, session=session)
+    return JourneyAction(
+        id=action.id,
+        title=action.title,
+        why=action.why,
+        suggested_command=action.suggested_command,
+        kind=action.kind,
+        unlock_conditions=list(action.unlock_conditions),
+        advance_safe=action.advance_safe,
+        risk=str(safety["risk"]),
+        approvals=list(safety["approvals"]),
+        rollback=str(safety["rollback"]),
+        rollback_implication=str(safety["rollback_implication"]),
+        recovery_command=recovery,
+        blocked_because=blocked_because if blocked_because is not None else action.blocked_because,
+        entry_criteria=list(criteria.get("entry") or action.entry_criteria),
+        exit_criteria=list(criteria.get("exit") or action.exit_criteria),
+    )
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -108,7 +306,7 @@ def suggested_command_for_action(
     workspace: Path | None = None,
 ) -> str:
     """Return a copy-ready CLI invocation for a workflow action."""
-    workspace_flag = f" --workspace {workspace}" if workspace is not None else ""
+    workspace_flag = f" --workspace {quote_path(workspace)}" if workspace is not None else ""
     action_id = action.id
     if action_id == "authorize-scope":
         return f"adaf-attack workflow authorize{workspace_flag}".strip()
@@ -126,24 +324,25 @@ def suggested_command_for_action(
             )
         return f"adaf-attack workflow do run-discovery{workspace_flag}".strip()
     if action_id.startswith("validate:"):
-        return f"adaf-attack workflow do {action_id}{workspace_flag}".strip()
+        return f"adaf-attack workflow do {shell_quote(action_id)}{workspace_flag}".strip()
     if action_id.startswith("decision:"):
         return (
-            f"adaf-attack workflow decide {action_id} mitigate "
-            f'--rationale "owner approved"{workspace_flag}'
+            f"adaf-attack workflow decide {shell_quote(action_id)} mitigate "
+            f"--rationale {shell_quote('owner approved')}{workspace_flag}"
         ).strip()
     if action_id.startswith(("response:", "verify:")):
-        return f"adaf-attack workflow do {action_id}{workspace_flag}".strip()
+        return f"adaf-attack workflow do {shell_quote(action_id)}{workspace_flag}".strip()
     if action_id.startswith("mitigate:"):
         finding_id = action_id.split(":", 1)[1]
         return (
-            f"adaf-attack workflow transition {finding_id} mitigated "
-            f'--note "remediation recorded"{workspace_flag}'
+            f"adaf-attack workflow transition {shell_quote(finding_id)} mitigated "
+            f"--note {shell_quote('remediation recorded')}{workspace_flag}"
         ).strip()
     if action_id == "generate-report":
         if session is not None:
             return (
-                f"adaf-attack engagement report --session {session} --engagement-id ENGAGEMENT-001"
+                "adaf-attack engagement report "
+                f"--session {quote_path(session)} --engagement-id ENGAGEMENT-001"
             )
         return f"adaf-attack workflow do generate-report{workspace_flag}".strip()
     if action.capability_id:
@@ -157,7 +356,7 @@ def suggested_command_for_action(
             username=defaults["username"],
             include_required_placeholders=True,
         )
-    return f"adaf-attack workflow do {action_id}{workspace_flag}".strip()
+    return f"adaf-attack workflow do {shell_quote(action_id)}{workspace_flag}".strip()
 
 
 def action_is_advance_safe(action: WorkflowAction) -> bool:
@@ -176,6 +375,9 @@ def enrich_action(
 ) -> dict[str, Any]:
     """Serialize a workflow action with a copy-ready suggested_command."""
     command = suggested_command_for_action(action, session=session, workspace=workspace)
+    root = Path(workspace) if workspace is not None else default_workspace_dir()
+    safety = _action_safety_metadata(action.id, capability_id=action.capability_id)
+    recovery = guide_recovery_command(workspace=root, session=session)
     return {
         "id": action.id,
         "kind": action.kind,
@@ -189,6 +391,11 @@ def enrich_action(
         "priority": action.priority,
         "suggested_command": command,
         "advance_safe": action_is_advance_safe(action),
+        "risk": safety["risk"],
+        "approvals": safety["approvals"],
+        "rollback": safety["rollback"],
+        "rollback_implication": safety["rollback_implication"],
+        "recovery_command": recovery,
     }
 
 
@@ -348,9 +555,10 @@ def _journey_action_from_workflow(
     *,
     session: Path | None,
     workspace: Path,
+    stage: str,
 ) -> JourneyAction:
     enriched = enrich_action(action, session=session, workspace=workspace)
-    return JourneyAction(
+    base = JourneyAction(
         id=enriched["id"],
         title=enriched["title"],
         why=enriched["consequence"] or enriched["description"],
@@ -358,7 +566,13 @@ def _journey_action_from_workflow(
         kind=enriched["kind"],
         unlock_conditions=list(enriched["unlock_conditions"]),
         advance_safe=bool(enriched["advance_safe"]),
+        risk=str(enriched["risk"]),
+        approvals=list(enriched["approvals"]),
+        rollback=str(enriched["rollback"]),
+        rollback_implication=str(enriched["rollback_implication"]),
+        recovery_command=str(enriched["recovery_command"]),
     )
+    return _decorate_action(base, workspace=workspace, session=session, stage=stage)
 
 
 def snapshot(
@@ -392,10 +606,13 @@ def snapshot(
     primary: JourneyAction
     secondary: list[JourneyAction] = []
     stage: str
+    blocked_because: str | None = None
+    ws_q = quote_path(root)
 
     if blockers:
         stage = "install-blocked"
         first = blockers[0]
+        blocked_because = first["message"]
         primary = JourneyAction(
             id="repair-install",
             title="Repair installation readiness",
@@ -420,7 +637,7 @@ def snapshot(
             id="quickstart",
             title="Run the safe offline quickstart",
             why="Creates a disposable demo session and findings dashboard without contacting AD.",
-            suggested_command="adaf-attack quickstart",
+            suggested_command=f"adaf-attack quickstart --workspace {ws_q}",
             kind="required",
             unlock_conditions=["packaged demo fixtures available"],
             advance_safe=True,
@@ -456,7 +673,7 @@ def snapshot(
                 id="workflow-audit",
                 title="Review the audit trail",
                 why="Confirm who changed what before archiving the workspace.",
-                suggested_command=f"adaf-attack workflow audit --workspace {root}",
+                suggested_command=f"adaf-attack workflow audit --workspace {ws_q}",
                 kind="recommended",
             )
         ]
@@ -467,7 +684,7 @@ def snapshot(
             id="authorize-scope",
             title="Confirm scope and authorization",
             why="Without authorization, all network and workflow target actions remain locked.",
-            suggested_command=f"adaf-attack workflow authorize --workspace {root}",
+            suggested_command=f"adaf-attack workflow authorize --workspace {ws_q}",
             kind="required",
             unlock_conditions=["scope and authorization decision recorded"],
             advance_safe=True,
@@ -480,8 +697,8 @@ def snapshot(
                     title="Import session findings after authorize",
                     why="Adapt saved session evidence into the guided workflow.",
                     suggested_command=(
-                        f"adaf-attack workflow import-session --session {session_hint} "
-                        f"--workspace {root}"
+                        f"adaf-attack workflow import-session --session {quote_path(session_hint)} "
+                        f"--workspace {ws_q}"
                     ),
                     kind="recommended",
                     advance_safe=True,
@@ -492,7 +709,7 @@ def snapshot(
                 id="session-show",
                 title="Inspect the offline demo session",
                 why="Review findings before authorizing live activity.",
-                suggested_command=f"adaf-attack session show --session {demo}",
+                suggested_command=f"adaf-attack session show --session {quote_path(demo)}",
                 kind="recommended",
             )
         )
@@ -510,8 +727,8 @@ def snapshot(
                 title="Import session findings into the workflow",
                 why="Session evidence exists but has not been adapted into finding-driven actions.",
                 suggested_command=(
-                    f"adaf-attack workflow import-session --session {session_hint} "
-                    f"--workspace {root}"
+                    f"adaf-attack workflow import-session --session {quote_path(session_hint)} "
+                    f"--workspace {ws_q}"
                 ),
                 kind="required",
                 unlock_conditions=["authorized scope", "saved session available"],
@@ -519,7 +736,9 @@ def snapshot(
             )
             if recs:
                 secondary = [
-                    _journey_action_from_workflow(item, session=session_hint, workspace=root)
+                    _journey_action_from_workflow(
+                        item, session=session_hint, workspace=root, stage=stage
+                    )
                     for item in recs[:3]
                 ]
         elif not recs:
@@ -528,7 +747,7 @@ def snapshot(
                 id="workflow-close",
                 title="Close the guided workflow",
                 why="No pending required actions remain; finish and retain the audit trail.",
-                suggested_command=f"adaf-attack workflow close --workspace {root}",
+                suggested_command=f"adaf-attack workflow close --workspace {ws_q}",
                 kind="required",
                 advance_safe=True,
             )
@@ -538,7 +757,7 @@ def snapshot(
                     title="Check rollback / cleanup status",
                     why="Confirm no pending directory mutations remain before closeout.",
                     suggested_command=(
-                        f"adaf-attack cleanup-status --session {session_hint}"
+                        f"adaf-attack cleanup-status --session {quote_path(session_hint)}"
                         if session_hint
                         else "adaf-attack sessions --limit 5"
                     ),
@@ -557,9 +776,13 @@ def snapshot(
                 stage = "closeout"
             else:
                 stage = "operate"
-            primary = _journey_action_from_workflow(top, session=session_hint, workspace=root)
+            primary = _journey_action_from_workflow(
+                top, session=session_hint, workspace=root, stage=stage
+            )
             secondary = [
-                _journey_action_from_workflow(item, session=session_hint, workspace=root)
+                _journey_action_from_workflow(
+                    item, session=session_hint, workspace=root, stage=stage
+                )
                 for item in recs[1:4]
             ]
             if session_hint is not None and stage == "deliver":
@@ -570,8 +793,8 @@ def snapshot(
                         title="Build a client evidence package",
                         why="Package redacted deliverables after the final report.",
                         suggested_command=(
-                            f"adaf-attack engagement package --session {session_hint} "
-                            f"--output engagement.zip --profile client"
+                            f"adaf-attack engagement package --session {quote_path(session_hint)} "
+                            f"--output {shell_quote('engagement.zip')} --profile client"
                         ),
                         kind="recommended",
                     ),
@@ -582,10 +805,22 @@ def snapshot(
             id="quickstart",
             title="Run the safe offline quickstart",
             why="Workflow state could not be loaded; start from the offline demo.",
-            suggested_command="adaf-attack quickstart",
+            suggested_command=f"adaf-attack quickstart --workspace {ws_q}",
             kind="required",
             advance_safe=True,
         )
+
+    primary = _decorate_action(
+        primary,
+        workspace=root,
+        session=session_hint,
+        stage=stage,
+        blocked_because=blocked_because,
+    )
+    secondary = [
+        _decorate_action(item, workspace=root, session=session_hint, stage=stage)
+        for item in secondary
+    ]
 
     workflow_view: dict[str, Any] | None = None
     if engine is not None:
@@ -606,11 +841,16 @@ def snapshot(
     if engine is not None and stage in {"operate", "deliver", "closeout", "complete"}:
         progress = max(progress, float(engine.state.progress))
 
+    criteria = STAGE_CRITERIA.get(stage, {"entry": [], "exit": []})
+    recovery = guide_recovery_command(workspace=root, session=session_hint)
     return {
         "ok": not blockers,
         "stage": stage,
         "stage_label": STAGE_LABELS.get(stage, stage),
         "progress_pct": round(progress, 1),
+        "entry_criteria": list(criteria.get("entry") or []),
+        "exit_criteria": list(criteria.get("exit") or []),
+        "blocked_because": blocked_because,
         "primary_action": primary.document(),
         "secondary_actions": [item.document() for item in secondary],
         "blockers": blockers,
@@ -618,6 +858,8 @@ def snapshot(
         "context": context,
         "breadcrumb": _breadcrumb(stage, engine, demo=demo),
         "next_step": primary.suggested_command,
+        "suggested_command": primary.suggested_command,
+        "recovery_command": recovery,
     }
 
 
@@ -662,13 +904,16 @@ def import_session_findings(
 
 __all__ = [
     "SAFE_ADVANCE_ACTIONS",
+    "STAGE_CRITERIA",
     "STAGE_LABELS",
     "JourneyAction",
     "action_is_advance_safe",
     "enrich_action",
     "find_demo_session",
     "find_recent_session",
+    "guide_recovery_command",
     "import_session_findings",
+    "quote_path",
     "snapshot",
     "suggested_command_for_action",
 ]
