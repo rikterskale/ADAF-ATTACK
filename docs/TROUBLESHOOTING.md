@@ -78,7 +78,10 @@ adaf-attack --format json support-bundle --output adaf-support-bundle.json
 
 For scripted installer diagnostics, use `-Json` with the Windows installer or
 `--json` with the Kali installer. Both include a stable error code, message,
-and remediation field.
+and remediation field. The Windows installer classifies common failures as
+`PYTHON_UNSUPPORTED`, `PATH_NOT_FOUND`, `EXECUTION_POLICY_BLOCKED`,
+`PROXY_TLS_FAILED`, `INSTALLER_OWNERSHIP`, or `INSTALLER_FAILURE` (aligned with
+`adaf-attack errors` where applicable).
 
 - Open a new terminal after a Windows installer changes user PATH.
 - Windows: run `Get-Command adaf-attack -All` and `py -0p`.

@@ -7,11 +7,24 @@
 
 **Aggressive Active Directory offensive toolkit for senior internal red teamers.**
 
-> Authorized internal red team use only.
+> Authorized internal red team use only. Proprietary. Not on PyPI.
+
+### Who this is for / what it will not do
+
+| For | Not for |
+|---|---|
+| Authorized internal red / purple teams with written scope | Public or unauthorized AD testing |
+| Operators with an approved private wheel or checkout | Invented public install URLs, pipx/uv/Poetry release paths |
+| Offline-first install, guidance, evidence, reporting, rollback | “Plan-only” containment theater or auto-running destructive work |
+| Guided next steps via `adaf-attack guide` | Reading source to guess the next command |
+
+Setup and `guide` never contact a domain controller. Recommendations never
+auto-execute destructive work. Destructive runs still require `--force` and/or
+approval tokens; mutating capabilities record rollback pre-state.
 
 ## Quick start
 
-Four commands from an approved wheel to a rendered offline demo session:
+Four commands from an approved wheel to a guided offline first success:
 
 ```bash
 python -m pip install "./adaf_attack-0.10.1-py3-none-any.whl[full]"
@@ -20,11 +33,14 @@ adaf-attack quickstart --workspace ./quickstart
 adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
 ```
 
-When lost, run `adaf-attack guide` — it is the single authoritative next step
-from install through closeout. Never contacts a domain controller. If any step
-fails, run `adaf-attack --format json doctor --explain` and see
-[Troubleshooting](docs/TROUBLESHOOTING.md). Windows and Kali operators
-should start from their platform guide below rather than pip directly.
+**When lost:** run `adaf-attack guide` (optionally with `--workspace` /
+`--session`). It is the single authoritative next step from install through
+closeout. CLI and TUI share the same journey snapshot.
+
+If any step fails: `adaf-attack --format json doctor --profile user-readiness --explain`,
+then `adaf-attack --format json support-bundle --output adaf-support-bundle.json`.
+See [Troubleshooting](docs/TROUBLESHOOTING.md). Windows and Kali operators should
+start from their platform guide below rather than pip directly.
 
 ## Platform guides
 
@@ -60,7 +76,23 @@ should start from their platform guide below rather than pip directly.
 ## Philosophy
 
 - No plan-only or containment gates
-- Lightweight controls: `--force`, redaction by default, session logging
+- Lightweight controls: `--force`, approval tokens, redaction by default, session logging
+- `guide` is the only authoritative “what next” surface
+
+## Operator orientation
+
+| Need | Command |
+|---|---|
+| What do I do next? | `adaf-attack guide` |
+| Where are logs/sessions? | `adaf-attack paths` (repair with `paths --repair`) |
+| Is the install healthy? | `adaf-attack doctor --profile user-readiness --explain` |
+| Redacted support pack | `adaf-attack support-bundle --output adaf-support-bundle.json` |
+| Undo directory mutations | `adaf-attack rollback` / `cleanup-status` |
+| Leave safely | Uninstall preserves data by default (see [Uninstall](#uninstall)) |
+
+Canonical decision guide: [docs/USER_READINESS.md](docs/USER_READINESS.md).
+Release-manager MANUAL pack: [docs/RELEASE_EVIDENCE.md](docs/RELEASE_EVIDENCE.md).
+Security reports: [SECURITY.md](SECURITY.md).
 
 ## Capabilities
 
@@ -313,20 +345,16 @@ and destructive capabilities additionally require an authorized target and the
 relevant optional tooling; mutating capabilities record in-session rollback
 state that `adaf-attack rollback` can reverse.
 
-### Recommended first 30 minutes
+### Recommended first 30 minutes (always via `guide`)
 
-1. Run `adaf-attack init` to save default domain / DC / workspace and see the
-   suggested next steps (skip fields with blank input).
-2. Browse the beginner catalog: `adaf-attack list-capabilities --novice`
-   (or `--novice --safe-only` for the offline-safe subset).
-3. Run `adaf-attack quickstart --workspace ./quickstart`.
-4. Inspect the generated session with `adaf-attack session show --session ./quickstart/demo-session`.
-5. Generate a report with `adaf-attack engagement report --session ./quickstart/demo-session --engagement-id QUICKSTART-2026-001`.
-6. Try a guided run: `adaf-attack run ldap-enum --interactive` (prompts for
-   each required option in plain language and previews the command before it
-   executes).
-7. Create and validate a scoped plan with `adaf-attack engagement init --output engagement.yaml` and `adaf-attack engagement validate engagement.yaml`.
-8. Before any target interaction, read the authorized-target and engagement guidance.
+1. Finish the [Quick start](#quick-start) (`doctor` → `quickstart` → `guide`).
+2. Whenever unsure, re-run `adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session`
+   and paste the suggested command — do not invent a parallel path.
+3. Optional offline extras after guide says you are past first-success:
+   `session show`, `engagement report`, `list-capabilities --novice --safe-only`.
+4. Optional defaults: `adaf-attack init` (blank skips). This does not replace `guide`.
+5. Before any live target work, follow your organization's engagement runbook,
+   then let `guide` name the authorize / plan / run step.
 
 ### What works offline?
 

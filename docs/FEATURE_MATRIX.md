@@ -7,6 +7,7 @@ external operator tools are available.
 | Surface | Install | Extra setup | Network | Mutating | Validation |
 |---|---|---|---|---|---|
 | CLI, doctor, paths, capability help | Base | None | No | No | CI |
+| Guided journey (`guide` / `what-next` / TUI Home) | Base | Writable workspace | No | No | CI |
 | Packaged offline demo | Base | Writable workspace | No | No | Artifact smoke |
 | HTML/PDF reports | `[reports]` / `[full]` | None | No | No | Operator workflow |
 | Evidence correlation and packaging | Base | Session evidence | No | No | CI fixtures |
@@ -35,11 +36,20 @@ not claim live AD validation by itself.
 
 ## Offline 10-minute acceptance path
 
-From a wheel-only installation, this sequence must succeed without source files:
+From a wheel-only installation, this sequence must succeed without source files.
+It matches [USER_READINESS.md](USER_READINESS.md):
 
 ```bash
 python -m pip check
-adaf-attack doctor --profile user-readiness
+adaf-attack --version
+adaf-attack --format json doctor --profile user-readiness --explain
+adaf-attack quickstart --workspace ./quickstart
+adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
+```
+
+Optional offline deliverable smoke after first success:
+
+```bash
 adaf-attack demo --workspace ./demo-session
 adaf-attack engagement report --session ./demo-session/demo-session --engagement-id DEMO-2026-001
 adaf-attack engagement package --session ./demo-session/demo-session --output demo.zip --profile client

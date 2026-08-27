@@ -2,6 +2,9 @@
 
 - The distribution is proprietary and currently delivered through private
   GitHub release assets or authorized source access; it is not on PyPI.
+- Operator guidance is centered on `adaf-attack guide`. Parallel aliases such
+  as `init` / `setup` / `home` hand off to that spine and must not be treated as
+  competing onboarding products.
 - A scheduled/manual workflow can test published GitHub release wheels, but no
   published artifact is proven until a release with the wheel asset exists and
   that workflow succeeds.

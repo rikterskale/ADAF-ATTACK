@@ -78,6 +78,8 @@ adaf-attack paths
 If the command is not found in the current window, either open a new terminal or
 run `.\.venv\Scripts\adaf-attack.exe` for the immediate verification.
 
+When lost, run `adaf-attack guide`. It always returns one copy-ready next step.
+
 ## First safe offline run
 
 ```powershell

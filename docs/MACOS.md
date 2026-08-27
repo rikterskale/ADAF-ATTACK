@@ -34,12 +34,13 @@ python -m pip check
 adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace ./quickstart
+adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
 adaf-attack list-capabilities
 adaf-attack paths
 ```
 
 These checks do not contact a target. Session evidence defaults below the macOS
-user data directory reported by `paths`.
+user data directory reported by `paths`. When lost, run `adaf-attack guide`.
 
 ## Upgrade, downgrade, and uninstall
 
