@@ -261,6 +261,11 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Do not share the output; rotate the exposed secret if it was real, then regenerate a redacted support bundle.",
         "adaf-attack support-bundle --output adaf-support-bundle.json",
     ),
+    "VERSION_SKEW": (
+        "Installed package metadata does not match adaf_attack.__version__.",
+        "Reinstall the approved wheel into a clean venv so metadata and runtime version agree, then rerun doctor.",
+        "adaf-attack doctor --profile user-readiness --explain",
+    ),
     "INSTALLER_FAILURE": (
         "The platform installer could not complete.",
         "Rerun the Windows or Kali installer with -Json/--json, then follow the remediation field.",
@@ -271,10 +276,75 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Uninstall the installer-owned environment first, or choose a dedicated venv/shim path.",
         "adaf-attack doctor --profile user-readiness --explain",
     ),
+    "KALI_REQUIRED": (
+        "The Kali installer was run on a non-Kali host.",
+        "Use the generic Linux or macOS wheel install path on this platform.",
+        "adaf-attack doctor --profile user-readiness --explain",
+    ),
+    "UNOWNED_VENV": (
+        "The installer refused to remove or modify an unowned virtual environment.",
+        "Choose a dedicated ADAF-ATTACK venv or uninstall the matching installer-owned environment.",
+        "bash scripts/install-kali.sh --help",
+    ),
+    "UNSAFE_VENV": (
+        "The installer refused an unsafe virtual environment path.",
+        "Choose a dedicated project virtual environment under your home or project directory.",
+        "bash scripts/install-kali.sh --help",
+    ),
+    "INVALID_UNINSTALL_OPTION": (
+        "An uninstall-only installer option was used without --uninstall.",
+        "Rerun with --uninstall, or remove the wipe option.",
+        "bash scripts/install-kali.sh --help",
+    ),
+    "SUDO_REQUIRED": (
+        "Installing Kali system packages requires sudo.",
+        "Re-run with sudo for system deps, or pass --skip-system-deps when packages are already provisioned.",
+        "bash scripts/install-kali.sh --help",
+    ),
+    "PYTHON_NOT_FOUND": (
+        "The selected Python interpreter was not found on PATH.",
+        "Install Python 3.11-3.14 or pass an absolute --python / -Python path.",
+        "adaf-attack doctor --profile user-readiness --explain",
+    ),
+    "UNSUPPORTED_EXTRAS": (
+        "The installer extras value is not supported.",
+        "Choose base, tui, kerberos, reports, full, or the documented Certipy separate environment.",
+        "bash scripts/install-kali.sh --help",
+    ),
+    "INSTALLER_ARGUMENT": (
+        "The installer received an unknown or invalid argument.",
+        "Run the installer --help / -? and retry with documented flags.",
+        "bash scripts/install-kali.sh --help",
+    ),
 }
 
 
 _ERROR_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "APPROVAL_TOKEN_EXPIRED",
+        (
+            "approval token has expired",
+            "token expired",
+            "approval expired",
+            "exp claim",
+            "not yet valid",
+            "expiry is malformed",
+        ),
+    ),
+    (
+        "APPROVAL_TOKEN_INVALID",
+        (
+            "approval token signature is invalid",
+            "invalid approval token",
+            "approval token rejected",
+            "token signature invalid",
+            "approval token scope",
+            "approval token does not permit",
+            "approval token does not match",
+            "approval token format",
+            "scoped approval rejected",
+        ),
+    ),
     (
         "AUTHENTICATION_FAILED",
         (
@@ -312,15 +382,16 @@ _ERROR_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
     (
         "REQUIRED_INPUT_MISSING",
-        ("pass -p", "required", "username required", "provide -p", "requires --"),
-    ),
-    (
-        "APPROVAL_TOKEN_EXPIRED",
-        ("token expired", "approval expired", "exp claim", "not yet valid"),
-    ),
-    (
-        "APPROVAL_TOKEN_INVALID",
-        ("invalid approval token", "approval token rejected", "token signature invalid"),
+        (
+            "pass -p",
+            "provide -p",
+            "username required",
+            "requires --",
+            "required input",
+            "missing required",
+            "required option",
+            "required parameter",
+        ),
     ),
     (
         "PYTHON_UNSUPPORTED",

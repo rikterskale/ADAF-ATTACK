@@ -41,7 +41,25 @@ def test_common_runner_failures_map_to_actionable_codes() -> None:
         "unexpected provider failure": "RUN_FAILED",
         "externally-managed-environment": "VENV_REQUIRED",
         "token expired for engagement": "APPROVAL_TOKEN_EXPIRED",
+        "Approval token has expired": "APPROVAL_TOKEN_EXPIRED",
+        "Scoped approval rejected: Approval token has expired": "APPROVAL_TOKEN_EXPIRED",
+        "Approval token signature is invalid": "APPROVAL_TOKEN_INVALID",
+        "Scoped approval rejected: Approval token signature is invalid": "APPROVAL_TOKEN_INVALID",
         "SSL: CERTIFICATE_VERIFY_FAILED via proxy": "PROXY_TLS_FAILED",
     }
     for message, expected in cases.items():
         assert classify_run_error(message) == expected
+
+
+def test_installer_and_version_codes_are_catalogued() -> None:
+    for code in (
+        "VERSION_SKEW",
+        "KALI_REQUIRED",
+        "UNOWNED_VENV",
+        "SUDO_REQUIRED",
+        "PYTHON_NOT_FOUND",
+        "UNSUPPORTED_EXTRAS",
+        "INSTALLER_ARGUMENT",
+    ):
+        assert code in ERROR_CATALOG
+        assert error_for(code).suggested_command
