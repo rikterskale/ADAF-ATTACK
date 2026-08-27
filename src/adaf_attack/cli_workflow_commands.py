@@ -61,6 +61,41 @@ def register_workflow_commands(
     def _resolve_workspace(workspace: Path | None) -> Path:
         return Path(workspace) if workspace is not None else default_workspace_dir()
 
+    def _aligned_recommendations(
+        journey: dict[str, Any],
+        engine: WorkflowEngine,
+        *,
+        session: Path | None,
+        workspace: Path,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Put journey primary first so recommendations[0] matches guide."""
+        primary = journey.get("primary_action") or {}
+        primary_cmd = str(
+            journey.get("suggested_command") or primary.get("suggested_command") or ""
+        )
+        engine_limit = max(limit, 1)
+        engine_recs = [
+            enrich_action(action, session=session, workspace=workspace)
+            for action in engine.recommendations(limit=engine_limit)
+        ]
+        aligned: list[dict[str, Any]] = []
+        if primary and primary_cmd:
+            aligned.append(dict(primary))
+        for rec in engine_recs:
+            if (
+                primary
+                and rec.get("id") == primary.get("id")
+                and rec.get("suggested_command") == primary_cmd
+            ):
+                continue
+            aligned.append(rec)
+            if limit > 0 and len(aligned) >= limit:
+                break
+        if limit > 0:
+            return aligned[:limit]
+        return aligned
+
     def _engine(workspace: Path | None, *, mode: str = "interactive") -> WorkflowEngine:
         """Load or create the shared engine, auto-starting an empty workflow.
 
@@ -98,10 +133,6 @@ def register_workflow_commands(
         guidance = engine.guidance()
         root = _resolve_workspace(workspace)
         session = _session_hint(workspace)
-        recs = [
-            enrich_action(action, session=session, workspace=root)
-            for action in engine.recommendations(limit=5)
-        ]
         from adaf_attack.core.journey import guide_recovery_command, snapshot
 
         # Authoritative next step always comes from the shared journey composer.
@@ -109,6 +140,7 @@ def register_workflow_commands(
         primary = str(
             journey.get("suggested_command") or journey["primary_action"]["suggested_command"]
         )
+        recs = _aligned_recommendations(journey, engine, session=session, workspace=root, limit=5)
         return {
             "ok": True,
             "workflow_id": engine.state.workflow_id,
@@ -136,10 +168,7 @@ def register_workflow_commands(
         primary = str(
             journey.get("suggested_command") or journey["primary_action"]["suggested_command"]
         )
-        recs = [
-            enrich_action(action, session=session, workspace=root)
-            for action in engine.recommendations(limit=3)
-        ]
+        recs = _aligned_recommendations(journey, engine, session=session, workspace=root, limit=3)
         lines = [
             f"Phase:    {g.phase}",
             f"Status:   {g.status}",
@@ -223,10 +252,13 @@ def register_workflow_commands(
         primary = str(
             journey.get("suggested_command") or journey["primary_action"]["suggested_command"]
         )
-        recs = [
-            enrich_action(action, session=session_hint, workspace=root)
-            for action in engine.recommendations(limit=max(0, limit))
-        ]
+        recs = _aligned_recommendations(
+            journey,
+            engine,
+            session=session_hint,
+            workspace=root,
+            limit=max(0, limit),
+        )
         payload = {
             "ok": True,
             "count": len(recs),
@@ -241,15 +273,9 @@ def register_workflow_commands(
         table.add_column("Action")
         table.add_column("Kind")
         table.add_column("Copy-ready command")
-        table.add_row(
-            str(journey["primary_action"]["id"]),
-            "journey",
-            primary,
-        )
         for a in recs:
-            if a["id"] == journey["primary_action"]["id"] and a["suggested_command"] == primary:
-                continue
-            table.add_row(a["id"], a["kind"], a["suggested_command"])
+            kind = "journey" if a.get("suggested_command") == primary else a.get("kind", "-")
+            table.add_row(str(a.get("id")), str(kind), str(a.get("suggested_command")))
         if not recs and journey.get("stage") not in {"first-success", "install-blocked"}:
             table.add_row("(none)", "-", "No engine action pending; follow the journey command.")
         emit(ctx, payload, table)

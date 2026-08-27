@@ -689,7 +689,13 @@ def snapshot(
                 kind="recommended",
             )
         ]
-    elif demo is None:
+    elif demo is None and (
+        engine is None
+        or ("scope-authorized" not in engine.state.completed_steps and not engine.state.findings)
+    ):
+        # Offline first success only when the guided workflow has not progressed.
+        # An authorized or finding-driven workflow without a demo session continues
+        # through orient/operate/deliver so guide and workflow next stay aligned.
         stage = "first-success"
         primary = JourneyAction(
             id="quickstart",
@@ -746,15 +752,16 @@ def snapshot(
                     advance_safe=True,
                 )
             )
-        secondary.append(
-            JourneyAction(
-                id="session-show",
-                title="Inspect the offline demo session",
-                why="Review findings before authorizing live activity.",
-                suggested_command=f"adaf-attack session show --session {quote_path(demo)}",
-                kind="recommended",
+        if demo is not None:
+            secondary.append(
+                JourneyAction(
+                    id="session-show",
+                    title="Inspect the offline demo session",
+                    why="Review findings before authorizing live activity.",
+                    suggested_command=f"adaf-attack session show --session {quote_path(demo)}",
+                    kind="recommended",
+                )
             )
-        )
     elif engine is not None:
         recs = engine.recommendations(limit=5)
         # If authorized with a session but no findings ingested yet, prefer import.

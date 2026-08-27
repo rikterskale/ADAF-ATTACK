@@ -72,7 +72,8 @@ def test_full_lifecycle_start_to_closure(tmp_path: Path) -> None:
     _json(_run(tmp_path, "transition", "ADAF-1", "closed", "--note", "retest clean"))
 
     nxt = _json(_run(tmp_path, "next"))
-    assert [r["id"] for r in nxt["recommendations"]] == ["generate-report"]
+    assert nxt["recommendations"][0]["id"] == "generate-report"
+    assert nxt["suggested_command"] == nxt["recommendations"][0]["suggested_command"]
     _json(_run(tmp_path, "do", "generate-report"))
 
     closed = _json(_run(tmp_path, "close"))
@@ -249,10 +250,12 @@ def test_next_shows_no_recommendations_when_closed(tmp_path: Path) -> None:
     _json(_run(tmp_path, "do", "run-discovery"))
     _json(_run(tmp_path, "close"))
     nxt = _json(_run(tmp_path, "next"))
-    assert nxt["count"] == 0
-    # Authoritative next step comes from the journey complete stage.
+    # Closed workflows still expose the journey complete action as recommendations[0]
+    # so next_step and the recommendation list never disagree.
+    assert nxt["count"] >= 1
     assert nxt["journey_stage"] == "complete"
     assert nxt["suggested_command"].startswith("adaf-attack ")
+    assert nxt["recommendations"][0]["suggested_command"] == nxt["suggested_command"]
     human = _human(tmp_path, "next")
     assert human.exit_code == 0
     assert "journey" in human.output.lower() or "sessions" in human.output.lower()

@@ -124,6 +124,16 @@ def test_journey_operates_from_workflow(tmp_path: Path) -> None:
     }
 
 
+def test_journey_follows_authorized_workflow_without_demo(tmp_path: Path) -> None:
+    """Authorized workflows must not be forced back to quickstart without a demo."""
+    engine = WorkflowEngine(tmp_path)
+    engine.start(actor="test")
+    engine.complete_action("authorize-scope", actor="test")
+    payload = journey.snapshot(workspace=tmp_path, doctor={"ok": True, "checks": []})
+    assert payload["stage"] != "first-success"
+    assert payload["primary_action"]["id"] != "quickstart"
+
+
 def test_guide_json_contract(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
     result = runner.invoke(app, ["--format", "json", "guide", "--workspace", str(tmp_path)])
@@ -211,7 +221,49 @@ def test_workflow_next_includes_suggested_command(tmp_path: Path) -> None:
     assert payload["count"] >= 1
     assert "suggested_command" in payload["recommendations"][0]
     assert payload["recommendations"][0]["suggested_command"].startswith("adaf-attack ")
+    # Journey primary wins even when the engine still wants authorize-scope.
     assert payload["next_step"] == payload["recommendations"][0]["suggested_command"]
+    assert payload["suggested_command"] == payload["recommendations"][0]["suggested_command"]
+    assert "quickstart" in payload["suggested_command"]
+
+
+def test_workflow_next_recommendations_match_guide_with_session(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    session = tmp_path / "demo-session"
+    materialize_demo_session(session)
+    guide = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "guide",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    workflow_next = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "workflow",
+                "next",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    assert workflow_next["suggested_command"] == guide["suggested_command"]
+    assert workflow_next["recommendations"][0]["suggested_command"] == guide["suggested_command"]
 
 
 def test_import_session_findings_unlocks_validation(tmp_path: Path) -> None:
