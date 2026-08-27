@@ -120,11 +120,13 @@ function Fail-Adaf(
                 message = $Message
                 remediation = $Remediation
                 suggested_command = "adaf-attack doctor --profile user-readiness --explain"
+                recovery_command = "adaf-attack doctor --profile user-readiness --explain"
             }
         } | ConvertTo-Json -Depth 4 -Compress
     } else {
         Write-Error "Error [$Code]: $Message"
         Write-Error "Next step: $Remediation"
+        Write-Error "Recovery: adaf-attack doctor --profile user-readiness --explain"
     }
     exit 1
 }

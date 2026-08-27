@@ -40,8 +40,8 @@ interpreter with `-Python C:\Path\python.exe`, or use the launcher with
 creating the environment.
 
 Pass `-Json` when invoking the installer from automation. Failures are emitted
-as a stable JSON object with `code`, `message`, `remediation`, and
-`suggested_command` fields.
+as a stable JSON object with `code`, `message`, `remediation`,
+`suggested_command`, and `recovery_command` fields.
 
 ## Upgrade and uninstall
 

@@ -370,6 +370,9 @@ def _check_docs() -> None:
         "support-bundle",
         "Who this is for",
         "Not on PyPI",
+        "Safe offline first success",
+        "Authorize scope",
+        "Ready / Blocked / Failed / Done",
     ):
         _require(phrase in readme, f"README.md: missing operator spine phrase {phrase!r}")
 
@@ -481,6 +484,7 @@ def _check_windows_installer_error_codes() -> None:
         "PROXY_TLS_FAILED",
         "INSTALLER_OWNERSHIP",
         "INSTALLER_FAILURE",
+        "recovery_command",
     ):
         _require(token in text, f"Install-AdafAttack.ps1 missing {token!r}")
 
