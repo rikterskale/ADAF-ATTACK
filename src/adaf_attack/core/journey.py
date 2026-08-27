@@ -132,7 +132,7 @@ class JourneyAction:
     kind: str = "required"
     unlock_conditions: list[str] = field(default_factory=list)
     advance_safe: bool = False
-    risk: str = "observe"
+    risk: str = "OBSERVE"
     approvals: list[str] = field(default_factory=list)
     rollback: str = "none"
     rollback_implication: str = "No directory mutation; safe to re-run."
@@ -152,8 +152,17 @@ class JourneyAction:
 
 
 def quote_path(path: Path | str) -> str:
-    """Return a shell-safe path token for copy-ready commands."""
-    return shell_quote(str(path))
+    """Return a shell-safe path token for copy-ready commands.
+
+    On Windows, normalize to forward slashes before quoting so PowerShell and
+    POSIX shells can paste the same token (``pathlib`` accepts ``/`` on Windows).
+    """
+    import os
+
+    text = str(path)
+    if os.name == "nt":
+        text = text.replace("\\", "/")
+    return shell_quote(text)
 
 
 def guide_recovery_command(
@@ -182,20 +191,20 @@ def _action_safety_metadata(
         # Workflow bookkeeping and decision records are local JSON only.
         if action_id.startswith(("decision:", "mitigate:")):
             return {
-                "risk": "observe",
+                "risk": "OBSERVE",
                 "approvals": [],
                 "rollback": "none",
                 "rollback_implication": "Records an offline decision only; no target change.",
             }
         if action_id.startswith(("validate:", "response:", "verify:")):
             return {
-                "risk": "observe",
+                "risk": "OBSERVE",
                 "approvals": [],
                 "rollback": "none",
                 "rollback_implication": "Marks workflow progress offline; live runs stay separate.",
             }
         return {
-            "risk": "observe",
+            "risk": "OBSERVE",
             "approvals": [],
             "rollback": "none",
             "rollback_implication": "Offline bookkeeping only; guidance never contacts a DC.",
@@ -206,7 +215,7 @@ def _action_safety_metadata(
     )
     if not cap_id:
         return {
-            "risk": "observe",
+            "risk": "OBSERVE",
             "approvals": [],
             "rollback": "none",
             "rollback_implication": "Review the suggested command before running.",
@@ -219,7 +228,7 @@ def _action_safety_metadata(
         cap = None
     if cap is None or cap.safety is None:
         return {
-            "risk": "sensitive",
+            "risk": "SENSITIVE",
             "approvals": ["Review plan output before any live run"],
             "rollback": "manual",
             "rollback_implication": "Confirm rollback coverage with capability-help before --force.",
@@ -245,7 +254,7 @@ def _action_safety_metadata(
     else:
         implication = "No automatic rollback; treat as read/observe or advisory."
     return {
-        "risk": safety.risk.value,
+        "risk": str(safety.risk.value).upper(),
         "approvals": approvals,
         "rollback": rollback,
         "rollback_implication": implication,

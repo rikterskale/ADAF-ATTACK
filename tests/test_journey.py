@@ -62,7 +62,7 @@ def test_journey_first_success_without_demo(tmp_path: Path, monkeypatch) -> None
     assert payload["primary_action"]["id"] == "quickstart"
     assert "quickstart" in payload["primary_action"]["suggested_command"]
     assert "--workspace" in payload["primary_action"]["suggested_command"]
-    assert payload["primary_action"]["risk"] == "observe"
+    assert payload["primary_action"]["risk"] == "OBSERVE"
     assert payload["primary_action"]["recovery_command"].startswith("adaf-attack guide")
     assert payload["entry_criteria"]
     assert payload["exit_criteria"]
@@ -82,6 +82,15 @@ def test_journey_quotes_workspace_paths_with_spaces(tmp_path: Path) -> None:
     assert "my workspace" in command or "my\\ workspace" in command or "'my workspace'" in command
     # Raw unquoted space between flag and path tokens must not appear.
     assert "--workspace my workspace" not in command
+
+
+def test_quote_path_uses_forward_slashes_on_windows(monkeypatch) -> None:
+    import os as os_mod
+
+    monkeypatch.setattr(os_mod, "name", "nt")
+    quoted = journey.quote_path(r"C:\Users\op\quickstart\demo-session")
+    assert "\\" not in quoted
+    assert "C:/Users/op/quickstart/demo-session" in quoted
 
 
 def test_journey_install_blocked(tmp_path: Path) -> None:

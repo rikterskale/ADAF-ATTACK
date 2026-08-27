@@ -198,9 +198,9 @@ def operator_capability_contract(cap: Capability) -> dict[str, Any]:
     return {
         "id": cap.id,
         "risk": (
-            cap.safety.risk.value
+            str(cap.safety.risk.value).upper()
             if cap.safety
-            else ("destructive" if cap.destructive else "observe")
+            else ("DESTRUCTIVE" if cap.destructive else "OBSERVE")
         ),
         "approvals": operator_approvals(cap),
         "rollback": rollback["rollback"],
