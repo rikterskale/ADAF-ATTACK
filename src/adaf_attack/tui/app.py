@@ -169,7 +169,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         Binding("?", "show_cheat_sheet", "Key help"),
     ]
 
-    def __init__(self) -> None:
+    def __init__(self, workspace: Path | None = None) -> None:
         super().__init__()
         self.selected_cap: str | None = None
         self._capability_running = False
@@ -177,6 +177,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._cancel_requested = threading.Event()
         self._capabilities: list[Capability] = []
         self._last_session: Path | None = None
+        # Explicit CLI --workspace wins; otherwise follow ADAF_ATTACK_WORKSPACE live
+        # so tests and operators can redirect the shared workspace after launch.
+        self._workspace_override = Path(workspace) if workspace is not None else None
         self._log_lines: list[str] = []
         self._reviewed_cap: str | None = None
         self._active_stage: str | None = None
@@ -194,6 +197,19 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         # Dynamic capability-parameter slots (see #param-form). Each entry is
         # {"option", "param_key", "is_param", "label"} for one visible input.
         self._param_bindings: list[dict[str, str]] = []
+
+    @property
+    def _workspace(self) -> Path:
+        if self._workspace_override is not None:
+            return self._workspace_override
+        return default_workspace_dir()
+
+    def _journey(self, *, session: Path | None = None) -> dict[str, Any]:
+        """Shared journey snapshot so TUI Cmd matches CLI guide."""
+        return journey_snapshot(
+            workspace=self._workspace,
+            session=session if session is not None else self._last_session,
+        )
 
     def on_unmount(self) -> None:
         """Ask background work to stop before the screen is torn down."""
@@ -420,7 +436,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._refresh_first_launch_panel()
         self._update_engagement_dashboard()
         self._refresh_pin_button()
-        self._workflow = WorkflowEngine(default_workspace_dir())
+        self._workflow = WorkflowEngine(self._workspace)
         self._refresh_workflow_panel()
         self._update_engagement_dashboard()
         self._show_log("[bold green]ADAF-ATTACK[/] ready. Use Quickstart or search capabilities.")
@@ -604,7 +620,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         title, guide = steps[self._wizard_step]
         if self._wizard_step >= 5:
             try:
-                journey = journey_snapshot(session=self._last_session)
+                journey = self._journey()
                 primary = journey["primary_action"]
                 guide = (
                     f"{guide}\n\n"
@@ -766,7 +782,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
         profile_count = len(list_profiles())
         checklist = [
-            ("workspace", default_workspace_dir().exists()),
+            ("workspace", self._workspace.exists()),
             ("target", domain and dc_ip),
             ("access", access),
             ("profile", profile_count > 0),
@@ -787,7 +803,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
 
     def _show_home(self) -> None:
-        journey = journey_snapshot(session=self._last_session)
+        journey = self._journey()
         primary = journey["primary_action"]
         actions = home_actions(first_run=bool(journey["context"].get("first_run")))
         lines = [
@@ -812,7 +828,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         )
 
     def _show_recommendations(self) -> None:
-        journey = journey_snapshot(session=self._last_session)
+        journey = self._journey()
         primary = journey["primary_action"]
         lines = [
             f"[bold]Journey[/bold] · {journey['stage_label']} ({journey['progress_pct']}%)",
@@ -885,7 +901,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             enriched = enrich_action(
                 recommendations[0],
                 session=self._last_session,
-                workspace=default_workspace_dir(),
+                workspace=self._workspace,
             )
             next_action = f"{enriched['title']}\nCmd: {enriched['suggested_command']}"
         else:
@@ -899,7 +915,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
 
     def _ensure_workflow_started(self) -> None:
         if not self._workflow:
-            self._workflow = WorkflowEngine(default_workspace_dir())
+            self._workflow = WorkflowEngine(self._workspace)
         if not self._workflow.state.audit_log:
             self._workflow.start(actor="tui")
         if "scope-authorized" not in self._workflow.state.completed_steps:
@@ -936,9 +952,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
         # Artifact-backed sessions (demo/capability JSON) use the shared journey importer.
         try:
-            result = import_session_findings(default_workspace_dir(), session, actor="tui-session")
+            result = import_session_findings(self._workspace, session, actor="tui-session")
             if int(result.get("count") or 0):
-                self._workflow = WorkflowEngine(default_workspace_dir())
+                self._workflow = WorkflowEngine(self._workspace)
                 self._refresh_workflow_panel()
                 self._show_recommendations()
                 self._show_log(
@@ -1241,7 +1257,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         target = f"{domain}" + (f" @ {dc}" if dc else "")
         cap = self.selected_cap or "(none)"
         state = "RUNNING" if self._capability_running else "idle"
-        workspace = default_workspace_dir()
+        workspace = self._workspace
         disk_path = workspace
         while not disk_path.exists() and disk_path != disk_path.parent:
             disk_path = disk_path.parent
@@ -1702,7 +1718,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     include_secrets=include_secrets,
                     creds_file=creds_file,
                     log=log_fn,
-                    workspace=default_workspace_dir(),
+                    workspace=self._workspace,
                     **extra,
                 )
                 self._last_session = Path(out["session_path"])
@@ -1751,7 +1767,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             )
 
     def _show_sessions(self) -> None:
-        workspace = default_workspace_dir()
+        workspace = self._workspace
         rows: list[str] = []
         if workspace.exists():
             for session in sorted(workspace.iterdir(), reverse=True):
@@ -1781,7 +1797,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if not self._last_session or not self._last_session.is_dir():
             self.notify("Complete or select a session first.", severity="information")
             return
-        workspace = default_workspace_dir()
+        workspace = self._workspace
         sessions = (
             [
                 path
@@ -2208,5 +2224,5 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             action()
 
 
-def run_tui() -> None:
-    ADAFAttackApp().run()
+def run_tui(workspace: Path | None = None) -> None:
+    ADAFAttackApp(workspace=workspace).run()

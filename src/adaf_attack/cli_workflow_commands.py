@@ -38,18 +38,25 @@ def register_workflow_commands(
     *,
     emit: Callable[..., None],
     emit_error: Callable[..., None],
+    doctor_payload: Callable[..., dict[str, Any]] | None = None,
 ) -> None:
     """Attach the ``workflow`` command group to the main CLI app.
 
     ``emit`` and ``emit_error`` are the shared CLI output helpers so this group
     honors ``--format json`` and ``--no-color`` identically to every other
-    command.
+    command. When ``doctor_payload`` is provided, ``workflow next`` shares the
+    same readiness snapshot as ``guide``.
     """
 
     workflow_app = typer.Typer(
         help="Finding-driven guided workflow: start to closure, interactive or agent-driven.",
     )
     app.add_typer(workflow_app, name="workflow")
+
+    def _doctor() -> dict[str, Any] | None:
+        if doctor_payload is None:
+            return None
+        return doctor_payload("user-readiness")
 
     def _resolve_workspace(workspace: Path | None) -> Path:
         return Path(workspace) if workspace is not None else default_workspace_dir()
@@ -95,10 +102,12 @@ def register_workflow_commands(
             enrich_action(action, session=session, workspace=root)
             for action in engine.recommendations(limit=5)
         ]
-        primary = (
-            recs[0]["suggested_command"]
-            if recs
-            else f"adaf-attack workflow close --workspace {root}"
+        from adaf_attack.core.journey import guide_recovery_command, snapshot
+
+        # Authoritative next step always comes from the shared journey composer.
+        journey = snapshot(workspace=root, session=session, doctor=_doctor())
+        primary = str(
+            journey.get("suggested_command") or journey["primary_action"]["suggested_command"]
         )
         return {
             "ok": True,
@@ -110,6 +119,9 @@ def register_workflow_commands(
             "recommendations": recs,
             "next_step": primary,
             "suggested_command": primary,
+            "recovery_command": guide_recovery_command(workspace=root, session=session),
+            "journey_stage": journey.get("stage"),
+            "primary_action": journey.get("primary_action"),
         }
 
     def _guidance_panel(
@@ -151,7 +163,9 @@ def register_workflow_commands(
             lines.append("")
             lines.append("No pending actions. Run `workflow close` to finish.")
         lines.append("")
-        lines.append("When lost: adaf-attack guide")
+        from adaf_attack.core.journey import guide_recovery_command
+
+        lines.append(f"When lost: {guide_recovery_command(workspace=root, session=session)}")
         return Panel("\n".join(lines), title=title)
 
     def _emit_guidance(

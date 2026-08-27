@@ -342,11 +342,25 @@ def _emit(ctx: typer.Context, payload: dict[str, Any], human: Any) -> None:
 
 
 def _emit_error(ctx: typer.Context, error: ActionableError) -> None:
+    from adaf_attack.core.journey import guide_recovery_command
+
+    # Lost-operator recovery: every failure points back at the guided spine.
+    if not error.suggested_command:
+        object.__setattr__(error, "suggested_command", guide_recovery_command())
+    payload = error.payload()
+    recovery = guide_recovery_command()
+    # Keep the guide recovery visible even when the catalog already supplied a command.
+    error_body = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    if isinstance(error_body, dict) and "recovery_command" not in error_body:
+        error_body = {**error_body, "recovery_command": recovery}
+        payload = {**payload, "error": error_body}
     if _json_mode(ctx):
-        typer.echo(json.dumps(error.payload(), indent=2, sort_keys=True))
+        typer.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         _console(ctx).print(
-            f"Error [{error.code}]: {error.message}\nNext step: {error.remediation}"
+            f"Error [{error.code}]: {error.message}\n"
+            f"Next step: {error.remediation}\n"
+            f"When lost: {recovery}"
         )
 
 
@@ -799,8 +813,10 @@ def _doctor_payload(
         )
     else:
         next_step = "Run `adaf-attack guide` for the next copy-ready step."
+    ready = not blocking_checks
     return {
         "ok": blocking is None,
+        "ready": ready,
         "profile": profile,
         "profile_description": _DOCTOR_PROFILES[profile],
         "version": __version__,
@@ -810,9 +826,9 @@ def _doctor_payload(
         "blocking_checks": blocking_checks,
         "advisory_checks": advisory_checks,
         "readiness": {
-            "ready": not blocking_checks,
+            "ready": ready,
             "install_verification": "adaf-attack doctor --profile user-readiness --explain",
-            "safe_first_run": "adaf-attack quickstart",
+            "safe_first_run": "adaf-attack quickstart --workspace ./quickstart",
             "next_command": "adaf-attack guide",
         },
     }
@@ -3720,7 +3736,12 @@ register_product_commands(app, emit=_emit, emit_error=_emit_error, engagement_gr
 
 # Finding-driven guided workflow surface: the CLI/agent client of the same
 # durable engine the TUI drives (src/adaf_attack/core/workflow_engine.py).
-register_workflow_commands(app, emit=_emit, emit_error=_emit_error)
+register_workflow_commands(
+    app,
+    emit=_emit,
+    emit_error=_emit_error,
+    doctor_payload=lambda *args, **kwargs: _doctor_payload(*args, **kwargs),
+)
 
 
 @capability_app.command("list")
@@ -4159,7 +4180,14 @@ def setup_cmd(
 
 
 @app.command("start", rich_help_panel="Setup & diagnostics")
-def start(ctx: typer.Context) -> None:
+def start(
+    ctx: typer.Context,
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        help="Workflow workspace shared with guide / what-next (default: platform workspace).",
+    ),
+) -> None:
     """Launch the interactive Textual TUI shell."""
     if ctx.ensure_object(dict).get("non_interactive"):
         error = ActionableError(
@@ -4180,7 +4208,7 @@ def start(ctx: typer.Context) -> None:
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code) from exc
 
-    run_tui()
+    run_tui(workspace=workspace or default_workspace_dir())
 
 
 if __name__ == "__main__":  # pragma: no cover - module CLI entry point

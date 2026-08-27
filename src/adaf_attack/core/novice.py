@@ -98,7 +98,7 @@ def home_actions(*, first_run: bool) -> list[dict[str, str]]:
         },
         {
             "goal": "Try the safe offline demo",
-            "command": "adaf-attack quickstart",
+            "command": "adaf-attack quickstart --workspace ./quickstart",
             "why": "Creates a disposable demo session and findings dashboard.",
         },
         {

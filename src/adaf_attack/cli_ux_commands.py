@@ -82,8 +82,11 @@ def register_ux_commands(
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from exc
 
+        from adaf_attack.core.journey import guide_recovery_command, quote_path
+
         dashboard = session_findings_dashboard(dest)
         guide_workspace = dest_root
+        next_guide = guide_recovery_command(workspace=guide_workspace, session=dest)
         payload = {
             "ok": True,
             "stage": "complete",
@@ -95,11 +98,16 @@ def register_ux_commands(
             "doctor": doctor,
             "session_path": str(dest),
             "dashboard": dashboard,
-            "next_step": f"adaf-attack guide --workspace {guide_workspace} --session {dest}",
+            "next_step": next_guide,
+            "suggested_command": next_guide,
+            "recovery_command": next_guide,
             "next_steps": [
-                f"adaf-attack guide --workspace {guide_workspace} --session {dest}",
-                f"adaf-attack session show --session {dest}",
-                f"adaf-attack engagement report --session {dest} --engagement-id QUICKSTART-2026-001",
+                next_guide,
+                f"adaf-attack session show --session {quote_path(dest)}",
+                (
+                    "adaf-attack engagement report "
+                    f"--session {quote_path(dest)} --engagement-id QUICKSTART-2026-001"
+                ),
                 "Read docs/USER_READINESS.md before connecting to an authorized target.",
             ],
         }
@@ -110,7 +118,7 @@ def register_ux_commands(
                 "Installation and offline demo passed.\n"
                 f"Session: {dest}\n"
                 f"Findings: {dashboard.get('finding_count', 0)}\n"
-                f"Next: adaf-attack guide --workspace {guide_workspace} --session {dest}",
+                f"Next: {next_guide}",
                 title="ADAF-ATTACK quickstart",
             ),
         )
@@ -153,19 +161,24 @@ def register_ux_commands(
             non_interactive = bool(ctx.ensure_object(dict).get("non_interactive"))
             primary = payload["primary_action"]
             if non_interactive or _json_mode(ctx):
-                error = ActionableError(
+                error = error_for(
                     "INTERACTIVE_MODE_DISABLED",
-                    "`guide --advance` requires an interactive TTY.",
-                    "Run `adaf-attack guide` and copy the suggested command, or omit `--format json`.",
+                    message="`guide --advance` requires an interactive TTY.",
                     suggested_command="adaf-attack guide",
+                )
+                # Keep the advance-specific remediation while retaining the catalog code.
+                error = ActionableError(
+                    error.code,
+                    error.message,
+                    "Run `adaf-attack guide` and copy the suggested command, or omit `--format json`.",
+                    suggested_command=error.suggested_command,
                 )
                 _emit_error(ctx, error)
                 raise typer.Exit(code=error.exit_code)
             if not primary.get("advance_safe"):
-                error = ActionableError(
+                error = error_for(
                     "GUIDE_ADVANCE_UNSAFE",
-                    f"The primary step `{primary['id']}` cannot be auto-advanced.",
-                    "Copy and run the suggested command after review (live or destructive steps stay manual).",
+                    message=f"The primary step `{primary['id']}` cannot be auto-advanced.",
                     suggested_command=str(primary.get("suggested_command") or "adaf-attack guide"),
                 )
                 _emit_error(ctx, error)
@@ -208,10 +221,9 @@ def register_ux_commands(
                     payload = snapshot(workspace=root, session=session, doctor=doctor)
                     payload["advanced"] = {"id": action_id}
                 else:
-                    error = ActionableError(
+                    error = error_for(
                         "GUIDE_ADVANCE_UNSAFE",
-                        f"No safe advance handler for `{action_id}`.",
-                        "Copy and run the suggested command after review.",
+                        message=f"No safe advance handler for `{action_id}`.",
                         suggested_command=str(
                             primary.get("suggested_command") or "adaf-attack guide"
                         ),
@@ -236,15 +248,27 @@ def register_ux_commands(
             f"- {item['title']}: {item['suggested_command']}"
             for item in payload.get("secondary_actions") or []
         ]
+        approvals = primary.get("approvals") or []
+        approval_text = ", ".join(approvals) if approvals else "none (offline / review-only)"
+        blocked_line = (
+            [f"Blocked because: {payload['blocked_because']}", ""]
+            if payload.get("blocked_because")
+            else []
+        )
         human = Panel(
             "\n".join(
                 [
                     f"Stage: {payload['stage_label']} ({payload['progress_pct']}%)",
                     breadcrumb,
                     "",
+                    *blocked_line,
                     f"Next: {primary['title']}",
                     f"Why:  {primary['why']}",
+                    f"Risk: {primary.get('risk', 'observe')}",
+                    f"Approvals: {approval_text}",
+                    f"Rollback: {primary.get('rollback_implication') or primary.get('rollback')}",
                     f"Cmd:  {primary['suggested_command']}",
+                    f"If this fails: {payload.get('recovery_command') or primary.get('recovery_command')}",
                     *(["", "Also:", *secondary_lines] if secondary_lines else []),
                     "",
                     "Tip: `adaf-attack guide --advance` runs safe offline steps only.",
@@ -312,56 +336,38 @@ def register_ux_commands(
         safe_only: bool = typer.Option(
             True, "--safe-only/--include-advanced", help="Prefer beginner-safe suggestions."
         ),
+        workspace: Path | None = typer.Option(
+            None,
+            "--workspace",
+            help="Workflow workspace (must match guide --workspace for identical next steps).",
+        ),
         session: Path | None = typer.Option(
-            None, "--session", help="Rank actions using persisted session evidence."
+            None,
+            "--session",
+            help="Bias the shared journey snapshot toward this session (same as guide --session).",
         ),
         mode: str = typer.Option(
-            "OBSERVE", "--mode", help="Operational mode: OBSERVE, VALIDATE, or EMULATE."
+            "OBSERVE", "--mode", help="Operational mode when attaching session evidence context."
         ),
         rank_by: str = typer.Option(
-            "balanced", "--rank-by", help="Ranking mode for session recommendations."
+            "balanced", "--rank-by", help="Ranking mode for optional session evidence context."
         ),
     ) -> None:
-        """Recommend the next action using capability or engagement context."""
+        """Recommend the next action; always shares guide's suggested_command."""
+        from adaf_attack.core.journey import snapshot
         from adaf_attack.core.novice import beginner_next_actions, home_actions
 
-        if session is not None:
-            from adaf_attack.core.engagement_dashboard import dashboard
-
-            view = dashboard(session, mode=mode, ranking=rank_by)
-            actions = view["recommended_next_actions"]
-            payload = {
-                "ok": True,
-                "context": "session",
-                "session": str(session),
-                "mode": view["engagement"]["mode"],
-                "ranking": view["ranking"],
-                "objective": view["objective"],
-                "breadcrumbs": view["breadcrumbs"],
-                "suggestions": actions,
-            }
-            human = Panel(
-                "\n".join(
-                    f"{i}. {item['action']} [{item['risk']}]\n   {item['why']}"
-                    for i, item in enumerate(actions, 1)
-                )
-                or "No next action is recommended.",
-                title="What next for this engagement?",
-            )
-            _emit(ctx, payload, human)
-            return
-
         if capability is None:
-            from adaf_attack.core.journey import snapshot
-
             doctor = doctor_payload("user-readiness")
-            journey = snapshot(session=session, doctor=doctor)
+            root = Path(workspace) if workspace is not None else default_workspace_dir()
+            journey = snapshot(workspace=root, session=session, doctor=doctor)
             primary = journey["primary_action"]
             actions = [
                 {
                     "goal": primary["title"],
                     "command": primary["suggested_command"],
                     "why": primary["why"],
+                    "risk": primary.get("risk"),
                 }
             ]
             for item in journey.get("secondary_actions") or []:
@@ -370,12 +376,37 @@ def register_ux_commands(
                         "goal": item["title"],
                         "command": item["suggested_command"],
                         "why": item["why"],
+                        "risk": item.get("risk"),
                     }
                 )
             # Keep classic goal list as additional suggestions for discoverability.
             for item in home_actions(first_run=bool(journey["context"].get("first_run"))):
                 if item["command"] not in {entry["command"] for entry in actions}:
                     actions.append(item)
+            session_context: dict[str, Any] | None = None
+            if session is not None and session.is_dir():
+                from adaf_attack.core.engagement_dashboard import dashboard
+
+                view = dashboard(session, mode=mode, ranking=rank_by)
+                session_context = {
+                    "session": str(session),
+                    "mode": view["engagement"]["mode"],
+                    "ranking": view["ranking"],
+                    "objective": view["objective"],
+                    "breadcrumbs": view["breadcrumbs"],
+                    "evidence_suggestions": view["recommended_next_actions"],
+                }
+                for item in view["recommended_next_actions"]:
+                    command = str(item.get("command") or item.get("action") or "")
+                    if command and command not in {entry["command"] for entry in actions}:
+                        actions.append(
+                            {
+                                "goal": str(item.get("action") or "Session evidence action"),
+                                "command": command,
+                                "why": str(item.get("why") or ""),
+                                "risk": item.get("risk"),
+                            }
+                        )
             payload = {
                 "ok": True,
                 "context": "journey",
@@ -383,12 +414,23 @@ def register_ux_commands(
                 "suggestions": actions,
                 "primary_action": primary,
                 "next_step": primary["suggested_command"],
+                "suggested_command": primary["suggested_command"],
+                "recovery_command": journey.get("recovery_command"),
                 "journey": journey,
+                "session_context": session_context,
             }
             human = Panel(
                 "\n".join(
-                    f"{i + 1}. {item['goal']}\n   {item['command']}\n   {item['why']}"
-                    for i, item in enumerate(actions[:6])
+                    [
+                        f"Stage: {journey['stage_label']}",
+                        f"Next:  {primary['suggested_command']}",
+                        f"Why:   {primary['why']}",
+                        "",
+                        *[
+                            f"{i + 1}. {item['goal']}\n   {item['command']}\n   {item['why']}"
+                            for i, item in enumerate(actions[:6])
+                        ],
+                    ]
                 ),
                 title="What should I do next?",
             )
