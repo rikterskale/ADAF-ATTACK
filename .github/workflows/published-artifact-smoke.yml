@@ -54,8 +54,11 @@ jobs:
             }
           fi
           mkdir -p published-dist
+          # Download every artifact named by release-manifest.json so --validate
+          # can resolve both the wheel and the sdist checksum rows.
           gh release download "$tag" --dir published-dist \
-            --pattern "*.whl" --pattern "release-manifest.json" \
+            --pattern "*.whl" --pattern "*.tar.gz" \
+            --pattern "release-manifest.json" \
             --pattern "release-provenance.json" --pattern "SHA256SUMS"
           wheels=(published-dist/*.whl)
           if [[ "${#wheels[@]}" -ne 1 ]]; then
