@@ -60,8 +60,28 @@ def test_journey_first_success_without_demo(tmp_path: Path, monkeypatch) -> None
     payload = journey.snapshot(workspace=tmp_path, doctor={"ok": True, "checks": []})
     assert payload["stage"] == "first-success"
     assert payload["primary_action"]["id"] == "quickstart"
-    assert payload["primary_action"]["suggested_command"] == "adaf-attack quickstart"
+    assert "quickstart" in payload["primary_action"]["suggested_command"]
+    assert "--workspace" in payload["primary_action"]["suggested_command"]
+    assert payload["primary_action"]["risk"] == "observe"
+    assert payload["primary_action"]["recovery_command"].startswith("adaf-attack guide")
+    assert payload["entry_criteria"]
+    assert payload["exit_criteria"]
     assert payload["ok"] is True
+
+
+def test_journey_quotes_workspace_paths_with_spaces(tmp_path: Path) -> None:
+    spaced = tmp_path / "my workspace"
+    spaced.mkdir()
+    command = journey.suggested_command_for_action(
+        WorkflowAction(
+            "authorize-scope", "Confirm scope", "Record approval", "scoping", "required"
+        ),
+        workspace=spaced,
+    )
+    assert "authorize" in command
+    assert "my workspace" in command or "my\\ workspace" in command or "'my workspace'" in command
+    # Raw unquoted space between flag and path tokens must not appear.
+    assert "--workspace my workspace" not in command
 
 
 def test_journey_install_blocked(tmp_path: Path) -> None:
@@ -119,9 +139,57 @@ def test_guide_json_contract(tmp_path: Path, monkeypatch) -> None:
 def test_what_next_delegates_to_journey(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
     guide = _json(runner.invoke(app, ["--format", "json", "guide", "--workspace", str(tmp_path)]))
-    what_next = _json(runner.invoke(app, ["--format", "json", "what-next"]))
+    what_next = _json(
+        runner.invoke(app, ["--format", "json", "what-next", "--workspace", str(tmp_path)])
+    )
     assert what_next["context"] == "journey"
     assert what_next["next_step"] == guide["primary_action"]["suggested_command"]
+    assert what_next["suggested_command"] == guide["suggested_command"]
+
+
+def test_guide_what_next_workflow_next_agree_with_session(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    session = tmp_path / "demo-session"
+    materialize_demo_session(session)
+    guide = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "guide",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    what_next = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "what-next",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    workflow_next = _json(
+        runner.invoke(
+            app,
+            ["--format", "json", "workflow", "next", "--workspace", str(tmp_path)],
+        )
+    )
+    assert what_next["context"] == "journey"
+    assert what_next["next_step"] == guide["next_step"]
+    assert workflow_next["next_step"] == guide["next_step"]
+    assert guide["primary_action"]["rollback_implication"]
+    assert guide["recovery_command"].startswith("adaf-attack guide")
 
 
 def test_tour_marks_progress(tmp_path: Path, monkeypatch) -> None:
