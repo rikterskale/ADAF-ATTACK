@@ -3,8 +3,10 @@
 - The distribution is proprietary and currently delivered through private
   GitHub release assets or authorized source access; it is not on PyPI.
 - Operator guidance is centered on `adaf-attack guide`. Parallel aliases such
-  as `init` / `setup` / `home` hand off to that spine and must not be treated as
-  competing onboarding products. `what-next` and `workflow next` must emit the
+  as `init` / `setup` / `home` / `tour` hand off to that spine and must not be
+  treated as competing onboarding products. `tour` and `home` use the default
+  workspace only (no `--workspace` / `--session` flags); for a custom path,
+  call `guide` with those flags. `what-next` and `workflow next` must emit the
   same `suggested_command` as `guide` for a given workspace/session snapshot.
 - Directory mutations are reversed with `adaf-attack rollback` (alias of
   `cleanup`); `cleanup-status` is the read-only dashboard.

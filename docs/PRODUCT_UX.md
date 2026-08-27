@@ -4,7 +4,8 @@ The product layer turns saved evidence into polished operator and client workflo
 
 - `guide` is the authoritative next-step command for the full operator journey
   (install → offline first success → authorize → operate → report → closeout).
-  CLI and TUI share `core.journey.snapshot()`.
+  CLI and TUI share `core.journey.snapshot()`. `tour` and `home` orient against
+  the default workspace only; custom workspaces use `guide --workspace …`.
 - `command-center` is the mission-control view.
 - `impact-map` connects evidence to findings, assets, and impact.
 - `investigate` provides zero-noise, read-only evidence review.

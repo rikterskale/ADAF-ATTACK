@@ -26,7 +26,7 @@ SHA256SUMS + release-manifest. No source reading.
 | Kali/Linux | 3.__ | PASS / FAIL | |
 | macOS (offline CLI) | 3.__ | PASS / FAIL | |
 
-Commands run (must all exit 0):
+Commands run (must all exit 0; first-ten canon):
 
 ```text
 python -m pip check
@@ -34,6 +34,7 @@ adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace ./quickstart
 adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack --format json paths
 ```
 
 Doctor `"ready": true` observed: YES / NO  

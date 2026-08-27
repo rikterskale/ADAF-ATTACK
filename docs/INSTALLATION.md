@@ -213,22 +213,31 @@ platform instead of enabling internet access on the isolated host.
 
 ## 7. First verification: safe and offline
 
-After any installation path, run this sequence. These commands do not contact
-Active Directory and do not modify a target:
+After any installation path, run the first-ten canon. These commands do not
+contact Active Directory and do not modify a target:
 
 ```bash
+python -m pip check
+adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
-adaf-attack --format json paths
 adaf-attack quickstart --workspace ./quickstart
-adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
-adaf-attack session show --session ./quickstart/demo-session
-adaf-attack --format json list-capabilities
+adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack --format json paths
 ```
 
-A successful readiness check reports `ok: true` and a ready installation.
-Optional warnings for TUI, Kerberos, reporting, or Certipy are expected when
-those extras were not installed. `quickstart` creates disposable local demo
-evidence and never contacts a domain controller.
+A successful readiness check reports `"ready": true` (and `ok: true`). Optional
+warnings for TUI, Kerberos, reporting, or Certipy are expected when those extras
+were not installed. `quickstart` creates disposable local demo evidence and
+never contacts a domain controller. When lost, re-run `guide` with the same
+workspace and session.
+
+Optional orientation **after** first success:
+
+```bash
+adaf-attack session show --session ./quickstart/demo-session
+adaf-attack --format json list-capabilities --novice --safe-only
+```
+
 
 If the default application directories are blocked:
 

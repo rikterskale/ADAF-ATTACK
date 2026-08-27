@@ -47,16 +47,17 @@ adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace ./quickstart
 adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
-adaf-attack --format json workflow next --workspace ./quickstart --session ./quickstart/demo-session
 adaf-attack --format json paths
 ```
 
-Expect doctor `"ready": true` and identical `suggested_command` from `guide` and
-`workflow next`. When lost: `adaf-attack guide` with the same workspace/session.
+Expect doctor `"ready": true` and one copy-ready `suggested_command` from
+`guide`. When lost: `adaf-attack guide` with the same workspace/session.
 
-Optional offline deliverable smoke **after** first success (still no DC):
+Optional checks **after** first success (still no DC). `workflow next` must
+emit the same `suggested_command` as `guide` for this snapshot:
 
 ```bash
+adaf-attack --format json workflow next --workspace ./quickstart --session ./quickstart/demo-session
 adaf-attack engagement report --session ./quickstart/demo-session --engagement-id DEMO-2026-001
 adaf-attack engagement package --session ./quickstart/demo-session --output demo.zip --profile client
 ```

@@ -66,13 +66,15 @@ its shim directory to the user PATH. Open a new terminal after installation.
 
 ## Verify
 
+Run the first-ten canon (same as First safe offline run). No domain controller:
+
 ```powershell
+python -m pip check
 adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace .\quickstart
-adaf-attack guide --workspace .\quickstart --session .\quickstart\demo-session
-adaf-attack list-capabilities
-adaf-attack paths
+adaf-attack --format json guide --workspace .\quickstart --session .\quickstart\demo-session
+adaf-attack --format json paths
 ```
 
 If the command is not found in the current window, either open a new terminal or
@@ -82,9 +84,11 @@ When lost, run `adaf-attack guide`. It always returns one copy-ready next step.
 
 ## First safe offline run
 
-Use the same Verify spine above. Short form:
+Use the same Verify spine above:
 
 ```powershell
+python -m pip check
+adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace .\quickstart
 adaf-attack --format json guide --workspace .\quickstart --session .\quickstart\demo-session
@@ -100,6 +104,7 @@ artifacts. When lost, re-run `guide`.
 Operator orientation after first success:
 
 ```powershell
+adaf-attack list-capabilities --novice --safe-only
 adaf-attack rollback --help
 adaf-attack cleanup-status --help
 adaf-attack --format json support-bundle --output adaf-support-bundle.json

@@ -23,7 +23,8 @@ host-integrated DNS, clock, authentication, and network access.
 ## First ten minutes
 
 After installing an approved wheel, run this safe sequence. It does not contact
-AD or modify a target:
+AD or modify a target. This block is the single first-ten canon shared with the
+README Quick start, platform guides, and release evidence pack:
 
 ```bash
 python -m pip check
@@ -31,42 +32,43 @@ adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace ./quickstart
 adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
-adaf-attack --format json workflow next --workspace ./quickstart --session ./quickstart/demo-session
 adaf-attack --format json paths
 ```
 
 If every command exits with status 0 and the doctor JSON reports
 `"ready": true` (also mirrored under `readiness.ready`), the base installation
-is usable. `guide` and `workflow next` must emit the same `suggested_command`.
-The doctor checks the installed runtime modules, writable application
+is usable. The doctor checks the installed runtime modules, writable application
 directories, and packaged demo fixtures. Optional warnings are expected when
 TUI, Kerberos, reporting, Certipy, or Impacket command-line tools were not
 selected.
 
 When lost at any point, run `adaf-attack guide` with the current `--workspace`
 and `--session`. It is the single authoritative next step from install through
-closeout (CLI and TUI share the same journey).
+closeout (CLI and TUI share the same journey). `tour` and `home` use the
+default workspace only; for a custom workspace or session, call `guide` with
+those flags.
 
-For the shortest safe first run, use the bundled quickstart:
-
-```bash
-adaf-attack quickstart --workspace ./quickstart
-adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
-```
-
-It runs the user-readiness doctor and creates a disposable offline demo session.
-It never contacts a domain controller. If a managed workstation blocks the
-default application directories, repair missing directories and retry:
+If a managed workstation blocks the default application directories, repair
+missing directories and retry:
 
 ```bash
 adaf-attack paths --repair
 adaf-attack quickstart --workspace ./quickstart
 ```
 
-For a deterministic offline demo from a release wheel, run:
+### After first success (optional)
+
+Confirm that `workflow next` agrees with `guide` for the same snapshot, then
+continue only by pasting `guide`'s `suggested_command`:
 
 ```bash
-adaf-attack doctor --profile user-readiness
+adaf-attack --format json workflow next --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack list-capabilities --novice --safe-only
+```
+
+For a second disposable offline demo from a release wheel (still no DC):
+
+```bash
 adaf-attack demo --workspace ./demo-session
 adaf-attack engagement report --session ./demo-session/demo-session --engagement-id DEMO-2026-001
 adaf-attack engagement package --session ./demo-session/demo-session --output demo-engagement.zip --profile client

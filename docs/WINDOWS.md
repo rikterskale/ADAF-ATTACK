@@ -22,6 +22,7 @@ This will:
 Open a **new** terminal, then run the first-ten spine (no domain controller):
 
 ```powershell
+python -m pip check
 adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace .\quickstart
