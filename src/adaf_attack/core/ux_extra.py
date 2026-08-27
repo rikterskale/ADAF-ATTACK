@@ -193,6 +193,56 @@ def format_stages_progress(cap: Capability, current: str | None = None) -> dict[
     return {"capability": cap.id, "stages": items, "current": current}
 
 
+# Keywords that advance a declared progress stage from runner/TUI log lines.
+_STAGE_LOG_HINTS: dict[str, tuple[str, ...]] = {
+    "prepare": ("prepare", "starting", "workspace:", "preflight"),
+    "connect": ("connect", "ldap bind", "binding", "dns", "kerberos"),
+    "execute": ("execute", "enumerat", "running query", "searching"),
+    "select-template": ("select-template", "template", "esc"),
+    "enroll": ("enroll", "certificate request", "cert request", "issued"),
+    "pkinit": ("pkinit", "tgt", "as-req", "asreq"),
+    "u2u-pac": ("u2u", "pac_credential", "pac credential"),
+    "recover-hash": ("recover", "unpac", "nt hash"),
+    "write-shadow": ("shadow", "key credential", "msds-keycredentiallink"),
+    "set-rbcd": ("rbcd", "allowedtoact", "msds-allowedtoact"),
+    "s4u": ("s4u", "s4u2self", "s4u2proxy"),
+    "ticket": ("ticket", "ccache", "kirbi"),
+    "forge": ("forge", "golden"),
+    "export-pfx": ("pfx", "export"),
+    "load-cert": ("load cert", "certificate", "pfx"),
+    "export-ccache": ("export ccache", "ccache"),
+    "plant-objects": ("plant", "addentry", "dcshadow object"),
+    "register-spns": ("spn", "register"),
+    "drsuapi-push": ("drsuapi", "replication", "push"),
+    "harvest": ("harvest", "hash", "roast", "secret"),
+    "analyze": ("analyze", "graph", "path", "resolved", "ranking", "interesting"),
+    "next-actions": ("next action", "session directory", "complete", "finished", "done"),
+}
+
+
+def advance_stage_from_log(
+    stages: list[str],
+    message: str,
+    *,
+    current: str | None = None,
+) -> str | None:
+    """Advance to the furthest matching stage for a log line (never move backward)."""
+    if not stages:
+        return current
+    lowered = message.lower()
+    matched_indexes = [
+        index
+        for index, stage in enumerate(stages)
+        if any(hint in lowered for hint in _STAGE_LOG_HINTS.get(stage, (stage.replace("-", " "),)))
+    ]
+    if not matched_indexes:
+        return current if current in stages else stages[0]
+    next_index = max(matched_indexes)
+    if current in stages:
+        next_index = max(next_index, stages.index(current))
+    return stages[next_index]
+
+
 def session_findings_dashboard(
     session_dir: Path, *, severity: str | None = None, limit: int = 50
 ) -> dict[str, Any]:

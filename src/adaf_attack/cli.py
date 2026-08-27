@@ -2629,16 +2629,22 @@ def _execute_with_spinner(
 ) -> dict[str, Any]:
     """Run a capability inside a Rich spinner, threading log messages into the status."""
     console_obj = _console(ctx)
-    stage_hint = capability
+    stages: list[str] = []
+    current_stage: str | None = None
     try:
         from adaf_attack.core.registry import capability_registry
         from adaf_attack.core.ux import format_stages_progress
+        from adaf_attack.core.ux_extra import advance_stage_from_log
 
         cap = capability_registry.get(capability)
         if cap is not None:
-            stage_hint = " -> ".join(item["id"] for item in format_stages_progress(cap)["stages"])
+            stages = [item["id"] for item in format_stages_progress(cap)["stages"]]
+            current_stage = stages[0] if stages else None
     except Exception:
-        stage_hint = capability
+        stages = []
+        current_stage = None
+        advance_stage_from_log = None  # type: ignore[assignment]
+    stage_hint = " -> ".join(stages) if stages else capability
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -2646,10 +2652,16 @@ def _execute_with_spinner(
         console=console_obj,
         transient=True,
     ) as progress:
-        task_id = progress.add_task(f"Running {capability}: {stage_hint}", total=None)
+        task_id = progress.add_task(
+            f"Running {capability} [{current_stage or stage_hint}]", total=None
+        )
 
         def _log(message: str) -> None:
-            progress.update(task_id, description=f"{capability}: {message[:80]}")
+            nonlocal current_stage
+            if stages and advance_stage_from_log is not None:
+                current_stage = advance_stage_from_log(stages, message, current=current_stage)
+            label = current_stage or capability
+            progress.update(task_id, description=f"{capability} [{label}]: {message[:72]}")
 
         return execute_capability(
             capability,

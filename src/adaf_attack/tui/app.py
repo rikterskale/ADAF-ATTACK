@@ -72,6 +72,7 @@ from adaf_attack.core.ux import (
     session_findings_dashboard,
     suggested_next_actions,
 )
+from adaf_attack.core.ux_extra import advance_stage_from_log
 from adaf_attack.core.workflow_engine import WorkflowEngine, WorkflowError, finding_from_document
 
 
@@ -198,6 +199,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         # Dynamic capability-parameter slots (see #param-form). Each entry is
         # {"option", "param_key", "is_param", "label"} for one visible input.
         self._param_bindings: list[dict[str, str]] = []
+        # Preserve operator-entered -P values across refresh for the same capability.
+        self._param_value_cache: dict[str, dict[str, str]] = {}
+        self._param_form_cap_id: str | None = None
 
     @property
     def _workspace(self) -> Path:
@@ -400,7 +404,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 )
                 with Vertical(id="checklist-panel"):
                     yield Static("[bold]Review checklist[/bold]", classes="section-label")
-                    for item in ("scope", "auth", "force", "opsec", "rollback"):
+                    for item in ("scope", "auth", "force", "opsec", "rollback", "approval_token"):
                         yield Checkbox(item, id=f"check-{item}")
                     yield Button("Acknowledge review", id="ack-review-btn")
                 yield Static("No session loaded.", id="session-panel")
@@ -1152,29 +1156,51 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             if option in self._TARGET_FORM_OPTIONS:
                 continue
             prompts.append(entry)
-        return prompts[:8]
+        return prompts
+
+    def _cache_param_form_values(self) -> None:
+        """Persist visible parameter inputs for the capability currently on the form."""
+        if not self._param_form_cap_id or not self._param_bindings:
+            return
+        cached = self._param_value_cache.setdefault(self._param_form_cap_id, {})
+        for index, binding in enumerate(self._param_bindings):
+            cached[binding["param_key"]] = self.query_one(f"#param-input-{index}", Input).value
 
     def _refresh_param_form(self) -> None:
         """Show/hide labeled inputs for the selected capability's required params."""
+        self._cache_param_form_values()
         cap = self._selected()
         title = self.query_one("#param-title", Static)
         bindings: list[dict[str, str]] = []
-        prompts = self._capability_param_prompts(cap) if cap else []
+        all_prompts = self._capability_param_prompts(cap) if cap else []
+        omitted = all_prompts[8:]
+        prompts = all_prompts[:8]
+        cached = self._param_value_cache.get(cap.id, {}) if cap else {}
         if not cap:
             title.update(
                 "[bold]Capability parameters[/bold]\n"
                 "Select a capability to enter required -P / flag values."
             )
-        elif not prompts:
+        elif not all_prompts:
             title.update(
                 f"[bold]Capability parameters[/bold]\n"
                 f"{cap.id} needs no extra parameters beyond the target form."
             )
         else:
             contract = operator_capability_contract(cap)
+            omitted_note = ""
+            if omitted:
+                names = ", ".join(entry["label"] for entry in omitted[:4])
+                more = f" (+{len(omitted) - 4} more)" if len(omitted) > 4 else ""
+                omitted_note = (
+                    f"\n[yellow]{len(omitted)} more required beyond this form "
+                    f"({names}{more}). Use `adaf-attack capability-help {cap.id}` "
+                    "or pass remaining -P values on the CLI.[/]"
+                )
             title.update(
                 f"[bold]Capability parameters[/bold] for {cap.id}\n"
                 f"Risk {contract['risk']} · Fill required -P / flags before Review / Run."
+                f"{omitted_note}"
             )
         for index in range(8):
             label = self.query_one(f"#param-label-{index}", Label)
@@ -1184,7 +1210,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 label.update(entry["label"])
                 label.display = True
                 field.placeholder = entry["help"]
-                field.value = ""
+                field.value = cached.get(entry["param_key"], "")
                 field.password = (
                     "password" in entry["option"].lower()
                     or "password" in entry["param_key"].lower()
@@ -1206,11 +1232,17 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 field.password = False
                 field.display = False
         self._param_bindings = bindings
+        self._param_form_cap_id = cap.id if cap else None
 
     def _collect_capability_params(self) -> tuple[dict[str, Any], list[str]]:
         """Return (runner_kwargs, missing_labels) from the dynamic param form."""
         values: dict[str, Any] = {}
         missing: list[str] = []
+        cap = self._selected()
+        if cap is not None:
+            # Fail closed when the form truncated required extras beyond eight slots.
+            overflow = self._capability_param_prompts(cap)[8:]
+            missing.extend(entry["label"] for entry in overflow)
         for index, binding in enumerate(self._param_bindings):
             raw = self.query_one(f"#param-input-{index}", Input).value.strip()
             if not raw:
@@ -1522,10 +1554,18 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         )
         checklist = risk_checklist(cap)
         contract = operator_capability_contract(cap)
+        checklist_ids = {item["id"] for item in checklist["items"]}
         for item in checklist["items"]:
             checkbox = self.query_one(f"#check-{item['id']}", Checkbox)
+            checkbox.display = True
             checkbox.label = item["label"] + (" *" if item["required"] else "")
             checkbox.value = item["id"] == "force" and force
+        # Hide checklist rows that do not apply to this capability (e.g. token).
+        for item_id in ("scope", "auth", "force", "opsec", "rollback", "approval_token"):
+            if item_id not in checklist_ids:
+                checkbox = self.query_one(f"#check-{item_id}", Checkbox)
+                checkbox.value = False
+                checkbox.display = False
         command = self._ready_command(cap.id)
         approvals = ", ".join(contract["approvals"]) or "none (observe / review-only)"
         params = ", ".join(contract["required_params"]) or "(none)"
@@ -1716,15 +1756,17 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._update_progress()
         self._update_engagement_dashboard()
 
+        stages = [item["id"] for item in format_stages_progress(cap)["stages"]] if cap else []
+
         def worker() -> None:
             def log_fn(msg: str) -> None:
                 while self._pause_requested.is_set() and not self._cancel_requested.is_set():
                     threading.Event().wait(0.1)
-                lowered = msg.lower()
-                if "connect" in lowered or "ldap bind" in lowered:
-                    self._active_stage = "connect"
-                elif "resolved" in lowered or "session directory" in lowered:
-                    self._active_stage = "analyze"
+                if stages:
+                    self._active_stage = advance_stage_from_log(
+                        stages, msg, current=self._active_stage
+                    )
+                    self._post_ui(self._update_progress)
                 self._write_run_log(f"  {msg}")
                 if self._cancel_requested.is_set():
                     self._write_run_log(

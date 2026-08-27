@@ -90,6 +90,8 @@ def risk_checklist(cap: Capability) -> dict[str, Any]:
     }
     may_modify = bool(cap.safety and cap.safety.modifies_directory)
 
+    from adaf_attack.core.registry import ApprovalPolicy
+
     items = [
         {"id": "scope", "label": "Engagement scope confirmed", "required": True},
         {
@@ -109,6 +111,14 @@ def risk_checklist(cap: Capability) -> dict[str, Any]:
         },
         {"id": "rollback", "label": "Cleanup / rollback path identified", "required": may_modify},
     ]
+    if cap.safety and cap.safety.approval == ApprovalPolicy.SCOPED_TOKEN:
+        items.append(
+            {
+                "id": "approval_token",
+                "label": "--approval-token with matching --engagement-id",
+                "required": True,
+            }
+        )
     return {
         "id": cap.id,
         "phase": phase,
@@ -731,6 +741,7 @@ def phase_label(phase_key: str) -> str:
 
 # Re-export extended helpers (kept in ux_extra to ease incremental deploys)
 from adaf_attack.core.ux_extra import (  # noqa: E402  # intentional late re-export
+    advance_stage_from_log,
     capability_dependency_graph,
     capability_prerequisites,
     evaluate_prerequisites,
@@ -742,6 +753,7 @@ from adaf_attack.core.ux_extra import (  # noqa: E402  # intentional late re-exp
 
 __all__ = [
     "PHASE_LABELS",
+    "advance_stage_from_log",
     "build_ready_command",
     "capability_dependency_graph",
     "capability_phase",
