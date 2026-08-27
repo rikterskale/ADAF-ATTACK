@@ -52,7 +52,7 @@ def test_plan_json_reports_read_only_default_for_mixed_capability() -> None:
     assert payload["mode"] == "preview"
     risk = payload["risk"]
     assert risk["force_provided"] is False
-    assert risk["level"] == "observe"
+    assert risk["level"] == "OBSERVE"
     assert risk["may_modify_target"] is False
     assert risk["network_contact"] is True
     assert risk["requires_force"] is False
