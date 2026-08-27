@@ -31,6 +31,10 @@ declared in `pyproject.toml`.
 - Operator-first README orientation table, expanded RELEASE.md checklist for
   non-author release managers, and Windows installer JSON codes for common
   setup failures.
+- `docs/VENDOR_SCORECARD.md` records Phase 0→4 before/after scores and the
+  vendor SE first-ten-minutes script; UX acceptance matrix rows are scored
+  with no row below 9.
+- `scripts/Invoke-Tests.ps1` falls back when `.pytest-local` is locked on Windows.
 
 ### Changed
 

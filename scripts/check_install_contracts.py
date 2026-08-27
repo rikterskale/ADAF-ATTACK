@@ -72,6 +72,7 @@ def _check_workflow_dependencies() -> None:
 def _resolve_job(jobs: dict[str, Any], name: str) -> dict[str, Any]:
     """Return the effective job definition, following one `uses:` hop if needed."""
     import yaml as _yaml
+
     job = jobs[name]
     if isinstance(job, dict) and job.get("uses"):
         uses = str(job["uses"])
@@ -145,7 +146,11 @@ def _check_ci() -> None:
     # Also pull in reusable workflows that ci.yml delegates to.
     aggregated_text = ci_text
     for job in jobs.values():
-        if isinstance(job, dict) and isinstance(job.get("uses"), str) and job["uses"].startswith("./"):
+        if (
+            isinstance(job, dict)
+            and isinstance(job.get("uses"), str)
+            and job["uses"].startswith("./")
+        ):
             called = ROOT / job["uses"].removeprefix("./")
             if called.is_file():
                 aggregated_text += "\n" + called.read_text(encoding="utf-8")
@@ -276,6 +281,7 @@ def _check_docs() -> None:
         "docs/KNOWN_LIMITATIONS.md",
         "docs/RELEASE_READINESS.md",
         "docs/RELEASE_EVIDENCE.md",
+        "docs/VENDOR_SCORECARD.md",
         "docs/USER_READINESS.md",
         "docs/FEATURE_MATRIX.md",
         ".github/ISSUE_TEMPLATE/bug_report.yml",
@@ -518,11 +524,10 @@ def _check_metadata_and_versions() -> None:
     )
 
 
-
-
 def _check_changelog_version() -> None:
     """CHANGELOG's most recent versioned heading must match pyproject version."""
     import re
+
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     version_match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, flags=re.MULTILINE)
     _require(version_match is not None, "pyproject.toml is missing a `version` line")
@@ -565,6 +570,7 @@ def _check_precommit_pins() -> None:
     """Delegate to scripts/check_precommit_pins.py for the actual comparison."""
     import subprocess
     import sys as _sys
+
     result = subprocess.run(
         [_sys.executable, "scripts/check_precommit_pins.py"],
         cwd=ROOT,

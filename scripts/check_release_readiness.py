@@ -408,6 +408,7 @@ _REQUIRED_DOCS = (
     "docs/WINDOWS_NOVICE_USABILITY_GUIDE.md",
     "docs/FEATURE_MATRIX.md",
     "docs/USER_READINESS.md",
+    "docs/VENDOR_SCORECARD.md",
 )
 
 _FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
@@ -449,7 +450,11 @@ def _docs_reference_real_surface() -> None:
                     unknown_cmds.add(f"{command_path or command} ({doc.name})")
                 if command_path in {"run", "plan", "capability-help"}:
                     remaining = tokens[len(path) :]
-                    if remaining and not remaining[0].startswith(("-", "<")) and remaining[0] not in cap_ids:
+                    if (
+                        remaining
+                        and not remaining[0].startswith(("-", "<"))
+                        and remaining[0] not in cap_ids
+                    ):
                         unknown_caps.add(f"{command_path} {remaining[0]} ({doc.name})")
     _require(not unknown_cmds, f"docs reference commands that do not exist: {sorted(unknown_cmds)}")
     _require(
@@ -580,6 +585,7 @@ def _job_is_gated() -> None:
 @binding.check("every pillar maps to live jobs, steps, and contract tests")
 def _pillars_are_wired() -> None:
     import yaml
+
     workflow = _load_workflow()
     jobs = workflow["jobs"]
     all_step_names: set[str] = set()

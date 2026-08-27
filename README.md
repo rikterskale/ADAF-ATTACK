@@ -92,6 +92,7 @@ start from their platform guide below rather than pip directly.
 
 Canonical decision guide: [docs/USER_READINESS.md](docs/USER_READINESS.md).
 Release-manager MANUAL pack: [docs/RELEASE_EVIDENCE.md](docs/RELEASE_EVIDENCE.md).
+Vendor scorecard: [docs/VENDOR_SCORECARD.md](docs/VENDOR_SCORECARD.md).
 Security reports: [SECURITY.md](SECURITY.md).
 
 ## Capabilities
