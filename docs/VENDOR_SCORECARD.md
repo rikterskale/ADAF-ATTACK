@@ -78,9 +78,10 @@ python scripts/check_release_readiness.py --repo-root .
 Phase 4 CI mirror (branch `ux/phase1-guided-spine`, local):
 
 - `ruff check` / `ruff format --check` / `mypy` / `compileall` — pass
-- `pytest --cov=adaf_attack --cov-branch --cov-fail-under=95` — **1400 passed**, branch coverage **96.28%**
+- `pytest --cov=adaf_attack --cov-branch --cov-fail-under=95` — **1401 passed**, branch coverage **96.30%**
 - `check_cli_documentation.py` / `check_install_contracts.py` — pass
 - `check_release_readiness.py` — pass under project `.venv` (system-site `pip check` may fail on unrelated packages)
+- First-ten script (`92_first_ten_minutes.ps1`) — pass with project `.venv` on PATH
 - Transcript: UX scratch `logs/ci_mirror.txt` (outside the git tree)
 
 ## Vendor SE first-ten-minutes script
