@@ -602,6 +602,8 @@ def test_tui_guided_workflow_persistence_recommendations_and_exports(
             monkeypatch.setattr(tui_app, "default_workspace_dir", lambda: tmp_path / "workflow")
             app._ensure_workflow_started()
             assert app._workflow is not None
+            # Run must not silently complete authorize-scope (CLI guide stays authoritative).
+            assert "scope-authorized" not in app._workflow.state.completed_steps
             missing = tmp_path / "missing-session"
             app._workflow = None
             app._ingest_session_findings(missing)
@@ -780,3 +782,32 @@ def test_tui_guided_workflow_persistence_recommendations_and_exports(
             await _wait_for(pilot, lambda: app._capability_running is False)
 
     asyncio.run(exercise())
+
+
+def test_tui_journey_uses_doctor_for_install_blocked(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TUI Home Cmd must match CLI guide when doctor reports blockers."""
+    monkeypatch.setattr(tui_app, "default_workspace_dir", lambda: tmp_path)
+
+    def blocked_doctor(profile: str, **_kwargs: object) -> dict[str, object]:
+        assert profile == "user-readiness"
+        return {
+            "ok": False,
+            "ready": False,
+            "checks": [
+                {
+                    "id": "packaged-demo",
+                    "status": "error",
+                    "detail": "missing",
+                    "remediation": "Reinstall the release artifact.",
+                    "severity": "blocking",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("adaf_attack.cli._doctor_payload", blocked_doctor)
+    app = ADAFAttackApp()
+    journey = app._journey()
+    assert journey["stage"] == "install-blocked"
+    assert "doctor" in journey["primary_action"]["suggested_command"]

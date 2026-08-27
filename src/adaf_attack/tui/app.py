@@ -210,10 +210,17 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         return default_workspace_dir()
 
     def _journey(self, *, session: Path | None = None) -> dict[str, Any]:
-        """Shared journey snapshot so TUI Cmd matches CLI guide."""
+        """Shared journey snapshot so TUI Cmd matches CLI guide.
+
+        Passes the same user-readiness doctor payload as ``adaf-attack guide`` so
+        install-blocked stages agree across CLI and TUI.
+        """
+        from adaf_attack.cli import _doctor_payload
+
         return journey_snapshot(
             workspace=self._workspace,
             session=session if session is not None else self._last_session,
+            doctor=_doctor_payload("user-readiness"),
         )
 
     def on_unmount(self) -> None:
@@ -940,12 +947,15 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         )
 
     def _ensure_workflow_started(self) -> None:
+        """Ensure durable workflow state exists without advancing authorize.
+
+        Authorization remains an explicit guide / workflow step. Silently
+        completing ``authorize-scope`` on Run would desync TUI from CLI guide.
+        """
         if not self._workflow:
             self._workflow = WorkflowEngine(self._workspace)
         if not self._workflow.state.audit_log:
             self._workflow.start(actor="tui")
-        if "scope-authorized" not in self._workflow.state.completed_steps:
-            self._workflow.complete_action("authorize-scope", actor="tui-review")
         self._refresh_workflow_panel()
 
     def _ingest_session_findings(self, session: Path) -> None:
