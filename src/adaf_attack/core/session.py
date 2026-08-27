@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 import uuid
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -37,6 +38,7 @@ class Session:
         self._events: list[dict[str, Any]] = []
         self._event_lock = threading.Lock()
         self._last_event_hash = ""
+        self._started_monotonic = time.monotonic()
         self._write_meta()
 
     def _write_meta(self) -> None:
@@ -76,6 +78,9 @@ class Session:
                 "prev_hash": self._last_event_hash,
                 **payload,
             }
+            # Stamp elapsed time for mid-run events when callers omit duration_ms.
+            if "duration_ms" not in event:
+                event["duration_ms"] = int((time.monotonic() - self._started_monotonic) * 1000)
             unsigned = json.dumps(event, sort_keys=True, separators=(",", ":")).encode()
             event["event_hash"] = hashlib.sha256(unsigned).hexdigest()
             self._events.append(event)
