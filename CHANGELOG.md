@@ -5,11 +5,10 @@ declared in `pyproject.toml`.
 
 ## Unreleased
 
-> These changes are on `main` ahead of the next cut. Do not market them as part
-> of a private release tag until they appear under a versioned `## X.Y.Z`
-> heading and the matching wheel is published. Operators on `0.10.1` wheels
-> should treat Unreleased items as upcoming unless their approved wheel build
-> already includes them (check `adaf-attack --version` and the release notes).
+> Empty after the `0.10.1` private release cut. New work lands here until the
+> next versioned heading.
+
+## 0.10.1
 
 ### Added
 
@@ -28,38 +27,6 @@ declared in `pyproject.toml`.
   `run` payloads include `progress.stages` / observed stage transitions.
 - Compact TUI layout contract test; release pillar bindings include Phase 2
   self-explain tests; doctor repair-text coverage includes `live-ad`.
-
-### Changed
-
-- `workflow next` (and TUI workflow / What next panels) always take the
-  authoritative next step from `core.journey.snapshot()`, matching `guide`.
-  `recommendations[0]` is aligned to the journey primary.
-- TUI Home uses the same user-readiness doctor snapshot as `guide`; Run no
-  longer silently completes `authorize-scope`.
-- Error recovery commands include `--workspace` / `--session` when known.
-  Real approval-token failure text maps to `APPROVAL_TOKEN_*` catalog codes.
-- `demo`, `init`, `setup`, doctor first-run, and TUI Quickstart hand off to
-  `guide` only (no competing start ladders).
-- First-ten-minutes canon is identical across README, USER_READINESS,
-  FEATURE_MATRIX, INSTALLATION, RELEASE_EVIDENCE, and platform guides, and is
-  enforced by install contracts (`pip check` → doctor → quickstart → guide →
-  paths).
-- `doctor --profile user-readiness` keeps unwritable path probes blocking
-  (`paths --repair`); `offline` may stay advisory on read-only hosts.
-- Journey / capability contracts emit uppercase risk (`OBSERVE`…). Windows
-  `quote_path` normalizes to forward slashes before quoting.
-- Windows installer `-Json` failures include `recovery_command`. Support
-  bundles fail closed with `SECRET_IN_OUTPUT` when high-confidence secrets
-  remain after redaction.
-- Vendor scorecard re-scored from this pass’s evidence (overall ~9.0; no UX
-  matrix row below 9). Phase 4 proof tests lock behaviors, not scorecard prose.
-- RELEASE_EVIDENCE adds narrow-terminal TUI MANUAL section and forbids inventing
-  a public package URL.
-
-## 0.10.1
-
-### Added
-
 - `adaf-attack guide`: authoritative next-step command for the full operator
   journey (install → offline first success → authorize → operate → report →
   closeout), shared by CLI and TUI via `core.journey`.
@@ -78,6 +45,34 @@ declared in `pyproject.toml`.
   security-reporting channel.
 - Safe command-template enrichment, target validation, evidence rationale, and
   built-in capability registration/docstring contract checks.
+
+### Changed
+
+- `workflow next` (and TUI workflow / What next panels) always take the
+  authoritative next step from `core.journey.snapshot()`, matching `guide`.
+  `recommendations[0]` is aligned to the journey primary.
+- TUI Home uses the same user-readiness doctor snapshot as `guide`; Run no
+  longer silently completes `authorize-scope`.
+- Error recovery commands include `--workspace` / `--session` when known.
+  Real approval-token failure text maps to `APPROVAL_TOKEN_*` catalog codes.
+- `demo`, `init`, `setup`, doctor first-run, and TUI Quickstart hand off to
+  `guide` only (no competing start ladders).
+- First-ten-minutes canon is identical across README, USER_READINESS,
+  FEATURE_MATRIX, INSTALLATION, RELEASE_EVIDENCE, and platform guides, and is
+  enforced by install contracts (`pip check` → doctor → quickstart → guide →
+  paths).
+- `doctor --profile user-readiness` keeps unwritable path probes blocking
+  (`paths --repair`); `offline` may stay advisory on read-only hosts. Editable
+  installs treat metadata vs runtime version skew as advisory; wheels stay
+  blocking.
+- Journey / capability contracts emit uppercase risk (`OBSERVE`…). Windows
+  `quote_path` normalizes to forward slashes before quoting.
+- Windows installer `-Json` failures include `recovery_command`. Support
+  bundles fail closed with `SECRET_IN_OUTPUT` when high-confidence secrets
+  remain after redaction.
+- Vendor scorecard re-scored from this pass’s evidence; Phase 4 proof tests
+  lock behaviors, not scorecard prose. RELEASE_EVIDENCE adds narrow-terminal
+  TUI MANUAL section and forbids inventing a public package URL.
 
 ### Fixed
 
