@@ -1,17 +1,25 @@
-"""Phase 4 vendor-proof behavioral checks for the guided spine and contracts."""
+"""Phase 4 vendor-proof behavioral checks for the guided spine and contracts.
+
+These tests lock operator-facing contracts. They do not assert scorecard prose
+or marketing slogans — scores live in docs/VENDOR_SCORECARD.md and must be
+backed by the behaviors below (and MANUAL evidence for stranger proofs).
+"""
 
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from typer.testing import CliRunner
 
 from adaf_attack.cli import _doctor_payload, app
-from adaf_attack.core.cli_contract import ERROR_CATALOG
+from adaf_attack.core.cli_contract import ERROR_CATALOG, classify_run_error
+from adaf_attack.core.journey import STAGE_LABELS
 
 runner = CliRunner()
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _json(result: Any) -> dict[str, Any]:
@@ -39,7 +47,7 @@ def test_emit_error_always_includes_guide_recovery(tmp_path: Path, monkeypatch) 
     assert error.get("recovery_command", "").startswith("adaf-attack guide")
 
 
-def test_installer_codes_are_in_error_catalog() -> None:
+def test_installer_and_approval_codes_are_in_error_catalog() -> None:
     for code in (
         "PYTHON_UNSUPPORTED",
         "PATH_NOT_FOUND",
@@ -48,8 +56,27 @@ def test_installer_codes_are_in_error_catalog() -> None:
         "INSTALLER_FAILURE",
         "INSTALLER_OWNERSHIP",
         "GUIDE_ADVANCE_UNSAFE",
+        "APPROVAL_TOKEN_EXPIRED",
+        "APPROVAL_TOKEN_INVALID",
+        "VERSION_SKEW",
+        "KALI_REQUIRED",
+        "SECRET_IN_OUTPUT",
     ):
         assert code in ERROR_CATALOG
+
+
+def test_real_approval_messages_classify_to_catalog_codes() -> None:
+    assert classify_run_error("Approval token has expired") == "APPROVAL_TOKEN_EXPIRED"
+    assert (
+        classify_run_error("Scoped approval rejected: Approval token signature is invalid")
+        == "APPROVAL_TOKEN_INVALID"
+    )
+
+
+def test_windows_installer_json_includes_recovery_command() -> None:
+    text = (ROOT / "scripts" / "Install-AdafAttack.ps1").read_text(encoding="utf-8")
+    assert "recovery_command" in text
+    assert "function Fail-Adaf" in text
 
 
 def test_first_ten_minutes_guide_payload_is_copy_ready(tmp_path: Path, monkeypatch) -> None:
@@ -74,18 +101,64 @@ def test_first_ten_minutes_guide_payload_is_copy_ready(tmp_path: Path, monkeypat
             ],
         )
     )
+    what_next = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "what-next",
+                "--workspace",
+                str(workspace),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    workflow_next = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "workflow",
+                "next",
+                "--workspace",
+                str(workspace),
+                "--session",
+                str(session),
+            ],
+        )
+    )
     assert guide["ok"] is True
     assert guide["suggested_command"] == guide["next_step"]
     assert guide["primary_action"]["suggested_command"].startswith("adaf-attack ")
     assert guide["recovery_command"].startswith("adaf-attack guide")
     assert guide["primary_action"]["risk"]
     assert "rollback_implication" in guide["primary_action"]
+    assert what_next["suggested_command"] == guide["suggested_command"]
+    assert workflow_next["suggested_command"] == guide["suggested_command"]
+    assert workflow_next["recommendations"][0]["suggested_command"] == guide["suggested_command"]
 
 
-def test_vendor_scorecard_and_evidence_docs_exist() -> None:
-    root = Path(__file__).resolve().parents[1]
-    scorecard = (root / "docs" / "VENDOR_SCORECARD.md").read_text(encoding="utf-8")
+def test_operator_docs_carry_stage_labels_and_first_ten_canon() -> None:
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for label in STAGE_LABELS.values():
+        assert label in readme, f"README missing stage label {label!r}"
+    assert "Ready / Blocked / Failed / Done" in readme
+    # Contiguous first-ten canon (may be preceded by an install line).
+    canon = (
+        "python -m pip check\n"
+        "adaf-attack --version\n"
+        "adaf-attack --format json doctor --profile user-readiness --explain\n"
+        "adaf-attack quickstart --workspace ./quickstart\n"
+        "adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session\n"
+        "adaf-attack --format json paths"
+    )
+    assert canon in readme
+    evidence = (ROOT / "docs" / "RELEASE_EVIDENCE.md").read_text(encoding="utf-8")
+    assert "## 6. Narrow-terminal TUI spot-check" in evidence
+    assert "Do **not** invent a public package URL" in evidence
+    scorecard = (ROOT / "docs" / "VENDOR_SCORECARD.md").read_text(encoding="utf-8")
     assert "No row below 9" in scorecard
-    assert "Vendor SE first-ten-minutes script" in scorecard
-    evidence = (root / "docs" / "RELEASE_EVIDENCE.md").read_text(encoding="utf-8")
-    assert "## 5. Security disclosure path check" in evidence
+    assert re.search(r"Overall product.*~9\.0", scorecard) or "~9.0" in scorecard
