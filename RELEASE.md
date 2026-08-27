@@ -52,3 +52,7 @@ Published artifact smoke: PASS / FAIL / NOT YET PUBLISHED
 
 Also record the candidate hashes, `release-manifest.json`,
 `requirements-operator.txt`, and supported OS/Python matrix.
+
+For the full **[MANUAL]** evidence pack (first-ten-minutes, published-artifact,
+air-gap, attestor block), complete
+[docs/RELEASE_EVIDENCE.md](docs/RELEASE_EVIDENCE.md).

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security advisory
+    url: https://github.com/rikterskale/ADAF-ATTACK/security/advisories/new
+    about: Report security issues privately. Do not open a public issue for vulnerabilities.
+  - name: Release readiness
+    url: https://github.com/rikterskale/ADAF-ATTACK/blob/main/docs/RELEASE_READINESS.md
+    about: Installation, packaging, and release evidence checklist.

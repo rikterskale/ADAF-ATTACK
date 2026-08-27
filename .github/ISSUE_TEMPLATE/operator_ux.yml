@@ -1,0 +1,35 @@
+name: Operator UX gap
+description: Report a place where guide / docs / TUI disagree or leave the operator guessing.
+title: "[ux] "
+labels: ["ux"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The authoritative next step is `adaf-attack guide`. Use this template when
+        `guide`, `what-next`, `workflow next`, TUI Home, or docs disagree — or when
+        a failure lacks a copy-ready repair command.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: 0.10.1
+    validations:
+      required: true
+  - type: textarea
+    id: state
+    attributes:
+      label: Operator state
+      description: Workspace/session stage and the commands that disagree.
+      placeholder: |
+        guide next_step: ...
+        what-next next_step: ...
+        workflow next: ...
+    validations:
+      required: true
+  - type: textarea
+    id: desired
+    attributes:
+      label: Desired zero-guess behavior
+    validations:
+      required: true

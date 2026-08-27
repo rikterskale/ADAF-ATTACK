@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible defect in install, guide, CLI, or TUI.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Authorized internal use only. Do not include secrets, live credentials,
+        or unredacted customer identifiers. Prefer a redacted
+        `adaf-attack support-bundle` when possible.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `adaf-attack --version`
+      placeholder: 0.10.1
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - Install / doctor / quickstart
+        - guide / what-next / workflow
+        - CLI capability run
+        - TUI
+        - Reporting / packaging
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Exact commands. Prefer `--format json` output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, install path (wheel/venv/installer), extras.
+    validations:
+      required: true

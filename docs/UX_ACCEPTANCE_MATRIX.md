@@ -26,6 +26,15 @@ rollback requirements.
 | 15 | Timeline, rollback visibility, and redacted packaging | `timeline`, `cleanup-status`, `engagement package` | Timeline, reports, package evidence | `tests/test_standout_ux.py`, `tests/test_core_rollback_and_guidance.py` |
 | 16 | Unified guided journey (install→closeout) | `guide`, `what-next`, `tour`, `workflow next` | Home / wizard complete / workflow panel | `tests/test_journey.py`, `tests/test_cli_ux.py` |
 
+Row 16 acceptance extras (Phase 1 spine):
+
+- `guide`, `what-next`, and `workflow next` emit the same `suggested_command` for
+  the same `--workspace` / `--session` snapshot.
+- Journey actions include `risk`, `approvals`, `rollback_implication`,
+  `recovery_command`, and stage `entry_criteria` / `exit_criteria`.
+- Path-bearing suggested commands are shell-quoted.
+- Failures include a `recovery_command` pointing at `adaf-attack guide`.
+
 ## Release acceptance
 
 Before a release is marked UX-complete:

@@ -88,7 +88,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack query` | Query local graph and finding evidence |
 | `adaf-attack start-here` | Beginner-friendly safe first-install alias |
 | `adaf-attack explain` | Explain a capability in plain language |
-| `adaf-attack what-next` | Recommend the next action (delegates to `guide` when no capability is given) |
+| `adaf-attack what-next` | Recommend the next action; shares `guide` suggested_command for the same `--workspace`/`--session` |
 | `adaf-attack command-center` | Mission-control overview for an engagement |
 | `adaf-attack impact-map` | Map evidence to findings, assets, and impact |
 | `adaf-attack investigate` | Read-only zero-noise evidence investigation |
@@ -112,7 +112,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack session list` | List workspace sessions |
 | `adaf-attack session show` | Inspect a session |
 | `adaf-attack sessions` | Navigate persisted sessions |
-| `adaf-attack start` | Launch the Textual TUI |
+| `adaf-attack start` | Launch the Textual TUI (`--workspace` matches guide) |
 | `adaf-attack start-demo` | Start the safe offline demo |
 | `adaf-attack support-bundle` | Write a redacted diagnostic bundle |
 | `adaf-attack targets` | List recent non-secret target identifiers |

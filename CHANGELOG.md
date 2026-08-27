@@ -10,14 +10,23 @@ declared in `pyproject.toml`.
 - `adaf-attack guide`: authoritative next-step command for the full operator
   journey (install → offline first success → authorize → operate → report →
   closeout), shared by CLI and TUI via `core.journey`.
-- Workflow recommendations now include copy-ready `suggested_command` values.
-- `run --import-workflow` (default on for `--interactive`) adapts session
-  findings into the guided workflow after a successful run.
+- Journey actions now include risk, approvals, rollback implication,
+  recovery command, and stage entry/exit criteria.
+- Install/guide error catalog codes for advance-unsafe, approval tokens,
+  Python/venv/PATH, execution policy, proxy TLS, missing extras, and
+  secret-in-output mishaps.
+- `docs/RELEASE_EVIDENCE.md` fill-in templates for MANUAL release checks.
+- GitHub issue templates for bugs and operator UX gaps.
 
 ### Changed
 
-- `what-next`, `home`, and `tour` converge on the shared journey snapshot.
-- Quickstart, init/setup, installers, and readiness docs hand off to `guide`.
+- `what-next` (including `--session`), `workflow next`, and TUI Home/wizard
+  share `core.journey.snapshot()` and emit the same `suggested_command`.
+- Path-bearing suggested commands are shell-quoted.
+- Doctor JSON exposes top-level `ready` (also under `readiness.ready`).
+- Failures print a `When lost: adaf-attack guide ...` recovery command.
+- Quickstart, init/setup, installers, and readiness docs hand off to `guide`
+  with the canonical `./quickstart` workspace.
 
 ## 0.10.1
 

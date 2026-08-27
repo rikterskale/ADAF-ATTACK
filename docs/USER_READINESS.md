@@ -36,11 +36,12 @@ adaf-attack --format json paths
 adaf-attack --format json workflow-profiles
 ```
 
-If every command exits with status 0 and the readiness payload reports
-`"ready": true`, the base installation is usable. The doctor checks the
-installed runtime modules, writable application directories, and packaged demo
-fixtures. Optional warnings are expected when TUI,
-Kerberos, reporting, Certipy, or Impacket command-line tools were not selected.
+If every command exits with status 0 and the doctor JSON reports
+`"ready": true` (also mirrored under `readiness.ready`), the base installation
+is usable. The doctor checks the installed runtime modules, writable
+application directories, and packaged demo fixtures. Optional warnings are
+expected when TUI, Kerberos, reporting, Certipy, or Impacket command-line tools
+were not selected.
 
 When lost at any point, run `adaf-attack guide`. It is the single authoritative
 next step from install through closeout (CLI and TUI share the same journey).

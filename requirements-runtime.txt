@@ -1,4 +1,4 @@
-# Direct runtime constraints for the 0.10.0 release line.
+# Direct runtime constraints for the 0.10.1 release line.
 #
 # This file intentionally contains direct dependencies only. The complete,
 # hash-verified reproducibility artifact is a release wheelhouse generated from

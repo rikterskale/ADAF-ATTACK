@@ -11,8 +11,8 @@ PyPI. From the installed environment:
 ```bash
 adaf-attack doctor --profile user-readiness
 adaf-attack --format json doctor --explain > doctor.json
-adaf-attack quickstart --workspace ./adaf-workspace
-adaf-attack guide --workspace ./adaf-workspace
+adaf-attack quickstart --workspace ./quickstart
+adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
 ```
 
 The quickstart is offline. Before a live command, verify the target, account,

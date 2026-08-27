@@ -398,6 +398,7 @@ _REQUIRED_DOCS = (
     "RELEASE.md",
     "CONTRIBUTING.md",
     "docs/RELEASE_READINESS.md",
+    "docs/RELEASE_EVIDENCE.md",
     "docs/KNOWN_LIMITATIONS.md",
     "docs/TROUBLESHOOTING.md",
     "docs/MACOS.md",
@@ -406,6 +407,7 @@ _REQUIRED_DOCS = (
     "docs/LINUX_NOVICE_USABILITY_GUIDE.md",
     "docs/WINDOWS_NOVICE_USABILITY_GUIDE.md",
     "docs/FEATURE_MATRIX.md",
+    "docs/USER_READINESS.md",
 )
 
 _FENCE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)

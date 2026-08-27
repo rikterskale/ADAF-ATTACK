@@ -126,6 +126,12 @@ Version: __________  Release manager: __________  Date: __________
 [ ] Rollback/recovery location for the exact release assets is recorded.
 ```
 
+## Manual evidence pack
+
+For every **[MANUAL]** checkbox above, complete the fill-in templates in
+[RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md) and attach that page to the private
+release record with artifact hashes.
+
 ## Remaining automation gaps
 
 1. Reproducible validation of organization-specific proxy, CA, endpoint, and
