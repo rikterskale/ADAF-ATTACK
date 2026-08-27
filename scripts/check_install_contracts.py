@@ -374,6 +374,71 @@ def _check_docs() -> None:
         _require(phrase in readme, f"README.md: missing operator spine phrase {phrase!r}")
 
 
+# Canonical first-ten sequence after an approved wheel is installed.
+# Docs may prefix an install line; path style .\ vs ./ is normalized.
+FIRST_TEN_CANON: tuple[str, ...] = (
+    "python -m pip check",
+    "adaf-attack --version",
+    "adaf-attack --format json doctor --profile user-readiness --explain",
+    "adaf-attack quickstart --workspace ./quickstart",
+    "adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session",
+    "adaf-attack --format json paths",
+)
+
+
+def _normalize_command_line(line: str) -> str:
+    """Normalize shell examples so PowerShell and bash fences compare equal."""
+    text = line.strip()
+    if not text or text.startswith("#"):
+        return ""
+    return text.replace(".\\", "./").replace("\\", "/")
+
+
+def _fenced_command_blocks(markdown: str) -> list[list[str]]:
+    blocks: list[list[str]] = []
+    for match in re.finditer(r"```(?:bash|text|powershell|shell)?\n(.*?)```", markdown, re.S):
+        lines = [
+            normalized
+            for raw in match.group(1).splitlines()
+            if (normalized := _normalize_command_line(raw))
+        ]
+        if lines:
+            blocks.append(lines)
+    return blocks
+
+
+def _block_contains_first_ten_canon(lines: list[str]) -> bool:
+    size = len(FIRST_TEN_CANON)
+    for index in range(len(lines) - size + 1):
+        if tuple(lines[index : index + size]) == FIRST_TEN_CANON:
+            return True
+    return False
+
+
+def _check_first_ten_minutes_canon() -> None:
+    """Operator docs must share one first-ten command sequence (no competing spines)."""
+    required_docs = (
+        "README.md",
+        "docs/USER_READINESS.md",
+        "docs/FEATURE_MATRIX.md",
+        "docs/INSTALLATION.md",
+        "docs/RELEASE_EVIDENCE.md",
+        "docs/KALI.md",
+        "docs/MACOS.md",
+        "docs/WINDOWS.md",
+        "docs/WINDOWS_NOVICE_USABILITY_GUIDE.md",
+        "docs/LINUX_NOVICE_USABILITY_GUIDE.md",
+    )
+    for relative in required_docs:
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        blocks = _fenced_command_blocks(text)
+        _require(
+            any(_block_contains_first_ten_canon(block) for block in blocks),
+            f"{relative}: missing first-ten canon fence "
+            f"(pip check → version → doctor → quickstart → guide → paths)",
+        )
+
+
 def _check_release_evidence_template() -> None:
     """Release managers need a complete MANUAL evidence pack, not a stub."""
     path = ROOT / "docs" / "RELEASE_EVIDENCE.md"
@@ -389,6 +454,7 @@ def _check_release_evidence_template() -> None:
     for token in (
         "guide --workspace ./quickstart",
         "doctor --profile user-readiness",
+        "adaf-attack --format json paths",
         "Signer / attestor",
     ):
         _require(token in text, f"RELEASE_EVIDENCE.md missing required token {token!r}")
@@ -589,6 +655,7 @@ def main() -> int:
         _check_published_workflow,
         _check_markdown_links,
         _check_docs,
+        _check_first_ten_minutes_canon,
         _check_release_evidence_template,
         _check_windows_installer_error_codes,
         _check_metadata_and_versions,
