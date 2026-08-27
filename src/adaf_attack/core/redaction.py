@@ -65,6 +65,8 @@ _SECRET_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b[0-9a-fA-F]{32}:[0-9a-fA-F]{32}\b"),
     # GPP cpassword is AES-encrypted then base64; the decrypted marker.
     re.compile(r"\bcpassword\s*[:=]", re.IGNORECASE),
+    # Explicit password assignments leaked into free-text log/message fields.
+    re.compile(r"\bpassword\s*[:=]\s*\S+", re.IGNORECASE),
     # Cloud / VCS access tokens (mirrors the CI secret scan).
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),

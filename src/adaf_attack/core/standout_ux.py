@@ -126,29 +126,42 @@ def session_timeline(session: Path, *, limit: int = 100) -> dict[str, Any]:
                 details = {
                     key: item[key] for key in detail_keys if key in item and item[key] is not None
                 }
+                status = (
+                    "error"
+                    if "error" in item
+                    or event_status in {"error", "failed", "failure"}
+                    or event_type.endswith((".error", ".failed"))
+                    else ("running" if event_status in {"running", "in_progress"} else "ok")
+                )
                 events.append(
                     {
                         "time": item.get("ts") or item.get("time"),
                         "type": event_type,
                         "capability": item.get("capability"),
-                        "status": (
-                            "error"
-                            if "error" in item
-                            or event_status in {"error", "failed", "failure"}
-                            or event_type.endswith((".error", ".failed"))
-                            else "ok"
-                        ),
+                        "status": status,
                         "duration_ms": item.get("duration_ms"),
                         "correlation_id": item.get("correlation_id"),
                         "details": redact(details, profile="operator"),
                     }
                 )
+    event_list = list(events)
+    status_counts = Counter(str(event.get("status") or "ok") for event in event_list)
     return {
         "ok": True,
         "session": str(session),
-        "events": list(events),
+        "events": event_list,
         "count": total,
         "replayable": True,
+        "summary": {
+            "shown": len(event_list),
+            "total": total,
+            "status_counts": dict(status_counts),
+            "with_duration": sum(1 for event in event_list if event.get("duration_ms") is not None),
+            "with_correlation": sum(
+                1 for event in event_list if event.get("correlation_id") is not None
+            ),
+            "secrets_redacted": True,
+        },
     }
 
 
@@ -157,6 +170,8 @@ def copilot_recommendations(session: Path) -> dict[str, Any]:
     dashboard = session_findings_dashboard(session)
     recommendations: list[dict[str, Any]] = []
     triage = dashboard.get("triage_counts") or {}
+    from adaf_attack.core.journey import quote_path
+
     if triage.get("open", 0):
         recommendations.append(
             {
@@ -164,7 +179,7 @@ def copilot_recommendations(session: Path) -> dict[str, Any]:
                 "action": "Review and assign open findings",
                 "why": f"{triage['open']} finding(s) remain open in the session.",
                 "confidence": "high",
-                "command": f"adaf-attack session show --session {session}",
+                "command": f"adaf-attack session show --session {quote_path(session)}",
             }
         )
     if dashboard.get("graph", {}).get("edges", 0):

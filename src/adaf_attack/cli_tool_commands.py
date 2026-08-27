@@ -303,18 +303,30 @@ def register_tool_commands(
             )
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from exc
+        summary = payload.get("summary") or {}
         lines = [
-            f"{item.get('time') or '-'}  {str(item.get('status') or 'ok').upper()}  "
-            f"{item.get('type') or 'event'}  "
-            f"{item.get('capability') or '-'}  "
-            f"duration={item.get('duration_ms') if item.get('duration_ms') is not None else '-'}ms"
-            + (f"  {item['details']}" if item.get("details") else "")
-            for item in payload["events"][-10:]
+            (
+                f"summary: shown={summary.get('shown', 0)}/{summary.get('total', 0)} "
+                f"status={summary.get('status_counts') or {}} "
+                f"redacted={summary.get('secrets_redacted', True)}"
+            ),
+            *[
+                f"{item.get('time') or '-'}  {str(item.get('status') or 'ok').upper()}  "
+                f"{item.get('type') or 'event'}  "
+                f"{item.get('capability') or '-'}  "
+                f"duration={item.get('duration_ms') if item.get('duration_ms') is not None else '-'}ms  "
+                f"corr={item.get('correlation_id') or '-'}"
+                + (f"  {item['details']}" if item.get("details") else "")
+                for item in payload["events"][-10:]
+            ],
         ]
         emit(
             ctx,
             payload,
-            Panel("\n".join(lines) or "No audit events found.", title="Engagement timeline"),
+            Panel(
+                "\n".join(lines) if payload["events"] else "No audit events found.",
+                title="Engagement timeline",
+            ),
         )
 
     @app.command("copilot", rich_help_panel="Advanced product surfaces")

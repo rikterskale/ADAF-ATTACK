@@ -67,6 +67,7 @@ from adaf_attack.core.ux import (
     diff_sessions,
     format_stages_progress,
     group_capabilities_by_phase,
+    operator_capability_contract,
     risk_checklist,
     session_findings_dashboard,
     suggested_next_actions,
@@ -733,9 +734,18 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             )
             if not value
         ]
+        repair = {
+            "domain": "Enter the authorized AD DNS name.",
+            "DC": "Enter the authorized DC IP or hostname.",
+            "access": "Provide username, ccache, or password for the authorized identity.",
+            "objective": "Select a capability from the list.",
+            "review": "Open Review, complete the checklist, then Acknowledge.",
+        }
         text = f"Readiness: {score}/100"
         if missing:
-            text += f" · Next: {missing[0]}"
+            text += (
+                f" · Next: {missing[0]} — {repair.get(missing[0], 'Complete the remaining gate.')}"
+            )
         else:
             text += " · Ready to run"
         self.query_one("#readiness", Static).update(text)
@@ -1093,19 +1103,27 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if not cap:
             return
         spec = capability_option_spec(cap.id, cap.requires_force)
+        contract = operator_capability_contract(cap)
         required = ", ".join(spec.required) or "none (offline/session input)"
         optional = ", ".join(spec.optional[:6]) or "none"
+        params = ", ".join(contract["required_params"]) or "none"
+        approvals = ", ".join(contract["approvals"]) or "none (observe / review-only)"
         notes = f"\n[italic]{spec.notes}[/]" if spec.notes else ""
         glossary = glossary_definition(cap.id)
         glossary_line = f"\nGlossary: {glossary}" if glossary else ""
         recent = ", ".join(recent_capabilities()) or "none yet"
         pinned = ", ".join(favorite_capabilities()) or "none"
         difficulty = capability_difficulty(cap)
+        stages = " → ".join(item["id"] for item in contract["stages"])
         self.query_one("#help-panel", Static).update(
             f"[bold]{cap.id}[/]\n{cap.summary}\nCategory: {cap.category}\n"
             f"Difficulty: {difficulty['level']} — {difficulty['reason']}\n"
             f"Safety: {safety_summary(cap)['level']} — {plain_description(cap)}\n"
-            f"Required: {required}\nOptional: {optional}{notes}{glossary_line}\n"
+            f"Risk: {contract['risk']}  |  Approvals: {approvals}\n"
+            f"Rollback: {contract['rollback_implication']}\n"
+            f"Required: {required}\nRequired -P: {params}\nOptional: {optional}\n"
+            f"Evidence: {', '.join(contract['evidence_produced'])}\n"
+            f"Stages: {stages}{notes}{glossary_line}\n"
             f"Recent: {recent}\nPinned: {pinned}"
         )
 
@@ -1153,9 +1171,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 f"{cap.id} needs no extra parameters beyond the target form."
             )
         else:
+            contract = operator_capability_contract(cap)
             title.update(
                 f"[bold]Capability parameters[/bold] for {cap.id}\n"
-                "Fill required values before Review / Run."
+                f"Risk {contract['risk']} · Fill required -P / flags before Review / Run."
             )
         for index in range(8):
             label = self.query_one(f"#param-label-{index}", Label)
@@ -1502,15 +1521,22 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             else "Read-only / no approval required"
         )
         checklist = risk_checklist(cap)
+        contract = operator_capability_contract(cap)
         for item in checklist["items"]:
             checkbox = self.query_one(f"#check-{item['id']}", Checkbox)
             checkbox.label = item["label"] + (" *" if item["required"] else "")
             checkbox.value = item["id"] == "force" and force
         command = self._ready_command(cap.id)
+        approvals = ", ".join(contract["approvals"]) or "none (observe / review-only)"
+        params = ", ".join(contract["required_params"]) or "(none)"
         self.query_one("#review-panel", Static).update(
             f"[bold]Execution review[/bold]  {cap.id}\n"
             f"Target: {target[0]} @ {target[1]}\nCategory: {cap.category}  |  Risk: {risk}\n"
+            f"Approvals: {approvals}\n"
+            f"Rollback: {contract['rollback_implication']}\n"
             f"Required contract: {', '.join(spec.required) or 'session/workspace input'}\n"
+            f"Required -P: {params}\n"
+            f"Evidence: {', '.join(contract['evidence_produced'])}\n"
             f"Opsec: {active_opsec().upper()} — {checklist['opsec_hint']}\n"
             f"Ready command: [dim]{command}[/]\n"
             "Check required items, then acknowledge the review."
@@ -2092,13 +2118,21 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self.notify("Complete or select a session first.", severity="information")
             return
         payload = session_timeline(self._last_session, limit=12)
+        summary = payload.get("summary") or {}
+        status_counts = summary.get("status_counts") or {}
+        header = (
+            f"[bold]Engagement timeline[/bold]  "
+            f"shown={summary.get('shown', 0)}/{summary.get('total', 0)}  "
+            f"status={status_counts}  redacted={summary.get('secrets_redacted', True)}\n"
+        )
         self.query_one("#session-panel", Static).update(
-            "[bold]Engagement timeline[/bold]\n"
+            header
             + "\n".join(
                 f"{item.get('time') or '-'}  {str(item.get('status') or 'ok').upper()}  "
                 f"{item.get('type') or 'event'}  "
                 f"{item.get('capability') or '-'}  "
-                f"{item.get('duration_ms') if item.get('duration_ms') is not None else '-'}ms"
+                f"{item.get('duration_ms') if item.get('duration_ms') is not None else '-'}ms  "
+                f"corr={item.get('correlation_id') or '-'}"
                 for item in payload["events"][-8:]
             )
         )
