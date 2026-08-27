@@ -211,6 +211,56 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Choose bash, zsh, fish, or powershell.",
         "adaf-attack completions bash",
     ),
+    "GUIDE_ADVANCE_UNSAFE": (
+        "The current guide step cannot be auto-advanced.",
+        "Copy and run the suggested command after review; live or destructive steps stay manual.",
+        "adaf-attack guide",
+    ),
+    "APPROVAL_TOKEN_EXPIRED": (
+        "The approval token is expired or not yet valid.",
+        "Request a fresh scoped token for this engagement ID, then re-run with --approval-token.",
+        "adaf-attack guide",
+    ),
+    "APPROVAL_TOKEN_INVALID": (
+        "The approval token was rejected for this engagement.",
+        "Confirm --engagement-id matches the token, then re-run with a valid --approval-token.",
+        "adaf-attack guide",
+    ),
+    "PYTHON_UNSUPPORTED": (
+        "The active Python version is outside the supported 3.11-3.14 range.",
+        "Create a venv with Python 3.11, 3.12, 3.13, or 3.14, then reinstall the approved wheel.",
+        "adaf-attack doctor --profile user-readiness --explain",
+    ),
+    "VENV_REQUIRED": (
+        "A virtual environment is required (system Python is externally managed or unprotected).",
+        "Run `python -m venv .venv`, activate it, then install the approved wheel into that venv.",
+        "adaf-attack doctor --profile user-readiness --explain",
+    ),
+    "PATH_NOT_FOUND": (
+        "The adaf-attack entry point is not on PATH for this shell.",
+        "Open a new terminal after install, or invoke the venv Scripts/bin path directly.",
+        "adaf-attack doctor --profile user-readiness --explain",
+    ),
+    "EXECUTION_POLICY_BLOCKED": (
+        "PowerShell execution policy or SmartScreen blocked the installer script.",
+        "Use the narrowest approved CurrentUser RemoteSigned policy, Unblock-File the script, then retry.",
+        "adaf-attack doctor --profile user-readiness --explain",
+    ),
+    "PROXY_TLS_FAILED": (
+        "pip could not validate TLS through the organization proxy or custom CA.",
+        "Configure the approved CA with pip --cert or pip.ini, or use an air-gapped wheelhouse with --no-index.",
+        "adaf-attack doctor --explain",
+    ),
+    "EXTRA_MISSING": (
+        "An optional extra required for this surface is not installed.",
+        "Install the documented extra (for example pip install 'adaf-attack[tui]') and rerun doctor.",
+        "adaf-attack doctor --profile operator --explain",
+    ),
+    "SECRET_IN_OUTPUT": (
+        "A secret or credential value appeared in a redacted operator surface.",
+        "Do not share the output; rotate the exposed secret if it was real, then regenerate a redacted support bundle.",
+        "adaf-attack support-bundle --output adaf-support-bundle.json",
+    ),
 }
 
 
@@ -253,6 +303,30 @@ _ERROR_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "REQUIRED_INPUT_MISSING",
         ("pass -p", "required", "username required", "provide -p", "requires --"),
+    ),
+    (
+        "APPROVAL_TOKEN_EXPIRED",
+        ("token expired", "approval expired", "exp claim", "not yet valid"),
+    ),
+    (
+        "APPROVAL_TOKEN_INVALID",
+        ("invalid approval token", "approval token rejected", "token signature invalid"),
+    ),
+    (
+        "PYTHON_UNSUPPORTED",
+        ("python 3.10", "unsupported python", "requires python 3.11"),
+    ),
+    (
+        "VENV_REQUIRED",
+        ("externally-managed-environment", "pep 668", "break-system-packages"),
+    ),
+    (
+        "PROXY_TLS_FAILED",
+        ("ssl: certificate_verify_failed", "certificate verify failed", "proxyerror"),
+    ),
+    (
+        "EXTRA_MISSING",
+        ("no module named 'textual'", "no module named 'reportlab'", "certipy is not installed"),
     ),
 )
 
