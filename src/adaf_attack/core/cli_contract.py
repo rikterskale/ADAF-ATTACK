@@ -261,6 +261,16 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Do not share the output; rotate the exposed secret if it was real, then regenerate a redacted support bundle.",
         "adaf-attack support-bundle --output adaf-support-bundle.json",
     ),
+    "INSTALLER_FAILURE": (
+        "The platform installer could not complete.",
+        "Rerun the Windows or Kali installer with -Json/--json, then follow the remediation field.",
+        "adaf-attack doctor --profile user-readiness --explain",
+    ),
+    "INSTALLER_OWNERSHIP": (
+        "The installer refused to modify an unowned or conflicting environment.",
+        "Uninstall the installer-owned environment first, or choose a dedicated venv/shim path.",
+        "adaf-attack doctor --profile user-readiness --explain",
+    ),
 }
 
 

@@ -62,23 +62,77 @@ param(
 
 $ErrorActionPreference = "Stop"
 $global:AdafJsonInstallerErrors = $Json
-trap {
-    $message = $_.Exception.Message
-    $remediation = "Check Python 3.11-3.14, artifact access, permissions, and rerun with -Json for machine-readable diagnostics."
+
+function Resolve-AdafInstallerError([string]$Message) {
+    $lower = $Message.ToLowerInvariant()
+    if ($lower -match 'executionpolicy|running scripts is disabled|unauthorizedaccess' -and $lower -match 'script') {
+        return [pscustomobject]@{
+            code = "EXECUTION_POLICY_BLOCKED"
+            remediation = "Set the narrowest approved CurrentUser RemoteSigned policy, Unblock-File this script, then retry with -Json."
+        }
+    }
+    if ($lower -match 'python .*unsupported|requires python 3\.11|could not parse python version|python command not found|python probe failed') {
+        return [pscustomobject]@{
+            code = "PYTHON_UNSUPPORTED"
+            remediation = "Install Python 3.11-3.14, pass -Python with a full path or -Python py -PythonVersion 3.13, then retry."
+        }
+    }
+    if ($lower -match 'externally-managed-environment|pep 668|break-system-packages') {
+        return [pscustomobject]@{
+            code = "VENV_REQUIRED"
+            remediation = "Use this installer (it creates an isolated venv) or create a venv manually before installing the wheel."
+        }
+    }
+    if ($lower -match 'certificate|ssl|tls|proxy') {
+        return [pscustomobject]@{
+            code = "PROXY_TLS_FAILED"
+            remediation = "Configure the organization CA with pip --cert / pip.ini, or install from an approved wheelhouse with --no-index."
+        }
+    }
+    if ($lower -match 'path|shim|console entry point|not found') {
+        return [pscustomobject]@{
+            code = "PATH_NOT_FOUND"
+            remediation = "Open a new terminal after install, or invoke .\.venv\Scripts\adaf-attack.exe directly, then rerun doctor."
+        }
+    }
+    if ($lower -match 'unowned|ownership|refusing to') {
+        return [pscustomobject]@{
+            code = "INSTALLER_OWNERSHIP"
+            remediation = "Uninstall the installer-owned environment first, or choose a different venv/shim path."
+        }
+    }
+    return [pscustomobject]@{
+        code = "INSTALLER_FAILURE"
+        remediation = "Check Python 3.11-3.14, artifact access, permissions, and rerun with -Json for machine-readable diagnostics."
+    }
+}
+
+function Fail-Adaf(
+    [string]$Code,
+    [string]$Message,
+    [string]$Remediation
+) {
     if ($global:AdafJsonInstallerErrors) {
         [pscustomobject]@{
             ok = $false
             error = [pscustomobject]@{
-                code = "INSTALLER_FAILURE"
-                message = $message
-                remediation = $remediation
+                code = $Code
+                message = $Message
+                remediation = $Remediation
+                suggested_command = "adaf-attack doctor --profile user-readiness --explain"
             }
         } | ConvertTo-Json -Depth 4 -Compress
     } else {
-        Write-Error $message
-        Write-Error "Next step: $remediation"
+        Write-Error "Error [$Code]: $Message"
+        Write-Error "Next step: $Remediation"
     }
     exit 1
+}
+
+trap {
+    $message = $_.Exception.Message
+    $resolved = Resolve-AdafInstallerError $message
+    Fail-Adaf -Code $resolved.code -Message $message -Remediation $resolved.remediation
 }
 $minimumPython = [Version]"3.11"
 $maximumPython = [Version]"3.15"
@@ -182,7 +236,7 @@ if ($pythonCommand -match "^(py(?:\.exe)?)\s+(.+)$") {
 }
 $resolvedPython = Get-Command $pythonCommand -ErrorAction SilentlyContinue
 if (-not $resolvedPython) {
-    throw "Python command not found: $pythonCommand. Install Python 3.11-3.14 or pass -Python with a full path."
+    Fail-Adaf -Code "PYTHON_UNSUPPORTED" -Message "Python command not found: $pythonCommand." -Remediation "Install Python 3.11-3.14 or pass -Python with a full path, then retry."
 }
 if ($resolvedPython.Source) {
     $pythonCommand = $resolvedPython.Source
@@ -207,7 +261,7 @@ if ($probeParts.Count -ne 2) {
 }
 $detectedVersion = [Version]$probeParts[0]
 if ($detectedVersion -lt $minimumPython -or $detectedVersion -ge $maximumPython) {
-    throw "Python $detectedVersion is unsupported. ADAF-ATTACK requires Python 3.11 through 3.14."
+    Fail-Adaf -Code "PYTHON_UNSUPPORTED" -Message "Python $detectedVersion is unsupported. ADAF-ATTACK requires Python 3.11 through 3.14." -Remediation "Install Python 3.11-3.14 or pass -Python with a supported interpreter, then retry."
 }
 $pythonExe = $probeParts[1]
 Write-Ok "Using Python $detectedVersion at $pythonExe"
@@ -283,7 +337,7 @@ Invoke-Native $venvPython @("-m", "pip", "check")
 
 $scriptsAdaf = Join-Path $venv "Scripts\adaf-attack.exe"
 if (-not (Test-Path $scriptsAdaf -PathType Leaf)) {
-    throw "Installation completed without the expected console entry point: $scriptsAdaf"
+    Fail-Adaf -Code "PATH_NOT_FOUND" -Message "Installation completed without the expected console entry point: $scriptsAdaf" -Remediation "Inspect the venv Scripts directory, open a new terminal, or invoke the venv adaf-attack.exe directly."
 }
 
 New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
