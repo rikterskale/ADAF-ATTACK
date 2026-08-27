@@ -61,6 +61,31 @@ def test_path_check_returns_actionable_error_for_unwritable_probe(
     assert "ADAF_ATTACK_WORKSPACE" in result["remediation"]
 
 
+def test_user_readiness_keeps_unwritable_paths_blocking(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(cli, "_path_write_probe", lambda path: (False, "PermissionError"))
+    monkeypatch.setattr(cli, "user_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(cli, "user_config_dir", lambda: tmp_path / "config")
+    monkeypatch.setattr(cli, "default_workspace_dir", lambda: tmp_path / "workspace")
+    payload = cli._doctor_payload("user-readiness")
+    assert payload["ready"] is False
+    assert "workspace" in payload["blocking_checks"]
+
+
+def test_offline_profile_downgrades_unwritable_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(cli, "_path_write_probe", lambda path: (False, "PermissionError"))
+    monkeypatch.setattr(cli, "user_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(cli, "user_config_dir", lambda: tmp_path / "config")
+    monkeypatch.setattr(cli, "default_workspace_dir", lambda: tmp_path / "workspace")
+    payload = cli._doctor_payload("offline")
+    assert "workspace" not in payload["blocking_checks"]
+    workspace = next(check for check in payload["checks"] if check["id"] == "workspace")
+    assert workspace["status"] == "warning"
+
+
 @pytest.mark.parametrize(
     ("path_id", "expected"),
     [("data_dir", "ADAF_ATTACK_DATA_DIR"), ("config_dir", "ADAF_ATTACK_CONFIG_DIR")],

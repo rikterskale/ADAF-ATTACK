@@ -662,15 +662,33 @@ def _doctor_payload(
         _path_check("workspace", default_workspace_dir()),
     ]
 
+    dist_version = _package_version("adaf-attack")
+    if dist_version and dist_version != __version__:
+        checks.append(
+            _doctor_check(
+                "version-skew",
+                "error",
+                f"metadata={dist_version} runtime={__version__}",
+                "Reinstall the approved wheel so package metadata matches adaf_attack.__version__.",
+                severity="blocking",
+            )
+        )
+    else:
+        checks.append(
+            _doctor_check(
+                "version-skew",
+                "ok",
+                dist_version or __version__,
+            )
+        )
+
     for check in checks:
         if check["id"] in {"data_dir", "config_dir", "workspace"}:
             check["scope"] = "offline"
-            # Offline and demo profiles must remain usable on read-only hosts
-            # (for example a packaged checkout or support container). Keep the
-            # probe result visible, but do not make it block read-only checks;
-            # commands that actually write still report their own actionable
-            # error at the write boundary.
-            if profile in {"offline", "user-readiness"} and check["status"] == "error":
+            # Offline profile may run on read-only hosts (support containers).
+            # user-readiness must stay honest: unwritable defaults block ready
+            # so operators repair with `paths --repair` before quickstart.
+            if profile == "offline" and check["status"] == "error":
                 check["status"] = "warning"
                 check["severity"] = "advisory"
 
@@ -1311,11 +1329,21 @@ def support_bundle(
         )
         return
     destination = output.expanduser().resolve()
+    rendered = json.dumps(bundle, indent=2, sort_keys=True, default=str) + "\n"
+    from adaf_attack.core.redaction import unredacted_secret_hits
+
+    leaks = unredacted_secret_hits(rendered)
+    if leaks:
+        error = error_for(
+            "SECRET_IN_OUTPUT",
+            message="Redacted support bundle still contains high-confidence secret material.",
+            details={"samples": leaks, "output": str(destination)},
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(
-            json.dumps(bundle, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8"
-        )
+        destination.write_text(rendered, encoding="utf-8")
     except OSError as exc:
         error = error_for(
             "SUPPORT_BUNDLE_WRITE_FAILED",
