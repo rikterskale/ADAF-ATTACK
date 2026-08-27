@@ -130,6 +130,12 @@ def register_workflow_commands(
         g = engine.guidance()
         root = _resolve_workspace(workspace)
         session = _session_hint(workspace)
+        from adaf_attack.core.journey import guide_recovery_command, snapshot
+
+        journey = snapshot(workspace=root, session=session, doctor=_doctor())
+        primary = str(
+            journey.get("suggested_command") or journey["primary_action"]["suggested_command"]
+        )
         recs = [
             enrich_action(action, session=session, workspace=root)
             for action in engine.recommendations(limit=3)
@@ -139,12 +145,12 @@ def register_workflow_commands(
             f"Status:   {g.status}",
             f"Progress: {g.progress:.1f}%    Risk: {g.risk_score:.1f}",
             f"Open findings: {len(engine.state.open_findings)} of {len(engine.state.findings)}",
+            f"Journey:  {journey.get('stage_label')} ({journey.get('stage')})",
             "",
             f"Next step: {g.explanation}",
+            f"Copy-ready: {primary}",
         ]
         if recs:
-            lines.append("")
-            lines.append(f"Copy-ready: {recs[0]['suggested_command']}")
             lines.append("")
             lines.append("Recommended next actions:")
             for action in recs:
@@ -163,8 +169,6 @@ def register_workflow_commands(
             lines.append("")
             lines.append("No pending actions. Run `workflow close` to finish.")
         lines.append("")
-        from adaf_attack.core.journey import guide_recovery_command
-
         lines.append(f"When lost: {guide_recovery_command(workspace=root, session=session)}")
         return Panel("\n".join(lines), title=title)
 
@@ -198,38 +202,56 @@ def register_workflow_commands(
     def workflow_next(
         ctx: typer.Context,
         workspace: Path | None = typer.Option(None, "--workspace"),
+        session: Path | None = typer.Option(
+            None,
+            "--session",
+            help="Bias discover/deliver stages toward this session (matches guide).",
+        ),
         limit: int = typer.Option(5, "--limit", help="Maximum recommendations to return."),
     ) -> None:
-        """List the ranked next actions with the consequence of ignoring each."""
+        """List ranked actions; authoritative next step matches ``guide``."""
         try:
             engine = _engine(workspace)
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error
         root = _resolve_workspace(workspace)
-        session = _session_hint(workspace)
+        session_hint = Path(session) if session is not None else _session_hint(workspace)
+        from adaf_attack.core.journey import guide_recovery_command, snapshot
+
+        journey = snapshot(workspace=root, session=session_hint, doctor=_doctor())
+        primary = str(
+            journey.get("suggested_command") or journey["primary_action"]["suggested_command"]
+        )
         recs = [
-            enrich_action(action, session=session, workspace=root)
+            enrich_action(action, session=session_hint, workspace=root)
             for action in engine.recommendations(limit=max(0, limit))
         ]
         payload = {
             "ok": True,
             "count": len(recs),
             "recommendations": recs,
-            "next_step": (
-                recs[0]["suggested_command"]
-                if recs
-                else f"adaf-attack workflow close --workspace {root}"
-            ),
+            "next_step": primary,
+            "suggested_command": primary,
+            "recovery_command": guide_recovery_command(workspace=root, session=session_hint),
+            "journey_stage": journey.get("stage"),
+            "primary_action": journey.get("primary_action"),
         }
         table = Table(title="Ranked next actions")
         table.add_column("Action")
         table.add_column("Kind")
         table.add_column("Copy-ready command")
+        table.add_row(
+            str(journey["primary_action"]["id"]),
+            "journey",
+            primary,
+        )
         for a in recs:
+            if a["id"] == journey["primary_action"]["id"] and a["suggested_command"] == primary:
+                continue
             table.add_row(a["id"], a["kind"], a["suggested_command"])
-        if not recs:
-            table.add_row("(none)", "-", "No action pending; the workflow can be closed.")
+        if not recs and journey.get("stage") not in {"first-success", "install-blocked"}:
+            table.add_row("(none)", "-", "No engine action pending; follow the journey command.")
         emit(ctx, payload, table)
 
     @workflow_app.command("snapshot")

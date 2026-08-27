@@ -33,3 +33,12 @@ body:
       label: Desired zero-guess behavior
     validations:
       required: true
+  - type: textarea
+    id: parity
+    attributes:
+      label: Parity evidence (optional)
+      description: >
+        Paste redacted JSON snippets showing guide / what-next / workflow next /
+        TUI Cmd disagreement for the same --workspace and --session.
+    validations:
+      required: false

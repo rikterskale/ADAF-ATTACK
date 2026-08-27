@@ -366,22 +366,18 @@ def register_product_commands(
         limit: int = typer.Option(100, "--limit"),
     ) -> None:
         """Replay a session timeline for review and handoff."""
-        from adaf_attack.core.standout_ux import session_timeline
+        from adaf_attack.core.journey import guide_recovery_command
+        from adaf_attack.core.standout_ux import format_timeline_human, session_timeline
+
+        def factory(path: Path) -> dict[str, Any]:
+            payload = session_timeline(path, limit=limit)
+            payload["recovery_command"] = guide_recovery_command(session=path)
+            return payload
 
         def human(payload: dict[str, Any]) -> str:
-            events = payload.get("events")
-            if not isinstance(events, list):
-                return "No events recorded."
-            return (
-                "\n".join(
-                    f"{event.get('time') or '-'}  {event.get('type', '-')}  {event.get('capability') or ''}"
-                    for event in events[-12:]
-                    if isinstance(event, dict)
-                )
-                or "No events recorded."
-            )
+            return format_timeline_human(payload, event_limit=12)
 
-        _run(ctx, "Engagement replay", session, session_timeline, human)
+        _run(ctx, "Engagement replay", session, factory, human)
 
     @app.command("confidence", rich_help_panel="Advanced product surfaces")
     def confidence(ctx: typer.Context, session: Path = typer.Option(..., "--session")) -> None:

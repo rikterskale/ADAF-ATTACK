@@ -77,15 +77,30 @@ When lost, run `adaf-attack guide`. It always returns one copy-ready next step.
 
 ## First safe offline run
 
+Use the same Verify spine above. Short form:
+
 ```bash
-adaf-attack --format json doctor --explain
-adaf-attack --format json list-capabilities
+adaf-attack --format json doctor --profile user-readiness --explain
+adaf-attack quickstart --workspace ./quickstart
+adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
 adaf-attack --format json paths
 ```
 
-Exit code `0` and `"ok": true` confirm success. `paths` reports the workspace
-where later session evidence and reports are stored; the commands above do not
-create target-side artifacts.
+Expect exit `0`, doctor `"ready": true`, and a copy-ready `suggested_command`
+from `guide`. `paths` reports the workspace where later session evidence and
+reports are stored (typically `~/.local/share/adaf-attack/workspaces`); the
+commands above do not create target-side artifacts. When lost, re-run `guide`.
+
+Operator orientation after first success:
+
+```bash
+adaf-attack rollback --help
+adaf-attack cleanup-status --help
+adaf-attack --format json support-bundle --output adaf-support-bundle.json
+```
+
+`rollback` is the alias of `cleanup` for reversing recorded directory mutations
+(requires `--force`). Attach only redacted support bundles to support requests.
 
 ## Stop or cancel
 

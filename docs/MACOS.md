@@ -31,16 +31,32 @@ python -m pip check
 ## Verify and first safe offline run
 
 ```bash
+python -m pip check
 adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace ./quickstart
-adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
-adaf-attack list-capabilities
-adaf-attack paths
+adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack --format json paths
 ```
 
-These checks do not contact a target. Session evidence defaults below the macOS
-user data directory reported by `paths`. When lost, run `adaf-attack guide`.
+Expect exit `0`, doctor `"ready": true`, and one copy-ready `suggested_command`
+from `guide`. These checks do not contact a target. Session evidence defaults
+below the macOS user data directory reported by `paths`.
+
+**When lost:** `adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session`
+
+Typical paths (confirm with `adaf-attack paths`):
+
+- Workspaces: `~/Library/Application Support/adaf-attack/workspaces`
+- Config: `~/Library/Preferences/adaf-attack`
+
+After first success:
+
+```bash
+adaf-attack rollback --help
+adaf-attack cleanup-status --help
+adaf-attack --format json support-bundle --output adaf-support-bundle.json
+```
 
 ## Upgrade, downgrade, and uninstall
 

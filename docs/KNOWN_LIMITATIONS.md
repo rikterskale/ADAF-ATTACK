@@ -4,7 +4,10 @@
   GitHub release assets or authorized source access; it is not on PyPI.
 - Operator guidance is centered on `adaf-attack guide`. Parallel aliases such
   as `init` / `setup` / `home` hand off to that spine and must not be treated as
-  competing onboarding products.
+  competing onboarding products. `what-next` and `workflow next` must emit the
+  same `suggested_command` as `guide` for a given workspace/session snapshot.
+- Directory mutations are reversed with `adaf-attack rollback` (alias of
+  `cleanup`); `cleanup-status` is the read-only dashboard.
 - A scheduled/manual workflow can test published GitHub release wheels, but no
   published artifact is proven until a release with the wheel asset exists and
   that workflow succeeds.
@@ -32,10 +35,10 @@
   certificate chains require explicit approval even when they do not directly
   mutate LDAP.
 - Destructive capabilities record rollback pre-state in the session
-  (`cleanup.json`) and `adaf-attack rollback` reverses supported pending
-  changes. Advisory effects such as coercion, certificate enrollment, relay,
-  and remote execution still require operator validation against an authorized
-  target.
+  (`cleanup.json`). `adaf-attack rollback` (alias of `cleanup`) reverses
+  supported pending changes; `cleanup-status` is the read-only dashboard.
+  Advisory effects such as coercion, certificate enrollment, relay, and remote
+  execution still require operator validation against an authorized target.
 - A generic execution timeout bounds how long the caller waits; it cannot
   force-kill an arbitrary Python or network worker. Timeouts and retries are
   rejected for registered target-mutating or network-side-effect operations.

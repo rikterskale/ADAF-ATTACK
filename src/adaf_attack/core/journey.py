@@ -80,6 +80,18 @@ STAGE_CRITERIA: dict[str, dict[str, list[str]]] = {
     },
 }
 
+# Safe fallback when the primary suggested command cannot run yet.
+STAGE_FALLBACKS: dict[str, str] = {
+    "install-blocked": "adaf-attack doctor --profile user-readiness --explain",
+    "first-success": "adaf-attack tour",
+    "orient": "adaf-attack session show --session <demo-session>",
+    "discover": "adaf-attack workflow status --workspace <workspace>",
+    "operate": "adaf-attack workflow next --workspace <workspace>",
+    "deliver": "adaf-attack cleanup-status --session <session>",
+    "closeout": "adaf-attack cleanup-status --session <session>",
+    "complete": "adaf-attack guide",
+}
+
 # Workflow bookkeeping actions that ``guide --advance`` may complete offline.
 SAFE_ADVANCE_ACTIONS = frozenset(
     {
@@ -126,6 +138,7 @@ class JourneyAction:
     rollback_implication: str = "No directory mutation; safe to re-run."
     recovery_command: str = "adaf-attack guide"
     blocked_because: str | None = None
+    fallback: str | None = None
     entry_criteria: list[str] = field(default_factory=list)
     exit_criteria: list[str] = field(default_factory=list)
 
@@ -133,6 +146,8 @@ class JourneyAction:
         payload = asdict(self)
         if payload.get("blocked_because") is None:
             payload.pop("blocked_because", None)
+        if payload.get("fallback") is None:
+            payload.pop("fallback", None)
         return payload
 
 
@@ -222,7 +237,8 @@ def _action_safety_metadata(
     rollback = safety.rollback.value
     if rollback == "automatic":
         implication = (
-            "Mutations record pre-state in session cleanup.json; use `adaf-attack rollback`."
+            "Mutations record pre-state in session cleanup.json; "
+            "use `adaf-attack rollback` (alias of `cleanup`)."
         )
     elif rollback == "manual":
         implication = "Operator must verify and reverse residual effects on the authorized target."
@@ -234,6 +250,25 @@ def _action_safety_metadata(
         "rollback": rollback,
         "rollback_implication": implication,
     }
+
+
+def _stage_fallback(stage: str, *, workspace: Path, session: Path | None) -> str:
+    """Return a shell-quoted fallback command for the stage."""
+    template = STAGE_FALLBACKS.get(stage) or "adaf-attack guide"
+    ws_q = quote_path(workspace)
+    if "<workspace>" in template:
+        template = template.replace("<workspace>", ws_q)
+    if "<session>" in template:
+        if session is not None:
+            template = template.replace("<session>", quote_path(session))
+        else:
+            template = guide_recovery_command(workspace=workspace)
+    if "<demo-session>" in template:
+        if session is not None:
+            template = template.replace("<demo-session>", quote_path(session))
+        else:
+            template = "adaf-attack sessions --limit 5"
+    return template
 
 
 def _decorate_action(
@@ -248,6 +283,7 @@ def _decorate_action(
     criteria = STAGE_CRITERIA.get(stage, {"entry": [], "exit": []})
     safety = _action_safety_metadata(action.id)
     recovery = guide_recovery_command(workspace=workspace, session=session)
+    fallback = action.fallback or _stage_fallback(stage, workspace=workspace, session=session)
     return JourneyAction(
         id=action.id,
         title=action.title,
@@ -262,6 +298,7 @@ def _decorate_action(
         rollback_implication=str(safety["rollback_implication"]),
         recovery_command=recovery,
         blocked_because=blocked_because if blocked_because is not None else action.blocked_because,
+        fallback=fallback,
         entry_criteria=list(criteria.get("entry") or action.entry_criteria),
         exit_criteria=list(criteria.get("exit") or action.exit_criteria),
     )
@@ -631,6 +668,27 @@ def snapshot(
                 kind="recommended",
             )
         ]
+    elif engine is not None and engine.state.status in {"complete", "archived"}:
+        # Prefer closeout/complete over re-pushing quickstart when a workflow
+        # already finished, even if no demo session exists in this workspace.
+        stage = "complete"
+        primary = JourneyAction(
+            id="new-engagement",
+            title="Start a new guided engagement",
+            why="This workflow is finished; retain evidence or begin the next authorized assessment.",
+            suggested_command="adaf-attack sessions --limit 5",
+            kind="recommended",
+            advance_safe=False,
+        )
+        secondary = [
+            JourneyAction(
+                id="workflow-audit",
+                title="Review the audit trail",
+                why="Confirm who changed what before archiving the workspace.",
+                suggested_command=f"adaf-attack workflow audit --workspace {ws_q}",
+                kind="recommended",
+            )
+        ]
     elif demo is None:
         stage = "first-success"
         primary = JourneyAction(
@@ -658,27 +716,11 @@ def snapshot(
                 kind="recommended",
             ),
         ]
-    elif engine is not None and engine.state.status in {"complete", "archived"}:
-        stage = "complete"
-        primary = JourneyAction(
-            id="new-engagement",
-            title="Start a new guided engagement",
-            why="This workflow is finished; retain evidence or begin the next authorized assessment.",
-            suggested_command="adaf-attack sessions --limit 5",
-            kind="recommended",
-            advance_safe=False,
-        )
-        secondary = [
-            JourneyAction(
-                id="workflow-audit",
-                title="Review the audit trail",
-                why="Confirm who changed what before archiving the workspace.",
-                suggested_command=f"adaf-attack workflow audit --workspace {ws_q}",
-                kind="recommended",
-            )
-        ]
     elif engine is not None and "scope-authorized" not in engine.state.completed_steps:
         stage = "orient"
+        blocked_because = (
+            "Workflow scope is not yet authorized; network and finding-driven actions stay locked."
+        )
         # Prefer importing demo findings after authorize when a session exists.
         primary = JourneyAction(
             id="authorize-scope",
@@ -722,6 +764,7 @@ def snapshot(
             and "discovery-complete" not in engine.state.completed_steps
         ):
             stage = "discover"
+            blocked_because = "A saved session exists but its findings have not been imported into the workflow yet."
             primary = JourneyAction(
                 id="import-session",
                 title="Import session findings into the workflow",
@@ -843,6 +886,7 @@ def snapshot(
 
     criteria = STAGE_CRITERIA.get(stage, {"entry": [], "exit": []})
     recovery = guide_recovery_command(workspace=root, session=session_hint)
+    fallback = primary.fallback or _stage_fallback(stage, workspace=root, session=session_hint)
     return {
         "ok": not blockers,
         "stage": stage,
@@ -851,6 +895,7 @@ def snapshot(
         "entry_criteria": list(criteria.get("entry") or []),
         "exit_criteria": list(criteria.get("exit") or []),
         "blocked_because": blocked_because,
+        "fallback": fallback,
         "primary_action": primary.document(),
         "secondary_actions": [item.document() for item in secondary],
         "blockers": blockers,
@@ -905,6 +950,7 @@ def import_session_findings(
 __all__ = [
     "SAFE_ADVANCE_ACTIONS",
     "STAGE_CRITERIA",
+    "STAGE_FALLBACKS",
     "STAGE_LABELS",
     "JourneyAction",
     "action_is_advance_safe",

@@ -56,3 +56,22 @@ body:
       description: OS, Python version, install path (wheel/venv/installer), extras.
     validations:
       required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Doctor JSON (redacted)
+      description: >
+        Prefer `adaf-attack --format json doctor --profile user-readiness --explain`
+        and confirm whether `"ready"` is true/false. Paste redacted JSON only.
+    validations:
+      required: false
+  - type: input
+    id: support_bundle
+    attributes:
+      label: Support bundle path (optional)
+      description: >
+        Path or attachment name for a redacted
+        `adaf-attack support-bundle --output adaf-support-bundle.json`.
+      placeholder: adaf-support-bundle.json
+    validations:
+      required: false

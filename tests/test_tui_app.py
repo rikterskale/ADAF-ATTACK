@@ -55,6 +55,29 @@ def test_tui_starts_populates_capabilities_and_updates_status() -> None:
     asyncio.run(exercise())
 
 
+def test_tui_compact_layout_keeps_review_run_and_param_form_reachable() -> None:
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            # Narrow width applies the compact class used by release acceptance.
+            app.on_resize(SimpleNamespace(size=SimpleNamespace(width=100, height=40)))
+            assert app.has_class("compact")
+            # Core operator controls remain mounted and queryable.
+            assert app.query_one("#review-btn")
+            assert app.query_one("#run-btn")
+            assert app.query_one("#param-form")
+            assert app.query_one("#search", Input)
+            app.selected_cap = "unpac-the-hash"
+            app._refresh_param_form()
+            assert app.query_one("#param-title", Static)
+            # Wide again clears compact.
+            app.on_resize(SimpleNamespace(size=SimpleNamespace(width=140, height=40)))
+            assert not app.has_class("compact")
+
+    asyncio.run(exercise())
+
+
 def test_tui_engagement_dashboard_reflects_target_review_and_session_state(tmp_path) -> None:
     async def exercise() -> None:
         app = ADAFAttackApp()
@@ -320,11 +343,13 @@ def test_tui_controls_validation_sessions_and_findings(
             app._review_run()
             app._dry_run()
             app._quickstart()
-            assert "Quickstart" in str(app.query_one("#review-panel", Static).render())
+            review_text = str(app.query_one("#review-panel", Static).render())
+            assert "quickstart" in review_text.lower()
+            assert "adaf-attack guide" in review_text
             app._show_findings()
-            assert (
-                "select a session" in str(app.query_one("#session-panel", Static).render()).lower()
-            )
+            findings_text = str(app.query_one("#session-panel", Static).render()).lower()
+            # Offline Quickstart materializes a demo session; findings should bind to it.
+            assert "findings dashboard" in findings_text or "select a session" in findings_text
             app._cancel()
             app._show_log("alpha\nbeta")
             app.query_one("#log-filter", Input).value = "beta"

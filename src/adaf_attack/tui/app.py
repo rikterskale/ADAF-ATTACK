@@ -32,7 +32,7 @@ from adaf_attack import __version__
 from adaf_attack.core.capability_help_data import capability_option_spec
 from adaf_attack.core.control_plane import package_evidence
 from adaf_attack.core.engagement_dashboard import MODES, inspect_edge
-from adaf_attack.core.journey import enrich_action, import_session_findings
+from adaf_attack.core.journey import import_session_findings
 from adaf_attack.core.journey import snapshot as journey_snapshot
 from adaf_attack.core.novice import (
     beginner_next_actions,
@@ -393,6 +393,17 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                         yield Switch(id="include_secrets", value=False)
                         yield Label("  Force")
                         yield Switch(id="force", value=False)
+                    yield Label("Engagement ID (scoped token)", classes="field-label")
+                    yield Input(
+                        placeholder="Engagement ID for --approval-token flows",
+                        id="engagement_id",
+                    )
+                    yield Label("Approval token", classes="field-label")
+                    yield Input(
+                        placeholder="Scoped approval token (optional unless required)",
+                        id="approval_token",
+                        password=True,
+                    )
                     with Horizontal():
                         yield Button("Review", id="review-btn")
                         yield Button("Dry run", id="dry-run-btn")
@@ -745,13 +756,18 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "objective": "Select a capability from the list.",
             "review": "Open Review, complete the checklist, then Acknowledge.",
         }
-        text = f"Readiness: {score}/100"
+        journey = self._journey()
+        primary = journey.get("primary_action") or {}
+        journey_cmd = str(primary.get("suggested_command") or "adaf-attack guide")
+        text = (
+            f"Readiness: {score}/100 · Journey: {journey.get('stage_label')} "
+            f"({journey.get('progress_pct')}%)"
+        )
         if missing:
-            text += (
-                f" · Next: {missing[0]} — {repair.get(missing[0], 'Complete the remaining gate.')}"
-            )
+            text += f"\nNext gate: {missing[0]} — {repair.get(missing[0], 'Complete the remaining gate.')}"
         else:
-            text += " · Ready to run"
+            text += "\nLive form ready to Review / Run when authorized."
+        text += f"\nGuided next (matches CLI): {journey_cmd}"
         self.query_one("#readiness", Static).update(text)
 
     def _validate_target_inline(self) -> None:
@@ -910,19 +926,15 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if not self._workflow:
             return
         state = self._workflow.state
-        recommendations = self._workflow.recommendations(limit=3)
-        if recommendations:
-            enriched = enrich_action(
-                recommendations[0],
-                session=self._last_session,
-                workspace=self._workspace,
-            )
-            next_action = f"{enriched['title']}\nCmd: {enriched['suggested_command']}"
-        else:
-            next_action = "No pending actions · adaf-attack guide"
+        journey = self._journey()
+        primary = journey.get("primary_action") or {}
+        title = str(primary.get("title") or "Follow guide")
+        command = str(primary.get("suggested_command") or "adaf-attack guide")
+        next_action = f"{title}\nCmd: {command}"
         self.query_one("#workflow-state-panel", Static).update(
             f"Workflow: {state.phase} · {state.status} · {state.progress:.0f}% · "
             f"risk {state.risk_score:.0f}\n"
+            f"Journey: {journey.get('stage_label')} · "
             f"Findings: {len(state.findings)} total / {len(state.open_findings)} open\n"
             f"Next: {next_action}"
         )
@@ -1119,6 +1131,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         pinned = ", ".join(favorite_capabilities()) or "none"
         difficulty = capability_difficulty(cap)
         stages = " → ".join(item["id"] for item in contract["stages"])
+        prereqs = contract.get("prerequisites") or {}
+        best_after = ", ".join(prereqs.get("best_run_after") or []) or "none"
+        produces_for = ", ".join(prereqs.get("produces_artifacts_for") or []) or "none"
         self.query_one("#help-panel", Static).update(
             f"[bold]{cap.id}[/]\n{cap.summary}\nCategory: {cap.category}\n"
             f"Difficulty: {difficulty['level']} — {difficulty['reason']}\n"
@@ -1126,6 +1141,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Risk: {contract['risk']}  |  Approvals: {approvals}\n"
             f"Rollback: {contract['rollback_implication']}\n"
             f"Required: {required}\nRequired -P: {params}\nOptional: {optional}\n"
+            f"Best run after: {best_after}\nProduces evidence for: {produces_for}\n"
             f"Evidence: {', '.join(contract['evidence_produced'])}\n"
             f"Stages: {stages}{notes}{glossary_line}\n"
             f"Recent: {recent}\nPinned: {pinned}"
@@ -1421,21 +1437,31 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         except ValueError as exc:
             self.notify(str(exc), severity="error")
 
+    def _requires_scoped_token(self, cap: Any) -> bool:
+        safety = getattr(cap, "safety", None) if cap is not None else None
+        approval = getattr(safety, "approval", None) if safety is not None else None
+        return getattr(approval, "value", None) == "scoped_token"
+
     def _update_run_gate(self) -> None:
         cap = self._selected()
         enabled = not self._capability_running
-        if cap and cap.requires_ack:
+        if cap and (cap.requires_ack or cap.requires_force or self._requires_scoped_token(cap)):
             required = risk_checklist(cap)["items"]
             complete = all(
                 not item["required"] or self.query_one(f"#check-{item['id']}", Checkbox).value
                 for item in required
             )
-            enabled = (
-                enabled
-                and self.query_one("#force", Switch).value
-                and complete
-                and self._reviewed_cap == cap.id
-            )
+            force_ok = (not cap.requires_force) or self.query_one("#force", Switch).value
+            ack_ok = (not cap.requires_ack) or self._reviewed_cap == cap.id
+            token_ok = True
+            if self._requires_scoped_token(cap):
+                token_ok = bool(
+                    self.query_one("#approval_token", Input).value.strip()
+                    and self.query_one("#engagement_id", Input).value.strip()
+                )
+            enabled = enabled and force_ok and complete and ack_ok and token_ok
+            if cap.requires_ack or self._requires_scoped_token(cap):
+                enabled = enabled and self._reviewed_cap == cap.id
         self.query_one("#run-btn", Button).disabled = not enabled
 
     def action_list_caps(self) -> None:
@@ -1681,12 +1707,33 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         )
 
     def _quickstart(self) -> None:
-        self.query_one("#domain", Input).focus()
-        self.query_one("#review-panel", Static).update(
-            "[bold]Quickstart[/bold]\n1. Enter domain and DC IP.\n"
-            "2. Select a capability and review prerequisites.\n"
-            "3. Use Dry run, then Review and Run when authorized."
-        )
+        """Materialize the offline demo and hand off to the shared guide spine."""
+        from adaf_attack.core.journey import guide_recovery_command
+        from adaf_attack.demo import materialize_demo_session
+
+        dest = self._workspace / "demo-session"
+        try:
+            if not (dest / "session.json").is_file():
+                materialize_demo_session(dest)
+            self._last_session = dest
+            next_guide = guide_recovery_command(workspace=self._workspace, session=dest)
+            self.query_one("#review-panel", Static).update(
+                "[bold]Offline quickstart complete[/bold]\n"
+                f"Session: {dest}\n"
+                f"Authoritative next step:\n[cyan]{next_guide}[/]\n"
+                "Home / What next? show the same command. Live AD still requires Review."
+            )
+            self._show_home()
+            self._refresh_workflow_panel()
+            self.notify("Offline demo ready; follow the guide command.", severity="information")
+        except (OSError, FileNotFoundError) as exc:
+            self.notify(f"Quickstart failed: {exc}", severity="error")
+            self.query_one("#review-panel", Static).update(
+                "[bold]Quickstart failed[/bold]\n"
+                "Repair local paths, then retry or run "
+                "`adaf-attack quickstart --workspace ./quickstart` from the CLI.\n"
+                f"Detail: {exc}"
+            )
 
     def _start_run(self) -> None:
         if self._capability_running:
@@ -1728,6 +1775,19 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         force = self.query_one("#force", Switch).value
         kerberos = self.query_one("#kerberos", Switch).value
         ldaps = self.query_one("#ldaps", Switch).value
+        approval_token = self.query_one("#approval_token", Input).value.strip() or None
+        engagement_id = self.query_one("#engagement_id", Input).value.strip() or None
+        if cap and self._requires_scoped_token(cap) and (not approval_token or not engagement_id):
+            self.notify(
+                "Scoped-token capabilities require Engagement ID and Approval token before Run.",
+                severity="error",
+            )
+            return
+        if cap and cap.requires_force and not force:
+            self.notify(
+                "Enable Force only when authorized for this mutating capability.", severity="error"
+            )
+            return
         target = Target(
             domain=domain,
             dc_ip=dc_ip,
@@ -1783,6 +1843,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     target,
                     force=force,
                     acknowledged=self._reviewed_cap == capability_id,
+                    approval_token=approval_token,
+                    approval_engagement_id=engagement_id,
                     include_secrets=include_secrets,
                     creds_file=creds_file,
                     log=log_fn,
@@ -2205,11 +2267,26 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         )
 
     def _show_what_next(self) -> None:
-        """Show the next safe action for the current selection or session."""
+        """Always prefer the shared journey snapshot (matches CLI guide / what-next)."""
+        journey = self._journey()
+        primary = journey.get("primary_action") or {}
+        command = str(primary.get("suggested_command") or "adaf-attack guide")
+        lines = [
+            f"[bold]Journey[/bold] · {journey.get('stage_label')} ({journey.get('progress_pct')}%)",
+            f"Why: {primary.get('why') or journey.get('why') or 'Follow the guided spine.'}",
+            f"Cmd:  {command}",
+        ]
+        if journey.get("blocked_because"):
+            lines.append(f"Blocked because: {journey['blocked_because']}")
+        if journey.get("fallback"):
+            lines.append(f"Fallback: {journey['fallback']}")
         if self.selected_cap:
-            self._show_next_actions(self.selected_cap)
-        else:
-            self._show_home()
+            lines.append("")
+            lines.append(
+                f"[dim]Selected capability tips for {self.selected_cap} remain secondary.[/]"
+            )
+        self.query_one("#recommendations-panel", Static).update("\n".join(lines))
+        self.notify("Guided journey next step matches CLI guide.", severity="information")
 
     def _copy_findings(self) -> None:
         text = str(self.query_one("#session-panel", Static).render())

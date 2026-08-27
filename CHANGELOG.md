@@ -5,51 +5,66 @@ declared in `pyproject.toml`.
 
 ## Unreleased
 
+> These changes are on `main` ahead of the next cut. Do not market them as part
+> of a private release tag until they appear under a versioned `## X.Y.Z`
+> heading and the matching wheel is published. Operators on `0.10.1` wheels
+> should treat Unreleased items as upcoming unless their approved wheel build
+> already includes them (check `adaf-attack --version` and the release notes).
+
 ### Added
 
-- `adaf-attack guide`: authoritative next-step command for the full operator
-  journey (install → offline first success → authorize → operate → report →
-  closeout), shared by CLI and TUI via `core.journey`.
-- Journey actions now include risk, approvals, rollback implication,
-  recovery command, and stage entry/exit criteria.
-- Shared operator capability contract (risk, approvals, rollback, required
-  `-P`, prerequisites, evidence produced, stages) on capability-help,
-  explain, plan, review, and TUI help/review panels.
-- Doctor profiles now attach repair/keep text to every check.
-- Timeline summary with status counts, duration/correlation coverage, and
-  stronger free-text password redaction.
-- Progress stages advance from runner log lines (CLI spinner and TUI).
-- TUI parameter form preserves values across refresh and warns when more than
-  eight required extras need CLI `-P` values.
-- Scoped-token capabilities require an explicit review-checklist approval item.
-- Session audit events stamp incremental `duration_ms` when callers omit it.
-- Install/guide error catalog codes for advance-unsafe, approval tokens,
-  Python/venv/PATH, execution policy, proxy TLS, missing extras, and
-  secret-in-output mishaps.
-- `docs/RELEASE_EVIDENCE.md` fill-in templates for MANUAL release checks.
-- GitHub issue templates for bugs and operator UX gaps.
-- Operator-first README orientation table, expanded RELEASE.md checklist for
-  non-author release managers, and Windows installer JSON codes for common
-  setup failures.
-- `docs/VENDOR_SCORECARD.md` records Phase 0→4 before/after scores and the
-  vendor SE first-ten-minutes script; UX acceptance matrix rows are scored
-  with no row below 9.
-- `scripts/Invoke-Tests.ps1` falls back when `.pytest-local` is locked on Windows.
+- Journey stage `fallback` commands and broader `blocked_because` narration
+  (authorize pending, session not yet imported).
+- `adaf-attack rollback` top-level alias for `cleanup`.
+- TUI Engagement ID / approval-token fields and force/token Run gating.
+- Kali installer structured JSON for ownership, Python, package, and completion
+  failures (aligned with ERROR_CATALOG codes where applicable).
+- Guide human output shows stage entry/exit criteria; TUI readiness embeds the
+  shared journey next command; timeline emits recovery + duration/correlation
+  coverage counts.
+- `review` accepts `--session` / `--export` (full `plan` alias); plan/review
+  expose top-level `prerequisites` and `recovery_command`.
+- Shared `format_timeline_human` for `timeline` and `engagement replay`; JSON
+  `run` payloads include `progress.stages` / observed stage transitions.
+- Compact TUI layout contract test; release pillar bindings include Phase 2
+  self-explain tests; doctor repair-text coverage includes `live-ad`.
 
 ### Changed
 
-- `what-next` (including `--session`), `workflow next`, and TUI Home/wizard
-  share `core.journey.snapshot()` and emit the same `suggested_command`.
-- Path-bearing suggested commands are shell-quoted.
-- Doctor JSON exposes top-level `ready` (also under `readiness.ready`).
-- Failures print a `When lost: adaf-attack guide ...` recovery command.
-- Quickstart, init/setup, installers, and readiness docs hand off to `guide`
-  with the canonical `./quickstart` workspace.
+- `workflow next` (and TUI workflow / What next panels) always take the
+  authoritative next step from `core.journey.snapshot()`, matching `guide`.
+- Error recovery commands include `--workspace` / `--session` when known.
+- `demo`, `init`, `setup`, doctor first-run, and TUI Quickstart hand off to
+  `guide` only (no competing start ladders).
+- README / Windows / Linux novice “first safe offline” sections align on the
+  doctor → quickstart → guide spine.
+- Release-readiness doctor contract requires top-level `ready` and
+  `readiness.ready`, plus remediation on every check.
+- Vendor release UX: README first-ten spine, Kali/macOS verify paths, FEATURE_MATRIX
+  / USER_READINESS parity checks, RELEASE.md day-of cut commands, expanded
+  RELEASE_EVIDENCE MANUAL sections, and install-contract enforcement for those
+  surfaces.
+- Phase 4 proof tests: first-ten guide≡workflow next≡what-next, paths/support-bundle
+  contracts, UX matrix score floor (≥9), RELEASE honesty gate presence.
 
 ## 0.10.1
 
 ### Added
 
+- `adaf-attack guide`: authoritative next-step command for the full operator
+  journey (install → offline first success → authorize → operate → report →
+  closeout), shared by CLI and TUI via `core.journey`.
+- Journey actions include risk, approvals, rollback implication, recovery
+  command, and stage entry/exit criteria.
+- Shared operator capability contract on capability-help, explain, plan,
+  review, and TUI help/review panels.
+- Doctor repair/keep text on every check; top-level `ready`.
+- Timeline summary with status, duration, correlation, and stronger redaction.
+- Progress stages from runner log lines (CLI spinner and TUI).
+- TUI parameter form with refresh preservation and >8 `-P` overflow warning.
+- Error catalog codes for guide/install/approval/secret mishaps.
+- `docs/RELEASE_EVIDENCE.md`, issue templates, operator-first README,
+  `docs/VENDOR_SCORECARD.md`, Windows installer JSON codes.
 - Single-operator runbook, proprietary license terms, and a concrete private
   security-reporting channel.
 - Safe command-template enrichment, target validation, evidence rationale, and

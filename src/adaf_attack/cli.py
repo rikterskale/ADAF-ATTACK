@@ -344,11 +344,20 @@ def _emit(ctx: typer.Context, payload: dict[str, Any], human: Any) -> None:
 def _emit_error(ctx: typer.Context, error: ActionableError) -> None:
     from adaf_attack.core.journey import guide_recovery_command
 
+    details = error.details if isinstance(error.details, dict) else {}
+    params = getattr(ctx, "params", None)
+    params = params if isinstance(params, dict) else {}
+    workspace = details.get("workspace") or params.get("workspace")
+    session = details.get("session") or params.get("session")
+    recovery = guide_recovery_command(
+        workspace=workspace if workspace is not None else None,
+        session=session if session is not None else None,
+    )
+
     # Lost-operator recovery: every failure points back at the guided spine.
     if not error.suggested_command:
-        object.__setattr__(error, "suggested_command", guide_recovery_command())
+        object.__setattr__(error, "suggested_command", recovery)
     payload = error.payload()
-    recovery = guide_recovery_command()
     # Keep the guide recovery visible even when the catalog already supplied a command.
     error_body = payload.get("error") if isinstance(payload.get("error"), dict) else {}
     if isinstance(error_body, dict) and "recovery_command" not in error_body:
@@ -809,9 +818,8 @@ def _doctor_payload(
         )
     elif first_run:
         next_step = (
-            "First run detected. Run `adaf-attack guide` for the authoritative next step, "
-            "or `adaf-attack quickstart` for a safe offline demo. When you are ready for an "
-            "authorized engagement, use `adaf-attack engagement init --output engagement.yaml`."
+            "First run detected. Run `adaf-attack guide` for the single authoritative next step "
+            "(it will recommend quickstart when no offline demo exists yet)."
         )
     else:
         next_step = "Run `adaf-attack guide` for the next copy-ready step."
@@ -1507,6 +1515,7 @@ def plan(
         "rollback": contract["rollback"],
         "rollback_implication": contract["rollback_implication"],
     }
+    prerequisites = contract.get("prerequisites") or {}
     payload: dict[str, Any] = {
         "ok": True,
         "mode": "preview",
@@ -1517,11 +1526,13 @@ def plan(
         "rollback": contract["rollback"],
         "rollback_implication": contract["rollback_implication"],
         "required_params": list(contract["required_params"]),
+        "prerequisites": prerequisites,
         "evidence_produced": list(contract["evidence_produced"]),
         "preflight_checklist": checklist,
         "stages": stages,
         "next_step": next_step,
         "suggested_command": ready,
+        "recovery_command": "adaf-attack guide",
     }
     from adaf_attack.core.engagement_dashboard import capability_review
 
@@ -1558,11 +1569,14 @@ def plan(
                 f"Opsec: {checklist['opsec_hint']}",
                 "Preflight: "
                 + ", ".join(item["label"] for item in checklist["items"] if item["required"]),
+                "Best run after: "
+                + (", ".join(prerequisites.get("best_run_after") or []) or "none"),
                 "Prerequisites: "
                 + payload["pre_execution_review"]["feasibility"]["prerequisites"]["status"],
                 "Stages: " + " -> ".join(item["id"] for item in stages["stages"]),
                 f"Copy-ready: {ready}",
                 f"Next step: {next_step}",
+                "When lost: adaf-attack guide",
             ]
         ),
         title=f"Plan preview: {cap.id}",
@@ -1662,16 +1676,20 @@ def review(
     domain: str = typer.Option(..., "--domain", "-d"),
     dc_ip: str = typer.Option(..., "--dc-ip"),
     force: bool = typer.Option(False, "--force"),
+    session: Path | None = typer.Option(
+        None, "--session", help="Use saved evidence to evaluate prerequisites (same as plan)."
+    ),
+    export: Path | None = typer.Option(None, "--export", help="Write the review as Markdown."),
 ) -> None:
-    """Preview a capability before running it."""
+    """Preview a capability before running it (full alias of ``plan``)."""
     plan(
         ctx,
         capability=capability,
         domain=domain,
         dc_ip=dc_ip,
         force=force,
-        session=None,
-        export=None,
+        session=session,
+        export=export,
     )
 
 
@@ -1929,6 +1947,28 @@ def cleanup_cmd(
         session, Target(domain=domain, dc_ip=dc_ip, username=username, password=password)
     )
     _emit(ctx, {"ok": True, **result}, Panel(f"Completed: {result['completed']}", title="Cleanup"))
+
+
+@app.command("rollback", rich_help_panel="Execution & sessions")
+def rollback_cmd(
+    ctx: typer.Context,
+    session: Path = typer.Option(..., "--session"),
+    domain: str = typer.Option(..., "--domain", "-d"),
+    dc_ip: str = typer.Option(..., "--dc-ip"),
+    username: str | None = typer.Option(None, "--username", "-u"),
+    password: str | None = typer.Option(None, "--password", "-p"),
+    force: bool = typer.Option(False, "--force"),
+) -> None:
+    """Alias for ``cleanup``: reverse recorded directory mutations (requires --force)."""
+    cleanup_cmd(
+        ctx,
+        session=session,
+        domain=domain,
+        dc_ip=dc_ip,
+        username=username,
+        password=password,
+        force=force,
+    )
 
 
 @app.command("cleanup-status", rich_help_panel="Execution & sessions")
@@ -2511,7 +2551,35 @@ def run_capability(
         )
 
     try:
+        progress_meta: dict[str, Any] = {"stages": [], "observed": [], "final_stage": None}
+        if cap is not None:
+            try:
+                from adaf_attack.core.ux import format_stages_progress as _fmt_stages
+
+                progress_meta["stages"] = [item["id"] for item in _fmt_stages(cap)["stages"]]
+            except Exception:
+                progress_meta["stages"] = []
         if _json_mode(ctx) or not interactive:
+            stage_list = list(progress_meta["stages"] or [])
+            current_stage: str | None = stage_list[0] if stage_list else None
+            observed: list[dict[str, str]] = []
+            try:
+                from adaf_attack.core.ux_extra import advance_stage_from_log
+            except Exception:
+                advance_stage_from_log = None  # type: ignore[assignment]
+
+            def _track_log(message: str) -> None:
+                nonlocal current_stage
+                previous = current_stage
+                if stage_list and advance_stage_from_log is not None:
+                    current_stage = advance_stage_from_log(
+                        stage_list, message, current=current_stage
+                    )
+                if current_stage and current_stage != previous:
+                    observed.append({"stage": current_stage, "message": message[:200]})
+                if not _json_mode(ctx):
+                    _console(ctx).print(message)
+
             out = execute_capability(
                 capability,
                 target,
@@ -2523,15 +2591,13 @@ def run_capability(
                 approval_engagement_id=engagement_id,
                 workspace=workspace,
                 creds_file=creds_file,
-                log=None if _json_mode(ctx) else lambda m: _console(ctx).print(m),
+                log=_track_log,
                 **extra,
             )
+            progress_meta["observed"] = observed
+            progress_meta["final_stage"] = current_stage or (stage_list[-1] if stage_list else None)
         else:
-            spinner_stages: list[str] = []
-            if cap is not None:
-                from adaf_attack.core.ux import format_stages_progress as _fmt_stages
-
-                spinner_stages = [item["id"] for item in _fmt_stages(cap)["stages"]]
+            spinner_stages = list(progress_meta["stages"] or [])
             out = _execute_with_spinner(
                 ctx,
                 capability,
@@ -2545,6 +2611,7 @@ def run_capability(
                 engagement_id,
                 stages=spinner_stages,
             )
+            progress_meta["final_stage"] = spinner_stages[-1] if spinner_stages else None
         session_path = Path(str(out.get("session_path") or ""))
         should_import = (
             bool(import_workflow)
@@ -2575,6 +2642,7 @@ def run_capability(
             **out,
             "ok": True,
             "workflow_import": workflow_import,
+            "progress": progress_meta,
             "next_step": next_steps[0],
             "next_steps": [item for item in next_steps if item],
         }
@@ -4213,14 +4281,10 @@ def init_cmd(
         username,
     )
 
-    next_steps = [
-        "adaf-attack guide",
-        "adaf-attack list-capabilities --novice",
-        "adaf-attack list-capabilities --novice --safe-only",
-    ]
-    if not skip_quickstart:
-        next_steps.insert(1, "adaf-attack quickstart")
-    next_steps.append("adaf-attack tour")
+    # Keep one ordered spine: guide decides whether quickstart is next.
+    _ = skip_quickstart  # retained for CLI flag compatibility
+    next_guide = "adaf-attack guide"
+    next_steps = [next_guide]
 
     payload = {
         "ok": doctor_payload["ok"] and not errors,
@@ -4228,6 +4292,8 @@ def init_cmd(
         "saved": saved,
         "errors": errors,
         "next_steps": next_steps,
+        "suggested_command": next_guide,
+        "recovery_command": next_guide,
     }
     if _json_mode(ctx):
         _emit(ctx, payload, "")
@@ -4243,9 +4309,9 @@ def init_cmd(
         console_obj.print("[yellow]Some values could not be saved:[/yellow]")
         for entry in errors:
             console_obj.print(f"  {entry['key']}: {entry['error']}")
-    console_obj.print("\n[bold]Next:[/bold]")
-    for step in next_steps:
-        console_obj.print(f"  {step}")
+    console_obj.print("\n[bold]Next (authoritative):[/bold]")
+    console_obj.print(f"  {next_guide}")
+    console_obj.print("[dim]When lost, rerun the same guide command.[/dim]")
 
 
 @app.command("setup", rich_help_panel="Setup & diagnostics")
@@ -4256,7 +4322,7 @@ def setup_cmd(
     dc_ip: str | None = typer.Option(None, "--dc-ip"),
     username: str | None = typer.Option(None, "--username"),
 ) -> None:
-    """Interactive first-run setup: runs init, then prints the next-step ladder.
+    """Interactive first-run setup: runs init, then hands off to ``guide``.
 
     Convenience alias for `init` with a clearer name for new operators; nothing
     is written unless a value is supplied at the prompt.
@@ -4272,11 +4338,9 @@ def setup_cmd(
     if not _json_mode(ctx):
         console = _console(ctx)
         console.print(
-            "\n[dim]Recommended next commands:[/dim]\n"
-            "  1. [cyan]adaf-attack guide[/cyan]\n"
-            "  2. [cyan]adaf-attack doctor --profile user-readiness[/cyan]\n"
-            "  3. [cyan]adaf-attack quickstart --workspace ./quickstart[/cyan]\n"
-            "  4. [cyan]adaf-attack list-capabilities --novice[/cyan]"
+            "\n[dim]Authoritative next step:[/dim]\n"
+            "  [cyan]adaf-attack guide[/cyan]\n"
+            "[dim]guide will recommend quickstart when no offline demo exists yet.[/dim]"
         )
 
 

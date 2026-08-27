@@ -19,13 +19,19 @@ This will:
 3. Drop a user PATH shim at `%LOCALAPPDATA%\adaf-attack\bin\adaf-attack.cmd`
 4. Set `ADAF_ATTACK_WORKSPACE=%LOCALAPPDATA%\adaf-attack\workspaces`
 
-Open a **new** terminal, then:
+Open a **new** terminal, then run the first-ten spine (no domain controller):
 
 ```powershell
-adaf-attack doctor
-adaf-attack paths
-adaf-attack list-capabilities
+adaf-attack --version
+adaf-attack --format json doctor --profile user-readiness --explain
+adaf-attack quickstart --workspace .\quickstart
+adaf-attack --format json guide --workspace .\quickstart --session .\quickstart\demo-session
+adaf-attack --format json paths
 ```
+
+Expect doctor `"ready": true` and a copy-ready `suggested_command` from `guide`.
+**When lost:** `adaf-attack guide`. New operators should prefer the
+[Windows novice guide](WINDOWS_NOVICE_USABILITY_GUIDE.md).
 
 The script supports Windows PowerShell 5.1 and PowerShell 7. Select a specific
 interpreter with `-Python C:\Path\python.exe`, or use the launcher with
@@ -33,7 +39,8 @@ interpreter with `-Python C:\Path\python.exe`, or use the launcher with
 creating the environment.
 
 Pass `-Json` when invoking the installer from automation. Failures are emitted
-as a stable `INSTALLER_FAILURE` object with a remediation field.
+as a stable JSON object with `code`, `message`, `remediation`, and
+`suggested_command` fields.
 
 ## Upgrade and uninstall
 

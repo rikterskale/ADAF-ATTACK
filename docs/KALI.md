@@ -2,7 +2,12 @@
 
 ADAF-ATTACK supports Kali Linux with Python 3.11-3.14. It uses the standard
 XDG data locations, so session artifacts default to
-`~/.local/share/adaf-attack/workspaces`.
+`~/.local/share/adaf-attack/workspaces` (confirm with `adaf-attack paths`).
+
+## Choose this path when
+
+You are on Kali and have an approved private release wheel (or authorized
+checkout). Do not invent a public PyPI URL.
 
 ## Install
 
@@ -12,15 +17,14 @@ then run the installer from the repository root:
 ```bash
 bash scripts/install-kali.sh --package dist/adaf_attack-0.10.1-py3-none-any.whl
 source .venv/bin/activate
-adaf-attack doctor
 ```
 
 The installer installs the build and Python prerequisites through `apt`, then
-creates a project-local `.venv` and installs the production `full` extra set. To use
-already-provisioned packages, omit the `apt` step:
+creates a project-local `.venv` and installs the production `full` extra set. To
+use already-provisioned packages, omit the `apt` step:
 
 ```bash
-bash scripts/install-kali.sh --skip-system-deps
+bash scripts/install-kali.sh --skip-system-deps --package dist/adaf_attack-0.10.1-py3-none-any.whl
 ```
 
 Select a smaller dependency set with `--extras base`, `--extras tui`, or
@@ -28,33 +32,42 @@ Select a smaller dependency set with `--extras base`, `--extras tui`, or
 checkout.
 
 For automation, pass `--json` to receive structured installer failures with a
-stable error code, message, and remediation field.
+stable error code, message, remediation, and suggested command.
 
-## Verify
+## Verify (first ten minutes)
 
 ```bash
+python -m pip check
 adaf-attack --version
-adaf-attack doctor --explain
-adaf-attack paths
+adaf-attack --format json doctor --profile user-readiness --explain
+adaf-attack quickstart --workspace ./quickstart
+adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack --format json paths
 ```
 
+Expect exit `0`, doctor `"ready": true`, and one copy-ready `suggested_command`
+from `guide`. These checks do not contact a domain controller.
+
 `doctor` reports `Kali Linux` when `/etc/os-release` identifies the host as
-Kali. You can override the artifact location without changing the installer:
+Kali. Override workspace location without changing the installer:
 
 ```bash
 export ADAF_ATTACK_WORKSPACE="$HOME/adaf-workspaces"
 ```
 
+**When lost:** `adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session`
+
 ## Upgrade and uninstall
 
 Rerun the installer with a newer or older approved artifact to change versions.
-The default uninstall removes only the venv and preserves workspace evidence:
+The default uninstall removes only the venv and **preserves** workspace evidence:
 
 ```bash
 bash scripts/install-kali.sh --uninstall
 ```
 
-Delete workspace data only after retention approval:
+Delete workspace data only after retention approval (confirm path with
+`adaf-attack paths` first):
 
 ```bash
 bash scripts/install-kali.sh --uninstall --remove-workspace
@@ -69,3 +82,4 @@ bash scripts/install-kali.sh --uninstall --remove-workspace
   authorized assessment scope.
 - Hosted CI performs a real artifact install in a Kali rolling container, but it
   cannot prove your endpoint policy or live AD environment.
+- Support: `adaf-attack support-bundle --output adaf-support-bundle.json` (redacted).

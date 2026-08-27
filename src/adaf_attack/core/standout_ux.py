@@ -91,6 +91,38 @@ def what_if_graph(
     }
 
 
+def format_timeline_human(payload: dict[str, Any], *, event_limit: int = 12) -> str:
+    """Shared human rendering for ``timeline`` and ``engagement replay``."""
+    events = payload.get("events")
+    if not isinstance(events, list) or not events:
+        return "No audit events found."
+    raw_summary = payload.get("summary")
+    summary: dict[str, Any] = raw_summary if isinstance(raw_summary, dict) else {}
+    recovery = str(payload.get("recovery_command") or "adaf-attack guide")
+    lines = [
+        (
+            f"summary: shown={summary.get('shown', 0)}/{summary.get('total', 0)} "
+            f"status={summary.get('status_counts') or {}} "
+            f"duration_events={summary.get('with_duration', 0)} "
+            f"corr_events={summary.get('with_correlation', 0)} "
+            f"redacted={summary.get('secrets_redacted', True)}"
+        ),
+        f"When lost: {recovery}",
+    ]
+    for item in events[-max(1, event_limit) :]:
+        if not isinstance(item, dict):
+            continue
+        detail = f"  {item['details']}" if item.get("details") else ""
+        lines.append(
+            f"{item.get('time') or '-'}  {str(item.get('status') or 'ok').upper()}  "
+            f"{item.get('type') or 'event'}  "
+            f"{item.get('capability') or '-'}  "
+            f"duration={item.get('duration_ms') if item.get('duration_ms') is not None else '-'}ms  "
+            f"corr={item.get('correlation_id') or '-'}{detail}"
+        )
+    return "\n".join(lines)
+
+
 def session_timeline(session: Path, *, limit: int = 100) -> dict[str, Any]:
     """Normalize audit events into a replayable engagement timeline."""
     events_path = session / "events.jsonl"

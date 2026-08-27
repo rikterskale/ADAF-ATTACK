@@ -161,7 +161,8 @@ def operator_rollback_contract(cap: Capability) -> dict[str, str]:
     rollback = safety.rollback.value if safety is not None else "manual"
     if rollback == "automatic":
         implication = (
-            "Mutations record pre-state in session cleanup.json; use `adaf-attack rollback`."
+            "Mutations record pre-state in session cleanup.json; "
+            "use `adaf-attack rollback` (alias of `cleanup`)."
         )
     elif rollback == "manual":
         implication = "Operator must verify and reverse residual effects on the authorized target."

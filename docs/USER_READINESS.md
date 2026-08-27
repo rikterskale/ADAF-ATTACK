@@ -31,20 +31,21 @@ adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace ./quickstart
 adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
-adaf-attack --format json list-capabilities
+adaf-attack --format json workflow next --workspace ./quickstart --session ./quickstart/demo-session
 adaf-attack --format json paths
-adaf-attack --format json workflow-profiles
 ```
 
 If every command exits with status 0 and the doctor JSON reports
 `"ready": true` (also mirrored under `readiness.ready`), the base installation
-is usable. The doctor checks the installed runtime modules, writable
-application directories, and packaged demo fixtures. Optional warnings are
-expected when TUI, Kerberos, reporting, Certipy, or Impacket command-line tools
-were not selected.
+is usable. `guide` and `workflow next` must emit the same `suggested_command`.
+The doctor checks the installed runtime modules, writable application
+directories, and packaged demo fixtures. Optional warnings are expected when
+TUI, Kerberos, reporting, Certipy, or Impacket command-line tools were not
+selected.
 
-When lost at any point, run `adaf-attack guide`. It is the single authoritative
-next step from install through closeout (CLI and TUI share the same journey).
+When lost at any point, run `adaf-attack guide` with the current `--workspace`
+and `--session`. It is the single authoritative next step from install through
+closeout (CLI and TUI share the same journey).
 
 For the shortest safe first run, use the bundled quickstart:
 

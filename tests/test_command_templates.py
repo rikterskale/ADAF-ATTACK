@@ -9,8 +9,20 @@ from adaf_attack.core.command_templates import (
     SECONDARY_COMMAND_TEMPLATES,
     _sam_from_node_id,
     build_exploit_commands,
+    shell_quote,
 )
 from adaf_attack.core.target import Target
+
+
+def test_shell_quote_uses_posix_shlex_for_metacharacters() -> None:
+    assert shell_quote("corp.local") == "corp.local"
+    assert shell_quote("DC01$") == "DC01$"
+    quoted = shell_quote("my domain")
+    assert "'" in quoted or "\\" in quoted
+    assert "my domain" in quoted or "my\\ domain" in quoted
+    # Documented contract: POSIX quoting; PowerShell operators should read CLI_REFERENCE.
+    assert "POSIX" in (shell_quote.__doc__ or "")
+    assert "PowerShell" in (shell_quote.__doc__ or "")
 
 
 def test_sam_from_node_id():

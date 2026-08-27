@@ -20,9 +20,15 @@ def test_doctor_json_has_stable_remediation_contract() -> None:
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert {"ok", "version", "checks", "next_step"} <= payload.keys()
+    assert {"ok", "ready", "version", "checks", "next_step", "readiness"} <= payload.keys()
+    assert isinstance(payload["ready"], bool)
+    assert payload["ready"] is payload["readiness"]["ready"]
     assert all(
         {"id", "status", "value", "remediation"} <= check.keys() for check in payload["checks"]
+    )
+    assert all(
+        isinstance(check["remediation"], str) and check["remediation"].strip()
+        for check in payload["checks"]
     )
 
 

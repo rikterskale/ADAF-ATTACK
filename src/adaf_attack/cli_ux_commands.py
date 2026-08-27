@@ -255,6 +255,17 @@ def register_ux_commands(
             if payload.get("blocked_because")
             else []
         )
+        fallback = payload.get("fallback") or primary.get("fallback")
+        fallback_line = [f"Fallback: {fallback}"] if fallback else []
+        entry = payload.get("entry_criteria") or primary.get("entry_criteria") or []
+        exit_c = payload.get("exit_criteria") or primary.get("exit_criteria") or []
+        criteria_lines: list[str] = []
+        if entry:
+            criteria_lines.append("Entry: " + "; ".join(str(item) for item in entry))
+        if exit_c:
+            criteria_lines.append("Exit:  " + "; ".join(str(item) for item in exit_c))
+        if criteria_lines:
+            criteria_lines.append("")
         human = Panel(
             "\n".join(
                 [
@@ -262,12 +273,14 @@ def register_ux_commands(
                     breadcrumb,
                     "",
                     *blocked_line,
+                    *criteria_lines,
                     f"Next: {primary['title']}",
                     f"Why:  {primary['why']}",
                     f"Risk: {primary.get('risk', 'observe')}",
                     f"Approvals: {approval_text}",
                     f"Rollback: {primary.get('rollback_implication') or primary.get('rollback')}",
                     f"Cmd:  {primary['suggested_command']}",
+                    *fallback_line,
                     f"If this fails: {payload.get('recovery_command') or primary.get('recovery_command')}",
                     *(["", "Also:", *secondary_lines] if secondary_lines else []),
                     "",
@@ -738,13 +751,22 @@ def register_ux_commands(
             )
             _emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from exc
+        from adaf_attack.core.journey import guide_recovery_command, quote_path
+
         dashboard = session_findings_dashboard(dest)
+        next_guide = guide_recovery_command(workspace=dest_root, session=dest)
         payload = {
             "ok": True,
             "mode": "offline-demo",
             "session_path": str(dest),
             "dashboard": dashboard,
-            "next_step": f"adaf-attack session show --session {dest}",
+            "next_step": next_guide,
+            "suggested_command": next_guide,
+            "recovery_command": next_guide,
+            "next_steps": [
+                next_guide,
+                f"adaf-attack session show --session {quote_path(dest)}",
+            ],
         }
         human = Panel(
             "\n".join(
@@ -753,8 +775,7 @@ def register_ux_commands(
                     f"Session: {dest}",
                     f"Findings: {dashboard.get('finding_count', 0)}",
                     f"Graph nodes/edges: {dashboard.get('graph', {}).get('nodes', 0)} / {dashboard.get('graph', {}).get('edges', 0)}",
-                    f"Next: adaf-attack session show --session {dest}",
-                    "Or open the TUI: adaf-attack start",
+                    f"Next: {next_guide}",
                 ]
             ),
             title="ADAF-ATTACK demo",

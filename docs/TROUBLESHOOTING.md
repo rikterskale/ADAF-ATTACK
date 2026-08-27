@@ -254,6 +254,11 @@ command. Use the code to choose the recovery path:
 | `REQUIRED_INPUT_MISSING` | Run `adaf-attack capability-help <capability>` and provide the named option or `-P` parameter. |
 | `INPUT_FILE_INVALID` | Confirm the path exists, is readable, and matches the documented artifact format. |
 | `PERMISSION_DENIED` | Select writable per-user data/config/workspace directories with `adaf-attack paths`. |
+| `SESSION_NOT_FOUND` | Pass an existing session directory from `adaf-attack sessions --limit 10`, or recreate with `quickstart`. |
+| `APPROVAL_TOKEN_EXPIRED` | Request a fresh scoped token for the same `--engagement-id`, then re-run with `--approval-token`. |
+| `APPROVAL_TOKEN_INVALID` | Confirm `--engagement-id` matches the token claims, then re-run with a valid `--approval-token`. |
+| `SECRET_IN_OUTPUT` | Do not share the output; rotate the exposed secret if it was real; regenerate a redacted `support-bundle`. |
+| `PROXY_TLS_FAILED` / air-gap | Configure the approved CA (`pip --cert`) or install from a complete wheelhouse with `--no-index --find-links`. |
 
 For a complete catalog, run `adaf-attack --format json errors`. The generic
 `RUN_FAILED` code is reserved for provider failures that do not match a safer

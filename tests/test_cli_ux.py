@@ -309,7 +309,7 @@ def test_doctor_first_run_hint_present(tmp_path: Path, monkeypatch) -> None:
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert payload["first_run"] is True
-    assert "engagement init" in payload["next_step"]
+    assert "adaf-attack guide" in payload["next_step"]
 
 
 def test_recent_capabilities_are_local_and_ordered(tmp_path: Path, monkeypatch) -> None:

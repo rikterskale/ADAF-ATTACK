@@ -299,34 +299,21 @@ def register_tool_commands(
             payload = session_timeline(session, limit=limit)
         except OSError as exc:
             error = ActionableError(
-                "SESSION_NOT_FOUND", str(exc), "Pass a completed session directory."
+                "SESSION_NOT_FOUND",
+                str(exc),
+                "Pass a completed session directory.",
+                details={"session": str(session)},
             )
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from exc
-        summary = payload.get("summary") or {}
-        lines = [
-            (
-                f"summary: shown={summary.get('shown', 0)}/{summary.get('total', 0)} "
-                f"status={summary.get('status_counts') or {}} "
-                f"redacted={summary.get('secrets_redacted', True)}"
-            ),
-            *[
-                f"{item.get('time') or '-'}  {str(item.get('status') or 'ok').upper()}  "
-                f"{item.get('type') or 'event'}  "
-                f"{item.get('capability') or '-'}  "
-                f"duration={item.get('duration_ms') if item.get('duration_ms') is not None else '-'}ms  "
-                f"corr={item.get('correlation_id') or '-'}"
-                + (f"  {item['details']}" if item.get("details") else "")
-                for item in payload["events"][-10:]
-            ],
-        ]
+        from adaf_attack.core.journey import guide_recovery_command
+        from adaf_attack.core.standout_ux import format_timeline_human
+
+        payload["recovery_command"] = guide_recovery_command(session=session)
         emit(
             ctx,
             payload,
-            Panel(
-                "\n".join(lines) if payload["events"] else "No audit events found.",
-                title="Engagement timeline",
-            ),
+            Panel(format_timeline_human(payload, event_limit=10), title="Engagement timeline"),
         )
 
     @app.command("copilot", rich_help_panel="Advanced product surfaces")

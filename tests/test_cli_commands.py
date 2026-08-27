@@ -174,6 +174,10 @@ def test_cleanup_executes_with_force(monkeypatch: Any, tmp_path: Path) -> None:
 
 def test_run_human_prints_paths_and_session(monkeypatch: Any, tmp_path: Path) -> None:
     def fake_run(capability: str, target: Any, **kwargs: Any) -> dict[str, Any]:
+        log = kwargs.get("log")
+        if callable(log):
+            log("connecting to target")
+            log("enumeration complete")
         return {
             "session_path": str(tmp_path),
             "interesting": {
@@ -191,6 +195,37 @@ def test_run_human_prints_paths_and_session(monkeypatch: Any, tmp_path: Path) ->
     _ok(result)
     assert "Top ranked paths" in result.output
     assert "Session:" in result.output
+
+
+def test_run_json_includes_progress_stages(monkeypatch: Any, tmp_path: Path) -> None:
+    def fake_run(capability: str, target: Any, **kwargs: Any) -> dict[str, Any]:
+        log = kwargs.get("log")
+        if callable(log):
+            log("preparing session")
+            log("connected to ldap")
+            log("harvested findings")
+        return {"session_path": str(tmp_path), "session_id": "s1"}
+
+    monkeypatch.setattr(cli, "execute_capability", fake_run)
+    result = runner.invoke(
+        app,
+        [
+            "--format",
+            "json",
+            "run",
+            "ldap-enum",
+            "--domain",
+            "corp.test",
+            "--dc-ip",
+            "10.0.0.1",
+        ],
+    )
+    _ok(result)
+    payload = json.loads(result.output)
+    assert "progress" in payload
+    assert isinstance(payload["progress"]["stages"], list)
+    assert payload["progress"]["stages"]
+    assert payload["progress"]["final_stage"]
 
 
 def test_run_human_destructive_error(monkeypatch: Any) -> None:

@@ -22,18 +22,24 @@ Setup and `guide` never contact a domain controller. Recommendations never
 auto-execute destructive work. Destructive runs still require `--force` and/or
 approval tokens; mutating capabilities record rollback pre-state.
 
-## Quick start
+## Quick start (first ten minutes)
 
-Four commands from an approved wheel to a guided offline first success:
+From an approved wheel to a guided offline first success (no domain controller):
 
 ```bash
 python -m pip install "./adaf_attack-0.10.1-py3-none-any.whl[full]"
-adaf-attack doctor --profile user-readiness
+python -m pip check
+adaf-attack --version
+adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace ./quickstart
-adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack --format json paths
 ```
 
-**When lost:** run `adaf-attack guide` (optionally with `--workspace` /
+Expect every command to exit `0`, doctor `"ready": true`, and one copy-ready
+`suggested_command` from `guide`.
+
+**When lost:** run `adaf-attack guide` (with the same `--workspace` /
 `--session`). It is the single authoritative next step from install through
 closeout. CLI and TUI share the same journey snapshot.
 
@@ -273,19 +279,22 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the pinned CI toolchain.
 
 ## Verify the installation
 
+Use the [Quick start (first ten minutes)](#quick-start-first-ten-minutes) spine.
+The shortest wheel-only acceptance path is:
+
 ```bash
 python -m pip check
 adaf-attack --version
-adaf-attack doctor --explain
-adaf-attack list-capabilities
-adaf-attack paths
+adaf-attack --format json doctor --profile user-readiness --explain
+adaf-attack quickstart --workspace ./quickstart
+adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack --format json paths
 ```
 
-`doctor --explain` verifies the interpreter, architecture, runtime packages,
-virtual environment, writable paths, and optional external tools such as
-`ntlmrelayx` and `certipy`. Missing optional tooling is reported with
-remediation; it does not invalidate the base installation. Use an explicit
-profile when checking a broader workflow:
+`doctor --profile user-readiness --explain` verifies the interpreter, runtime
+packages, writable paths, and packaged demo fixtures. Missing optional tooling
+is reported with remediation; it does not invalidate the base installation when
+`"ready": true`. Broader profiles:
 
 ```bash
 adaf-attack --format json doctor --profile operator
@@ -294,30 +303,22 @@ adaf-attack --format json doctor --profile live-ad \
   --domain corp.example --dc-ip 10.0.0.10
 ```
 
-The default `offline` profile never performs network probes. The `live-ad`
-profile performs only explicit DNS and TCP preflight checks; it does not
-authenticate or execute a capability.
+The default `offline` / `user-readiness` profiles never perform network probes.
+The `live-ad` profile performs only explicit DNS and TCP preflight checks; it
+does not authenticate or execute a capability.
 
-For the complete wheel-only acceptance path, run:
-
-```bash
-adaf-attack doctor --profile user-readiness
-adaf-attack demo --workspace ./demo-session
-```
-
-For the shortest safe first run, use the single-command quickstart. It checks
-the installation and creates a disposable offline demo session without
-contacting a domain controller:
-
-```bash
-adaf-attack quickstart --workspace ./quickstart
-```
-
-If the quickstart reports a permissions problem, run:
+If quickstart reports a permissions problem:
 
 ```bash
 adaf-attack paths --repair
 adaf-attack quickstart --workspace ./quickstart
+```
+
+Optional offline deliverable smoke **after** `guide` (still no DC contact):
+
+```bash
+adaf-attack engagement report --session ./quickstart/demo-session --engagement-id QUICKSTART-2026-001
+adaf-attack engagement package --session ./quickstart/demo-session --output demo.zip --profile client
 ```
 
 For support, export a redacted diagnostic bundle and review it before sharing:
@@ -328,16 +329,19 @@ adaf-attack --format json support-bundle --output adaf-support-bundle.json
 
 ## First safe offline success
 
-These commands do not contact a domain controller and do not modify a target:
+Use the same spine as [Quick start](#quick-start). These commands do not contact
+a domain controller and do not modify a target:
 
 ```bash
-adaf-attack --format json doctor --explain
-adaf-attack --format json list-capabilities
+adaf-attack --format json doctor --profile user-readiness --explain
+adaf-attack quickstart --workspace ./quickstart
+adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
 adaf-attack --format json paths
 ```
 
-Exit code `0` and JSON containing `"ok": true` confirm the install. `paths`
-shows where future session evidence will be stored.
+Exit code `0`, doctor `"ready": true`, and a copy-ready `suggested_command` from
+`guide` confirm the install. `paths` shows where session evidence will be stored.
+When lost later, re-run `guide` — do not invent a parallel ladder.
 
 Without an authorized target, the supported offline functionality includes diagnostics,
 capability discovery, planning, evidence correlation, engagement reporting,
@@ -420,26 +424,27 @@ workspaces outside disposable virtual environments.
 
 ## Uninstall
 
-For a direct wheel/source install, remove the isolated environment. Workspace
-data is separate and must be deleted explicitly:
+Uninstall **preserves** session/workspace data by default. Confirm paths with
+`adaf-attack paths` before any explicit wipe.
 
-```bash
-deactivate 2>/dev/null || true
-rm -rf .venv
-# Optional and destructive: rm -rf ~/.local/share/adaf-attack/workspaces
-```
+| Install path | Uninstall (preserves data) | Explicit data wipe |
+|---|---|---|
+| Windows installer | `.\scripts\Install-AdafAttack.ps1 -Uninstall` | add `-RemoveWorkspace` |
+| Kali installer | `bash scripts/install-kali.sh --uninstall` | add `--remove-workspace` |
+| Linux/macOS venv | `deactivate`; `rm -rf .venv` (or `$HOME/.venvs/adaf-attack`) | delete only the workspace path from `paths` |
 
-Windows installer users must run
-`.\scripts\Install-AdafAttack.ps1 -Uninstall`; Kali installer users run
-`bash scripts/install-kali.sh --uninstall`. Both preserve workspace data by
-default. Their explicit `-RemoveWorkspace` / `--remove-workspace` options delete
-operator data.
+Typical workspace roots (confirm with `paths` — do not guess):
+
+- Linux/Kali: `~/.local/share/adaf-attack/workspaces`
+- macOS: `~/Library/Application Support/adaf-attack/workspaces`
+- Windows: `%LOCALAPPDATA%\adaf-attack\workspaces`
 
 ## Troubleshooting
 
-Start with `adaf-attack doctor --profile offline --explain`, or use
-`adaf-attack doctor --profile live-ad --domain <authorized-domain> --dc-ip <authorized-dc>`
-before a target-scoped preflight. Then use the
+Start with `adaf-attack --format json doctor --profile user-readiness --explain`
+(or `live-ad` with `--domain` / `--dc-ip` before an authorized target preflight).
+When lost after install, run `adaf-attack guide`. Attach a redacted
+`support-bundle` when escalating. Then use the
 [first-install troubleshooting guide](docs/TROUBLESHOOTING.md) for PATH refresh,
 Python launcher selection, missing `venv`, PEP 668, PowerShell policy and
 SmartScreen, proxies/custom CAs, offline installs, optional dependency conflicts,

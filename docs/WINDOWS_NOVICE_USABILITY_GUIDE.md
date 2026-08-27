@@ -82,15 +82,31 @@ When lost, run `adaf-attack guide`. It always returns one copy-ready next step.
 
 ## First safe offline run
 
+Use the same Verify spine above. Short form:
+
 ```powershell
-adaf-attack --format json doctor --explain
-adaf-attack --format json list-capabilities
+adaf-attack --format json doctor --profile user-readiness --explain
+adaf-attack quickstart --workspace .\quickstart
+adaf-attack --format json guide --workspace .\quickstart --session .\quickstart\demo-session
 adaf-attack --format json paths
 ```
 
-Each result should contain `"ok": true`. `paths` identifies the workspace where
-future `session.json`, `events.jsonl`, findings, and reports are written. These
-commands create no target artifacts.
+Expect exit `0`, doctor `"ready": true`, and a copy-ready `suggested_command`
+from `guide`. `paths` identifies the workspace where future `session.json`,
+`events.jsonl`, findings, and reports are written (typically
+`%LOCALAPPDATA%\adaf-attack\workspaces`). These commands create no target
+artifacts. When lost, re-run `guide`.
+
+Operator orientation after first success:
+
+```powershell
+adaf-attack rollback --help
+adaf-attack cleanup-status --help
+adaf-attack --format json support-bundle --output adaf-support-bundle.json
+```
+
+`rollback` is the alias of `cleanup` for reversing recorded directory mutations
+(requires `--force`). Attach only redacted support bundles to support requests.
 
 ## Stop or cancel
 

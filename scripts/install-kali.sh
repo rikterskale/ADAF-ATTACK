@@ -17,14 +17,25 @@ ownership_marker="$venv_path/.adaf-attack-installer"
 
 fail() {
   local code="$1" message="$2" remediation="$3"
+  local suggested="${4:-adaf-attack doctor --profile user-readiness --explain}"
   if ((json_output)); then
-    python3 - "$code" "$message" "$remediation" <<'PY'
+    python3 - "$code" "$message" "$remediation" "$suggested" <<'PY'
 import json
 import sys
-print(json.dumps({"ok": False, "error": {"code": sys.argv[1], "message": sys.argv[2], "remediation": sys.argv[3]}}))
+print(json.dumps({
+    "ok": False,
+    "error": {
+        "code": sys.argv[1],
+        "message": sys.argv[2],
+        "remediation": sys.argv[3],
+        "suggested_command": sys.argv[4],
+        "recovery_command": "adaf-attack guide",
+    },
+}))
 PY
   else
-    printf 'Error [%s]: %s\nNext step: %s\n' "$code" "$message" "$remediation" >&2
+    printf 'Error [%s]: %s\nNext step: %s\nSuggested: %s\nWhen lost: adaf-attack guide\n' \
+      "$code" "$message" "$remediation" "$suggested" >&2
   fi
   exit 1
 }
@@ -114,18 +125,17 @@ if ((install_system_deps)); then
     python3 python3-venv python3-pip python3-dev build-essential libkrb5-dev libssl-dev
 fi
 
-command -v "$python_command" >/dev/null || fail "PYTHON_NOT_FOUND" "Python command not found: $python_command" "Install Python 3.11-3.14 or pass --python."
-"$python_command" -c \
-  'import sys; assert (3, 11) <= sys.version_info < (3, 15), f"Python 3.11-3.14 required, found {sys.version.split()[0]}"'
+command -v "$python_command" >/dev/null || fail "PYTHON_NOT_FOUND" "Python command not found: $python_command" "Install Python 3.11-3.14 or pass --python." "python3 --version"
+if ! "$python_command" -c 'import sys; raise SystemExit(0 if (3, 11) <= sys.version_info < (3, 15) else 1)'; then
+  fail "PYTHON_UNSUPPORTED" "Python 3.11-3.14 is required." "Install a supported Python and pass --python." "adaf-attack doctor --profile user-readiness --explain"
+fi
 
 if [[ -e "$venv_path" && ! -f "$ownership_marker" ]]; then
-  echo "Refusing to modify unowned virtual environment: $venv_path" >&2
-  exit 1
+  fail "INSTALLER_OWNERSHIP" "Refusing to modify unowned virtual environment: $venv_path" "Use the matching installer ownership marker or choose another --venv." "bash scripts/install-kali.sh --help"
 fi
 if [[ -f "$ownership_marker" ]] &&
   [[ "$(<"$ownership_marker")" != "ADAF_ATTACK_INSTALLER_V1" ]]; then
-  echo "Virtual environment ownership marker is invalid: $ownership_marker" >&2
-  exit 1
+  fail "INSTALLER_OWNERSHIP" "Virtual environment ownership marker is invalid: $ownership_marker" "Recreate the venv with this installer or choose another --venv." "bash scripts/install-kali.sh --uninstall"
 fi
 if [[ -x "$venv_path/bin/python" ]]; then
   selected_base="$(
@@ -135,9 +145,7 @@ if [[ -x "$venv_path/bin/python" ]]; then
     "$venv_path/bin/python" -c 'import os, sys; print(os.path.realpath(sys.base_prefix))'
   )"
   if [[ "$selected_base" != "$existing_base" ]]; then
-    echo "Existing $venv_path uses $existing_base, not selected interpreter $selected_base." >&2
-    echo "Uninstall first or select the matching Python." >&2
-    exit 1
+    fail "VENV_REQUIRED" "Existing $venv_path uses $existing_base, not selected interpreter $selected_base." "Uninstall first or select the matching Python." "bash scripts/install-kali.sh --uninstall"
   fi
 fi
 if [[ ! -f "$ownership_marker" ]]; then
@@ -150,8 +158,7 @@ venv_python="$venv_path/bin/python"
 
 install_target="${package:-$repo_root}"
 if [[ -n "$package" && ! -f "$package" ]]; then
-  echo "Package artifact does not exist: $package" >&2
-  exit 1
+  fail "INPUT_FILE_INVALID" "Package artifact does not exist: $package" "Pass an existing approved wheel path with --package." "ls -la \"$package\""
 fi
 if [[ "$extras" != "base" ]]; then
   install_target="${install_target}[${extras}]"
@@ -166,8 +173,7 @@ if ((install_completion)); then
     if "$venv_path/bin/adaf-attack" --install-completion "$shell_name"; then
       echo "Installed $shell_name completion for adaf-attack."
     else
-      echo "Completion install failed; run 'adaf-attack --install-completion $shell_name' manually." >&2
-      exit 1
+      fail "INSTALLER_FAILURE" "Completion install failed for $shell_name." "Activate the venv and run adaf-attack --install-completion $shell_name manually." "source $venv_path/bin/activate"
     fi
   fi
 fi

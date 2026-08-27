@@ -513,6 +513,12 @@ def shell_quote(value: str) -> str:
     Computer accounts conventionally end in ``$``. A trailing dollar has no
     expansion meaning in a POSIX shell, so preserve that familiar display
     form while still quoting whitespace and shell metacharacters.
+
+    Copy-ready commands use POSIX/`shlex.quote` (single quotes). On Windows
+    PowerShell, paste into bash/`pwsh` with bash-compatible quoting, or wrap
+    the whole invocation in ``cmd /c`` / use the unquoted safe-token form when
+    values have no spaces. Prefer ``adaf-attack command`` / ``plan`` output as
+    the operator contract rather than hand-editing quotes.
     """
     if _SAFE_COMMAND_VALUE.fullmatch(value):
         return value

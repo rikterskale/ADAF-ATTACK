@@ -101,8 +101,9 @@ def test_init_saves_defaults_via_flags(tmp_path: Path, monkeypatch) -> None:
     assert payload["saved"]["target.domain"] == "corp.example"
     assert payload["saved"]["target.dc_ip"] == "10.0.0.10"
     assert payload["saved"]["target.username"] == "svc-red"
-    # quickstart hint suppressed
-    assert not any("quickstart" in step for step in payload["next_steps"])
+    # Authoritative spine is guide-only (guide may later recommend quickstart).
+    assert payload["next_steps"] == ["adaf-attack guide"]
+    assert payload["suggested_command"] == "adaf-attack guide"
 
     stored = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
     assert stored["target.domain"] == "corp.example"
@@ -295,11 +296,11 @@ def test_init_human_mode_prints_panel_and_next_steps(tmp_path: Path, monkeypatch
         ],
     )
     assert result.exit_code == 0, result.output
-    # Panel header and Next: block
+    # Panel header and authoritative guide handoff
     assert "ADAF-ATTACK init" in result.output
     assert "Saved defaults" in result.output
-    assert "Next:" in result.output
-    assert "quickstart" in result.output
+    assert "Next (authoritative):" in result.output
+    assert "adaf-attack guide" in result.output
 
 
 def test_init_interactive_prompts_persist_values(tmp_path: Path, monkeypatch) -> None:

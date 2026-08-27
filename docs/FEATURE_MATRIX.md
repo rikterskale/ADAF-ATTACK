@@ -28,16 +28,18 @@ not claim live AD validation by itself.
 - **CI**: exercised automatically in a clean environment.
 - **Operator-verified**: exercised against an authorized target by the
   operator.
-- **Experimental**: not currently a release claim; document the limitation in
-  the release record before use. The 40 catalog IDs added in 0.10.0 that
-  were previously experimental tracking stubs are now `supported`; the full
-  catalog contains 90+ capabilities (see
-  [CAPABILITY_CATALOG.md](CAPABILITY_CATALOG.md)).
+- **Experimental / playbook-only**: not a release claim of live AD success;
+  document any limitation in the release record before use. The 40 catalog IDs
+  added in 0.10.0 that were previously experimental tracking stubs now have
+  registered runners with maturity metadata (`implemented` /
+  `fixture-tested` / `operator-verified` / `playbook-only`) — that is not the
+  same as CI-proven live forest behavior. The full catalog contains 90+
+  capabilities (see [CAPABILITY_CATALOG.md](CAPABILITY_CATALOG.md)).
 
 ## Offline 10-minute acceptance path
 
 From a wheel-only installation, this sequence must succeed without source files.
-It matches [USER_READINESS.md](USER_READINESS.md):
+It matches [USER_READINESS.md](USER_READINESS.md) and the README Quick start:
 
 ```bash
 python -m pip check
@@ -45,12 +47,16 @@ adaf-attack --version
 adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace ./quickstart
 adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack --format json workflow next --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack --format json paths
 ```
 
-Optional offline deliverable smoke after first success:
+Expect doctor `"ready": true` and identical `suggested_command` from `guide` and
+`workflow next`. When lost: `adaf-attack guide` with the same workspace/session.
+
+Optional offline deliverable smoke **after** first success (still no DC):
 
 ```bash
-adaf-attack demo --workspace ./demo-session
-adaf-attack engagement report --session ./demo-session/demo-session --engagement-id DEMO-2026-001
-adaf-attack engagement package --session ./demo-session/demo-session --output demo.zip --profile client
+adaf-attack engagement report --session ./quickstart/demo-session --engagement-id DEMO-2026-001
+adaf-attack engagement package --session ./quickstart/demo-session --output demo.zip --profile client
 ```

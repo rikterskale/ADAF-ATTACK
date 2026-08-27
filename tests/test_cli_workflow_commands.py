@@ -250,10 +250,12 @@ def test_next_shows_no_recommendations_when_closed(tmp_path: Path) -> None:
     _json(_run(tmp_path, "close"))
     nxt = _json(_run(tmp_path, "next"))
     assert nxt["count"] == 0
-    # Human mode renders the empty-actions row.
+    # Authoritative next step comes from the journey complete stage.
+    assert nxt["journey_stage"] == "complete"
+    assert nxt["suggested_command"].startswith("adaf-attack ")
     human = _human(tmp_path, "next")
     assert human.exit_code == 0
-    assert "none" in human.output.lower()
+    assert "journey" in human.output.lower() or "sessions" in human.output.lower()
 
 
 def test_import_into_closed_workflow_is_rejected(tmp_path: Path) -> None:

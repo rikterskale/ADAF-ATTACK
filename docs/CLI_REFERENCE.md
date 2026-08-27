@@ -5,6 +5,11 @@ command names are checked against the Typer application by
 `python scripts/check_cli_documentation.py`. Use `adaf-attack <command> --help`
 for current options, defaults, validation, and examples.
 
+Copy-ready commands from `guide`, `plan`, `command`, and related surfaces use
+POSIX/`shlex` quoting (single quotes). On Windows PowerShell, paste into a
+bash-compatible shell when values contain spaces, or prefer values without
+spaces so the unquoted safe-token form applies.
+
 | Command | Surface |
 |---|---|
 | `adaf-attack ad-recon` | Read-only AD reconnaissance group |
@@ -22,6 +27,7 @@ for current options, defaults, validation, and examples.
 | `adaf-attack check` | Check beginner setup or preflight an authorized target |
 | `adaf-attack cleanup` | Execute recorded cleanup with explicit force |
 | `adaf-attack cleanup-status` | Show rollback readiness and restored-state status |
+| `adaf-attack rollback` | Alias for cleanup: reverse recorded directory mutations |
 | `adaf-attack detection-status` | Record defensive detection validation |
 | `adaf-attack coercion-fixtures` | Validate authorized coercion fixtures |
 | `adaf-attack command` | Build a copy-ready command with option explanations |
