@@ -111,4 +111,8 @@ def test_doctor_reports_resolved_external_binaries(monkeypatch: pytest.MonkeyPat
     for check in binary_checks.values():
         assert check["status"] == "ok"
         assert check["value"].startswith("/usr/bin/")
-        assert check["remediation"] is None
+        # Healthy checks now carry keep-ready repair text for --explain uniformity.
+        assert isinstance(check["remediation"], str) and check["remediation"].strip()
+        assert (
+            "healthy" in check["remediation"].lower() or "no action" in check["remediation"].lower()
+        )

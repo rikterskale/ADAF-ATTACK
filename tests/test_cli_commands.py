@@ -593,7 +593,9 @@ def test_start_launches_tui(monkeypatch: Any) -> None:
     import adaf_attack.tui.app as tui_app
 
     called = {"ran": False}
-    monkeypatch.setattr(tui_app, "run_tui", lambda: called.update(ran=True))
+    monkeypatch.setattr(
+        tui_app, "run_tui", lambda workspace=None: called.update(ran=True, workspace=workspace)
+    )
     result = runner.invoke(app, ["start"])
     _ok(result)
     assert called["ran"] is True

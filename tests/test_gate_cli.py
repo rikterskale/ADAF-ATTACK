@@ -386,31 +386,95 @@ def test_run_destructive_confirmation_declined(monkeypatch: pytest.MonkeyPatch) 
 def test_spinner_stage_hint_recovers_from_registry_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    from rich.console import Console
+
     import adaf_attack.capabilities  # noqa: F401
     from adaf_attack.core.registry import capability_registry
+    from adaf_attack.core.target import Target
 
-    original_get = capability_registry.get
-    state = {"calls": 0}
-
-    def flaky_get(capability_id: str) -> Any:
-        state["calls"] += 1
-        if state["calls"] > 1:
-            raise RuntimeError("registry exploded")
-        return original_get(capability_id)
-
-    monkeypatch.setattr(capability_registry, "get", flaky_get)
+    monkeypatch.setattr(
+        capability_registry,
+        "get",
+        lambda capability_id: (_ for _ in ()).throw(RuntimeError("registry exploded")),
+    )
     monkeypatch.setattr(
         cli, "execute_capability", lambda *a, **k: {"session_path": str(tmp_path), "ok": True}
     )
-    monkeypatch.setattr(cli, "sys", _SysProxy(sys))
 
-    result = runner.invoke(
-        app,
-        ["run", "ldap-enum", "--domain", "corp.test", "--dc-ip", "10.0.0.1"],
+    class _Ctx:
+        def ensure_object(self, typ: type) -> dict[str, Any]:
+            return {
+                "console": Console(force_terminal=False),
+                "format": "human",
+                "non_interactive": False,
+            }
+
+    out = cli._execute_with_spinner(
+        _Ctx(),  # type: ignore[arg-type]
+        "ldap-enum",
+        Target(domain="corp.test", dc_ip="10.0.0.1"),
+        force=False,
+        include_secrets=False,
+        workspace=tmp_path,
+        creds_file=None,
+        extra={},
+        stages=None,
     )
+    assert out["ok"] is True
+    assert out["session_path"] == str(tmp_path)
 
-    assert result.exit_code == 0, result.output
-    assert f"Session: {tmp_path}" in result.output
+
+def test_spinner_advances_precomputed_stages_from_log(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from adaf_attack.core.target import Target
+
+    descriptions: list[str] = []
+
+    def fake_execute(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        log = kwargs.get("log")
+        if callable(log):
+            log("LDAP bind succeeded")
+            log("Resolved 2 MemberOf DN edges")
+            log("Session directory: ready")
+        return {"session_path": str(tmp_path), "ok": True}
+
+    class _Progress:
+        def __enter__(self) -> Any:
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+        def add_task(self, description: str, total: Any = None) -> int:
+            descriptions.append(description)
+            return 1
+
+        def update(self, task_id: int, description: str | None = None) -> None:
+            if description:
+                descriptions.append(description)
+
+    monkeypatch.setattr(cli, "Progress", lambda *a, **k: _Progress())
+    monkeypatch.setattr(cli, "execute_capability", fake_execute)
+
+    class _Ctx:
+        def ensure_object(self, typ: type) -> dict[str, Any]:
+            return {"format": "human", "non_interactive": False}
+
+    out = cli._execute_with_spinner(
+        _Ctx(),  # type: ignore[arg-type]
+        "ldap-enum",
+        Target(domain="corp.test", dc_ip="10.0.0.1"),
+        force=False,
+        include_secrets=False,
+        workspace=tmp_path,
+        creds_file=None,
+        extra={},
+        stages=["prepare", "connect", "analyze", "next-actions"],
+    )
+    assert out["ok"] is True
+    assert any("[connect]" in item for item in descriptions)
+    assert any("[analyze]" in item or "[next-actions]" in item for item in descriptions)
 
 
 def test_spinner_handles_unknown_capability_hint(

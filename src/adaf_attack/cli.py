@@ -2527,6 +2527,11 @@ def run_capability(
                 **extra,
             )
         else:
+            spinner_stages: list[str] = []
+            if cap is not None:
+                from adaf_attack.core.ux import format_stages_progress as _fmt_stages
+
+                spinner_stages = [item["id"] for item in _fmt_stages(cap)["stages"]]
             out = _execute_with_spinner(
                 ctx,
                 capability,
@@ -2538,6 +2543,7 @@ def run_capability(
                 extra,
                 approval_token,
                 engagement_id,
+                stages=spinner_stages,
             )
         session_path = Path(str(out.get("session_path") or ""))
         should_import = (
@@ -2626,25 +2632,33 @@ def _execute_with_spinner(
     extra: dict[str, Any],
     approval_token: str | None = None,
     engagement_id: str | None = None,
+    stages: list[str] | None = None,
 ) -> dict[str, Any]:
     """Run a capability inside a Rich spinner, threading log messages into the status."""
     console_obj = _console(ctx)
-    stages: list[str] = []
-    current_stage: str | None = None
+    stage_list = list(stages or [])
+    current_stage: str | None = stage_list[0] if stage_list else None
     try:
-        from adaf_attack.core.registry import capability_registry
-        from adaf_attack.core.ux import format_stages_progress
         from adaf_attack.core.ux_extra import advance_stage_from_log
-
-        cap = capability_registry.get(capability)
-        if cap is not None:
-            stages = [item["id"] for item in format_stages_progress(cap)["stages"]]
-            current_stage = stages[0] if stages else None
     except Exception:
-        stages = []
-        current_stage = None
+        # Keep running even if progress helpers cannot load.
         advance_stage_from_log = None  # type: ignore[assignment]
-    stage_hint = " -> ".join(stages) if stages else capability
+        stage_list = []
+        current_stage = None
+    if not stage_list:
+        # Best-effort stage list; never block execution if registry/help fails.
+        try:
+            from adaf_attack.core.registry import capability_registry
+            from adaf_attack.core.ux import format_stages_progress
+
+            cap = capability_registry.get(capability)
+            if cap is not None:
+                stage_list = [item["id"] for item in format_stages_progress(cap)["stages"]]
+                current_stage = stage_list[0] if stage_list else None
+        except Exception:
+            stage_list = []
+            current_stage = None
+    stage_hint = " -> ".join(stage_list) if stage_list else capability
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -2658,8 +2672,8 @@ def _execute_with_spinner(
 
         def _log(message: str) -> None:
             nonlocal current_stage
-            if stages and advance_stage_from_log is not None:
-                current_stage = advance_stage_from_log(stages, message, current=current_stage)
+            if stage_list and advance_stage_from_log is not None:
+                current_stage = advance_stage_from_log(stage_list, message, current=current_stage)
             label = current_stage or capability
             progress.update(task_id, description=f"{capability} [{label}]: {message[:72]}")
 

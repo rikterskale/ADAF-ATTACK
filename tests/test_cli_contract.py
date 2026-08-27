@@ -44,14 +44,19 @@ def test_plan_json_reports_read_only_default_for_mixed_capability() -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["mode"] == "preview"
-    assert payload["risk"] == {
-        "force_provided": False,
-        "level": "observe",
-        "may_modify_target": False,
-        "network_contact": True,
-        "requires_force": False,
-    }
-    assert not payload["next_step"].endswith(" --force")
+    risk = payload["risk"]
+    assert risk["force_provided"] is False
+    assert risk["level"] == "observe"
+    assert risk["may_modify_target"] is False
+    assert risk["network_contact"] is True
+    assert risk["requires_force"] is False
+    assert "approvals" in risk
+    assert "rollback" in risk
+    assert "rollback_implication" in risk
+    # OptionSpec still lists --force for write-mode shadow-creds; copy-ready must
+    # surface that requirement even when the safety profile is observe-by-default.
+    assert "--sam" in payload["next_step"]
+    assert payload["suggested_command"] == payload["next_step"]
 
 
 def test_unknown_capability_uses_actionable_json_error() -> None:
