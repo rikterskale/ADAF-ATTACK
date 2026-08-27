@@ -663,16 +663,32 @@ def _doctor_payload(
     ]
 
     dist_version = _package_version("adaf-attack")
+    install_kind = _installation_kind()
     if dist_version and dist_version != __version__:
-        checks.append(
-            _doctor_check(
-                "version-skew",
-                "error",
-                f"metadata={dist_version} runtime={__version__}",
-                "Reinstall the approved wheel so package metadata matches adaf_attack.__version__.",
-                severity="blocking",
+        # Editable checkouts often carry stale dist-info until reinstall; keep that
+        # advisory for contributors. Wheel/operator installs must stay blocking.
+        if install_kind == "editable":
+            checks.append(
+                _doctor_check(
+                    "version-skew",
+                    "warning",
+                    f"metadata={dist_version} runtime={__version__} ({install_kind})",
+                    "Re-run `python -m pip install -e '.[dev,operator]'` so editable "
+                    "metadata matches adaf_attack.__version__.",
+                    severity="advisory",
+                )
             )
-        )
+        else:
+            checks.append(
+                _doctor_check(
+                    "version-skew",
+                    "error",
+                    f"metadata={dist_version} runtime={__version__}",
+                    "Reinstall the approved wheel so package metadata matches "
+                    "adaf_attack.__version__.",
+                    severity="blocking",
+                )
+            )
     else:
         checks.append(
             _doctor_check(

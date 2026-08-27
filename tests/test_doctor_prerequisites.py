@@ -86,6 +86,27 @@ def test_offline_profile_downgrades_unwritable_paths(
     assert workspace["status"] == "warning"
 
 
+def test_version_skew_blocks_wheels_but_warns_for_editable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli, "_package_version", lambda name: "0.0.0" if name == "adaf-attack" else "1"
+    )
+    monkeypatch.setattr(cli, "__version__", "0.10.1")
+
+    monkeypatch.setattr(cli, "_installation_kind", lambda: "editable")
+    editable = cli._doctor_payload("user-readiness")
+    skew = next(check for check in editable["checks"] if check["id"] == "version-skew")
+    assert skew["status"] == "warning"
+    assert "version-skew" not in editable["blocking_checks"]
+
+    monkeypatch.setattr(cli, "_installation_kind", lambda: "wheel")
+    wheeled = cli._doctor_payload("user-readiness")
+    skew = next(check for check in wheeled["checks"] if check["id"] == "version-skew")
+    assert skew["status"] == "error"
+    assert "version-skew" in wheeled["blocking_checks"]
+
+
 @pytest.mark.parametrize(
     ("path_id", "expected"),
     [("data_dir", "ADAF_ATTACK_DATA_DIR"), ("config_dir", "ADAF_ATTACK_CONFIG_DIR")],

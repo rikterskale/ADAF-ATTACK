@@ -75,8 +75,13 @@ python scripts/check_install_contracts.py
 python scripts/check_release_readiness.py --repo-root .
 ```
 
-Phase 1–2 of this pass: focused behavioral suites + install contracts green.
-Full coverage gate and CI mirror: record in Phase 4 `logs/ci_mirror.txt`.
+Phase 4 CI mirror (branch `ux/phase1-guided-spine`, local):
+
+- `ruff check` / `ruff format --check` / `mypy` / `compileall` — pass
+- `pytest --cov=adaf_attack --cov-branch --cov-fail-under=95` — **1400 passed**, branch coverage **96.28%**
+- `check_cli_documentation.py` / `check_install_contracts.py` — pass
+- `check_release_readiness.py` — pass under project `.venv` (system-site `pip check` may fail on unrelated packages)
+- Transcript: UX scratch `logs/ci_mirror.txt` (outside the git tree)
 
 ## Vendor SE first-ten-minutes script
 
