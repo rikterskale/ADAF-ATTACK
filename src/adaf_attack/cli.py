@@ -1118,11 +1118,13 @@ def list_capabilities(
         )
         return
 
-    display_caps = (
-        [cap for group in group_capabilities_by_phase().values() for cap in group]
-        if by_phase
-        else caps
-    )
+    grouped_caps: dict[str, list[Any]] | None = None
+    if by_phase:
+        grouped_caps = group_capabilities_by_phase()
+        wanted = {cap.id for cap in caps}
+        display_caps = [cap for group in grouped_caps.values() for cap in group if cap.id in wanted]
+    else:
+        display_caps = caps
     columns = [TableColumn("ID", max_width=28, style="cyan")]
     if by_phase:
         columns.append(TableColumn("Phase", max_width=26))
@@ -1175,12 +1177,12 @@ def list_capabilities(
     payload: dict[str, Any] = {
         "ok": True,
         "capabilities": [_capability_payload(cap) for cap in display_caps],
-        "count": len(caps),
+        "count": len(display_caps),
         "full": full,
+        "safe_only": safe_only,
         "next_step": "Run `adaf-attack capability-help <id>` for details.",
     }
-    if by_phase:
-        grouped = group_capabilities_by_phase()
+    if by_phase and grouped_caps is not None:
         wanted = {cap.id for cap in caps}
         payload["by_phase"] = True
         payload["phases"] = [
@@ -1190,7 +1192,7 @@ def list_capabilities(
                 "count": len(phase_caps),
                 "capability_ids": [cap.id for cap in phase_caps],
             }
-            for phase, group in grouped.items()
+            for phase, group in grouped_caps.items()
             if (phase_caps := [cap for cap in group if cap.id in wanted])
         ]
     if clipboard is not None:
@@ -1694,13 +1696,26 @@ def plan(
 
 
 @app.command("tour", rich_help_panel="Guidance & UX helpers")
-def tour(ctx: typer.Context) -> None:
-    """Show the guided operator tour with progress against the current journey."""
-    from adaf_attack.core.journey import snapshot
+def tour(
+    ctx: typer.Context,
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        help="Workflow workspace (defaults to the shared workspace).",
+    ),
+    session: Path | None = typer.Option(
+        None,
+        "--session",
+        help="Bias journey state toward this session (same as guide --session).",
+    ),
+) -> None:
+    """Show the guided operator tour with progress from the same guide snapshot."""
+    from adaf_attack.core.journey import journey_summary_lines, snapshot
     from adaf_attack.core.ux import guided_tour_payload
 
     doctor = _doctor_payload("user-readiness")
-    journey = snapshot(doctor=doctor)
+    root = Path(workspace) if workspace is not None else default_workspace_dir()
+    journey = snapshot(workspace=root, session=session, doctor=doctor)
     done_stages = {item["id"] for item in journey.get("breadcrumb") or [] if item.get("done")}
     past_orient = bool(
         done_stages & {"orient", "discover", "operate", "deliver", "closeout", "complete"}
@@ -1711,7 +1726,9 @@ def tour(ctx: typer.Context) -> None:
     steps = []
     for step in tour_payload["steps"]:
         step_id = str(step["id"])
-        if step_id == "doctor":
+        if step_id == "guide":
+            completed = bool(journey.get("suggested_command"))
+        elif step_id == "doctor":
             completed = bool(doctor.get("ok"))
         elif step_id == "demo":
             completed = bool(journey["context"].get("demo_available"))
@@ -1729,26 +1746,34 @@ def tour(ctx: typer.Context) -> None:
         steps.append(annotated)
     primary = journey["primary_action"]
     payload = {
-        "ok": True,
+        "ok": bool(journey.get("ok")),
         "title": tour_payload["title"],
         "steps": steps,
         "next_step": primary["suggested_command"],
+        "suggested_command": primary["suggested_command"],
+        "recovery_command": journey.get("recovery_command"),
         "stage": journey["stage"],
-        "journey": {
-            "stage": journey["stage"],
-            "stage_label": journey["stage_label"],
-            "progress_pct": journey["progress_pct"],
-            "primary_action": primary,
-        },
+        "stage_label": journey["stage_label"],
+        "primary_action": primary,
+        "journey": journey,
     }
+    if journey.get("error"):
+        payload["error"] = journey["error"]
     human = Panel(
         "\n".join(
-            [f"{step['marker']} {step['title']}: {step['command']}" for step in steps]
-            + ["", f"Next: {primary['suggested_command']}", "Continue with: adaf-attack guide"]
+            [
+                *journey_summary_lines(journey, compact=True),
+                "",
+                *[f"{step['marker']} {step['title']}: {step['command']}" for step in steps],
+                "",
+                f"Continue with: {primary['suggested_command']}",
+            ]
         ),
         title="Operator tour",
     )
     _emit(ctx, payload, human)
+    if not payload["ok"]:
+        raise typer.Exit(code=1)
 
 
 @app.command("check", rich_help_panel="Setup & diagnostics")
@@ -1803,9 +1828,21 @@ def review(
 
 
 @app.command("help-me", hidden=True)
-def help_me(ctx: typer.Context) -> None:
+def help_me(
+    ctx: typer.Context,
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        help="Workflow workspace (same as tour --workspace).",
+    ),
+    session: Path | None = typer.Option(
+        None,
+        "--session",
+        help="Session hint for journey state (same as tour --session).",
+    ),
+) -> None:
     """Show the guided tour for new operators (alias of `tour`)."""
-    tour(ctx)
+    tour(ctx, workspace=workspace, session=session)
 
 
 @app.command("recent", rich_help_panel="Guidance & UX helpers")
@@ -3596,14 +3633,28 @@ def glossary_cmd(
 
 
 @app.command("home", hidden=True)
-def home_cmd(ctx: typer.Context) -> None:
-    """Show plain-language goals for users who do not know the command names."""
+def home_cmd(
+    ctx: typer.Context,
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        help="Workflow workspace (defaults to the shared workspace).",
+    ),
+    session: Path | None = typer.Option(
+        None,
+        "--session",
+        help="Bias journey state toward this session (same as guide --session).",
+    ),
+) -> None:
+    """Show plain-language goals from the same guide journey snapshot."""
     from adaf_attack.core.journey import snapshot
     from adaf_attack.core.novice import home_actions
 
     doctor_payload = _doctor_payload("user-readiness")
-    journey = snapshot(doctor=doctor_payload)
+    root = Path(workspace) if workspace is not None else default_workspace_dir()
+    journey = snapshot(workspace=root, session=session, doctor=doctor_payload)
     primary = journey["primary_action"]
+    guide_command = str(journey.get("recovery_command") or "adaf-attack guide")
     actions = [
         {
             "goal": primary["title"],
@@ -3619,18 +3670,24 @@ def home_cmd(ctx: typer.Context) -> None:
         1,
         {
             "goal": "Ask the guided journey what to do next",
-            "command": "adaf-attack guide",
+            "command": guide_command,
             "why": "One authoritative next step from install through closeout.",
         },
     )
     payload = {
-        "ok": True,
+        "ok": bool(journey.get("ok")),
         "first_run": journey["context"].get("first_run"),
         "stage": journey["stage"],
+        "stage_label": journey["stage_label"],
         "actions": actions,
         "primary_action": primary,
         "next_step": primary["suggested_command"],
+        "suggested_command": primary["suggested_command"],
+        "recovery_command": journey.get("recovery_command"),
+        "journey": journey,
     }
+    if journey.get("error"):
+        payload["error"] = journey["error"]
     table = Table(title="What should I do?", show_header=True)
     table.add_column("Goal", style="cyan")
     table.add_column("Command")
@@ -3638,6 +3695,8 @@ def home_cmd(ctx: typer.Context) -> None:
     for action in actions:
         table.add_row(action["goal"], action["command"], action["why"])
     _emit(ctx, payload, table)
+    if not payload["ok"]:
+        raise typer.Exit(code=1)
 
 
 @app.command("command", rich_help_panel="Guidance & UX helpers")

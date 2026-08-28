@@ -17,7 +17,7 @@ interaction cannot be automated.
 |---:|---|---|---|---|---:|
 | 1 | First-run onboarding and offline demo | `quickstart`, `init`, `setup`, `demo` | Quickstart and first-launch wizard | `tests/test_cli_ux.py`, `tests/test_install_contracts.py` | 9 |
 | 2 | Doctor and actionable preflight checks | `doctor`, `check`, `paths` | Readiness panel and target validation | `tests/test_doctor_prerequisites.py`, `tests/test_phase2_self_explain.py` | 9 |
-| 3 | Kill-chain capability discovery | `list-capabilities --by-phase` | Phase-grouped capability list | `tests/test_ux_enhancements.py` | 9 |
+| 3 | Kill-chain capability discovery | `list-capabilities --by-phase` | Phase-grouped capability list | `tests/test_ux_enhancements.py`, `tests/test_phase4_vendor_proof.py` | 9 |
 | 4 | Plain-language explanations and safety ratings | `explain`, `capability-help` | Explain selected | `tests/test_novice_ux.py`, `tests/test_phase2_self_explain.py` | 9 |
 | 5 | Review-first plans and risk previews | `plan`, `review` | Review checklist and acknowledgement gate | `tests/test_ux_enhancements.py`, `tests/test_phase2_self_explain.py` | 9 |
 | 6 | Shell-safe copy-ready commands | `command`, plan output | Copy ready command | `tests/test_command_templates.py`, `tests/test_ux_hardening.py`, `tests/test_journey.py` | 10 |
@@ -30,7 +30,7 @@ interaction cannot be automated.
 | 13 | Target and OPSEC profiles | `profile` command group | Profile load/save/default controls | `tests/test_ux_ten_enhancements.py` | 9 |
 | 14 | Favorites, recents, completions, and shortcuts | `favorites`, `recent`, `completions` | Pinning, recent targets, key help | `tests/test_ux_enhancements.py`, `tests/test_tui_app.py` | 9 |
 | 15 | Timeline, rollback visibility, and redacted packaging | `timeline`, `cleanup-status`, `engagement package` | Timeline, reports, package evidence | `tests/test_standout_ux.py`, `tests/test_redaction.py` | 9 |
-| 16 | Unified guided journey (install→closeout) | `guide`, `what-next`, `tour`, `workflow next` | Home / wizard complete / workflow panel | `tests/test_journey.py`, `tests/test_tui_app.py` | 10 |
+| 16 | Unified guided journey (install→closeout) | `guide`, `what-next`, `tour`, `workflow next` | Home / wizard complete / workflow panel | `tests/test_journey.py`, `tests/test_tui_app.py`, `tests/test_phase4_vendor_proof.py` | 10 |
 
 Row 16 acceptance extras (Phase 1 spine):
 

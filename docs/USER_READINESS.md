@@ -44,9 +44,9 @@ selected.
 
 When lost at any point, run `adaf-attack guide` with the current `--workspace`
 and `--session`. It is the single authoritative next step from install through
-closeout (CLI and TUI share the same journey). `tour` and `home` use the
-default workspace only; for a custom workspace or session, call `guide` with
-those flags.
+closeout (CLI and TUI share the same journey). `tour`, `home`, `what-next`, and
+`workflow next` consume the same snapshot and support the same workspace/session
+hints for parity checks.
 
 Journey stage labels match CLI and TUI character-for-character:
 

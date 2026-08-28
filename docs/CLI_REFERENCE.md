@@ -81,8 +81,8 @@ that omits the invalid session.
 | `adaf-attack glossary` | Explain Active Directory and operator terms |
 | `adaf-attack gpo-impact-plan` | Plan GPO impact validation |
 | `adaf-attack guide` | Show the authoritative next step for the guided journey |
-| `adaf-attack help-me` | Show the guided novice tour |
-| `adaf-attack home` | Show goal-based starting points |
+| `adaf-attack help-me` | Show the guided novice tour (supports `--workspace` / `--session`) |
+| `adaf-attack home` | Show goal-based starting points from the same guide snapshot |
 | `adaf-attack init` | First-run onboarding: check environment and save defaults |
 | `adaf-attack setup` | Interactive first-run wizard alias with next-step ladder |
 | `adaf-attack list-capabilities` | List capabilities; `--full` adds tags/tools/required options and `--copy` exports a table |
@@ -132,7 +132,7 @@ that omits the invalid session.
 | `adaf-attack support-bundle` | Write a redacted diagnostic bundle |
 | `adaf-attack targets` | List recent non-secret target identifiers |
 | `adaf-attack tool` | Offline graph, evidence, scope, detection, and manifest tools |
-| `adaf-attack tour` | Show the guided operator tour with journey progress markers |
+| `adaf-attack tour` | Show the guided operator tour with journey parity (`--workspace` / `--session`) |
 | `adaf-attack trust-correlation` | Correlate trust evidence |
 | `adaf-attack credential-inventory` | Inventory credential-exposure artifacts without revealing secrets |
 | `adaf-attack tool graph` | Explore a saved graph offline |

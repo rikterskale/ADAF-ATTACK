@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
 
+from textual.widgets import Input, Static
 from typer.testing import CliRunner
 
 import adaf_attack.capabilities  # noqa: F401  # register capabilities
@@ -14,6 +16,7 @@ from adaf_attack.core.registry import capability_registry
 from adaf_attack.core.standout_ux import session_timeline
 from adaf_attack.core.ux import operator_capability_contract
 from adaf_attack.demo import materialize_demo_session
+from adaf_attack.tui.app import ADAFAttackApp
 
 runner = CliRunner()
 
@@ -128,3 +131,33 @@ def test_timeline_summary_is_redacted_and_structured(tmp_path: Path) -> None:
     assert payload["summary"]["with_correlation"] >= 1
     assert payload["events"][0]["status"] == "ok"
     assert "SuperSecret123!" not in json.dumps(payload)
+
+
+def test_tui_surfaces_expose_shared_operator_contract_before_run() -> None:
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.selected_cap = "ldap-enum"
+            app.query_one("#domain", Input).value = "corp.example"
+            app.query_one("#dc_ip", Input).value = "192.0.2.10"
+            app.query_one("#username", Input).value = "operator"
+            app._update_help()
+            app._refresh_param_form()
+            app._review_run()
+            app._update_readiness()
+            surfaces = (
+                str(app.query_one("#help-panel", Static).render()),
+                str(app.query_one("#param-title", Static).render()),
+                str(app.query_one("#review-panel", Static).render()),
+                str(app.query_one("#readiness", Static).render()),
+            )
+            for surface in surfaces:
+                assert "Risk" in surface
+                assert "Approvals" in surface
+                assert "Rollback" in surface
+                assert "Required -P" in surface
+                assert "Evidence" in surface
+                assert "Stages" in surface
+
+    asyncio.run(exercise())

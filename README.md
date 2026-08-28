@@ -42,6 +42,8 @@ Expect every command to exit `0`, doctor `"ready": true`, and one copy-ready
 **When lost:** run `adaf-attack guide` (with the same `--workspace` /
 `--session`). It is the single authoritative next step from install through
 closeout. CLI and TUI share the same journey snapshot.
+For parity checks, `what-next`, `workflow next`, `tour`, and `home` accept the
+same workspace/session hints and should emit the same `suggested_command`.
 
 Journey stage labels (character-for-character with `guide` / TUI Home):
 

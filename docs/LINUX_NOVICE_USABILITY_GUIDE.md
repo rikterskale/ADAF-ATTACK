@@ -75,6 +75,8 @@ adaf-attack --format json paths
 ```
 
 When lost, run `adaf-attack guide`. It always returns one copy-ready next step.
+`what-next`, `workflow next`, `tour`, and `home` can use the same
+`--workspace`/`--session` values to confirm parity with `guide`.
 
 ## First safe offline run
 

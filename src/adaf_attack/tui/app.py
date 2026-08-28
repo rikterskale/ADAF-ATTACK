@@ -74,6 +74,7 @@ from adaf_attack.core.ux import (
     format_stages_progress,
     group_capabilities_by_phase,
     operator_capability_contract,
+    phase_label,
     risk_checklist,
     session_findings_dashboard,
     suggested_next_actions,
@@ -538,9 +539,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             if not phase_caps:
                 continue
             for index, cap in enumerate(phase_caps):
-                header = (
-                    f"{phase.replace('-', ' ').title()} ({len(phase_caps)})" if index == 0 else None
-                )
+                header = f"{phase_label(phase)} ({len(phase_caps)})" if index == 0 else None
                 list_view.append(CapabilityItem(cap, header))
         self.query_one("#sidebar-title", Static).update(
             f"[bold]Capabilities[/bold] ({len(visible)}/{len(self._capabilities)})"
@@ -784,6 +783,25 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         journey = self._journey()
         primary = journey.get("primary_action") or {}
         journey_cmd = str(primary.get("suggested_command") or "adaf-attack guide")
+        contract_text = ""
+        cap = self._selected()
+        if cap:
+            contract = operator_capability_contract(cap)
+            approvals = ", ".join(contract["approvals"]) or "none (observe / review-only)"
+            params = ", ".join(contract["required_params"]) or "none"
+            stages = " → ".join(item["id"] for item in contract["stages"])
+            prereqs = contract.get("prerequisites") or {}
+            best_after = ", ".join(prereqs.get("best_run_after") or []) or "none"
+            produces_for = ", ".join(prereqs.get("produces_artifacts_for") or []) or "none"
+            contract_text = (
+                f"\nSelected contract: Risk {contract['risk']} · Approvals: {approvals}"
+                f"\nRollback: {contract['rollback_implication']}"
+                f"\nRequired -P: {params}"
+                f"\nBest run after: {best_after}"
+                f"\nProduces evidence for: {produces_for}"
+                f"\nEvidence: {', '.join(contract['evidence_produced'])}"
+                f"\nStages: {stages}"
+            )
         text = (
             f"Readiness: {score}/100 · Journey: {journey.get('stage_label')} "
             f"({journey.get('progress_pct')}%)"
@@ -793,6 +811,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         else:
             text += "\nLive form ready to Review / Run when authorized."
         text += f"\nGuided next (matches CLI): {journey_cmd}"
+        text += contract_text
         self.query_one("#readiness", Static).update(text)
 
     def _validate_target_inline(self) -> None:
@@ -1210,6 +1229,18 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         """Show/hide labeled inputs for the selected capability's required params."""
         self._cache_param_form_values()
         cap = self._selected()
+        contract = operator_capability_contract(cap) if cap else None
+        risk = str(contract["risk"]) if contract else "unknown"
+        rollback = str(contract["rollback_implication"]) if contract else "none"
+        approvals = (
+            ", ".join(contract["approvals"]) if contract else "none (observe / review-only)"
+        ) or "none (observe / review-only)"
+        stages = " → ".join(item["id"] for item in contract["stages"]) if contract else "none"
+        evidence = ", ".join(contract["evidence_produced"]) if contract else "none"
+        params = ", ".join(contract["required_params"]) if contract else "none"
+        prereqs = contract.get("prerequisites") if contract else {}
+        best_after = ", ".join((prereqs or {}).get("best_run_after") or []) or "none"
+        produces_for = ", ".join((prereqs or {}).get("produces_artifacts_for") or []) or "none"
         title = self.query_one("#param-title", Static)
         bindings: list[dict[str, str]] = []
         all_prompts = self._capability_param_prompts(cap) if cap else []
@@ -1224,10 +1255,16 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         elif not all_prompts:
             title.update(
                 f"[bold]Capability parameters[/bold]\n"
-                f"{cap.id} needs no extra parameters beyond the target form."
+                f"{cap.id} needs no extra parameters beyond the target form.\n"
+                f"Risk {risk} · Approvals: {approvals}\n"
+                f"Rollback: {rollback}\n"
+                f"Required -P: {params}\n"
+                f"Best run after: {best_after}\n"
+                f"Produces evidence for: {produces_for}\n"
+                f"Evidence: {evidence}\n"
+                f"Stages: {stages}"
             )
         else:
-            contract = operator_capability_contract(cap)
             omitted_note = ""
             if omitted:
                 names = ", ".join(entry["label"] for entry in omitted[:4])
@@ -1239,7 +1276,14 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 )
             title.update(
                 f"[bold]Capability parameters[/bold] for {cap.id}\n"
-                f"Risk {contract['risk']} · Fill required -P / flags before Review / Run."
+                f"Risk {risk} · Approvals: {approvals}\n"
+                f"Rollback: {rollback}\n"
+                f"Required -P: {params}\n"
+                f"Best run after: {best_after}\n"
+                f"Produces evidence for: {produces_for}\n"
+                f"Evidence: {evidence}\n"
+                f"Stages: {stages}\n"
+                "Fill required -P / flags before Review / Run."
                 f"{omitted_note}"
             )
         for index in range(8):
@@ -1619,6 +1663,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         command = self._ready_command(cap.id)
         approvals = ", ".join(contract["approvals"]) or "none (observe / review-only)"
         params = ", ".join(contract["required_params"]) or "(none)"
+        stages = " → ".join(item["id"] for item in contract["stages"])
+        prereqs = contract.get("prerequisites") or {}
+        best_after = ", ".join(prereqs.get("best_run_after") or []) or "none"
+        produces_for = ", ".join(prereqs.get("produces_artifacts_for") or []) or "none"
         self.query_one("#review-panel", Static).update(
             f"[bold]Execution review[/bold]  {cap.id}\n"
             f"Target: {target[0]} @ {target[1]}\nCategory: {cap.category}  |  Risk: {risk}\n"
@@ -1626,7 +1674,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Rollback: {contract['rollback_implication']}\n"
             f"Required contract: {', '.join(spec.required) or 'session/workspace input'}\n"
             f"Required -P: {params}\n"
+            f"Best run after: {best_after}\n"
+            f"Produces evidence for: {produces_for}\n"
             f"Evidence: {', '.join(contract['evidence_produced'])}\n"
+            f"Stages: {stages}\n"
             f"Opsec: {active_opsec().upper()} — {checklist['opsec_hint']}\n"
             f"Ready command: [dim]{command}[/]\n"
             "Check required items, then acknowledge the review."

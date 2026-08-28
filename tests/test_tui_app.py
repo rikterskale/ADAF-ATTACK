@@ -248,6 +248,7 @@ def test_tui_beginner_mode_and_form_reset_are_reversible() -> None:
 def test_tui_green_only_switch_filters_capability_list() -> None:
     async def exercise() -> None:
         from adaf_attack.core.novice import safety_summary
+        from adaf_attack.core.ux import group_capabilities_by_phase, phase_label
 
         app = ADAFAttackApp()
         async with app.run_test() as pilot:
@@ -255,16 +256,56 @@ def test_tui_green_only_switch_filters_capability_list() -> None:
             app.on_switch_changed(
                 SimpleNamespace(switch=SimpleNamespace(id="green-only"), value=True)
             )
+            await pilot.pause()
             assert app._green_only is True
-            # The internal populate uses the same predicate we can check directly.
-            green_ids = {
-                cap.id for cap in app._capabilities if safety_summary(cap)["level"] == "GREEN"
-            }
-            assert green_ids, "expected at least one offline-safe capability"
+            rendered_ids = [
+                str(item.cap_id) for item in app.query_one("#cap-list", ListView).children
+            ]
+            expected_ids = [
+                cap.id
+                for group in group_capabilities_by_phase().values()
+                for cap in group
+                if safety_summary(cap)["level"] == "GREEN"
+            ]
+            assert expected_ids, "expected at least one offline-safe capability"
+            assert rendered_ids == expected_ids
+            rendered_headers = [
+                str(item.phase_header)
+                for item in app.query_one("#cap-list", ListView).children
+                if item.phase_header
+            ]
+            expected_headers = []
+            for phase, group in group_capabilities_by_phase().items():
+                green = [cap for cap in group if safety_summary(cap)["level"] == "GREEN"]
+                if green:
+                    expected_headers.append(f"{phase_label(phase)} ({len(green)})")
+            assert rendered_headers == expected_headers
             app.on_switch_changed(
                 SimpleNamespace(switch=SimpleNamespace(id="green-only"), value=False)
             )
+            await pilot.pause()
             assert app._green_only is False
+
+    asyncio.run(exercise())
+
+
+def test_tui_quickstart_is_idempotent_for_existing_demo_session(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = tmp_path / "quickstart"
+    monkeypatch.setattr(tui_app, "default_workspace_dir", lambda: workspace)
+
+    async def exercise() -> None:
+        app = ADAFAttackApp()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert app._quickstart() is True
+            first = app._last_session
+            assert first == workspace / "demo-session"
+            assert first is not None and first.is_dir()
+            assert app._quickstart() is True
+            assert app._last_session == first
+            assert not (workspace / "quickstart" / "demo-session").exists()
 
     asyncio.run(exercise())
 

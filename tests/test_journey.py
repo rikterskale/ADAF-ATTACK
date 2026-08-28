@@ -398,10 +398,112 @@ def test_tour_marks_progress(tmp_path: Path, monkeypatch) -> None:
     materialize_demo_session(tmp_path / "demo-session")
     payload = _json(runner.invoke(app, ["--format", "json", "tour"]))
     assert payload["ok"] is True
+    guide_step = next(step for step in payload["steps"] if step["id"] == "guide")
+    assert guide_step["done"] is True
     demo_step = next(step for step in payload["steps"] if step["id"] == "demo")
     assert demo_step["done"] is True
     assert payload["next_step"]
     assert "guide" in payload["next_step"] or "workflow" in payload["next_step"]
+
+
+def test_tour_and_home_match_guide_with_workspace_session(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    session = tmp_path / "demo-session"
+    materialize_demo_session(session)
+    guide = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "guide",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    tour = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "tour",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    home = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "home",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    help_me = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "help-me",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    assert tour["suggested_command"] == guide["suggested_command"]
+    assert home["suggested_command"] == guide["suggested_command"]
+    assert help_me["suggested_command"] == guide["suggested_command"]
+    assert tour["recovery_command"] == guide["recovery_command"]
+    assert home["recovery_command"] == guide["recovery_command"]
+    assert help_me["recovery_command"] == guide["recovery_command"]
+    assert tour["stage"] == guide["stage"]
+    assert home["stage"] == guide["stage"]
+
+
+@pytest.mark.parametrize("command", ("tour", "home", "help-me"))
+def test_tour_home_and_help_me_fail_like_guide_for_invalid_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    missing = tmp_path / "missing-session"
+    result = runner.invoke(
+        app,
+        [
+            "--format",
+            "json",
+            command,
+            "--workspace",
+            str(tmp_path),
+            "--session",
+            str(missing),
+        ],
+    )
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "SESSION_NOT_FOUND"
+    assert payload["stage"] == "session-blocked"
+    assert payload["suggested_command"] == "adaf-attack sessions --limit 10"
+    assert payload["recovery_command"].startswith("adaf-attack guide")
+    assert "--session" not in payload["recovery_command"]
 
 
 def test_workflow_next_includes_suggested_command(tmp_path: Path) -> None:

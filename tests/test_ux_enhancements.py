@@ -115,6 +115,8 @@ def test_profiles_roundtrip(tmp_path: Path, monkeypatch) -> None:
 def test_guided_tour_payload() -> None:
     payload = guided_tour_payload()
     assert len(payload["steps"]) >= 5
+    assert payload["steps"][0]["id"] == "guide"
+    assert payload["steps"][0]["command"] == "adaf-attack guide"
 
 
 def test_cli_list_capabilities_by_phase() -> None:
@@ -140,6 +142,30 @@ def test_cli_phase_catalog_is_complete_and_stable_json() -> None:
     assert grouped_ids == listed_ids
     assert len(grouped_ids) == len(set(grouped_ids)) == payload["count"]
     assert all(phase["count"] == len(phase["capability_ids"]) for phase in payload["phases"])
+
+
+def test_cli_phase_catalog_safe_only_matches_filtered_capabilities() -> None:
+    from adaf_attack.core.novice import safety_summary
+
+    result = runner.invoke(
+        app, ["--format", "json", "list-capabilities", "--by-phase", "--safe-only"]
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["by_phase"] is True
+    assert payload["safe_only"] is True
+    listed_ids = [capability["id"] for capability in payload["capabilities"]]
+    grouped_ids = [
+        capability_id for phase in payload["phases"] for capability_id in phase["capability_ids"]
+    ]
+    assert listed_ids
+    assert listed_ids == grouped_ids
+    assert payload["count"] == len(listed_ids)
+    for capability_id in listed_ids:
+        cap = capability_registry.get(capability_id)
+        assert cap is not None
+        assert safety_summary(cap)["level"] == "GREEN"
 
 
 def test_cli_capability_help_checklist() -> None:

@@ -694,15 +694,21 @@ def guided_tour_payload() -> dict[str, Any]:
     """Return the interactive guided-tour steps for new operators."""
     steps = [
         {
+            "id": "guide",
+            "title": "Check your current stage",
+            "command": "adaf-attack guide",
+            "why": "One authoritative command for current stage, blockers, and the exact next step.",
+        },
+        {
             "id": "doctor",
             "title": "Check local environment",
-            "command": "adaf-attack doctor",
+            "command": "adaf-attack doctor --profile user-readiness --explain",
             "why": "Verify Python, optional deps (impacket, textual), and workspace paths.",
         },
         {
             "id": "demo",
             "title": "Offline first success (no network)",
-            "command": "adaf-attack demo",
+            "command": "adaf-attack quickstart --workspace ./quickstart",
             "why": "Materialize the packaged demo session and open a findings dashboard without contacting a target.",
         },
         {
@@ -751,7 +757,7 @@ def guided_tour_payload() -> dict[str, Any]:
     return {
         "title": "ADAF-ATTACK guided tour",
         "steps": steps,
-        "next_step": "Run the first command: adaf-attack doctor",
+        "next_step": "Run the first command: adaf-attack guide",
     }
 
 

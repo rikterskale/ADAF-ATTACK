@@ -139,6 +139,48 @@ def test_first_ten_minutes_guide_payload_is_copy_ready(tmp_path: Path, monkeypat
             ],
         )
     )
+    tour = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "tour",
+                "--workspace",
+                str(workspace),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    home = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "home",
+                "--workspace",
+                str(workspace),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    help_me = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "help-me",
+                "--workspace",
+                str(workspace),
+                "--session",
+                str(session),
+            ],
+        )
+    )
     assert guide["ok"] is True
     assert guide["suggested_command"] == guide["next_step"]
     assert guide["primary_action"]["suggested_command"].startswith("adaf-attack ")
@@ -148,6 +190,37 @@ def test_first_ten_minutes_guide_payload_is_copy_ready(tmp_path: Path, monkeypat
     assert what_next["suggested_command"] == guide["suggested_command"]
     assert workflow_next["suggested_command"] == guide["suggested_command"]
     assert workflow_next["recommendations"][0]["suggested_command"] == guide["suggested_command"]
+    assert tour["suggested_command"] == guide["suggested_command"]
+    assert home["suggested_command"] == guide["suggested_command"]
+    assert help_me["suggested_command"] == guide["suggested_command"]
+    assert tour["recovery_command"] == guide["recovery_command"]
+    assert home["recovery_command"] == guide["recovery_command"]
+    assert help_me["recovery_command"] == guide["recovery_command"]
+
+
+def test_safe_only_phase_catalog_contract_is_complete() -> None:
+    payload = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "list-capabilities",
+                "--by-phase",
+                "--safe-only",
+            ],
+        )
+    )
+    assert payload["ok"] is True
+    assert payload["by_phase"] is True
+    assert payload["safe_only"] is True
+    grouped_ids = [
+        capability_id for phase in payload["phases"] for capability_id in phase["capability_ids"]
+    ]
+    listed_ids = [capability["id"] for capability in payload["capabilities"]]
+    assert grouped_ids
+    assert grouped_ids == listed_ids
+    assert payload["count"] == len(listed_ids)
 
 
 def test_operator_docs_carry_stage_labels_and_first_ten_canon() -> None:
