@@ -5,12 +5,22 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from adaf_attack.cli import app
 from adaf_attack.core import user_config
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _consistent_test_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    import adaf_attack.cli as cli
+
+    monkeypatch.setattr(
+        cli, "_pip_consistency_check", lambda: (True, "No broken requirements found.")
+    )
 
 
 def test_errors_command_lists_catalog() -> None:
@@ -38,6 +48,7 @@ def test_errors_catalog_covers_all_emitted_user_facing_codes() -> None:
     emitted_codes = {
         "FIRST_DESTRUCTIVE_USE_CONFIRMATION_REQUIRED",
         "INVALID_PROFILE",
+        "QUICKSTART_READINESS_BLOCKED",
         "QUICKSTART_WORKSPACE_EXISTS",
         "QUICKSTART_WRITE_FAILED",
         "UNKNOWN_ERROR_CODE",
@@ -101,7 +112,12 @@ def test_quickstart_runs_safe_offline_acceptance(tmp_path: Path, monkeypatch) ->
     payload = json.loads(result.output)
     assert payload["ok"] is True
     assert payload["stage"] == "complete"
-    assert Path(payload["session_path"]).joinpath("session.json").is_file()
+    session = Path(payload["session_path"])
+    assert session.joinpath("session.json").is_file()
+    findings = json.loads(session.joinpath("findings.json").read_text(encoding="utf-8"))
+    assert findings["ok"] is True
+    assert findings["findings"]
+    assert payload["dashboard"]["finding_count"] > 0
 
 
 def test_quickstart_does_not_overwrite_existing_session(tmp_path: Path, monkeypatch) -> None:
@@ -135,6 +151,9 @@ def test_quickstart_stops_when_doctor_fails(tmp_path: Path, monkeypatch) -> None
     assert result.exit_code == 1
     payload = json.loads(result.output)
     assert payload["stage"] == "doctor"
+    assert payload["error"]["code"] == "QUICKSTART_READINESS_BLOCKED"
+    assert payload["suggested_command"]
+    assert payload["recovery_command"].startswith("adaf-attack guide")
 
 
 def test_quickstart_reports_demo_write_failure(tmp_path: Path, monkeypatch) -> None:

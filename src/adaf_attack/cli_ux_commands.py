@@ -43,11 +43,37 @@ def register_ux_commands(
 
         doctor = doctor_payload("user-readiness")
         if not doctor["ok"]:
+            from adaf_attack.core.journey import guide_recovery_command
+
+            blocking: dict[str, Any] = next(
+                (item for item in doctor.get("checks", []) if item.get("status") == "error"),
+                {},
+            )
+            error = error_for(
+                "QUICKSTART_READINESS_BLOCKED",
+                message=str(
+                    blocking.get("value")
+                    or blocking.get("detail")
+                    or "User-readiness doctor reported a blocking check."
+                ),
+                details={
+                    "workspace": str(workspace) if workspace is not None else None,
+                    "doctor": doctor,
+                    "blocking_check": blocking.get("id"),
+                },
+                suggested_command=str(
+                    blocking.get("repair_command")
+                    or "adaf-attack doctor --profile user-readiness --explain"
+                ),
+            )
             payload = {
                 "ok": False,
                 "stage": "doctor",
                 "doctor": doctor,
-                "next_step": "Run `adaf-attack paths --repair`, then rerun `adaf-attack quickstart`.",
+                "error": error.payload()["error"],
+                "next_step": error.suggested_command,
+                "suggested_command": error.suggested_command,
+                "recovery_command": guide_recovery_command(workspace=workspace),
             }
             _emit(
                 ctx,

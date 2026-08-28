@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+import pytest
 from typer.testing import CliRunner
 
 from adaf_attack.cli import _doctor_payload, app
@@ -20,6 +21,15 @@ from adaf_attack.core.journey import STAGE_LABELS
 
 runner = CliRunner()
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(autouse=True)
+def _consistent_test_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    import adaf_attack.cli as cli
+
+    monkeypatch.setattr(
+        cli, "_pip_consistency_check", lambda: (True, "No broken requirements found.")
+    )
 
 
 def _json(result: Any) -> dict[str, Any]:
@@ -165,8 +175,4 @@ def test_operator_docs_carry_stage_labels_and_first_ten_canon() -> None:
         or "No row below 10" in scorecard
         or re.search(r"\*\*Overall product\*\*.*\*\*10\*\*", scorecard)
     )
-    assert (
-        re.search(r"Overall product.*(?:~9\.0|\*\*10\*\*)", scorecard) is not None
-        or "~9.0" in scorecard
-        or "| **10**" in scorecard
-    )
+    assert re.search(r"Overall product.*(?:~9\.[0-9]|\*\*10\*\*)", scorecard) is not None

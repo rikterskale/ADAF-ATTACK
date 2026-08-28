@@ -9,6 +9,7 @@ import os
 import platform as host_platform
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
 from datetime import UTC, datetime, timedelta
@@ -603,6 +604,22 @@ def _installation_kind() -> str:
     return "wheel-or-sdist"
 
 
+def _pip_consistency_check() -> tuple[bool, str]:
+    """Run pip's installed-distribution consistency check without network access."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "check"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+    detail = (result.stdout or result.stderr).strip()
+    return result.returncode == 0, detail or "No broken requirements found."
+
+
 def _socket_check(host: str, port: int, timeout: float) -> tuple[str, str | None]:
     try:
         socket.create_connection((host, port), timeout=timeout).close()
@@ -728,6 +745,21 @@ def _doctor_payload(
             )
 
     if profile == "user-readiness":
+        pip_consistent, pip_detail = _pip_consistency_check()
+        checks.append(
+            _doctor_check(
+                "pip-check",
+                "ok" if pip_consistent else "error",
+                pip_detail,
+                None
+                if pip_consistent
+                else (
+                    "Create a clean virtual environment and reinstall the approved wheel; "
+                    "then run `python -m pip check` again."
+                ),
+                scope="user-readiness",
+            )
+        )
         try:
             from importlib.resources import files
 
@@ -889,25 +921,37 @@ def _ensure_doctor_repair_text(checks: list[dict[str, Any]], *, profile: str) ->
     }
     for check in checks:
         remediation = check.get("remediation")
-        if isinstance(remediation, str) and remediation.strip():
-            continue
         check_id = str(check.get("id") or "")
         status = str(check.get("status") or "ok")
-        if status == "ok":
-            check["remediation"] = ok_repairs.get(
-                check_id,
-                f"No action needed; `{check_id}` is healthy for profile `{profile}`.",
+        if not isinstance(remediation, str) or not remediation.strip():
+            if status == "ok":
+                check["remediation"] = ok_repairs.get(
+                    check_id,
+                    f"No action needed; `{check_id}` is healthy for profile `{profile}`.",
+                )
+            elif status == "warning":
+                check["remediation"] = (
+                    f"Optional gap for `{check_id}`. Install the matching extra or tool, "
+                    f"then rerun `adaf-attack doctor --profile {profile} --explain`."
+                )
+            else:
+                check["remediation"] = (
+                    f"Repair `{check_id}`, then rerun "
+                    f"`adaf-attack doctor --profile {profile} --explain`."
+                )
+        repair_command = f"adaf-attack doctor --profile {profile} --explain"
+        if check_id in {"data_dir", "config_dir", "workspace"}:
+            repair_command = "adaf-attack paths --repair"
+        elif check_id == "pip-check":
+            repair_command = "python -m pip check"
+        elif check_id == "packaged-demo":
+            repair_command = "adaf-attack quickstart --workspace ./quickstart"
+        elif check_id == "target-arguments":
+            repair_command = (
+                "adaf-attack doctor --profile live-ad "
+                "--domain <authorized-domain> --dc-ip <authorized-dc>"
             )
-        elif status == "warning":
-            check["remediation"] = (
-                f"Optional gap for `{check_id}`. Install the matching extra or tool, "
-                f"then rerun `adaf-attack doctor --profile {profile} --explain`."
-            )
-        else:
-            check["remediation"] = (
-                f"Repair `{check_id}`, then rerun "
-                f"`adaf-attack doctor --profile {profile} --explain`."
-            )
+        check["repair_command"] = repair_command
 
 
 @app.command("doctor", rich_help_panel="Setup & diagnostics")
@@ -1123,11 +1167,25 @@ def list_capabilities(
 
     payload: dict[str, Any] = {
         "ok": True,
-        "capabilities": [_capability_payload(cap) for cap in caps],
+        "capabilities": [_capability_payload(cap) for cap in display_caps],
         "count": len(caps),
         "full": full,
         "next_step": "Run `adaf-attack capability-help <id>` for details.",
     }
+    if by_phase:
+        grouped = group_capabilities_by_phase()
+        wanted = {cap.id for cap in caps}
+        payload["by_phase"] = True
+        payload["phases"] = [
+            {
+                "id": phase,
+                "label": phase_label(phase),
+                "count": len(phase_caps),
+                "capability_ids": [cap.id for cap in phase_caps],
+            }
+            for phase, group in grouped.items()
+            if (phase_caps := [cap for cap in group if cap.id in wanted])
+        ]
     if clipboard is not None:
         payload["clipboard"] = clipboard
     _emit(

@@ -16,9 +16,14 @@ runner = CliRunner()
 
 @pytest.fixture(autouse=True)
 def _isolated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import adaf_attack.cli as cli
+
     monkeypatch.setenv("ADAF_ATTACK_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("ADAF_ATTACK_CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path / "workspace"))
+    monkeypatch.setattr(
+        cli, "_pip_consistency_check", lambda: (True, "No broken requirements found.")
+    )
 
 
 def test_start_here_aliases_quickstart(tmp_path: Path) -> None:

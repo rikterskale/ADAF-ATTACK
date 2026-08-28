@@ -6,11 +6,21 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 from typer.testing import CliRunner
 
 from adaf_attack.cli import app
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _consistent_test_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    import adaf_attack.cli as cli
+
+    monkeypatch.setattr(
+        cli, "_pip_consistency_check", lambda: (True, "No broken requirements found.")
+    )
 
 
 def _json(result: Any) -> dict[str, Any]:

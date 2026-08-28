@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import threading
+import time
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, ClassVar
@@ -146,9 +147,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     Button { margin-right: 1; }
     .field-label { color: $text-muted; text-style: bold; margin-top: 1; }
     .compact #toolbar { max-height: 8; overflow-y: auto; }
-    .compact #sidebar { width: 30; }
+    .compact #sidebar { width: 24; }
     .compact #toolbar Label { display: none; }
-    .compact #toolbar Button { min-width: 12; }
+    .compact #toolbar Button { min-width: 10; }
     .compact #target-form { padding: 0 1; }
     .section-label, .phase-label { color: $accent; text-style: bold; margin-top: 1; }
     """
@@ -202,6 +203,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         # Preserve operator-entered -P values across refresh for the same capability.
         self._param_value_cache: dict[str, dict[str, str]] = {}
         self._param_form_cap_id: str | None = None
+        self._doctor_cache: tuple[float, dict[str, Any]] | None = None
 
     @property
     def _workspace(self) -> Path:
@@ -217,10 +219,13 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         """
         from adaf_attack.cli import _doctor_payload
 
+        now = time.monotonic()
+        if self._doctor_cache is None or now - self._doctor_cache[0] >= 10:
+            self._doctor_cache = (now, _doctor_payload("user-readiness"))
         return journey_snapshot(
             workspace=self._workspace,
             session=session if session is not None else self._last_session,
-            doctor=_doctor_payload("user-readiness"),
+            doctor=self._doctor_cache[1],
         )
 
     def on_unmount(self) -> None:
@@ -462,12 +467,15 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._workflow = WorkflowEngine(self._workspace)
         self._refresh_workflow_panel()
         self._update_engagement_dashboard()
-        self._show_log("[bold green]ADAF-ATTACK[/] ready. Use Quickstart or search capabilities.")
-        if not self.query_one("#domain", Input).value:
+        self._show_log("[bold green]ADAF-ATTACK[/] ready. Follow Home or Quickstart first.")
+        journey = self._journey()
+        if journey.get("stage") == "first-success":
             self.notify(
-                "First run: Quickstart will focus the required target fields.",
+                "First run: complete the offline Quickstart before entering a live target.",
                 severity="information",
             )
+            self.query_one("#quickstart-btn", Button).focus()
+        elif not self.query_one("#domain", Input).value:
             self.query_one("#domain", Input).focus()
 
     def on_resize(self, event: Any) -> None:
@@ -616,12 +624,12 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._wizard_step = max(0, min(step, 5))
         steps = (
             (
-                "1 of 5 · Target",
-                "Start with the authorized domain and domain controller. These are the only required values for the first step.",
+                "1 of 5 · Offline first success",
+                "Run the packaged Quickstart first. It creates local evidence only and never contacts a domain controller.",
             ),
             (
-                "2 of 5 · Access",
-                "Add the least-privileged credentials or session material available. Leave optional fields empty when you are using an existing session.",
+                "2 of 5 · Authorized target & access",
+                "After offline success, enter the approved domain and controller plus the least-privileged access material available.",
             ),
             (
                 "3 of 5 · Objective",
@@ -660,7 +668,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         back.disabled = self._wizard_step == 0 or self._capability_running
         next_button.disabled = self._capability_running
         next_button.label = (
-            "Continue to access"
+            "Run offline quickstart"
             if self._wizard_step == 0
             else "Continue to objective"
             if self._wizard_step == 1
@@ -818,12 +826,13 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             # A minimal/test screen may not mount the setup controls.
             return
         profile_count = len(list_profiles())
+        journey = self._journey()
         checklist = [
+            ("quickstart", bool(journey.get("context", {}).get("demo_available"))),
             ("workspace", self._workspace.exists()),
             ("target", domain and dc_ip),
             ("access", access),
             ("profile", profile_count > 0),
-            ("quickstart", self._last_session is not None),
         ]
         done = sum(1 for _label, ok in checklist if ok)
         next_item = next((label for label, ok in checklist if not ok), "review")
@@ -857,10 +866,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
 
     def _show_setup_wizard(self) -> None:
         self._set_wizard_step(0)
-        self.query_one("#domain", Input).focus()
+        self.query_one("#quickstart-btn", Button).focus()
         self._refresh_first_launch_panel()
         self.notify(
-            "Setup starts with workspace, target, access, profile, then quickstart.",
+            "Setup starts with the offline Quickstart, then authorized target and access.",
             severity="information",
         )
 
@@ -1001,11 +1010,14 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
 
     def _wizard_next(self) -> None:
         if self._wizard_step == 0:
+            if self._journey().get("stage") == "first-success":
+                if not self._quickstart():
+                    return
+            self._set_wizard_step(1)
+            self.query_one("#domain", Input).focus()
+        elif self._wizard_step == 1:
             if self._validate_target() is None:
                 return
-            self._set_wizard_step(1)
-            self.query_one("#username", Input).focus()
-        elif self._wizard_step == 1:
             self._set_wizard_step(2)
             self.query_one("#search", Input).focus()
         elif self._wizard_step == 2:
@@ -1031,7 +1043,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._reset_form()
             self.selected_cap = None
             self._set_wizard_step(0)
-            self.query_one("#domain", Input).focus()
+            self.query_one("#quickstart-btn", Button).focus()
 
     def _wizard_back(self) -> None:
         if self._wizard_step > 0 and not self._capability_running:
@@ -1043,9 +1055,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._reset_form()
         self.selected_cap = None
         self._set_wizard_step(0)
-        self.query_one("#domain", Input).focus()
+        self.query_one("#quickstart-btn", Button).focus()
         self.notify(
-            "Guided workflow reset. Start with the authorized target.", severity="information"
+            "Guided workflow reset. Start with the offline Quickstart.", severity="information"
         )
 
     def _form_values(self) -> dict[str, Any]:
@@ -1716,7 +1728,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Ready command: {self._ready_command(cap.id)}"
         )
 
-    def _quickstart(self) -> None:
+    def _quickstart(self) -> bool:
         """Materialize the offline demo and hand off to the shared guide spine."""
         from adaf_attack.core.journey import guide_recovery_command
         from adaf_attack.demo import materialize_demo_session
@@ -1736,6 +1748,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._show_home()
             self._refresh_workflow_panel()
             self.notify("Offline demo ready; follow the guide command.", severity="information")
+            return True
         except (OSError, FileNotFoundError) as exc:
             self.notify(f"Quickstart failed: {exc}", severity="error")
             self.query_one("#review-panel", Static).update(
@@ -1744,6 +1757,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 "`adaf-attack quickstart --workspace ./quickstart` from the CLI.\n"
                 f"Detail: {exc}"
             )
+            return False
 
     def _start_run(self) -> None:
         if self._capability_running:

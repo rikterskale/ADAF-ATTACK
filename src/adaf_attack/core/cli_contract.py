@@ -54,7 +54,9 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
     ),
     "RUN_FAILED": (
         "The capability could not complete.",
-        "Review the message and session events; correct the target, credentials, or prerequisite and retry.",
+        "Review the message and session events, run `adaf-attack doctor --explain`, "
+        "and create a redacted support bundle before requesting help.",
+        "adaf-attack support-bundle --output adaf-support-bundle.json",
     ),
     "USER_ABORTED": (
         "The interactive confirmation was declined.",
@@ -200,6 +202,11 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "The quickstart demo session could not be created.",
         "Choose a writable workspace and rerun quickstart.",
         "adaf-attack paths",
+    ),
+    "QUICKSTART_READINESS_BLOCKED": (
+        "The local installation is not ready for the offline quickstart.",
+        "Follow the first blocking doctor check, then rerun the user-readiness profile.",
+        "adaf-attack doctor --profile user-readiness --explain",
     ),
     "UNKNOWN_ERROR_CODE": (
         "The requested error code is not in the catalog.",
@@ -385,6 +392,7 @@ _ERROR_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "pass -p",
             "provide -p",
+            "required -p",
             "username required",
             "requires --",
             "required input",

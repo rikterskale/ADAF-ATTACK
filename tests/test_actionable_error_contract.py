@@ -1,6 +1,16 @@
 from __future__ import annotations
 
+import json
+
+import pytest
+from typer.testing import CliRunner
+
+import adaf_attack.cli as cli
+from adaf_attack.cli import app
 from adaf_attack.core.cli_contract import ERROR_CATALOG, classify_run_error, error_for
+from adaf_attack.core.runner import RunError
+
+runner = CliRunner()
 
 
 def test_catalog_entries_have_complete_recovery_contracts() -> None:
@@ -63,3 +73,54 @@ def test_installer_and_version_codes_are_catalogued() -> None:
     ):
         assert code in ERROR_CATALOG
         assert error_for(code).suggested_command
+
+
+@pytest.mark.parametrize(
+    ("message", "code"),
+    [
+        ("LDAP bind failed for operator", "AUTHENTICATION_FAILED"),
+        ("connection refused by target", "TARGET_UNREACHABLE"),
+        ("permission denied: workspace", "PERMISSION_DENIED"),
+        ("user list not found: users.txt", "INPUT_FILE_INVALID"),
+        ("required -P template value is missing", "REQUIRED_INPUT_MISSING"),
+        ("Approval token has expired", "APPROVAL_TOKEN_EXPIRED"),
+        ("SSL: CERTIFICATE_VERIFY_FAILED via proxy", "PROXY_TLS_FAILED"),
+        ("No module named 'textual'", "EXTRA_MISSING"),
+        ("unexpected provider failure", "RUN_FAILED"),
+    ],
+)
+def test_run_json_surfaces_induced_failures_end_to_end(
+    monkeypatch: pytest.MonkeyPatch,
+    message: str,
+    code: str,
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "execute_capability",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RunError(message)),
+    )
+    result = runner.invoke(
+        app,
+        [
+            "--format",
+            "json",
+            "run",
+            "ldap-enum",
+            "--domain",
+            "corp.test",
+            "--dc-ip",
+            "192.0.2.10",
+        ],
+    )
+    assert result.exit_code != 0
+    error = json.loads(result.output)["error"]
+    assert error["code"] == code
+    assert error["recovery_command"].startswith("adaf-attack guide")
+    assert error["suggested_command"]
+
+
+def test_generic_provider_failure_collects_redacted_support_evidence() -> None:
+    error = error_for("RUN_FAILED")
+    assert "doctor --explain" in error.remediation
+    assert "redacted support bundle" in error.remediation
+    assert error.suggested_command == "adaf-attack support-bundle --output adaf-support-bundle.json"

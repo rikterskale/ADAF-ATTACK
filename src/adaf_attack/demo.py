@@ -31,4 +31,19 @@ def materialize_demo_session(destination: Path) -> Path:
         + "\n",
         encoding="utf-8",
     )
+    from adaf_attack.core.findings import findings_from_session
+
+    findings = findings_from_session(destination)
+    (destination / "findings.json").write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "schema": 1,
+                "findings": [finding.document() for finding in findings],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     return destination

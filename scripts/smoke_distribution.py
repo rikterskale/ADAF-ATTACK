@@ -66,9 +66,10 @@ def smoke(artifact: Path, venv_root: Path, extras: str | None) -> None:
         raise FileNotFoundError(f"console entry point was not installed: {cli}")
 
     _run([str(cli), "--version"])
+    doctor_payload: dict[str, object] | None = None
     for arguments in (
         ["--format", "json", "doctor", "--explain"],
-        ["--format", "json", "doctor", "--profile", "user-readiness"],
+        ["--format", "json", "doctor", "--profile", "user-readiness", "--explain"],
         ["--format", "json", "list-capabilities"],
         ["--format", "json", "paths"],
     ):
@@ -76,6 +77,13 @@ def smoke(artifact: Path, venv_root: Path, extras: str | None) -> None:
         payload = json.loads(result.stdout)
         if payload.get("ok") is not True:
             raise RuntimeError(f"{arguments[-1]} returned ok != true: {payload}")
+        if "user-readiness" in arguments:
+            doctor_payload = payload
+    if doctor_payload is None or doctor_payload.get("ready") is not True:
+        raise RuntimeError(f"user-readiness doctor did not report ready: {doctor_payload}")
+    readiness = doctor_payload.get("readiness")
+    if not isinstance(readiness, dict) or readiness.get("ready") is not True:
+        raise RuntimeError(f"nested readiness contract did not report ready: {doctor_payload}")
 
     demo_root = venv_root.parent / f"{venv_root.name}-demo"
     quickstart = _run(
@@ -85,6 +93,23 @@ def smoke(artifact: Path, venv_root: Path, extras: str | None) -> None:
     quickstart_payload = json.loads(quickstart.stdout)
     if quickstart_payload.get("ok") is not True:
         raise RuntimeError(f"first-run quickstart failed: {quickstart_payload}")
+    session = str(quickstart_payload["session_path"])
+    guide = _run(
+        [
+            str(cli),
+            "--format",
+            "json",
+            "guide",
+            "--workspace",
+            str(demo_root / "quickstart"),
+            "--session",
+            session,
+        ],
+        capture=True,
+    )
+    guide_payload = json.loads(guide.stdout)
+    if guide_payload.get("ok") is not True or not guide_payload.get("suggested_command"):
+        raise RuntimeError(f"first-run guide failed: {guide_payload}")
     demo = _run([str(cli), "--format", "json", "demo", "--workspace", str(demo_root)], capture=True)
     demo_payload = json.loads(demo.stdout)
     if demo_payload.get("ok") is not True:

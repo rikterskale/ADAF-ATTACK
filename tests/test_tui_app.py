@@ -58,19 +58,22 @@ def test_tui_starts_populates_capabilities_and_updates_status() -> None:
 def test_tui_compact_layout_keeps_review_run_and_param_form_reachable() -> None:
     async def exercise() -> None:
         app = ADAFAttackApp()
-        async with app.run_test(size=(100, 40)) as pilot:
+        async with app.run_test(size=(80, 50)) as pilot:
             await pilot.pause()
-            # Narrow width applies the compact class used by release acceptance.
-            app.on_resize(SimpleNamespace(size=SimpleNamespace(width=100, height=40)))
+            app.on_resize(SimpleNamespace(size=SimpleNamespace(width=80, height=50)))
             assert app.has_class("compact")
-            # Core operator controls remain mounted and queryable.
-            assert app.query_one("#review-btn")
-            assert app.query_one("#run-btn")
-            assert app.query_one("#param-form")
-            assert app.query_one("#search", Input)
+            search = app.query_one("#search", Input)
+            search.value = "unpac"
+            app._populate_capabilities(search.value)
             app.selected_cap = "unpac-the-hash"
             app._refresh_param_form()
-            assert app.query_one("#param-title", Static)
+            app.query_one("#domain", Input).value = "corp.test"
+            app.query_one("#dc_ip", Input).value = "192.0.2.10"
+            app._review_run()
+            for selector in ("#review-btn", "#run-btn", "#param-form", "#search"):
+                assert app.query_one(selector).display
+            assert "unpac-the-hash" in str(app.query_one("#param-title", Static).render())
+            assert "Execution review" in str(app.query_one("#review-panel", Static).render())
             # Wide again clears compact.
             app.on_resize(SimpleNamespace(size=SimpleNamespace(width=140, height=40)))
             assert not app.has_class("compact")
@@ -811,3 +814,94 @@ def test_tui_journey_uses_doctor_for_install_blocked(
     journey = app._journey()
     assert journey["stage"] == "install-blocked"
     assert "doctor" in journey["primary_action"]["suggested_command"]
+
+
+def test_tui_doctor_cache_refreshes_after_ttl(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tui_app, "default_workspace_dir", lambda: tmp_path)
+    clock = iter((1.0, 2.0, 12.0))
+    calls: list[str] = []
+
+    def doctor(profile: str, **_kwargs: object) -> dict[str, object]:
+        calls.append(profile)
+        return {"ok": True, "ready": True, "checks": []}
+
+    import adaf_attack.cli as cli
+
+    monkeypatch.setattr(cli, "_doctor_payload", doctor)
+    monkeypatch.setattr(tui_app.time, "monotonic", lambda: next(clock))
+    app = ADAFAttackApp()
+    app._journey()
+    app._journey()
+    app._journey()
+    assert calls == ["user-readiness", "user-readiness"]
+
+
+@pytest.mark.parametrize(
+    ("doctor", "with_demo", "authorize", "complete", "expected_stage"),
+    [
+        (
+            {
+                "ok": False,
+                "checks": [
+                    {
+                        "id": "packaged-demo",
+                        "status": "error",
+                        "value": "missing",
+                        "remediation": "Reinstall the release artifact.",
+                        "repair_command": "python -m pip check",
+                    }
+                ],
+            },
+            False,
+            False,
+            False,
+            "install-blocked",
+        ),
+        ({"ok": True, "checks": []}, False, False, False, "first-success"),
+        ({"ok": True, "checks": []}, True, False, False, "orient"),
+        ({"ok": True, "checks": []}, True, True, False, "discover"),
+        ({"ok": True, "checks": []}, True, True, True, "complete"),
+    ],
+)
+def test_tui_journey_exactly_matches_shared_snapshot_across_states(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    doctor: dict[str, object],
+    with_demo: bool,
+    authorize: bool,
+    complete: bool,
+    expected_stage: str,
+) -> None:
+    from adaf_attack.core.journey import snapshot
+    from adaf_attack.demo import materialize_demo_session
+
+    workspace = tmp_path / expected_stage
+    session = workspace / "demo-session"
+    if with_demo:
+        materialize_demo_session(session)
+    if authorize:
+        engine = WorkflowEngine(workspace)
+        engine.start(actor="test")
+        engine.complete_action("authorize-scope", actor="test")
+        if complete:
+            engine.complete_action("run-discovery", actor="test")
+            engine.close(actor="test")
+    monkeypatch.setattr("adaf_attack.cli._doctor_payload", lambda profile: doctor)
+    app = ADAFAttackApp(workspace=workspace)
+    app._last_session = session if with_demo else None
+    expected = snapshot(
+        workspace=workspace,
+        session=session if with_demo else None,
+        doctor=doctor,
+    )
+    actual = app._journey()
+    assert actual["stage"] == expected_stage
+    assert actual["stage"] == expected["stage"]
+    assert actual["suggested_command"] == expected["suggested_command"]
+    assert (
+        actual["primary_action"]["suggested_command"]
+        == expected["primary_action"]["suggested_command"]
+    )
+    assert actual["recovery_command"] == expected["recovery_command"]
+    if expected_stage == "install-blocked":
+        assert actual["suggested_command"] == "python -m pip check"

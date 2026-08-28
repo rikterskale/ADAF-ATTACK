@@ -1,0 +1,45 @@
+{
+  "audit_log": [
+    {
+      "actor": "journey",
+      "event_id": "EV-5b6382899e8e",
+      "event_type": "workflow.started",
+      "payload": {},
+      "summary": "Guided workflow started",
+      "timestamp": "2026-08-27T19:20:20+00:00"
+    }
+  ],
+  "completed_steps": [],
+  "created_at": "2026-08-27T19:20:20+00:00",
+  "decisions": [],
+  "findings": {},
+  "mode": "interactive",
+  "pending_actions": {
+    "authorize-scope": {
+      "blocked": false,
+      "capability_id": null,
+      "completed": false,
+      "completed_at": null,
+      "consequence": "Without authorization, all network actions remain locked.",
+      "created_at": "2026-08-27T19:20:20+00:00",
+      "description": "Record the approved target scope before collection.",
+      "finding_ids": [],
+      "id": "authorize-scope",
+      "kind": "required",
+      "phase": "scoping",
+      "priority": 0.0,
+      "title": "Confirm scope and authorization",
+      "unlock_conditions": [
+        "scope and authorization decision recorded"
+      ]
+    }
+  },
+  "phase": "scoping",
+  "progress": 0.0,
+  "revision": 1,
+  "risk_score": 0,
+  "status": "blocked",
+  "title": "ADAF-ATTACK guided assessment",
+  "updated_at": "2026-08-27T19:20:20+00:00",
+  "workflow_id": "WF-3f538f9b5145"
+}

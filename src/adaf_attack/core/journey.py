@@ -535,13 +535,21 @@ def _doctor_blockers(doctor: dict[str, Any] | None) -> list[dict[str, str]]:
         if not isinstance(check, dict) or check.get("status") != "error":
             continue
         remediation = str(check.get("remediation") or "Run `adaf-attack doctor --explain`.")
-        command = "adaf-attack doctor --profile user-readiness --explain"
-        if "paths" in remediation or check.get("id") in {"data_dir", "config_dir", "workspace"}:
-            command = "adaf-attack paths --repair"
+        command = str(
+            check.get("repair_command")
+            or (
+                "adaf-attack paths --repair"
+                if "paths" in remediation
+                or check.get("id") in {"data_dir", "config_dir", "workspace"}
+                else "adaf-attack doctor --profile user-readiness --explain"
+            )
+        )
         blockers.append(
             {
                 "id": str(check.get("id") or "doctor"),
-                "message": str(check.get("detail") or check.get("id") or "blocked"),
+                "message": str(
+                    check.get("detail") or check.get("value") or check.get("id") or "blocked"
+                ),
                 "remediation": remediation,
                 "suggested_command": command,
             }

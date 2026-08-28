@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 from typer.testing import CliRunner
 
 from adaf_attack.cli import app
@@ -14,6 +15,15 @@ from adaf_attack.core.workflow_engine import WorkflowAction, WorkflowEngine
 from adaf_attack.demo import materialize_demo_session
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _consistent_test_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    import adaf_attack.cli as cli
+
+    monkeypatch.setattr(
+        cli, "_pip_consistency_check", lambda: (True, "No broken requirements found.")
+    )
 
 
 def _json(result: Any) -> dict[str, Any]:

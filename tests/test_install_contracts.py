@@ -90,3 +90,17 @@ def test_artifact_matrix_is_focused() -> None:
     assert 4 <= len(matrix) <= 6, (
         "artifact smoke should stay focused, not duplicate the test matrix"
     )
+
+
+def test_artifact_smoke_runs_exact_guided_first_success_contract() -> None:
+    script = (ROOT / "scripts" / "smoke_distribution.py").read_text(encoding="utf-8")
+    for token in (
+        '"ready"',
+        '"readiness"',
+        '"quickstart"',
+        '"guide"',
+        '"--workspace"',
+        '"--session"',
+        '"suggested_command"',
+    ):
+        assert token in script, f"artifact smoke is missing first-ten contract token: {token}"

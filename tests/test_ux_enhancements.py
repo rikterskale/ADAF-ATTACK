@@ -127,6 +127,21 @@ def test_cli_list_capabilities_by_phase() -> None:
     )
 
 
+def test_cli_phase_catalog_is_complete_and_stable_json() -> None:
+    result = runner.invoke(app, ["--format", "json", "list-capabilities", "--by-phase"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["by_phase"] is True
+    grouped_ids = [
+        capability_id for phase in payload["phases"] for capability_id in phase["capability_ids"]
+    ]
+    listed_ids = [capability["id"] for capability in payload["capabilities"]]
+    assert grouped_ids == listed_ids
+    assert len(grouped_ids) == len(set(grouped_ids)) == payload["count"]
+    assert all(phase["count"] == len(phase["capability_ids"]) for phase in payload["phases"])
+
+
 def test_cli_capability_help_checklist() -> None:
     result = runner.invoke(app, ["capability-help", "ldap-enum"])
     assert result.exit_code == 0

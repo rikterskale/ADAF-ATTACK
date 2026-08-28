@@ -186,6 +186,12 @@ def test_execute_cleanup_reverts_ldap_kind(
     result = cleanup.execute_cleanup(tmp_path, _target())
     assert result["completed"] == 1, result
     assert conn.modifies, f"{kind}: no reversal LDAP modify was issued"
+    entry = json.loads((tmp_path / "cleanup.json").read_text(encoding="utf-8"))[0]
+    assert entry["status"] == "completed"
+    modify_count = len(conn.modifies)
+    again = cleanup.execute_cleanup(tmp_path, _target())
+    assert again["completed"] == 1
+    assert len(conn.modifies) == modify_count
 
 
 def test_execute_cleanup_ldap_hex_encoding(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

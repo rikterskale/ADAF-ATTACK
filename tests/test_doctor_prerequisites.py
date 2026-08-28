@@ -73,6 +73,32 @@ def test_user_readiness_keeps_unwritable_paths_blocking(
     assert "workspace" in payload["blocking_checks"]
 
 
+def test_user_readiness_blocks_inconsistent_pip_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "_pip_consistency_check",
+        lambda: (False, "dependency-a requires dependency-b==1, but 2 is installed"),
+    )
+    payload = cli._doctor_payload("user-readiness")
+    check = next(item for item in payload["checks"] if item["id"] == "pip-check")
+    assert check["status"] == "error"
+    assert payload["ready"] is False
+    assert payload["readiness"]["ready"] is False
+    assert "clean virtual environment" in check["remediation"]
+
+
+def test_pip_consistency_check_reports_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "No broken requirements found.\n"
+        stderr = ""
+
+    monkeypatch.setattr(cli.subprocess, "run", lambda *args, **kwargs: Result())
+    assert cli._pip_consistency_check() == (True, "No broken requirements found.")
+
+
 def test_offline_profile_downgrades_unwritable_paths(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -162,3 +188,18 @@ def test_doctor_reports_resolved_external_binaries(monkeypatch: pytest.MonkeyPat
         assert (
             "healthy" in check["remediation"].lower() or "no action" in check["remediation"].lower()
         )
+
+
+def test_every_doctor_check_has_copy_ready_repair_command(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(cli, "user_data_dir", lambda: tmp_path / "data")
+    monkeypatch.setattr(cli, "user_config_dir", lambda: tmp_path / "config")
+    monkeypatch.setattr(cli, "default_workspace_dir", lambda: tmp_path / "workspace")
+    for profile in ("offline", "user-readiness", "operator", "certipy"):
+        payload = cli._doctor_payload(profile)
+        for check in payload["checks"]:
+            command = check.get("repair_command")
+            assert isinstance(command, str) and command.strip(), (profile, check)
+            assert command.startswith(("adaf-attack ", "python -m pip "))
