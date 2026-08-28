@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from adaf_attack.capabilities.capability_catalog import (
@@ -11,7 +13,22 @@ from adaf_attack.capabilities.capability_catalog import (
     catalog_ids,
     register_from_catalog,
 )
-from adaf_attack.core.registry import capability_registry
+from adaf_attack.core.registry import (
+    KNOWN_ENVIRONMENTS,
+    ApprovalPolicy,
+    Capability,
+    RiskLevel,
+    SafetyProfile,
+    capability_registry,
+    infer_environment,
+)
+
+
+def test_generated_catalog_has_no_unknown_environment() -> None:
+    catalog = (Path(__file__).resolve().parents[1] / "docs" / "CAPABILITY_CATALOG.md").read_text(
+        encoding="utf-8"
+    )
+    assert "| unknown |" not in catalog
 
 
 def test_catalog_ids_are_unique() -> None:
@@ -53,3 +70,53 @@ def test_register_from_catalog_rejects_duplicate() -> None:
         class _Dup:
             def run(self, *args: object, **kwargs: object) -> dict[str, object]:
                 return {}
+
+
+def test_registered_capabilities_have_known_environments() -> None:
+    for cap in capability_registry.list():
+        assert cap.environment in KNOWN_ENVIRONMENTS, cap.id
+
+
+def test_infer_environment_from_safety_and_category() -> None:
+    assert infer_environment(environment="live-read-only") == "live-read-only"
+    assert infer_environment(environment="offline") == "offline"
+    assert infer_environment(environment="live-mutating") == "live-mutating"
+    assert infer_environment(destructive=True) == "live-mutating"
+    assert infer_environment(safety=SafetyProfile(modifies_directory=True)) == "live-mutating"
+    assert infer_environment(safety=SafetyProfile(network_side_effect=True)) == "live-mutating"
+    assert (
+        infer_environment(safety=SafetyProfile(approval=ApprovalPolicy.FORCE_AND_ACK))
+        == "live-mutating"
+    )
+    assert infer_environment(safety=SafetyProfile(risk=RiskLevel.DESTRUCTIVE)) == "live-mutating"
+    assert infer_environment(safety=SafetyProfile(risk=RiskLevel.SIDE_EFFECT)) == "live-mutating"
+    assert infer_environment(category="analysis") == "offline"
+    assert infer_environment(category="export") == "offline"
+    assert infer_environment(tags=("vault",)) == "offline"
+    assert infer_environment(category="enumeration") == "live-read-only"
+    assert infer_environment() == "live-read-only"
+
+
+def test_capability_infers_environment_when_unknown() -> None:
+    cap = Capability(id="test-enum", summary="Observe LDAP", category="enumeration")
+    assert cap.environment == "live-read-only"
+    mutating = Capability(
+        id="test-write",
+        summary="Mutate",
+        destructive=True,
+        category="privilege-escalation",
+    )
+    assert mutating.environment == "live-mutating"
+    offline = Capability(
+        id="test-report",
+        summary="Report",
+        category="export",
+    )
+    assert offline.environment == "offline"
+    explicit = Capability(
+        id="test-explicit",
+        summary="Explicit",
+        environment="live-read-only",
+        category="enumeration",
+    )
+    assert explicit.environment == "live-read-only"

@@ -17,10 +17,10 @@ def test_catalog_entries_have_complete_recovery_contracts() -> None:
     assert ERROR_CATALOG
     for code, entry in ERROR_CATALOG.items():
         assert code == code.upper()
-        assert len(entry) >= 2
-        assert all(isinstance(value, str) and value.strip() for value in entry[:2])
-        if len(entry) > 2:
-            assert entry[2].strip()
+        assert len(entry) >= 3
+        assert all(isinstance(value, str) and value.strip() for value in entry[:3])
+        err = error_for(code)
+        assert err.suggested_command
 
 
 def test_guide_and_install_failure_codes_are_catalogued() -> None:
@@ -124,3 +124,12 @@ def test_generic_provider_failure_collects_redacted_support_evidence() -> None:
     assert "doctor --explain" in error.remediation
     assert "redacted support bundle" in error.remediation
     assert error.suggested_command == "adaf-attack support-bundle --output adaf-support-bundle.json"
+
+
+def test_human_failures_print_guide_when_lost() -> None:
+    result = runner.invoke(app, ["explain", "not-a-real-capability"])
+    assert result.exit_code != 0
+    assert "UNKNOWN_CAPABILITY" in result.output
+    assert "When lost:" in result.output
+    assert "adaf-attack guide" in result.output
+    assert "Cmd:" in result.output

@@ -46,6 +46,7 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
     "CAPABILITY_UNAVAILABLE": (
         "The capability is registered but has no runnable implementation.",
         "Choose another capability or install the release that provides this implementation.",
+        "adaf-attack guide",
     ),
     "GRAPH_NOT_FOUND": (
         "The requested graph file does not exist.",
@@ -66,18 +67,22 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
     "APPROVAL_VERIFIER_INSECURE": (
         "The built-in HMAC approval verifier is not permitted when ADAF_ATTACK_ENV=prod.",
         "Deploy an asymmetric JWKS verifier for production, or set ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD=1 to explicitly accept the shared-secret verifier for this engagement.",
+        "adaf-attack guide",
     ),
     "ENGAGEMENT_PLAN_INVALID": (
         "The engagement plan YAML is invalid.",
         "Correct the YAML scope and validate again.",
+        "adaf-attack guide",
     ),
     "ENGAGEMENT_RUN_BLOCKED": (
         "The engagement plan could not run against the requested target.",
         "Review target scope, authorization, and phase configuration.",
+        "adaf-attack guide",
     ),
     "ENGAGEMENT_PACKAGE_FAILED": (
         "The engagement evidence package could not be created.",
         "Use an existing session and a valid redaction profile.",
+        "adaf-attack sessions --limit 10",
     ),
     "SESSION_NOT_FOUND": (
         "One or more session directories do not exist.",
@@ -92,26 +97,32 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
     "BLOODHOUND_FILE_NOT_FOUND": (
         "The BloodHound JSON file does not exist.",
         "Pass a valid JSON export with --bloodhound.",
+        "adaf-attack guide",
     ),
     "FOREST_CAMPAIGN_FAILED": (
         "The forest campaign could not be composed from these sessions.",
         "Pass completed, authorized session directories.",
+        "adaf-attack sessions --limit 10",
     ),
     "CAMPAIGN_RUN_FAILED": (
         "The campaign run failed before completion.",
         "Validate the campaign plans, scopes, and approval-token mapping.",
+        "adaf-attack guide",
     ),
     "FIXTURE_AUTHORIZATION_REQUIRED": (
         "Fixture validation requires explicit confirmation that fixtures are authorized.",
         "Re-run with --authorized-fixtures only for isolated, authorized test data.",
+        "adaf-attack guide",
     ),
     "FIXTURE_DIRECTORY_NOT_FOUND": (
         "The fixture directory does not exist.",
         "Pass an existing directory containing JSON fixtures.",
+        "adaf-attack guide",
     ),
     "UNKNOWN_WORKFLOW_PROFILE": (
         "The requested workflow profile is not defined.",
         "Run `adaf-attack workflow-profiles` to list valid profile names.",
+        "adaf-attack workflow-profiles",
     ),
     "WORKFLOW_STATE_INVALID": (
         "The persisted guided-workflow state could not be read.",
@@ -439,11 +450,11 @@ def error_for(
     entry = ERROR_CATALOG[code]
     default_message = entry[0]
     remediation = entry[1]
-    catalog_cmd = entry[2] if len(entry) > 2 else None
+    catalog_cmd = entry[2] if len(entry) > 2 else "adaf-attack guide"
     return ActionableError(
         code,
         message or default_message,
         remediation,
         details=details,
-        suggested_command=suggested_command or catalog_cmd,
+        suggested_command=suggested_command or catalog_cmd or "adaf-attack guide",
     )

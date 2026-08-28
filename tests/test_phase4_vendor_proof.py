@@ -14,9 +14,18 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
+import adaf_attack.capabilities  # noqa: F401  # registers capabilities
 from adaf_attack.cli import _doctor_payload, app
 from adaf_attack.core.cli_contract import ERROR_CATALOG, classify_run_error
-from adaf_attack.core.journey import STAGE_LABELS
+from adaf_attack.core.journey import (
+    STAGE_BLOCKED_BECAUSE,
+    STAGE_CRITERIA,
+    STAGE_FALLBACKS,
+    STAGE_LABELS,
+    empty_surface_guidance,
+)
+from adaf_attack.core.registry import KNOWN_ENVIRONMENTS, capability_registry
+from adaf_attack.core.ux import destructive_confirmation_copy
 
 runner = CliRunner()
 ROOT = Path(__file__).resolve().parents[1]
@@ -187,6 +196,10 @@ def test_first_ten_minutes_guide_payload_is_copy_ready(tmp_path: Path, monkeypat
     assert guide["recovery_command"].startswith("adaf-attack guide")
     assert guide["primary_action"]["risk"]
     assert "rollback_implication" in guide["primary_action"]
+    assert guide["entry_criteria"]
+    assert guide["exit_criteria"]
+    assert guide["fallback"]
+    assert guide["blocked_because"]
     assert what_next["suggested_command"] == guide["suggested_command"]
     assert workflow_next["suggested_command"] == guide["suggested_command"]
     assert workflow_next["recommendations"][0]["suggested_command"] == guide["suggested_command"]
@@ -249,3 +262,47 @@ def test_operator_docs_carry_stage_labels_and_first_ten_canon() -> None:
     scorecard = (ROOT / "docs" / "VENDOR_SCORECARD.md").read_text(encoding="utf-8")
     assert "RELEASE_EVIDENCE_0.10.1.md" in scorecard
     assert "../tmp/" not in scorecard
+    assert canon in scorecard
+    assert "overall **10/10**" not in scorecard
+    assert "No 10/10 claim without" in scorecard
+
+
+def test_stage_contracts_cover_every_label() -> None:
+    stages = set(STAGE_LABELS)
+    assert set(STAGE_BLOCKED_BECAUSE) == stages
+    assert set(STAGE_CRITERIA) == stages
+    assert set(STAGE_FALLBACKS) == stages
+    for text in STAGE_BLOCKED_BECAUSE.values():
+        assert text.strip()
+
+
+def test_release_docs_stay_honest_about_ten() -> None:
+    release = (ROOT / "RELEASE.md").read_text(encoding="utf-8")
+    assert "overall **10/10**" not in release
+    assert "docs/RELEASE_EVIDENCE_0.10.1.md" in release
+
+
+def test_registered_catalog_environments_are_known() -> None:
+    for cap in capability_registry.list():
+        assert cap.environment in KNOWN_ENVIRONMENTS, cap.id
+
+
+def test_empty_sessions_surface_matches_guide(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    empty = empty_surface_guidance("sessions", workspace=tmp_path)
+    guide = _json(runner.invoke(app, ["--format", "json", "guide", "--workspace", str(tmp_path)]))
+    assert empty["empty"] is True
+    assert empty["suggested_command"] == guide["suggested_command"]
+    assert empty["next_command"] == guide["suggested_command"]
+
+
+def test_destructive_confirmation_quotes_rollback() -> None:
+    cap = capability_registry.get("add-member")
+    assert cap is not None
+    copy = destructive_confirmation_copy(cap, domain="corp.example", dc_ip="10.0.0.10")
+    assert "Rollback command:" in copy
+    assert "adaf-attack rollback" in copy
+    assert "Not rolled back:" in copy
+    assert "--force" in copy

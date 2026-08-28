@@ -327,6 +327,9 @@ def register_ux_commands(
                 "approvals": list(contract["approvals"]),
                 "rollback": contract["rollback"],
                 "rollback_implication": contract["rollback_implication"],
+                "rollback_command": contract["rollback_command"],
+                "not_rolled_back": contract["not_rolled_back"],
+                "after_run_command": contract["after_run_command"],
                 "evidence_produced": list(contract["evidence_produced"]),
                 "stages": list(contract["stages"]),
                 "next_command": contract["copy_ready_command"] or build_ready_command(cap.id),
@@ -339,11 +342,14 @@ def register_ux_commands(
             f"Risk: {contract['risk']}\n"
             f"Approvals: {', '.join(contract['approvals']) or 'none (observe / review-only)'}\n"
             f"Rollback: {contract['rollback_implication']}\n"
+            f"Rollback command: {contract['rollback_command']}\n"
+            f"Not rolled back: {contract['not_rolled_back']}\n"
             f"Difficulty: {difficulty['level']} — {difficulty['reason']}\n"
             f"Required information: {', '.join(spec.required) or 'none'}\n"
             f"Required -P: {', '.join(contract['required_params']) or 'none'}\n"
             f"Evidence produced: {', '.join(contract['evidence_produced'])}\n"
             f"Best run after: {', '.join(prerequisites['best_run_after']) or 'none'}\n\n"
+            f"After run: {contract['after_run_command']}\n"
             "Next: review the plan with `adaf-attack plan <id> -d <domain> --dc-ip <dc>`.",
             title=f"Plain-language explanation: {cap.id}",
         )
@@ -1015,10 +1021,19 @@ def register_ux_commands(
             f"Resume: adaf-attack session show --session {session}",
         ]
         if finding_count == 0:
-            lines.append(
-                "Empty: populate this session with `adaf-attack demo --workspace <dir>`"
-                " or run a discovery capability."
+            from adaf_attack.core.journey import empty_surface_guidance
+
+            empty = empty_surface_guidance(
+                "findings",
+                workspace=session.parent,
+                session=session,
+                doctor=doctor_payload("user-readiness"),
             )
+            payload["empty_state"] = empty
+            payload["next_step"] = empty["next_command"]
+            payload["suggested_command"] = empty["next_command"]
+            lines.append(f"Empty: {empty['message']}")
+            lines.append(f"Next: {empty['next_command']}")
         titles = dashboard.get("titles") or []
         if titles:
             lines.append("Titles:")

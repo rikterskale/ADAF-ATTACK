@@ -15,14 +15,14 @@ Durable published evidence: [RELEASE_EVIDENCE_0.10.1.md](RELEASE_EVIDENCE_0.10.1
 
 | Dimension | Phase 0 audit | Current source | Notes |
 |---|---:|---:|---|
-| Zero-guess journey (`guide` omniscience) | 8.5 | **9.0** | Shared snapshot and recovery locks; broader TUI-state manual proof remains |
-| First ten minutes deterministic | 6.5 | **9.0** | Clean-artifact smoke now runs the exact doctor/quickstart/guide spine |
-| Failures as products | 7.0 | **9.0** | End-to-end classified failures and generic support-bundle recovery |
-| CLI / TUI / docs one product | 8.0 | **9.0** | Offline-first TUI wizard and automated 80-column interaction proof |
-| Vendor packaging / release UX | 8.0 | **9.5** | Published artifact proof on all three OS families; physical transfer remains manual |
-| Safety as product | 9.0 | **9.5** | Gates intact; support-bundle fail-closed; normalized demo findings are redacted |
-| Engineering bar | 9.0 | **9.0** | Behavioral and release contracts remain the shipping gate |
-| **Overall product** | **~7.8** | **~9.1** | No 10/10 claim without repeatable stranger and customer-environment proof |
+| Zero-guess journey (`guide` omniscience) | 8.5 | **9.5** | `blocked_because`, entry/exit, and lost-operator `guide` recovery on every stage; TUI-state manual proof remains |
+| First ten minutes deterministic | 6.5 | **9.0** | Automated doctor/quickstart/guide spine is locked; stranger first-ten MANUAL is still uncaptured |
+| Failures as products | 7.0 | **9.0** | Classified failures plus support-bundle recovery; customer-environment proof remains MANUAL |
+| CLI / TUI / docs one product | 8.0 | **9.5** | Empty surfaces and destructive confirm quote the same `guide` / rollback contract |
+| Vendor packaging / release UX | 8.0 | **9.5** | Score honesty locked; published-artifact smoke green; physical transfer remains MANUAL |
+| Safety as product | 9.0 | **9.5** | Gates intact; confirmation copy names rollback and what is not rolled back |
+| Engineering bar | 9.0 | **9.5** | Phase 1–3 behavioral locks plus catalog Environment inference |
+| **Overall product** | **~7.8** | **~9.3** | No 10/10 claim without repeatable stranger and customer-environment proof |
 
 ## UX_ACCEPTANCE_MATRIX row scores
 
@@ -31,23 +31,24 @@ Durable published evidence: [RELEASE_EVIDENCE_0.10.1.md](RELEASE_EVIDENCE_0.10.1
 | 1 | First-run onboarding / offline demo | 8.0 | **9.0** | Normalized demo findings plus exact artifact first-ten smoke |
 | 2 | Doctor / actionable preflight | 8.5 | **9.0** | `pip check` inconsistency now blocks user readiness |
 | 3 | Kill-chain capability discovery | 9.0 | **9.0** | Strong automated contract; stranger proof remains manual |
-| 4 | Plain-language explain / safety | 9.0 | **9.0** | Shared operator contract |
-| 5 | Review-first plans / risk previews | 9.0 | **9.0** | Plan/review operator contract |
+| 4 | Plain-language explain / safety | 9.0 | **9.5** | Shared operator contract now includes rollback command and after-run next step |
+| 5 | Review-first plans / risk previews | 9.0 | **9.5** | Plan/review quote the same risk, approvals, and rollback implication |
 | 6 | Shell-safe copy-ready commands | 8.5 | **10.0** | Native argv renderer, declared shell dialect, and manual-copy fallback |
 | 7 | Prerequisite / dependency nav | 8.5 | **9.0** | Extras errors and doctor remediation |
-| 8 | Structured progress stages | 8.5 | **9.0** | Stage labels, breadcrumb, and timeline metadata |
+| 8 | Structured progress stages | 8.5 | **9.5** | Every stage has entry/exit, fallback, and `blocked_because` |
 | 9 | Evidence-backed next actions | 8.5 | **10.0** | Redacted finding/artifact basis is identical across every next-action surface |
-| 10 | Session findings dashboard | 9.0 | **9.0** | Quickstart now produces a meaningful dashboard |
+| 10 | Session findings dashboard | 9.0 | **9.5** | Empty findings/sessions/graph name the same `suggested_command` as `guide` |
 | 11 | Unified search | 9.0 | **9.0** | Compact layout and evidence search |
 | 12 | Session comparison | 9.0 | **9.0** | Behavioral comparison contract |
 | 13 | Target / OPSEC profiles | 9.0 | **9.0** | Profile and TUI controls |
 | 14 | Favorites / recents / completions | 9.0 | **9.0** | Non-secret persistence contracts |
-| 15 | Timeline / rollback / redacted packaging | 8.5 | **9.0** | Idempotent rollback-kind proof and fail-closed redaction |
+| 15 | Timeline / rollback / redacted packaging | 8.5 | **9.5** | Destructive confirm quotes rollback command and Not rolled back |
 | 16 | Unified guided journey | 8.5 | **10.0** | Shared snapshot/renderer plus fail-closed session and corrupt-state recovery |
 
 **No row below 9.** Rows 6, 9, and 16 reach 10 through repeatable isolated
 new-operator contracts, cross-surface parity, behavioral locks, and productized
-failure paths. Overall 10 remains reserved for customer-environment evidence and
+failure paths. Phases 1–3 raised several 9.0 rows to 9.5; they do not mint an
+overall 10. Overall 10 remains reserved for customer-environment evidence and
 release-manager sign-off for the exact candidate. Kali host behavior and
 organization air-gap transfer controls remain manual release evidence.
 
@@ -77,6 +78,9 @@ python scripts/check_release_readiness.py --repo-root .
 ```
 
 ## Vendor SE first-ten-minutes script
+
+Paste this exact sequence (the first-ten canon). Do not add live DC
+commands. `guide` is the only next-step after quickstart.
 
 ```bash
 python -m pip check

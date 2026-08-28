@@ -100,6 +100,19 @@ STAGE_FALLBACKS: dict[str, str] = {
     "complete": "adaf-attack guide",
 }
 
+# Default "you are here because X" copy when snapshot has no more specific reason.
+STAGE_BLOCKED_BECAUSE: dict[str, str] = {
+    "install-blocked": "Local install readiness is not green.",
+    "session-blocked": "The requested session is missing or unreadable.",
+    "first-success": "No offline demo session exists in this workspace yet.",
+    "orient": "Workflow scope is not yet authorized; network and finding-driven actions stay locked.",
+    "discover": "Scope is authorized but discovery evidence is not yet in the workflow.",
+    "operate": "Open findings still require validation, decision, or response.",
+    "deliver": "Reporting and packaging remain before closeout.",
+    "closeout": "No required actions remain; the workflow is not closed yet.",
+    "complete": "Not blocked; this workflow is finished. Retain evidence or start a new engagement.",
+}
+
 # Workflow bookkeeping actions that ``guide --advance`` may complete offline.
 SAFE_ADVANCE_ACTIONS: frozenset[str] = frozenset()
 
@@ -181,6 +194,55 @@ def guide_recovery_command(
     if session is not None:
         parts.extend(["--session", quote_path(session)])
     return " ".join(parts)
+
+
+_EMPTY_SURFACE_MESSAGES: dict[str, str] = {
+    "sessions": "No sessions found.",
+    "findings": "No findings recorded for this session.",
+    "explain": "No findings to explain.",
+    "graph": "No graph.json evidence is available for this session.",
+    "paths": "No paths found",
+    "top_paths": "No top paths recorded.",
+    "no_session": "Run a capability or select a session first.",
+}
+
+
+def empty_surface_guidance(
+    kind: str,
+    *,
+    workspace: Path | str | None = None,
+    session: Path | str | None = None,
+    doctor: dict[str, Any] | None = None,
+    document: dict[str, Any] | None = None,
+    message: str | None = None,
+) -> dict[str, Any]:
+    """Name the same next command ``guide`` would print for an empty surface."""
+    root = Path(workspace) if workspace is not None else default_workspace_dir()
+    session_path = Path(session) if session is not None else None
+    journey = (
+        document
+        if document is not None
+        else snapshot(
+            workspace=root,
+            session=session_path,
+            doctor=doctor,
+        )
+    )
+    suggested = str(
+        journey.get("suggested_command")
+        or guide_recovery_command(workspace=root, session=session_path)
+    )
+    return {
+        "ok": True,
+        "kind": kind,
+        "empty": True,
+        "message": message or _EMPTY_SURFACE_MESSAGES.get(kind, "Nothing to show yet."),
+        "next_command": suggested,
+        "suggested_command": suggested,
+        "stage": journey.get("stage"),
+        "recovery_command": journey.get("recovery_command")
+        or guide_recovery_command(workspace=root, session=session_path),
+    }
 
 
 def _action_safety_metadata(
@@ -796,8 +858,9 @@ def journey_summary_lines(
         f"({document.get('progress_pct', 0)}%)",
     ]
     blocked = document.get("blocked_because")
-    if blocked:
-        lines.append(f"Blocked because: {blocked}")
+    if blocked and document.get("stage") != "complete":
+        label = "Blocked because" if document.get("ok") is False else "Waiting on"
+        lines.append(f"{label}: {blocked}")
     lines.extend(
         [
             f"Next: {primary.get('title') or 'Follow the guided journey'}",
@@ -1181,6 +1244,9 @@ def snapshot(
             advance_safe=True,
         )
 
+    if not blocked_because:
+        blocked_because = STAGE_BLOCKED_BECAUSE.get(stage)
+
     primary = _decorate_action(
         primary,
         workspace=root,
@@ -1320,11 +1386,13 @@ def import_session_findings(
 
 __all__ = [
     "SAFE_ADVANCE_ACTIONS",
+    "STAGE_BLOCKED_BECAUSE",
     "STAGE_CRITERIA",
     "STAGE_FALLBACKS",
     "STAGE_LABELS",
     "JourneyAction",
     "action_is_advance_safe",
+    "empty_surface_guidance",
     "enrich_action",
     "find_demo_session",
     "find_recent_session",

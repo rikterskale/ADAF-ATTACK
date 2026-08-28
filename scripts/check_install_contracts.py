@@ -410,6 +410,23 @@ def _check_docs() -> None:
     ):
         _require(phrase in readme, f"README.md: missing operator spine phrase {phrase!r}")
 
+    product_ux = (ROOT / "docs" / "PRODUCT_UX.md").read_text(encoding="utf-8")
+    _require(
+        "default workspace only" not in product_ux,
+        "docs/PRODUCT_UX.md must not claim tour/home are default-workspace only",
+    )
+    for phrase in (
+        "--workspace",
+        "what-next",
+        "workflow next",
+        "suggested_command",
+        "Not rolled back",
+    ):
+        _require(
+            phrase in product_ux,
+            f"docs/PRODUCT_UX.md: missing guided-spine phrase {phrase!r}",
+        )
+
 
 # Canonical first-ten sequence after an approved wheel is installed.
 # Docs may prefix an install line; path style .\ vs ./ is normalized.
@@ -465,6 +482,7 @@ def _check_first_ten_minutes_canon() -> None:
         "docs/WINDOWS.md",
         "docs/WINDOWS_NOVICE_USABILITY_GUIDE.md",
         "docs/LINUX_NOVICE_USABILITY_GUIDE.md",
+        "docs/VENDOR_SCORECARD.md",
     )
     for relative in required_docs:
         text = (ROOT / relative).read_text(encoding="utf-8")
@@ -494,6 +512,7 @@ def _check_release_evidence_template() -> None:
         "doctor --profile user-readiness",
         "adaf-attack --format json paths",
         "Do **not** invent a public package URL",
+        "Do **not** claim an overall 10/10",
         "Signer / attestor",
     ):
         _require(token in text, f"RELEASE_EVIDENCE.md missing required token {token!r}")
@@ -516,6 +535,43 @@ def _check_release_evidence_template() -> None:
     _require(
         "docs/RELEASE_EVIDENCE.md" in release_md,
         "RELEASE.md must link the MANUAL evidence pack",
+    )
+    _check_release_score_honesty()
+
+
+def _check_release_score_honesty() -> None:
+    """RELEASE.md cannot claim 10/10 while durable MANUAL evidence is uncaptured."""
+    release_md = (ROOT / "RELEASE.md").read_text(encoding="utf-8")
+    published = (ROOT / "docs" / "RELEASE_EVIDENCE_0.10.1.md").read_text(encoding="utf-8")
+    scorecard = (ROOT / "docs" / "VENDOR_SCORECARD.md").read_text(encoding="utf-8")
+    template = (ROOT / "docs" / "RELEASE_EVIDENCE.md").read_text(encoding="utf-8")
+    _require(
+        "Manual evidence not captured" in published,
+        "RELEASE_EVIDENCE_0.10.1.md must keep the uncaptured MANUAL record",
+    )
+    _require(
+        "No score of 10 is" in published,
+        "RELEASE_EVIDENCE_0.10.1.md must refuse a 10 from automation",
+    )
+    _require(
+        "No 10/10 claim without" in scorecard,
+        "VENDOR_SCORECARD.md must reserve overall 10 for stranger proof",
+    )
+    _require(
+        "overall **10/10**" not in release_md,
+        "RELEASE.md must not claim overall 10/10 while MANUAL evidence is uncaptured",
+    )
+    _require(
+        "docs/RELEASE_EVIDENCE_0.10.1.md" in release_md,
+        "RELEASE.md must point at the durable v0.10.1 evidence record",
+    )
+    _require(
+        "docs/VENDOR_SCORECARD.md" in release_md,
+        "RELEASE.md must point at the vendor scorecard",
+    )
+    _require(
+        "Do **not** claim an overall 10/10" in template,
+        "RELEASE_EVIDENCE.md must forbid a 10/10 claim without a completed pack",
     )
 
 

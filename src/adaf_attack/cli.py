@@ -370,6 +370,7 @@ def _emit_error(ctx: typer.Context, error: ActionableError) -> None:
         _console(ctx).print(
             f"Error [{error.code}]: {error.message}\n"
             f"Next step: {error.remediation}\n"
+            f"Cmd: {error.suggested_command or recovery}\n"
             f"When lost: {recovery}"
         )
 
@@ -1483,6 +1484,9 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
         "approvals": list(contract["approvals"]),
         "rollback": contract["rollback"],
         "rollback_implication": contract["rollback_implication"],
+        "rollback_command": contract["rollback_command"],
+        "not_rolled_back": contract["not_rolled_back"],
+        "after_run_command": contract["after_run_command"],
         "evidence_produced": list(contract["evidence_produced"]),
         "preflight_checklist": contract["preflight_checklist"],
         "stages": list(contract["stages"]),
@@ -1537,6 +1541,8 @@ def capability_help(
             f"Risk: {item.get('risk') or item['safety'].get('risk', 'unknown')}",
             f"Approvals: {approvals}",
             f"Rollback: {item.get('rollback_implication') or item.get('rollback')}",
+            f"Rollback command: {item.get('rollback_command')}",
+            f"Not rolled back: {item.get('not_rolled_back')}",
             f"Required: {required}",
             f"Required -P: {params}",
             f"Optional: {optional}",
@@ -1547,6 +1553,7 @@ def capability_help(
             "Checklist: "
             + ", ".join(entry["label"] for entry in checklist["items"] if entry["required"]),
             f"Copy-ready: {ready}",
+            f"After run: {item.get('after_run_command')}",
         ]
         if item.get("notes"):
             lines.append(f"Notes: {item['notes']}")
@@ -1636,6 +1643,9 @@ def plan(
         "approvals": list(contract["approvals"]),
         "rollback": contract["rollback"],
         "rollback_implication": contract["rollback_implication"],
+        "rollback_command": contract["rollback_command"],
+        "not_rolled_back": contract["not_rolled_back"],
+        "after_run_command": contract["after_run_command"],
         "required_params": list(contract["required_params"]),
         "prerequisites": prerequisites,
         "evidence_produced": list(contract["evidence_produced"]),
@@ -1674,6 +1684,8 @@ def plan(
                 f"Risk: {risk}; {'may modify target state' if checklist.get('may_modify_target') else 'observation-oriented'}",
                 f"Approvals: {', '.join(contract['approvals']) or 'none (observe / review-only)'}",
                 f"Rollback: {contract['rollback_implication']}",
+                f"Rollback command: {contract['rollback_command']}",
+                f"Not rolled back: {contract['not_rolled_back']}",
                 f"Required -P: {', '.join(contract['required_params']) or '(none)'}",
                 f"Evidence: {', '.join(contract['evidence_produced'])}",
                 f"--force: {'provided' if force else 'not provided'}",
@@ -1687,6 +1699,7 @@ def plan(
                 "Stages: " + " -> ".join(item["id"] for item in stages["stages"]),
                 f"Copy-ready: {ready}",
                 f"Next step: {next_step}",
+                f"After run: {contract['after_run_command']}",
                 "When lost: adaf-attack guide",
             ]
         ),
@@ -2045,18 +2058,40 @@ def sessions(
     if limit is not None and limit > 0:
         entries = entries[:limit]
     total_bytes = sum(entry["bytes"] for entry in entries)
-    payload = {
+    cleanup: dict[str, Any] = {
+        "action": "read-only status",
+        "session_count": len(entries),
+        "bytes": total_bytes,
+        "bytes_human": _humanize_bytes(total_bytes),
+        "next_step": "Review session paths, then remove only explicitly selected sessions outside this command.",
+    }
+    payload: dict[str, Any] = {
         "ok": True,
         "workspace": str(root),
         "sessions": entries,
-        "cleanup": {
-            "action": "read-only status",
-            "session_count": len(entries),
-            "bytes": total_bytes,
-            "bytes_human": _humanize_bytes(total_bytes),
-            "next_step": "Review session paths, then remove only explicitly selected sessions outside this command.",
-        },
+        "cleanup": cleanup,
     }
+    if not entries:
+        from adaf_attack.core.journey import empty_surface_guidance
+
+        empty = empty_surface_guidance(
+            "sessions",
+            workspace=root,
+            doctor=_doctor_payload("user-readiness"),
+        )
+        payload["empty_state"] = empty
+        payload["next_step"] = empty["next_command"]
+        payload["suggested_command"] = empty["next_command"]
+        cleanup["next_step"] = empty["next_command"]
+        _emit(
+            ctx,
+            payload,
+            Panel(
+                f"{empty['message']}\nNext: {empty['next_command']}",
+                title="Workspace sessions",
+            ),
+        )
+        return
     table = Table(title="Workspace sessions", show_header=True)
     table.add_column("Session")
     table.add_column("Created")
@@ -2345,9 +2380,20 @@ def _interactive_run_prompts(
         force=force_already or bool(collected.get("--force")),
         extra=preview_extra or None,
     )
+    confirm_body = (
+        f"[bold]About to run[/bold]\n{ready}\n\nReview the command above. Nothing has run yet."
+    )
+    if cap.requires_force:
+        from adaf_attack.core.ux import destructive_confirmation_copy
+
+        confirm_body += "\n\n" + destructive_confirmation_copy(
+            cap,
+            domain=_pick("--domain") or "<domain>",
+            dc_ip=_pick("--dc-ip") or "<dc-ip>",
+        )
     console_obj.print(
         Panel(
-            f"[bold]About to run[/bold]\n{ready}\n\nReview the command above. Nothing has run yet.",
+            confirm_body,
             title="Confirm",
             border_style=color,
         )
@@ -2629,10 +2675,12 @@ def run_capability(
     if cap is not None and why and not _json_mode(ctx):
         _console(ctx).print(Panel(_why_text(cap), title=f"Why: {capability}"))
     if cap is not None and requires_force and force and interactive and not yes:
+        from adaf_attack.core.ux import destructive_confirmation_copy
+
+        copy = destructive_confirmation_copy(cap, domain=str(domain), dc_ip=str(dc_ip))
         _console(ctx).print(
             Panel(
-                f"[bold red]DESTRUCTIVE[/bold red] {capability} against {domain} @ {dc_ip}\n"
-                "This may modify the target. Re-run with --yes to skip this prompt.",
+                copy.replace("DESTRUCTIVE", "[bold red]DESTRUCTIVE[/bold red]", 1),
                 title="Confirm",
             )
         )
@@ -2678,6 +2726,8 @@ def run_capability(
                             f"Risk: {contract['risk']}",
                             f"Approvals: {', '.join(contract['approvals']) or 'none'}",
                             f"Rollback: {contract['rollback_implication']}",
+                            f"Rollback command: {contract['rollback_command']}",
+                            f"Not rolled back: {contract['not_rolled_back']}",
                             f"Required -P: {', '.join(contract['required_params']) or '(none)'}",
                             "Preflight: " + ", ".join(required_items),
                             "Stages: " + " -> ".join(item["id"] for item in stages["stages"]),
@@ -2792,6 +2842,13 @@ def run_capability(
             "next_step": next_steps[0],
             "next_steps": [item for item in next_steps if item],
         }
+        if cap is not None:
+            from adaf_attack.core.ux import operator_capability_contract
+
+            contract = operator_capability_contract(cap)
+            out["after_run_command"] = contract["after_run_command"]
+            out["rollback_command"] = contract["rollback_command"]
+            out["not_rolled_back"] = contract["not_rolled_back"]
         if _json_mode(ctx):
             _emit(ctx, out, "")
             return None
@@ -3210,6 +3267,16 @@ def rank_paths_cmd(
     if output:
         output.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         payload["output"] = str(output)
+    if not ranked and not exploit_chains:
+        from adaf_attack.core.journey import empty_surface_guidance
+
+        empty = empty_surface_guidance(
+            "paths",
+            doctor=_doctor_payload("user-readiness"),
+        )
+        payload["empty_state"] = empty
+        payload["next_step"] = empty["next_command"]
+        payload["suggested_command"] = empty["next_command"]
     clipboard_text = table_text(columns, table_rows)
     if exploit_chains:
         clipboard_text += "\nExploit chains\n"
@@ -3235,7 +3302,9 @@ def rank_paths_cmd(
         if output:
             _console(ctx).print(f"Wrote {output}")
     else:
-        _console(ctx).print("No paths found")
+        empty = payload.get("empty_state") or {}
+        next_command = empty.get("next_command") or "adaf-attack guide"
+        _console(ctx).print(f"No paths found\nNext: {next_command}")
 
 
 def _offline_sessions(values: list[Path]) -> list[Path]:
@@ -3586,7 +3655,7 @@ def show_errors(
                 "code": key,
                 "message": entry[0],
                 "remediation": entry[1],
-                "suggested_command": entry[2] if len(entry) > 2 else None,
+                "suggested_command": entry[2] if len(entry) > 2 else "adaf-attack guide",
             }
             for key, entry in catalog.items()
         ],

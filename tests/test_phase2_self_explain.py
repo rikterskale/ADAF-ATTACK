@@ -12,9 +12,10 @@ from typer.testing import CliRunner
 
 import adaf_attack.capabilities  # noqa: F401  # register capabilities
 from adaf_attack.cli import _doctor_payload, app
+from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import capability_registry
 from adaf_attack.core.standout_ux import session_timeline
-from adaf_attack.core.ux import operator_capability_contract
+from adaf_attack.core.ux import destructive_confirmation_copy, operator_capability_contract
 from adaf_attack.demo import materialize_demo_session
 from adaf_attack.tui.app import ADAFAttackApp
 
@@ -45,6 +46,10 @@ def test_operator_capability_contract_covers_help_fields() -> None:
     assert contract["evidence_produced"]
     assert contract["stages"]
     assert "session.json" in contract["evidence_produced"]
+    assert contract["rollback_command"].startswith("adaf-attack rollback")
+    assert "--force" in contract["rollback_command"]
+    assert "tickets" in contract["not_rolled_back"].lower()
+    assert contract["after_run_command"] == "adaf-attack what-next ldap-enum"
 
 
 def test_capability_help_and_explain_include_operator_contract() -> None:
@@ -159,5 +164,107 @@ def test_tui_surfaces_expose_shared_operator_contract_before_run() -> None:
                 assert "Required -P" in surface
                 assert "Evidence" in surface
                 assert "Stages" in surface
+
+    asyncio.run(exercise())
+
+
+def test_destructive_confirmation_includes_rollback_and_exclusions() -> None:
+    cap = capability_registry.get("dcsync")
+    assert cap is not None
+    copy = destructive_confirmation_copy(cap, domain="corp.example", dc_ip="10.0.0.10")
+    assert "DESTRUCTIVE dcsync" in copy
+    assert "corp.example" in copy
+    assert "adaf-attack rollback" in copy
+    assert "Not rolled back" in copy
+    assert "tickets" in copy.lower()
+    assert "cleanup.json" in copy
+
+
+def test_plan_dcsync_includes_not_rolled_back() -> None:
+    plan = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "plan",
+                "dcsync",
+                "-d",
+                "corp.example",
+                "--dc-ip",
+                "10.0.0.10",
+            ],
+        )
+    )
+    assert plan["suggested_command"] == plan["next_step"]
+    assert "adaf-attack run dcsync" in plan["next_step"]
+    assert plan["rollback_command"].startswith("adaf-attack rollback")
+    assert "tickets" in plan["not_rolled_back"].lower()
+    assert plan["after_run_command"] == "adaf-attack what-next dcsync"
+    assert plan["next_step"] != plan["after_run_command"]
+
+
+def test_empty_sessions_names_guide_suggested_command(tmp_path: Path) -> None:
+    guide = _json(runner.invoke(app, ["--format", "json", "guide", "--workspace", str(tmp_path)]))
+    sessions = _json(
+        runner.invoke(app, ["--format", "json", "sessions", "--workspace", str(tmp_path)])
+    )
+    assert sessions["ok"] is True
+    assert sessions["sessions"] == []
+    assert sessions["empty_state"]["next_command"] == guide["suggested_command"]
+    assert sessions["suggested_command"] == guide["suggested_command"]
+
+
+def test_empty_session_show_names_guide_next(tmp_path: Path) -> None:
+    session = tmp_path / "empty-session"
+    session.mkdir()
+    (session / "session.json").write_text(
+        json.dumps({"session_id": "empty-session"}),
+        encoding="utf-8",
+    )
+    shown = _json(
+        runner.invoke(
+            app,
+            ["--format", "json", "session", "show", "--session", str(session)],
+        )
+    )
+    guide = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "guide",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    assert shown["finding_count"] == 0
+    assert shown["empty_state"]["next_command"] == guide["suggested_command"]
+
+
+def test_empty_rank_paths_names_guide_next(tmp_path: Path) -> None:
+    graph = tmp_path / "graph.json"
+    AttackGraph().save(graph)
+    ranked = _json(runner.invoke(app, ["--format", "json", "rank-paths", "--graph", str(graph)]))
+    guide = _json(runner.invoke(app, ["--format", "json", "guide"]))
+    assert ranked["count"] == 0
+    assert ranked["empty_state"]["next_command"] == guide["suggested_command"]
+
+
+def test_tui_empty_sessions_names_guide_next(tmp_path: Path) -> None:
+    async def exercise() -> None:
+        app = ADAFAttackApp(workspace=tmp_path)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app._show_sessions()
+            surface = str(app.query_one("#session-panel", Static).render())
+            assert "No sessions found." in surface
+            assert "Next:" in surface
+            journey = app._journey()
+            assert str(journey.get("suggested_command")) in surface
 
     asyncio.run(exercise())

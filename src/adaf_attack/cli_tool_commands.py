@@ -41,13 +41,23 @@ def register_tool_commands(
             )
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from exc
+        payload_out = {"ok": True, **payload}
+        extra = ""
+        if not payload.get("path_count"):
+            from adaf_attack.core.journey import empty_surface_guidance
+
+            empty = empty_surface_guidance("paths")
+            payload_out["empty_state"] = empty
+            payload_out["next_step"] = empty["next_command"]
+            payload_out["suggested_command"] = empty["next_command"]
+            extra = f"\nNext: {empty['next_command']}"
         emit(
             ctx,
-            {"ok": True, **payload},
+            payload_out,
             Panel(
                 f"Nodes: {payload['summary'].get('nodes', 0)}\n"
                 f"Edges: {payload['summary'].get('edges', 0)}\n"
-                f"Ranked paths: {payload['path_count']}\nOffline: yes",
+                f"Ranked paths: {payload['path_count']}\nOffline: yes{extra}",
                 title="Graph explorer",
             ),
         )

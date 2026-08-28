@@ -4,8 +4,9 @@ The product layer turns saved evidence into polished operator and client workflo
 
 - `guide` is the authoritative next-step command for the full operator journey
   (install → offline first success → authorize → operate → report → closeout).
-  CLI and TUI share `core.journey.snapshot()`. `tour` and `home` orient against
-  the default workspace only; custom workspaces use `guide --workspace …`.
+  CLI and TUI share `core.journey.snapshot()`. `tour`, `home`, `help-me`,
+  `what-next`, and `workflow next` accept the same `--workspace` / `--session`
+  as `guide` and emit the same `suggested_command`.
 - `command-center` is the mission-control view.
 - `impact-map` connects evidence to findings, assets, and impact.
 - `investigate` provides zero-noise, read-only evidence review.
@@ -14,6 +15,12 @@ The product layer turns saved evidence into polished operator and client workflo
 - `confidence` identifies conclusions that need more evidence.
 - `product-templates` lists repeatable assessment patterns.
 - `deliverables` shows report and evidence-package readiness.
+- Empty `sessions`, session findings, and graph surfaces name the same
+  `suggested_command` `guide` would print, so operators are never dumped.
+- Destructive confirmation quotes the rollback command and what is
+  Not rolled back (tickets, hashes, captured secrets, detection telemetry).
+- `plan`, `run`, `explain`, `capability-help`, and the TUI review panel share
+  risk, approvals, rollback implication, evidence produced, and the next command.
 
 The finding-driven `workflow` command group remains the durable spine for
 scoping through closure; `guide` and `workflow next` emit the same copy-ready

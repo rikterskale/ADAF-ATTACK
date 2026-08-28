@@ -155,8 +155,17 @@ def operator_approvals(cap: Capability) -> list[str]:
     return approvals
 
 
+ROLLBACK_COMMAND_TEMPLATE = (
+    "adaf-attack rollback --session <session> --domain <domain> --dc-ip <dc-ip> --force"
+)
+NOT_ROLLED_BACK = (
+    "Tickets, hashes, captured secrets, and detection telemetry are not reversed. "
+    "Automatic rollback only reverses mutations recorded in session cleanup.json."
+)
+
+
 def operator_rollback_contract(cap: Capability) -> dict[str, str]:
-    """Return rollback class and plain-language implication for operators."""
+    """Return rollback class, implication, command, and exclusions for operators."""
     safety = cap.safety
     rollback = safety.rollback.value if safety is not None else "manual"
     if rollback == "automatic":
@@ -168,7 +177,34 @@ def operator_rollback_contract(cap: Capability) -> dict[str, str]:
         implication = "Operator must verify and reverse residual effects on the authorized target."
     else:
         implication = "No automatic rollback; treat as read/observe or advisory."
-    return {"rollback": rollback, "rollback_implication": implication}
+    return {
+        "rollback": rollback,
+        "rollback_implication": implication,
+        "rollback_command": ROLLBACK_COMMAND_TEMPLATE,
+        "not_rolled_back": NOT_ROLLED_BACK,
+    }
+
+
+def destructive_confirmation_copy(
+    cap: Capability,
+    *,
+    domain: str,
+    dc_ip: str,
+) -> str:
+    """Operator-facing destructive confirmation, including rollback exclusions."""
+    rollback = operator_rollback_contract(cap)
+    risk = (
+        str(cap.safety.risk.value).upper()
+        if cap.safety
+        else ("DESTRUCTIVE" if cap.destructive else "OBSERVE")
+    )
+    return (
+        f"DESTRUCTIVE {cap.id} against {domain} @ {dc_ip}\n"
+        f"This may modify the target. Risk: {risk}. "
+        "Re-run with --yes to skip this prompt.\n"
+        f"Rollback command: {rollback['rollback_command']}\n"
+        f"Not rolled back: {rollback['not_rolled_back']}"
+    )
 
 
 def operator_capability_contract(cap: Capability) -> dict[str, Any]:
@@ -205,6 +241,8 @@ def operator_capability_contract(cap: Capability) -> dict[str, Any]:
         "approvals": operator_approvals(cap),
         "rollback": rollback["rollback"],
         "rollback_implication": rollback["rollback_implication"],
+        "rollback_command": rollback["rollback_command"],
+        "not_rolled_back": rollback["not_rolled_back"],
         "required_options": list(spec.required),
         "optional_options": list(spec.optional),
         "required_params": required_params,
@@ -217,6 +255,7 @@ def operator_capability_contract(cap: Capability) -> dict[str, Any]:
             force=cap.requires_force,
             include_required_placeholders=True,
         ),
+        "after_run_command": f"adaf-attack what-next {cap.id}",
     }
 
 
@@ -783,12 +822,15 @@ from adaf_attack.core.ux_extra import (  # noqa: E402  # intentional late re-exp
 )
 
 __all__ = [
+    "NOT_ROLLED_BACK",
     "PHASE_LABELS",
+    "ROLLBACK_COMMAND_TEMPLATE",
     "advance_stage_from_log",
     "build_ready_command",
     "capability_dependency_graph",
     "capability_phase",
     "capability_prerequisites",
+    "destructive_confirmation_copy",
     "diff_sessions",
     "evaluate_prerequisites",
     "export_plan_markdown",

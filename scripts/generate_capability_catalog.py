@@ -27,7 +27,7 @@ script (CI enforces parity).
 
 def _rows() -> list[str]:
     import adaf_attack.capabilities  # noqa: F401  - registers capabilities
-    from adaf_attack.core.registry import capability_registry
+    from adaf_attack.core.registry import capability_registry, infer_environment
 
     lines: list[str] = []
     for cap_id in sorted(capability_registry.ids()):
@@ -50,7 +50,13 @@ def _rows() -> list[str]:
         difficulty = getattr(cap, "difficulty", "-") or "-"
         category = getattr(cap, "category", "-") or "-"
         maturity = getattr(cap, "maturity", "implemented") or "implemented"
-        environment = getattr(cap, "environment", "unknown") or "unknown"
+        environment = infer_environment(
+            environment=getattr(cap, "environment", "unknown") or "unknown",
+            destructive=cap.destructive,
+            category=category,
+            tags=tuple(getattr(cap, "tags", ()) or ()),
+            safety=safety,
+        )
         tools = ", ".join(getattr(cap, "tools", ()) or ()) or "-"
         fixture = getattr(cap, "fixture", None) or "-"
         lines.append(

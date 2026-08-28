@@ -50,6 +50,16 @@ PowerShell and POSIX rendering, artifact-level recommendation evidence, every
 guided CLI surface, all four TUI journey panels, clipboard failure, invalid
 session recovery, and corrupt workflow-state recovery.
 
+Phase 3 packaging honesty / Phase 4 proof extras:
+
+- `RELEASE.md` must not claim overall 10/10 while
+  `RELEASE_EVIDENCE_0.10.1.md` records uncaptured MANUAL evidence.
+- Generated `CAPABILITY_CATALOG.md` Environment cells are never `unknown`.
+- `docs/VENDOR_SCORECARD.md` carries the same first-ten canon fence as README.
+- `tests/test_phase4_vendor_proof.py` locks guide parity, stage contracts,
+  catalog environments, empty-surface next commands, and destructive confirm
+  copy.
+
 Phase 2 self-explain extras:
 
 - Every doctor check includes remediation/repair text (keep-healthy for `ok`).

@@ -13,11 +13,18 @@ also includes the unquoted `command_argv` and its `shell` dialect so automation
 does not need to parse a rendered command string.
 
 `guide`, `what-next`, and `workflow next` share one journey document. Every
-recommended action includes a redacted `evidence_basis` containing workflow,
-finding, or durable artifact references; no secret evidence values are copied
-into guidance. An invalid explicit `--session` fails with `SESSION_NOT_FOUND`,
-shows `adaf-attack sessions --limit 10`, and preserves a guide recovery command
-that omits the invalid session.
+stage includes entry criteria, exit criteria, a copy-ready `suggested_command`,
+a fallback, and a blocked-because / waiting-on reason. Every recommended action
+includes a redacted `evidence_basis` containing workflow, finding, or durable
+artifact references; no secret evidence values are copied into guidance. An
+invalid explicit `--session` fails with `SESSION_NOT_FOUND`, shows
+`adaf-attack sessions --limit 10`, and preserves a guide recovery command that
+omits the invalid session. Failed commands print `When lost: adaf-attack guide`
+(with workspace/session when known). Self-explaining surfaces: `plan`,
+`explain`, `capability-help`, and TUI review show risk, approvals, rollback
+implication, evidence produced, and the next command. Empty sessions, findings,
+and graph views name the same next command as `guide`. Destructive confirmation
+includes the rollback command and what is not rolled back.
 
 | Command | Surface |
 |---|---|

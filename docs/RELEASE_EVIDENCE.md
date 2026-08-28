@@ -11,6 +11,11 @@ Published facts for the `v0.10.1` private cut are retained in
 [RELEASE_EVIDENCE_0.10.1.md](RELEASE_EVIDENCE_0.10.1.md). That record explicitly
 separates automated proof from manual evidence that was not captured.
 
+Do **not** claim an overall 10/10 score from automated CI or from
+`RELEASE_EVIDENCE_0.10.1.md` alone. A 10 requires this pack completed for the
+candidate, including stranger first-ten, air-gap transfer, and the
+narrow-terminal TUI spot-check.
+
 ```text
 Version: __________
 Release manager: __________

@@ -125,6 +125,40 @@ def default_safety_profile(destructive: bool) -> SafetyProfile:
     return SafetyProfile()
 
 
+KNOWN_ENVIRONMENTS = frozenset({"offline", "live-read-only", "live-mutating"})
+_OFFLINE_CATEGORIES = frozenset({"analysis", "export"})
+
+
+def infer_environment(
+    *,
+    environment: str = "unknown",
+    destructive: bool = False,
+    category: str = "general",
+    tags: tuple[str, ...] = (),
+    safety: SafetyProfile | None = None,
+) -> str:
+    """Resolve operator-facing environment when registration omits it.
+
+    ``unknown`` is not a catalog value. Infer from safety and category so the
+    generated capability catalog never ships blank Environment cells.
+    """
+    if environment in KNOWN_ENVIRONMENTS:
+        return environment
+    if destructive or (
+        safety is not None
+        and (
+            safety.modifies_directory
+            or safety.network_side_effect
+            or safety.requires_force
+            or safety.risk in {RiskLevel.DESTRUCTIVE, RiskLevel.SIDE_EFFECT}
+        )
+    ):
+        return "live-mutating"
+    if category in _OFFLINE_CATEGORIES or "vault" in tags:
+        return "offline"
+    return "live-read-only"
+
+
 @dataclass(frozen=True)
 class Capability:
     id: str
@@ -146,6 +180,15 @@ class Capability:
             # Keep legacy callers and downstream documentation in sync with
             # explicit profiles. The profile remains the source of truth.
             object.__setattr__(self, "destructive", True)
+        resolved = infer_environment(
+            environment=self.environment,
+            destructive=self.destructive,
+            category=self.category,
+            tags=self.tags,
+            safety=self.safety,
+        )
+        if resolved != self.environment:
+            object.__setattr__(self, "environment", resolved)
 
     @property
     def requires_force(self) -> bool:

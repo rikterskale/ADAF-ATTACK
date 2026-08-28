@@ -97,7 +97,11 @@ Published artifact smoke: PASS / FAIL / NOT YET PUBLISHED
 Also record the candidate hashes, `release-manifest.json`,
 `requirements-operator.txt`, and supported OS/Python matrix.
 
-Private cut `v0.10.1` records overall **10/10** with completed MANUAL evidence
-and published-artifact-smoke green (see
-[docs/VENDOR_SCORECARD.md](docs/VENDOR_SCORECARD.md)). Future cuts must refill
-[docs/RELEASE_EVIDENCE.md](docs/RELEASE_EVIDENCE.md) before claiming 10 again.
+Private cut `v0.10.1` records published-artifact-smoke **green** and an overall
+**~9.3** on [docs/VENDOR_SCORECARD.md](docs/VENDOR_SCORECARD.md). Manual
+first-ten identity/notes, organization air-gap transfer, and the release-time
+narrow-terminal TUI spot-check were **not** captured in
+[docs/RELEASE_EVIDENCE_0.10.1.md](docs/RELEASE_EVIDENCE_0.10.1.md). Do **not**
+claim 10/10 until a completed
+[docs/RELEASE_EVIDENCE.md](docs/RELEASE_EVIDENCE.md) pack is attached to the
+private release record.

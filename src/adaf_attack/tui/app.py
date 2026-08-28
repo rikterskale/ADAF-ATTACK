@@ -34,6 +34,7 @@ from adaf_attack.core.capability_help_data import capability_option_spec
 from adaf_attack.core.control_plane import package_evidence
 from adaf_attack.core.engagement_dashboard import MODES, inspect_edge
 from adaf_attack.core.journey import (
+    empty_surface_guidance,
     guide_recovery_command,
     import_session_findings,
     journey_evidence_summary,
@@ -216,6 +217,26 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if self._workspace_override is not None:
             return self._workspace_override
         return default_workspace_dir()
+
+    def _empty_surface_text(
+        self,
+        kind: str,
+        heading: str,
+        *,
+        session: Path | None = None,
+        message: str | None = None,
+    ) -> str:
+        """Empty-state copy that names the same next command as CLI guide."""
+        target = session if session is not None else self._last_session
+        journey = self._journey(session=target)
+        empty = empty_surface_guidance(
+            kind,
+            workspace=self._workspace,
+            session=target,
+            document=journey,
+            message=message,
+        )
+        return f"{heading}\n{empty['message']}\nNext: {empty['next_command']}"
 
     def _journey(self, *, session: Path | None = None) -> dict[str, Any]:
         """Shared journey snapshot so TUI Cmd matches CLI guide.
@@ -796,6 +817,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             contract_text = (
                 f"\nSelected contract: Risk {contract['risk']} · Approvals: {approvals}"
                 f"\nRollback: {contract['rollback_implication']}"
+                f"\nRollback command: {contract['rollback_command']}"
+                f"\nNot rolled back: {contract['not_rolled_back']}"
                 f"\nRequired -P: {params}"
                 f"\nBest run after: {best_after}"
                 f"\nProduces evidence for: {produces_for}"
@@ -1183,6 +1206,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Safety: {safety_summary(cap)['level']} — {plain_description(cap)}\n"
             f"Risk: {contract['risk']}  |  Approvals: {approvals}\n"
             f"Rollback: {contract['rollback_implication']}\n"
+            f"Rollback command: {contract['rollback_command']}\n"
+            f"Not rolled back: {contract['not_rolled_back']}\n"
             f"Required: {required}\nRequired -P: {params}\nOptional: {optional}\n"
             f"Best run after: {best_after}\nProduces evidence for: {produces_for}\n"
             f"Evidence: {', '.join(contract['evidence_produced'])}\n"
@@ -1578,9 +1603,18 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             return
         findings = self._read_json(self._last_session / "findings.json").get("findings") or []
         explanations = [explain_finding(item) for item in findings if isinstance(item, dict)]
+        if explanations:
+            self.query_one("#session-panel", Static).update(
+                "[bold]Finding explanations[/bold]\n" + "\n".join(explanations)
+            )
+            return
         self.query_one("#session-panel", Static).update(
-            "[bold]Finding explanations[/bold]\n"
-            + ("\n".join(explanations) or "No findings to explain.")
+            self._empty_surface_text(
+                "explain",
+                "[bold]Finding explanations[/bold]",
+                session=self._last_session,
+                message="No findings to explain.",
+            )
         )
 
     def action_jump_to_error(self) -> None:
@@ -1672,6 +1706,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Target: {target[0]} @ {target[1]}\nCategory: {cap.category}  |  Risk: {risk}\n"
             f"Approvals: {approvals}\n"
             f"Rollback: {contract['rollback_implication']}\n"
+            f"Rollback command: {contract['rollback_command']}\n"
+            f"Not rolled back: {contract['not_rolled_back']}\n"
             f"Required contract: {', '.join(spec.required) or 'session/workspace input'}\n"
             f"Required -P: {params}\n"
             f"Best run after: {best_after}\n"
@@ -1680,6 +1716,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Stages: {stages}\n"
             f"Opsec: {active_opsec().upper()} — {checklist['opsec_hint']}\n"
             f"Ready command: [dim]{command}[/]\n"
+            f"After run: {contract['after_run_command']}\n"
             "Check required items, then acknowledge the review."
         )
         self._update_run_gate()
@@ -2010,8 +2047,17 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     f"{meta.get('session_id', session.name)}  {meta.get('created_at', '')[:19]}  "
                     f"findings:{sum(severity.values())} [{heat}]"
                 )
+        if rows:
+            self.query_one("#session-panel", Static).update(
+                "[bold]Recent sessions[/bold]\n" + "\n".join(rows[:8])
+            )
+            return
         self.query_one("#session-panel", Static).update(
-            "[bold]Recent sessions[/bold]\n" + ("\n".join(rows[:8]) or "No sessions found.")
+            self._empty_surface_text(
+                "sessions",
+                "[bold]Recent sessions[/bold]",
+                message="No sessions found.",
+            )
         )
 
     def _show_session_comparison(self) -> None:
@@ -2126,7 +2172,11 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             self._load_findings(self._last_session)
         else:
             self.query_one("#session-panel", Static).update(
-                "[bold]Findings dashboard[/bold]\nRun a capability or select a session first."
+                self._empty_surface_text(
+                    "no_session",
+                    "[bold]Findings dashboard[/bold]",
+                    message="Run a capability or select a session first.",
+                )
             )
 
     def _show_cockpit(self) -> None:
@@ -2147,16 +2197,23 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if not self._last_session:
             self._clear_attack_edges()
             panel.update(
-                "[bold]Attack-path workspace[/bold]\n"
-                "Complete or select a session with saved graph evidence first."
+                self._empty_surface_text(
+                    "no_session",
+                    "[bold]Attack-path workspace[/bold]",
+                    message="Complete or select a session with saved graph evidence first.",
+                )
             )
             return
         graph_path = self._last_session / "graph.json"
         if not graph_path.is_file():
             self._clear_attack_edges()
             panel.update(
-                f"[bold]Attack-path workspace[/bold]  {self._last_session.name}\n"
-                "No graph.json evidence is available for this session."
+                self._empty_surface_text(
+                    "graph",
+                    f"[bold]Attack-path workspace[/bold]  {self._last_session.name}",
+                    session=self._last_session,
+                    message="No graph.json evidence is available for this session.",
+                )
             )
             return
         try:
@@ -2175,7 +2232,15 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Ranked paths: {len(paths)} · Offline inspection only",
         ]
         if not paths:
-            lines.append("No ranked paths were found in the saved graph.")
+            empty = empty_surface_guidance(
+                "paths",
+                workspace=self._workspace,
+                session=self._last_session,
+                document=self._journey(session=self._last_session),
+                message="No ranked paths were found in the saved graph.",
+            )
+            lines.append(str(empty["message"]))
+            lines.append(f"Next: {empty['next_command']}")
         edges: list[dict[str, Any]] = []
         seen_edges: set[tuple[str, str, str]] = set()
         for number, path in enumerate(paths, start=1):
@@ -2399,7 +2464,16 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             f"Nodes: {summary.get('nodes', 0)}  Edges: {summary.get('edges', 0)}  "
             f"Findings: {dashboard.get('finding_count', 0)}  Severity: {severity_counts or 'none'}\n"
             f"Triage: {triage_counts or {'open': 0}}\n"
-            + ("Top paths:\n" + "\n".join(path_lines) if path_lines else "No top paths recorded.")
+            + (
+                "Top paths:\n" + "\n".join(path_lines)
+                if path_lines
+                else self._empty_surface_text(
+                    "top_paths",
+                    "",
+                    session=session,
+                    message="No top paths recorded.",
+                ).lstrip()
+            )
         )
 
     @staticmethod

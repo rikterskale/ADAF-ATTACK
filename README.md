@@ -663,7 +663,8 @@ when controlled-computer credentials are supplied
 those credentials it still writes a scoped playbook handoff. Both workflows
 log their artifacts and decisions in the session.
 
-The force-gated `unconst-tgtdump-workflow` (Kerberos section) hunts
+After `adaf-attack guide` (not first-ten) and `--force` / approval, the
+force-gated `unconst-tgtdump-workflow` (Kerberos section) hunts
 unconstrained-delegation hosts and coerces a machine authentication. With
 `-P capture=true` it also runs an in-process AP-REQ listener that harvests the
 coerced machine's TGT into `<session>/captured/*.kirbi` (tune with

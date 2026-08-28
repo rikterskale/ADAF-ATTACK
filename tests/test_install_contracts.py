@@ -23,6 +23,15 @@ def _load_release_readiness_script() -> ModuleType:
     return module
 
 
+def test_release_docs_do_not_claim_overall_ten() -> None:
+    release = (ROOT / "RELEASE.md").read_text(encoding="utf-8")
+    assert "overall **10/10**" not in release
+    published = (ROOT / "docs" / "RELEASE_EVIDENCE_0.10.1.md").read_text(encoding="utf-8")
+    assert "Manual evidence not captured" in published
+    template = (ROOT / "docs" / "RELEASE_EVIDENCE.md").read_text(encoding="utf-8")
+    assert "Do **not** claim an overall 10/10" in template
+
+
 def test_install_and_documentation_contracts() -> None:
     result = subprocess.run(
         [sys.executable, "scripts/check_install_contracts.py"],

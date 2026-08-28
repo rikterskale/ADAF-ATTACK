@@ -76,6 +76,8 @@ def test_journey_first_success_without_demo(tmp_path: Path, monkeypatch) -> None
     assert payload["primary_action"]["recovery_command"].startswith("adaf-attack guide")
     assert payload["entry_criteria"]
     assert payload["exit_criteria"]
+    assert payload["fallback"]
+    assert payload["blocked_because"]
     assert payload["ok"] is True
 
 
@@ -120,6 +122,10 @@ def test_journey_install_blocked(tmp_path: Path) -> None:
     assert payload["ok"] is False
     assert payload["primary_action"]["id"] == "repair-install"
     assert "doctor" in payload["primary_action"]["suggested_command"]
+    assert payload["blocked_because"]
+    assert payload["fallback"]
+    assert payload["entry_criteria"]
+    assert payload["exit_criteria"]
 
 
 def test_journey_operates_from_workflow(tmp_path: Path) -> None:
@@ -669,3 +675,78 @@ def test_corrupt_workflow_state_precedes_advance_guard(tmp_path: Path, monkeypat
     assert result.exit_code != 0
     assert "WORKFLOW_STATE_INVALID" in result.output
     assert "GUIDE_ADVANCE_UNSAFE" not in result.output
+
+
+def _assert_omniscient(payload: dict[str, Any]) -> None:
+    assert payload["stage"] in journey.STAGE_LABELS
+    assert payload["stage_label"] == journey.STAGE_LABELS[payload["stage"]]
+    assert payload["entry_criteria"]
+    assert payload["exit_criteria"]
+    assert payload["fallback"]
+    assert payload["suggested_command"]
+    assert payload["recovery_command"].startswith("adaf-attack guide")
+    assert payload["blocked_because"]
+    summary = "\n".join(journey.journey_summary_lines(payload))
+    assert payload["suggested_command"] in summary
+    if payload["stage"] != "complete":
+        assert ("Blocked because:" in summary) or ("Waiting on:" in summary)
+
+
+def test_every_stage_table_is_omniscient() -> None:
+    labels = set(journey.STAGE_LABELS)
+    assert labels == set(journey.STAGE_CRITERIA)
+    assert labels == set(journey.STAGE_FALLBACKS)
+    assert labels == set(journey.STAGE_BLOCKED_BECAUSE)
+    for stage in labels:
+        criteria = journey.STAGE_CRITERIA[stage]
+        assert criteria["entry"]
+        assert criteria["exit"]
+        assert journey.STAGE_FALLBACKS[stage].startswith("adaf-attack")
+        assert journey.STAGE_BLOCKED_BECAUSE[stage]
+
+
+def test_guide_snapshots_are_omniscient_across_stages(tmp_path: Path) -> None:
+    doctor_ok = {"ok": True, "checks": []}
+    first = journey.snapshot(workspace=tmp_path, doctor=doctor_ok)
+    assert first["stage"] == "first-success"
+    _assert_omniscient(first)
+
+    blocked = journey.snapshot(
+        workspace=tmp_path,
+        doctor={
+            "ok": False,
+            "checks": [
+                {
+                    "id": "packaged-demo",
+                    "status": "error",
+                    "detail": "missing",
+                    "remediation": "Reinstall.",
+                }
+            ],
+        },
+    )
+    assert blocked["stage"] == "install-blocked"
+    _assert_omniscient(blocked)
+
+    missing = tmp_path / "missing-session"
+    session_blocked = journey.snapshot(workspace=tmp_path, session=missing, doctor=doctor_ok)
+    assert session_blocked["stage"] == "session-blocked"
+    _assert_omniscient(session_blocked)
+
+    session = tmp_path / "demo-session"
+    materialize_demo_session(session)
+    orient = journey.snapshot(workspace=tmp_path, session=session, doctor=doctor_ok)
+    assert orient["stage"] == "orient"
+    _assert_omniscient(orient)
+
+    engine = WorkflowEngine(tmp_path)
+    engine.start(actor="test")
+    engine.complete_action("authorize-scope", actor="test")
+    discover = journey.snapshot(workspace=tmp_path, session=session, doctor=doctor_ok)
+    assert discover["stage"] in {"discover", "operate"}
+    _assert_omniscient(discover)
+
+    journey.import_session_findings(tmp_path, session, actor="test")
+    operate = journey.snapshot(workspace=tmp_path, session=session, doctor=doctor_ok)
+    assert operate["stage"] in {"operate", "deliver", "discover"}
+    _assert_omniscient(operate)
