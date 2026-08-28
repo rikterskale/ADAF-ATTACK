@@ -53,7 +53,10 @@ also proven by the full source matrix.
       kali-installer; scripts]**
 - [ ] Latest/specified published wheel and release manifest install from the
       private GitHub release channel on three OS families. **[CI:
-      published-artifact-smoke, once a release asset exists]**
+      published-artifact-smoke, once a release asset exists]** The release
+      evidence workflow generates manifest, provenance, checksum, and SBOM
+      assets from the exact published distributions; smoke starts after that
+      workflow succeeds and tolerates brief release-API propagation delay.
 - [ ] Record the first successful published-artifact workflow for the candidate.
       **[MANUAL]** No current source branch can prove an asset has already been
       published.
@@ -139,4 +142,6 @@ release record with artifact hashes.
    The wheelhouse *build + offline install recipe* is documented and
    contract-tested; CI cannot reproduce each customer's media controls.
 2. Published-artifact proof still requires a private release asset plus the
-   scheduled/manual workflow (**[MANUAL]** until first successful publish).
+   scheduled/manual workflow. The `v0.10.1` proof is recorded in
+   [RELEASE_EVIDENCE_0.10.1.md](RELEASE_EVIDENCE_0.10.1.md); every later
+   candidate requires a fresh successful run and evidence record.

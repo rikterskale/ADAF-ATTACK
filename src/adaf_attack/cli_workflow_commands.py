@@ -76,7 +76,12 @@ def register_workflow_commands(
         )
         engine_limit = max(limit, 1)
         engine_recs = [
-            enrich_action(action, session=session, workspace=workspace)
+            enrich_action(
+                action,
+                session=session,
+                workspace=workspace,
+                findings=engine.state.findings,
+            )
             for action in engine.recommendations(limit=engine_limit)
         ]
         aligned: list[dict[str, Any]] = []
@@ -249,36 +254,56 @@ def register_workflow_commands(
         from adaf_attack.core.journey import guide_recovery_command, snapshot
 
         journey = snapshot(workspace=root, session=session_hint, doctor=_doctor())
+        effective_session_value = (journey.get("context") or {}).get("session_hint")
+        effective_session = Path(str(effective_session_value)) if effective_session_value else None
         primary = str(
             journey.get("suggested_command") or journey["primary_action"]["suggested_command"]
         )
         recs = _aligned_recommendations(
             journey,
             engine,
-            session=session_hint,
+            session=effective_session,
             workspace=root,
             limit=max(0, limit),
         )
         payload = {
-            "ok": True,
+            "ok": bool(journey.get("ok")),
             "count": len(recs),
             "recommendations": recs,
             "next_step": primary,
             "suggested_command": primary,
-            "recovery_command": guide_recovery_command(workspace=root, session=session_hint),
+            "recovery_command": journey.get("recovery_command")
+            or guide_recovery_command(workspace=root, session=effective_session),
             "journey_stage": journey.get("stage"),
             "primary_action": journey.get("primary_action"),
         }
+        if journey.get("error"):
+            payload["error"] = journey["error"]
         table = Table(title="Ranked next actions")
         table.add_column("Action")
         table.add_column("Kind")
+        table.add_column("Evidence basis")
         table.add_column("Copy-ready command")
+        from adaf_attack.core.journey import journey_evidence_summary
+
         for a in recs:
             kind = "journey" if a.get("suggested_command") == primary else a.get("kind", "-")
-            table.add_row(str(a.get("id")), str(kind), str(a.get("suggested_command")))
+            table.add_row(
+                str(a.get("id")),
+                str(kind),
+                journey_evidence_summary(a),
+                str(a.get("suggested_command")),
+            )
         if not recs and journey.get("stage") not in {"first-success", "install-blocked"}:
-            table.add_row("(none)", "-", "No engine action pending; follow the journey command.")
+            table.add_row(
+                "(none)",
+                "-",
+                "workflow-state",
+                "No engine action pending; follow the journey command.",
+            )
         emit(ctx, payload, table)
+        if not payload["ok"]:
+            raise typer.Exit(code=1)
 
     @workflow_app.command("snapshot")
     def workflow_snapshot(

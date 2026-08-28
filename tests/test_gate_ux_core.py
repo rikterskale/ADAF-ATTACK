@@ -62,7 +62,10 @@ def test_what_next_with_capability_context() -> None:
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
-    assert payload["context"] == "ldap-enum"
+    assert payload["context"] == "journey"
+    assert payload["completed_capability"] == "ldap-enum"
+    assert payload["suggested_command"] == payload["journey"]["suggested_command"]
+    assert payload["recovery_command"] == payload["journey"]["recovery_command"]
     for item in payload["suggestions"]:
         follow_cap = item["id"]
         assert follow_cap != ""

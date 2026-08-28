@@ -8,12 +8,12 @@ opsec indicators.
 from __future__ import annotations
 
 import json
-import shlex
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, cast
 
 from adaf_attack.core.capability_help_data import capability_option_spec
+from adaf_attack.core.command_templates import render_command
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.registry import Capability, capability_registry
 
@@ -242,13 +242,37 @@ def build_ready_command(
     clear placeholders (``--set-on <set-on>``, ``-P sam=<user>``, etc.) so
     ``capability-help``, ``plan``, and TUI copy-ready commands stay complete.
     """
+    return render_command(
+        build_ready_argv(
+            capability_id,
+            domain=domain,
+            dc_ip=dc_ip,
+            username=username,
+            force=force,
+            extra=extra,
+            include_required_placeholders=include_required_placeholders,
+        )
+    )
+
+
+def build_ready_argv(
+    capability_id: str,
+    *,
+    domain: str | None = None,
+    dc_ip: str | None = None,
+    username: str | None = None,
+    force: bool = False,
+    extra: dict[str, str] | None = None,
+    include_required_placeholders: bool = True,
+) -> list[str]:
+    """Build the unquoted argument vector behind a copy-ready command."""
     parts = ["adaf-attack", "run", capability_id]
     if domain:
-        parts.extend(["--domain", shlex.quote(domain)])
+        parts.extend(["--domain", domain])
     if dc_ip:
-        parts.extend(["--dc-ip", shlex.quote(dc_ip)])
+        parts.extend(["--dc-ip", dc_ip])
     if username:
-        parts.extend(["--username", shlex.quote(username)])
+        parts.extend(["--username", username])
     if force:
         parts.append("--force")
 
@@ -277,7 +301,7 @@ def build_ready_command(
                 if key in provided_params:
                     continue
                 placeholder = f"{key}={sample or 'VALUE'}"
-                parts.extend(["-P", shlex.quote(placeholder)])
+                parts.extend(["-P", placeholder])
                 provided_params.add(key)
                 continue
             if option.startswith("--"):
@@ -286,13 +310,13 @@ def build_ready_command(
                     continue
                 # Capability-specific flags (--set-on, --sam, ...) get placeholders.
                 name = flag.lstrip("-").replace("-", "_")
-                parts.extend([flag, shlex.quote(f"<{name}>")])
+                parts.extend([flag, f"<{name}>"])
                 emitted_flags.add(flag)
 
     if extra:
         for key, value in extra.items():
-            parts.extend(["-P", shlex.quote(f"{key}={value}")])
-    return " ".join(parts)
+            parts.extend(["-P", f"{key}={value}"])
+    return parts
 
 
 # ---------------------------------------------------------------------------

@@ -231,6 +231,10 @@ def _check_published_workflow() -> None:
         re.search(r"(?m)^\s+workflow_dispatch:", text) is not None,
         f"{path.name}: missing workflow_dispatch",
     )
+    _require(
+        'workflows: ["Attach release evidence"]' in text,
+        f"{path.name}: must run after release evidence is attached",
+    )
     _require("gh release download" in text, f"{path.name}: must download GitHub release assets")
     _require(
         "scripts/smoke_distribution.py" in text,
@@ -240,6 +244,35 @@ def _check_published_workflow() -> None:
         "release-manifest.json" in text,
         f"{path.name}: must validate the published release manifest",
     )
+    _require(
+        "Waiting for release assets" in text and "sleep 10" in text,
+        f"{path.name}: must wait for manifest/provenance assets attached after publication",
+    )
+    attach = (ROOT / ".github" / "workflows" / "attach-release-artifacts.yml").read_text(
+        encoding="utf-8"
+    )
+    for token in (
+        "gh release download",
+        "generate_release_manifest.py",
+        "generate_release_provenance.py",
+        "SHA256SUMS",
+        "gh release upload",
+        "actions/upload-artifact@",
+        "release-tag.txt",
+    ):
+        _require(
+            token in attach,
+            f"attach-release-artifacts.yml must produce published evidence: {token}",
+        )
+    for token in (
+        "actions/download-artifact@",
+        "github.event.workflow_run.id",
+        "release-smoke-target/release-tag.txt",
+    ):
+        _require(
+            token in text,
+            f"{path.name}: must use the exact release tag from the attachment run: {token}",
+        )
 
 
 def _markdown_files() -> list[Path]:
@@ -281,6 +314,7 @@ def _check_docs() -> None:
         "docs/KNOWN_LIMITATIONS.md",
         "docs/RELEASE_READINESS.md",
         "docs/RELEASE_EVIDENCE.md",
+        "docs/RELEASE_EVIDENCE_0.10.1.md",
         "docs/VENDOR_SCORECARD.md",
         "docs/USER_READINESS.md",
         "docs/FEATURE_MATRIX.md",
@@ -463,6 +497,17 @@ def _check_release_evidence_template() -> None:
         "Signer / attestor",
     ):
         _require(token in text, f"RELEASE_EVIDENCE.md missing required token {token!r}")
+    published = (ROOT / "docs" / "RELEASE_EVIDENCE_0.10.1.md").read_text(encoding="utf-8")
+    for token in (
+        "7e5bbc74c48dca50277e92f59535dcb8cc4ee192",
+        "33112303284",
+        "fffe417db5beadb7237f29c423c00a3f7ad65854d32dd0a7658c0075354a9b5f",
+        "Manual evidence not captured",
+    ):
+        _require(
+            token in published,
+            f"RELEASE_EVIDENCE_0.10.1.md missing published evidence token {token!r}",
+        )
     release_md = (ROOT / "RELEASE.md").read_text(encoding="utf-8")
     _require(
         "Release manager checklist" in release_md,

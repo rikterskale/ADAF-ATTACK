@@ -329,12 +329,16 @@ def register_tool_commands(
             )
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from exc
+        from adaf_attack.core.journey import journey_evidence_summary
+
         emit(
             ctx,
             payload,
             Panel(
                 "\n".join(
-                    f"{i + 1}. {item['action']} — {item['why']}\n   {item['command']}"
+                    f"{i + 1}. {item['action']} — {item['why']}\n"
+                    f"   Evidence: {journey_evidence_summary(item)}\n"
+                    f"   {item['command']}"
                     for i, item in enumerate(payload["recommendations"])
                 ),
                 title="Evidence copilot — suggestions only",

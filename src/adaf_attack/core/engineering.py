@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 import time
 from collections.abc import Callable, Iterable, Mapping
@@ -16,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from contextlib import closing
 from dataclasses import dataclass
-from importlib.metadata import entry_points
+from importlib.metadata import PackageNotFoundError, distribution, entry_points
 from pathlib import Path
 from threading import Lock
 from typing import Any, TypeVar
@@ -28,6 +29,50 @@ from adaf_attack.core.paths import ensure_dir
 SCHEMA_VERSION = 2
 PLUGIN_GROUP = "adaf_attack.capabilities"
 _PLUGIN_STATUS: list[dict[str, str]] = []
+
+
+def normalize_distribution_name(value: str) -> str:
+    """Normalize a Python distribution name for dependency comparisons."""
+    return re.sub(r"[-_.]+", "-", value).lower()
+
+
+def distribution_closure(root: str = "adaf-attack") -> set[str]:
+    """Return installed distributions reachable from one package."""
+    pending = [normalize_distribution_name(root)]
+    seen: set[str] = set()
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        try:
+            installed = distribution(name)
+        except PackageNotFoundError:
+            continue
+        for requirement in installed.requires or []:
+            match = re.match(r"\s*([A-Za-z0-9_.-]+)", requirement)
+            if match:
+                dependency = normalize_distribution_name(match.group(1))
+                if dependency not in seen:
+                    pending.append(dependency)
+    return seen
+
+
+def relevant_pip_failures(
+    output: str,
+    relevant: set[str] | None = None,
+) -> list[str]:
+    """Filter ``pip check`` output to the ADAF dependency closure."""
+    relevant_names = relevant if relevant is not None else distribution_closure()
+    failures: list[str] = []
+    for line in output.splitlines():
+        text = line.strip()
+        if not text or text == "No broken requirements found.":
+            continue
+        match = re.match(r"([A-Za-z0-9_.-]+)\b", text)
+        if match is None or normalize_distribution_name(match.group(1)) in relevant_names:
+            failures.append(text)
+    return failures
 
 
 class SessionContract(BaseModel):

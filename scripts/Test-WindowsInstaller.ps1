@@ -8,15 +8,29 @@ param(
     [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
 
     [Parameter(Mandatory = $false)]
+    [string]$Package,
+
+    [Parameter(Mandatory = $false)]
     [switch]$PreexistingConfig
 )
 
 $ErrorActionPreference = "Stop"
 $env:PYTHONUTF8 = "1"
 $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP "adaf-localappdata"
-$wheel = @(Get-ChildItem (Join-Path $RepoRoot "dist\*.whl"))
-if ($wheel.Count -ne 1) {
-    throw "Expected exactly one wheel, found $($wheel.Count)"
+if ($Package) {
+    $wheel = Get-Item (Resolve-Path $Package)
+} else {
+    $project = Get-Content (Join-Path $RepoRoot "pyproject.toml") -Raw
+    $versionMatch = [regex]::Match($project, '(?m)^version\s*=\s*"([^"]+)"')
+    if (-not $versionMatch.Success) {
+        throw "Could not resolve the project version from pyproject.toml"
+    }
+    $version = $versionMatch.Groups[1].Value
+    $candidates = @(Get-ChildItem (Join-Path $RepoRoot "dist\adaf_attack-$version-*.whl"))
+    if ($candidates.Count -ne 1) {
+        throw "Expected exactly one wheel for version $version, found $($candidates.Count)"
+    }
+    $wheel = $candidates[0]
 }
 
 $python = (Get-Command python).Source
@@ -35,7 +49,7 @@ if ($PreexistingConfig) {
 $installer = Join-Path $RepoRoot "scripts\Install-AdafAttack.ps1"
 & $installer `
     -RepoRoot $RepoRoot `
-    -Package $wheel[0].FullName `
+    -Package $wheel.FullName `
     -Extras base `
     -Python $python `
     -SkipCompletion
@@ -71,7 +85,7 @@ Set-Content $sentinel "operator data"
 # Re-running the installer is the supported in-place upgrade path.
 & $installer `
     -RepoRoot $RepoRoot `
-    -Package $wheel[0].FullName `
+    -Package $wheel.FullName `
     -Extras base `
     -Python $python `
     -SkipCompletion
@@ -102,7 +116,7 @@ if ($PreexistingConfig) {
 
 & $installer `
     -RepoRoot $RepoRoot `
-    -Package $wheel[0].FullName `
+    -Package $wheel.FullName `
     -Extras base `
     -Python $python `
     -SkipCompletion

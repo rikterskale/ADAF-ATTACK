@@ -8,8 +8,10 @@ destructive actions retain their existing `--force`, approval-token, and
 rollback requirements.
 
 Vendor scores after this UX pass are recorded in [VENDOR_SCORECARD.md](VENDOR_SCORECARD.md).
-**No row may ship below 9.** A row is **10** only with stranger MANUAL proof,
-CLI/TUI/docs agreement, a behavioral lock, and a productized failure path.
+**No row may ship below 9.** A row is **10** only with repeatable isolated
+new-operator proof, CLI/TUI/docs agreement, a behavioral lock, and a
+productized failure path. Manual evidence remains mandatory where release-host
+interaction cannot be automated.
 
 | # | Enhancement | CLI surface | TUI surface | Primary coverage | Score |
 |---:|---|---|---|---|---:|
@@ -18,17 +20,17 @@ CLI/TUI/docs agreement, a behavioral lock, and a productized failure path.
 | 3 | Kill-chain capability discovery | `list-capabilities --by-phase` | Phase-grouped capability list | `tests/test_ux_enhancements.py` | 9 |
 | 4 | Plain-language explanations and safety ratings | `explain`, `capability-help` | Explain selected | `tests/test_novice_ux.py`, `tests/test_phase2_self_explain.py` | 9 |
 | 5 | Review-first plans and risk previews | `plan`, `review` | Review checklist and acknowledgement gate | `tests/test_ux_enhancements.py`, `tests/test_phase2_self_explain.py` | 9 |
-| 6 | Shell-safe copy-ready commands | `command`, plan output | Copy ready command | `tests/test_command_templates.py`, `tests/test_ux_hardening.py`, `tests/test_journey.py` | 9 |
+| 6 | Shell-safe copy-ready commands | `command`, plan output | Copy ready command | `tests/test_command_templates.py`, `tests/test_ux_hardening.py`, `tests/test_journey.py` | 10 |
 | 7 | Prerequisite and dependency navigation | `capability dependencies` | Prerequisite/help panel | `tests/test_ux_ten_enhancements.py` | 9 |
 | 8 | Structured progress stages | run output and plan payload | Progress/status panel | `tests/test_ux_ten_enhancements.py`, `tests/test_phase2_polish.py` | 9 |
-| 9 | Evidence-backed next actions | `what-next`, `workflow next` | What next and copilot panels | `tests/test_journey.py`, `tests/test_phase4_vendor_proof.py` | 9 |
+| 9 | Evidence-backed next actions | `what-next`, `workflow next` | What next and copilot panels | `tests/test_journey.py`, `tests/test_phase4_vendor_proof.py` | 10 |
 | 10 | Session findings dashboard and filters | `session show`, `engagement dashboard` | Findings dashboard | `tests/test_product_surfaces.py`, `tests/test_ux_ten_enhancements.py` | 9 |
 | 11 | Unified search | `search`, `query` | Capability search box | `tests/test_ux_enhancements.py`, `tests/test_ux_hardening.py` | 9 |
 | 12 | Session comparison | `session diff` | Compare sessions | `tests/test_ux_enhancements.py` | 9 |
 | 13 | Target and OPSEC profiles | `profile` command group | Profile load/save/default controls | `tests/test_ux_ten_enhancements.py` | 9 |
 | 14 | Favorites, recents, completions, and shortcuts | `favorites`, `recent`, `completions` | Pinning, recent targets, key help | `tests/test_ux_enhancements.py`, `tests/test_tui_app.py` | 9 |
 | 15 | Timeline, rollback visibility, and redacted packaging | `timeline`, `cleanup-status`, `engagement package` | Timeline, reports, package evidence | `tests/test_standout_ux.py`, `tests/test_redaction.py` | 9 |
-| 16 | Unified guided journey (install→closeout) | `guide`, `what-next`, `tour`, `workflow next` | Home / wizard complete / workflow panel | `tests/test_journey.py`, `tests/test_tui_app.py` | 9 |
+| 16 | Unified guided journey (install→closeout) | `guide`, `what-next`, `tour`, `workflow next` | Home / wizard complete / workflow panel | `tests/test_journey.py`, `tests/test_tui_app.py` | 10 |
 
 Row 16 acceptance extras (Phase 1 spine):
 
@@ -38,6 +40,15 @@ Row 16 acceptance extras (Phase 1 spine):
   `recovery_command`, and stage `entry_criteria` / `exit_criteria`.
 - Path-bearing suggested commands are shell-quoted.
 - Failures include a `recovery_command` pointing at `adaf-attack guide`.
+- Every primary action carries a redacted workflow, finding, or artifact
+  `evidence_basis`; CLI and TUI use the same summary renderer.
+- An invalid explicit session fails identically across `guide`, `what-next`,
+  `workflow next`, and the TUI instead of producing a dead command.
+
+Rows 6, 9, and 16 have isolated behavioral acceptance that covers native
+PowerShell and POSIX rendering, artifact-level recommendation evidence, every
+guided CLI surface, all four TUI journey panels, clipboard failure, invalid
+session recovery, and corrupt workflow-state recovery.
 
 Phase 2 self-explain extras:
 

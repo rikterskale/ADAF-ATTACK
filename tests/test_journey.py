@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 
 from adaf_attack.cli import app
 from adaf_attack.core import journey
-from adaf_attack.core.workflow_engine import WorkflowAction, WorkflowEngine
+from adaf_attack.core.workflow_engine import WorkflowAction, WorkflowEngine, WorkflowError
 from adaf_attack.demo import materialize_demo_session
 
 runner = CliRunner()
@@ -176,6 +176,29 @@ def test_what_next_delegates_to_journey(tmp_path: Path, monkeypatch) -> None:
     assert what_next["suggested_command"] == guide["suggested_command"]
 
 
+def test_capability_what_next_keeps_journey_primary(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    guide = _json(runner.invoke(app, ["--format", "json", "guide", "--workspace", str(tmp_path)]))
+    what_next = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "what-next",
+                "ldap-enum",
+                "--workspace",
+                str(tmp_path),
+            ],
+        )
+    )
+    assert what_next["context"] == "journey"
+    assert what_next["completed_capability"] == "ldap-enum"
+    assert what_next["stage"] == guide["stage"]
+    assert what_next["suggested_command"] == guide["suggested_command"]
+    assert what_next["recovery_command"] == guide["recovery_command"]
+
+
 def test_guide_what_next_workflow_next_agree_with_session(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
     session = tmp_path / "demo-session"
@@ -219,6 +242,155 @@ def test_guide_what_next_workflow_next_agree_with_session(tmp_path: Path, monkey
     assert workflow_next["next_step"] == guide["next_step"]
     assert guide["primary_action"]["rollback_implication"]
     assert guide["recovery_command"].startswith("adaf-attack guide")
+
+
+def test_evidence_basis_matches_across_all_next_action_surfaces(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    session = tmp_path / "demo-session"
+    materialize_demo_session(session)
+    engine = WorkflowEngine(tmp_path)
+    engine.start(actor="test")
+    engine.complete_action("authorize-scope", actor="test")
+    journey.import_session_findings(tmp_path, session, actor="test")
+
+    guide = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "guide",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    what_next = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "what-next",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+    workflow_next = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "workflow",
+                "next",
+                "--workspace",
+                str(tmp_path),
+                "--session",
+                str(session),
+            ],
+        )
+    )
+
+    evidence = guide["primary_action"]["evidence_basis"]
+    assert {item["kind"] for item in evidence} >= {"finding", "artifact"}
+    artifact = next(item for item in evidence if item["kind"] == "artifact")
+    assert artifact["ref"].endswith((".json#/dcsync_principals", ".json#/esc1_candidates"))
+    assert len(artifact["sha256"]) == 64
+    assert what_next["primary_action"]["evidence_basis"] == evidence
+    assert workflow_next["primary_action"]["evidence_basis"] == evidence
+    assert workflow_next["recommendations"][0]["evidence_basis"] == evidence
+
+
+def test_invalid_session_failure_matches_across_guided_surfaces(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    missing = tmp_path / "missing-session"
+    invocations = (
+        ["guide", "--workspace", str(tmp_path), "--session", str(missing)],
+        ["what-next", "--workspace", str(tmp_path), "--session", str(missing)],
+        [
+            "workflow",
+            "next",
+            "--workspace",
+            str(tmp_path),
+            "--session",
+            str(missing),
+        ],
+    )
+    payloads: list[dict[str, Any]] = []
+    for args in invocations:
+        result = runner.invoke(app, ["--format", "json", *args])
+        assert result.exit_code == 1
+        payload = json.loads(result.output)
+        assert payload["ok"] is False
+        assert payload["error"]["code"] == "SESSION_NOT_FOUND"
+        assert payload["stage" if args[0] != "workflow" else "journey_stage"] == ("session-blocked")
+        payloads.append(payload)
+    commands = {payload["suggested_command"] for payload in payloads}
+    recoveries = {payload["recovery_command"] for payload in payloads}
+    assert commands == {"adaf-attack sessions --limit 10"}
+    assert len(recoveries) == 1
+    assert "--session" not in recoveries.pop()
+
+
+def test_invalid_session_json_is_rejected(tmp_path: Path) -> None:
+    session = tmp_path / "bad-session"
+    session.mkdir()
+    (session / "session.json").write_text("not-json", encoding="utf-8")
+    payload = journey.snapshot(
+        workspace=tmp_path,
+        session=session,
+        doctor={"ok": True, "checks": []},
+    )
+    assert payload["ok"] is False
+    assert payload["stage"] == "session-blocked"
+    assert payload["error"]["code"] == "SESSION_NOT_FOUND"
+
+
+def test_every_next_action_suggestion_has_evidence_basis(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    what_next = _json(
+        runner.invoke(
+            app,
+            ["--format", "json", "what-next", "--workspace", str(tmp_path)],
+        )
+    )
+    assert all(item["evidence_basis"] for item in what_next["suggestions"])
+    after_capability = _json(
+        runner.invoke(
+            app,
+            [
+                "--format",
+                "json",
+                "what-next",
+                "ldap-enum",
+                "--workspace",
+                str(tmp_path),
+            ],
+        )
+    )
+    assert all(item["evidence_basis"] for item in after_capability["suggestions"])
+    workflow_next = _json(
+        runner.invoke(
+            app,
+            ["--format", "json", "workflow", "next", "--workspace", str(tmp_path)],
+        )
+    )
+    assert all(item["evidence_basis"] for item in workflow_next["recommendations"])
 
 
 def test_tour_marks_progress(tmp_path: Path, monkeypatch) -> None:
@@ -288,6 +460,9 @@ def test_workflow_next_recommendations_match_guide_with_session(
 def test_import_session_findings_unlocks_validation(tmp_path: Path) -> None:
     session = tmp_path / "demo-session"
     materialize_demo_session(session)
+    engine = WorkflowEngine(tmp_path)
+    engine.start(actor="test")
+    engine.complete_action("authorize-scope", actor="test")
     result = journey.import_session_findings(tmp_path, session, actor="test")
     assert result["ok"] is True
     assert result["count"] >= 1
@@ -298,10 +473,97 @@ def test_import_session_findings_unlocks_validation(tmp_path: Path) -> None:
     assert any(item.id.startswith("validate:") for item in recs)
 
 
-def test_guide_advance_quickstart(tmp_path: Path, monkeypatch) -> None:
+def test_import_session_findings_requires_authorized_scope(tmp_path: Path) -> None:
+    session = tmp_path / "demo-session"
+    materialize_demo_session(session)
+    with pytest.raises(WorkflowError, match="Authorize scope"):
+        journey.import_session_findings(tmp_path, session, actor="test")
+
+
+def test_guide_advance_requires_human_output_mode(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
-    # Non-interactive / JSON mode must refuse --advance.
     blocked = runner.invoke(
         app, ["--format", "json", "guide", "--workspace", str(tmp_path), "--advance"]
     )
     assert blocked.exit_code != 0
+
+
+def test_guide_advance_quickstart_uses_suggested_workspace(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    result = runner.invoke(app, ["guide", "--workspace", str(tmp_path), "--advance"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "demo-session" / "session.json").is_file()
+    assert not (tmp_path / "quickstart" / "demo-session").exists()
+
+
+def test_guide_advance_does_not_record_authorization(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    session = tmp_path / "demo-session"
+    materialize_demo_session(session)
+    result = runner.invoke(
+        app,
+        [
+            "guide",
+            "--workspace",
+            str(tmp_path),
+            "--session",
+            str(session),
+            "--advance",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "GUIDE_ADVANCE_UNSAFE" in result.output
+    engine = WorkflowEngine(tmp_path)
+    assert "scope-authorized" not in engine.state.completed_steps
+
+
+@pytest.mark.parametrize(
+    "action_id",
+    (
+        "authorize-scope",
+        "run-discovery",
+        "validate:F-1",
+        "response:F-1",
+        "verify:F-1",
+        "generate-report",
+    ),
+)
+def test_workflow_actions_cannot_be_auto_advanced(action_id: str) -> None:
+    action = WorkflowAction(action_id, "Action", "Operator work", "validation", "required")
+    assert journey.action_is_advance_safe(action) is False
+
+
+def test_corrupt_workflow_state_blocks_guide(tmp_path: Path) -> None:
+    (tmp_path / "workflow-state.json").write_text("not-json", encoding="utf-8")
+    payload = journey.snapshot(workspace=tmp_path, doctor={"ok": True, "checks": []})
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "WORKFLOW_STATE_INVALID"
+    assert payload["primary_action"]["id"] == "repair-workflow-state"
+    assert payload["suggested_command"].startswith("adaf-attack support-bundle")
+
+
+@pytest.mark.parametrize("capability", (None, "ldap-enum"))
+def test_corrupt_workflow_state_blocks_what_next(
+    tmp_path: Path,
+    monkeypatch,
+    capability: str | None,
+) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    (tmp_path / "workflow-state.json").write_text("not-json", encoding="utf-8")
+    args = ["--format", "json", "what-next"]
+    if capability is not None:
+        args.append(capability)
+    args.extend(["--workspace", str(tmp_path)])
+    payload = json.loads(runner.invoke(app, args).output)
+    assert payload["ok"] is False
+    assert payload["error"]["code"] == "WORKFLOW_STATE_INVALID"
+    assert payload["journey"]["ok"] is False
+
+
+def test_corrupt_workflow_state_precedes_advance_guard(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    (tmp_path / "workflow-state.json").write_text("not-json", encoding="utf-8")
+    result = runner.invoke(app, ["guide", "--workspace", str(tmp_path), "--advance"])
+    assert result.exit_code != 0
+    assert "WORKFLOW_STATE_INVALID" in result.output
+    assert "GUIDE_ADVANCE_UNSAFE" not in result.output

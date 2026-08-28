@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import sys
+
 import pytest
 
+from adaf_attack.core import command_templates
 from adaf_attack.core.command_templates import (
     COMMAND_TEMPLATES,
     SECONDARY_COMMAND_TEMPLATES,
     _sam_from_node_id,
     build_exploit_commands,
+    render_command,
+    shell_dialect,
     shell_quote,
 )
 from adaf_attack.core.target import Target
@@ -23,6 +31,51 @@ def test_shell_quote_uses_posix_shlex_for_metacharacters() -> None:
     # Documented contract: POSIX quoting; PowerShell operators should read CLI_REFERENCE.
     assert "POSIX" in (shell_quote.__doc__ or "")
     assert "PowerShell" in (shell_quote.__doc__ or "")
+
+
+def test_shell_quote_uses_native_powershell_apostrophe_escaping(monkeypatch) -> None:
+    monkeypatch.setattr(command_templates, "_WINDOWS_SHELL", True)
+    assert shell_quote("O'Brien workspace") == "'O''Brien workspace'"
+
+
+def test_shell_quote_uses_posix_escaping_off_windows(monkeypatch) -> None:
+    monkeypatch.setattr(command_templates, "_WINDOWS_SHELL", False)
+    assert shell_quote("O'Brien workspace") == "'O'\"'\"'Brien workspace'"
+
+
+def test_render_command_declares_and_uses_native_shell(monkeypatch) -> None:
+    monkeypatch.setattr(command_templates, "_WINDOWS_SHELL", True)
+    assert shell_dialect() == "powershell"
+    assert render_command(["tool", "--path", "O'Brien workspace"]) == (
+        "tool --path 'O''Brien workspace'"
+    )
+    assert render_command(["tool", "--principal", "@operators"]) == (
+        "tool --principal '@operators'"
+    )
+    monkeypatch.setattr(command_templates, "_WINDOWS_SHELL", False)
+    assert shell_dialect() == "posix"
+    assert render_command(["tool", "--path", "O'Brien workspace"]) == (
+        "tool --path 'O'\"'\"'Brien workspace'"
+    )
+
+
+def test_render_command_round_trips_native_shell_arguments() -> None:
+    values = ["@operators", "O'Brien workspace", "a;b", "user@corp.example"]
+    command = render_command(
+        [
+            sys.executable,
+            "-c",
+            "import json,sys; print(json.dumps(sys.argv[1:]))",
+            *values,
+        ]
+    )
+    shell = (
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", command]
+        if os.name == "nt"
+        else ["/bin/sh", "-c", command]
+    )
+    completed = subprocess.run(shell, check=True, capture_output=True, text=True)
+    assert json.loads(completed.stdout.strip().splitlines()[-1]) == values
 
 
 def test_sam_from_node_id():

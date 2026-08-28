@@ -45,14 +45,16 @@ import json
 import os
 import re
 import shlex
-import shutil
 import subprocess
 import sys
+import sysconfig
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from adaf_attack.core.engineering import distribution_closure, relevant_pip_failures
 
 # --------------------------------------------------------------------------- #
 # CLI invocation - talk to the installed artifact, like a new user does.
@@ -60,17 +62,16 @@ from typing import Any
 
 
 def _cli_argv() -> list[str]:
-    """Resolve how to invoke the tool: console script, else module form."""
+    """Resolve the console script owned by this interpreter unless overridden."""
     override = os.environ.get("ADAF_CLI")
     if override:
         argv = shlex.split(override)
         if not argv:
             raise ValueError("ADAF_CLI must contain an executable")
         return argv
-    console = shutil.which("adaf-attack")
-    if console:
-        return [console]
-    return [sys.executable, "-m", "adaf_attack.cli"]
+    scripts = Path(sysconfig.get_path("scripts"))
+    console_name = "adaf-attack.exe" if os.name == "nt" else "adaf-attack"
+    return [str(scripts / console_name)]
 
 
 _ARGV = _cli_argv()
@@ -157,7 +158,11 @@ def _pip_check() -> None:
         text=True,
         timeout=120,
     )
-    _require(proc.returncode == 0, f"pip check failed: {proc.stdout}{proc.stderr}")
+    if proc.returncode == 0:
+        return
+    output = f"{proc.stdout}{proc.stderr}"
+    failures = relevant_pip_failures(output, distribution_closure())
+    _require(not failures, "pip check failed for ADAF dependencies: " + "\n".join(failures))
 
 
 @installation.check("entry points run (--version, list-capabilities, paths)")
@@ -657,7 +662,7 @@ def main() -> int:
         for name, fn in pillar.checks:
             try:
                 fn()
-            except Exception as exc:  # noqa: BLE001 - report, don't crash the gate
+            except Exception as exc:
                 print(f"  FAIL  {name}")
                 detail = str(exc).strip() or exc.__class__.__name__
                 for line in detail.splitlines():

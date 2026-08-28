@@ -37,7 +37,7 @@ Single test: `pytest tests/test_foo.py::test_bar` (mocked harnesses mean no netw
 - **Coverage gate (95%)**: CI fails under 95% branch coverage of `adaf_attack`. New code needs tests covering error/edge branches too. Write *behavioral* tests named for the behavior under test — do not add coverage-only tests (or `sys.settrace`/line-injection tricks) purely to chase the last few percent.
 - **Cross-platform matrix**: CI tests on Linux/Windows/macOS × Python 3.11–3.14; avoid platform-specific code paths or guard them.
 - **Security lanes**: Bandit (`src`, medium severity/confidence) and a tracked-file secret scan run in CI — no hardcoded keys/tokens in non-test files.
-- **Ruff version sensitivity**: CI pins `ruff==0.16.2` (`requirements-ci.txt`). The `[dev]` extra only sets a lower bound — different ruff versions format/sort imports differently and will fail CI. Use pre-commit hooks or pin explicitly.
+- **Ruff version sensitivity**: CI pins `ruff==0.16.3` (`requirements-ci.txt`). The `[dev]` extra only sets a lower bound — different ruff versions format/sort imports differently and will fail CI. Use pre-commit hooks or pin explicitly.
 - **mypy is strict** and only runs on `src/adaf_attack` (not tests).
 - **CLI docs parity**: adding/renaming any Typer command requires updating `docs/CLI_REFERENCE.md` in the same change; `check_cli_documentation.py` fails on stale entries.
 - **Windows pytest**: if `PermissionError` on global temp dirs, run via `.\scripts\Invoke-Tests.ps1 <args>` which redirects TEMP to repo-local folders.

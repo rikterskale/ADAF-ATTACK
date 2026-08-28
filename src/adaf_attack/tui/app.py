@@ -33,7 +33,12 @@ from adaf_attack import __version__
 from adaf_attack.core.capability_help_data import capability_option_spec
 from adaf_attack.core.control_plane import package_evidence
 from adaf_attack.core.engagement_dashboard import MODES, inspect_edge
-from adaf_attack.core.journey import import_session_findings
+from adaf_attack.core.journey import (
+    guide_recovery_command,
+    import_session_findings,
+    journey_evidence_summary,
+    journey_summary_lines,
+)
 from adaf_attack.core.journey import snapshot as journey_snapshot
 from adaf_attack.core.novice import (
     beginner_next_actions,
@@ -464,7 +469,14 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self._refresh_first_launch_panel()
         self._update_engagement_dashboard()
         self._refresh_pin_button()
-        self._workflow = WorkflowEngine(self._workspace)
+        try:
+            self._workflow = WorkflowEngine(self._workspace)
+        except WorkflowError as exc:
+            self._workflow = None
+            self._show_log(
+                f"[red]Workflow state is invalid: {exc}[/]\n"
+                f"When lost: {guide_recovery_command(workspace=self._workspace)}"
+            )
         self._refresh_workflow_panel()
         self._update_engagement_dashboard()
         self._show_log("[bold green]ADAF-ATTACK[/] ready. Follow Home or Quickstart first.")
@@ -649,18 +661,16 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             ),
         )
         title, guide = steps[self._wizard_step]
-        if self._wizard_step >= 5:
-            try:
-                journey = self._journey()
-                primary = journey["primary_action"]
-                guide = (
-                    f"{guide}\n\n"
-                    f"Journey stage: {journey['stage_label']} ({journey['progress_pct']}%)\n"
-                    f"Next: {primary['title']}\n"
-                    f"Cmd:  {primary['suggested_command']}"
-                )
-            except (OSError, ValueError):
-                pass
+        try:
+            journey = self._journey()
+            guide = f"{guide}\n\nAuthoritative journey\n" + "\n".join(
+                journey_summary_lines(journey, compact=True)
+            )
+        except (OSError, ValueError):
+            guide += (
+                "\n\nAuthoritative journey unavailable.\n"
+                f"If this fails: {guide_recovery_command(workspace=self._workspace)}"
+            )
         self.query_one("#wizard-step", Static).update(title)
         self.query_one("#wizard-guide", Static).update(guide)
         back = self.query_one("#wizard-back", Button)
@@ -850,14 +860,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
 
     def _show_home(self) -> None:
         journey = self._journey()
-        primary = journey["primary_action"]
         actions = home_actions(first_run=bool(journey["context"].get("first_run")))
-        lines = [
-            f"Stage: {journey['stage_label']} ({journey['progress_pct']}%)",
-            f"Next: {primary['title']}",
-            f"Cmd:  {primary['suggested_command']}",
-            "",
-        ]
+        lines = [*journey_summary_lines(journey, compact=True), ""]
         lines.extend(f"{item['goal']}: {item['command']}" for item in actions[:5])
         self.query_one("#first-launch-panel", Static).update(
             "[bold]What should I do?[/bold]\n" + "\n".join(lines)
@@ -875,11 +879,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
 
     def _show_recommendations(self) -> None:
         journey = self._journey()
-        primary = journey["primary_action"]
         lines = [
             f"[bold]Journey[/bold] · {journey['stage_label']} ({journey['progress_pct']}%)",
-            f"Next: {primary['title']}",
-            f"Cmd:  {primary['suggested_command']}",
+            *journey_summary_lines(journey, compact=True)[1:],
         ]
         cap = self._selected()
         if cap:
@@ -939,21 +941,21 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         )
 
     def _refresh_workflow_panel(self) -> None:
-        if not self._workflow:
-            return
-        state = self._workflow.state
         journey = self._journey()
-        primary = journey.get("primary_action") or {}
-        title = str(primary.get("title") or "Follow guide")
-        command = str(primary.get("suggested_command") or "adaf-attack guide")
-        next_action = f"{title}\nCmd: {command}"
-        self.query_one("#workflow-state-panel", Static).update(
-            f"Workflow: {state.phase} · {state.status} · {state.progress:.0f}% · "
-            f"risk {state.risk_score:.0f}\n"
-            f"Journey: {journey.get('stage_label')} · "
-            f"Findings: {len(state.findings)} total / {len(state.open_findings)} open\n"
-            f"Next: {next_action}"
-        )
+        lines = journey_summary_lines(journey, compact=True)
+        workflow = journey.get("workflow")
+        if isinstance(workflow, dict):
+            lines.insert(
+                0,
+                f"Workflow: {workflow.get('phase')} · {workflow.get('status')} · "
+                f"{float(workflow.get('progress') or 0):.0f}% · "
+                f"risk {float(workflow.get('risk_score') or 0):.0f} · "
+                f"findings {workflow.get('total_findings', 0)} total/"
+                f"{workflow.get('open_findings', 0)} open",
+            )
+        else:
+            lines.insert(0, "Workflow: unavailable; preserve invalid state for diagnosis")
+        self.query_one("#workflow-state-panel", Static).update("\n".join(lines))
 
     def _ensure_workflow_started(self) -> None:
         """Ensure durable workflow state exists without advancing authorize.
@@ -1701,11 +1703,20 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         if not self.selected_cap:
             self.notify("Select a capability first.", severity="warning")
             return
+        command = self._ready_command()
         try:
-            self.copy_to_clipboard(self._ready_command())
+            self.copy_to_clipboard(command)
             self.notify("Ready command copied to clipboard.")
         except Exception:
-            self.notify("Clipboard is unavailable in this terminal.", severity="warning")
+            self.query_one("#review-panel", Static).update(
+                "[bold yellow]Clipboard unavailable[/bold yellow]\n"
+                "Select and copy this shell-safe command manually:\n"
+                f"{command}"
+            )
+            self.notify(
+                "Clipboard is unavailable; the command is shown in Review.",
+                severity="warning",
+            )
 
     def _dry_run(self) -> None:
         cap = self._selected()
@@ -1893,8 +1904,14 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     severity="information",
                 )
             except RunError as exc:
+                recovery = guide_recovery_command(
+                    workspace=self._workspace,
+                    session=self._last_session,
+                )
                 self._write_run_log(
-                    f"[red]Error:[/] {exc}\n[dim]Check the review panel and capability prerequisites.[/]"
+                    f"[red]Error:[/] {exc}\n"
+                    f"[dim]Check the review panel and capability prerequisites.\n"
+                    f"When lost: {recovery}[/]"
                 )
                 self._post_ui(self.notify, str(exc), severity="error")
             finally:
@@ -2273,7 +2290,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         self.query_one("#review-panel", Static).update(
             "[bold]Evidence copilot — suggestions only[/bold]\n"
             + "\n".join(
-                f"• {item['action']} — {item['why']}\n  {item['command']}"
+                f"• {item['action']} — {item['why']}\n"
+                f"  Evidence: {journey_evidence_summary(item)}\n"
+                f"  {item['command']}"
                 for item in payload["recommendations"]
             )
         )
@@ -2293,17 +2312,10 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     def _show_what_next(self) -> None:
         """Always prefer the shared journey snapshot (matches CLI guide / what-next)."""
         journey = self._journey()
-        primary = journey.get("primary_action") or {}
-        command = str(primary.get("suggested_command") or "adaf-attack guide")
         lines = [
             f"[bold]Journey[/bold] · {journey.get('stage_label')} ({journey.get('progress_pct')}%)",
-            f"Why: {primary.get('why') or journey.get('why') or 'Follow the guided spine.'}",
-            f"Cmd:  {command}",
+            *journey_summary_lines(journey, compact=True)[1:],
         ]
-        if journey.get("blocked_because"):
-            lines.append(f"Blocked because: {journey['blocked_because']}")
-        if journey.get("fallback"):
-            lines.append(f"Fallback: {journey['fallback']}")
         if self.selected_cap:
             lines.append("")
             lines.append(

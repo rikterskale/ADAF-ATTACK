@@ -1,7 +1,7 @@
 name: Attach release evidence
 
 # When a private GitHub release is published, generate the SBOM (CycloneDX),
-# reproduce the release manifest, and attach both alongside the wheel assets.
+# manifest, provenance, and checksums from the exact published distributions.
 # The SBOM is generated on the release commit so it reflects the exact locked
 # dependency set that CI proved.
 
@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   attach:
-    name: Generate and attach SBOM + manifest
+    name: Generate and attach release evidence
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -41,6 +41,46 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --requirement requirements-ci.txt
 
+      - name: Download exact published distributions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-dist
+          gh release download "$RELEASE_TAG" --dir release-dist \
+            --pattern "*.whl" --pattern "*.tar.gz"
+          test "$(find release-dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
+          test "$(find release-dist -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 1
+
+      - name: Generate release manifest, provenance, and checksums
+        run: |
+          set -euo pipefail
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          python scripts/generate_release_manifest.py \
+            --repo-root . \
+            --dist release-dist \
+            --output release-dist/release-manifest.json
+          python scripts/generate_release_manifest.py \
+            --repo-root . \
+            --dist release-dist \
+            --output release-dist/release-manifest.json \
+            --validate
+          python scripts/generate_release_provenance.py \
+            --repo-root . \
+            --dist release-dist \
+            --output release-dist/release-provenance.json
+          python scripts/generate_release_provenance.py \
+            --repo-root . \
+            --dist release-dist \
+            --output release-dist/release-provenance.json \
+            --validate
+          (
+            cd release-dist
+            sha256sum *.whl *.tar.gz release-manifest.json release-provenance.json > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+
       - name: Generate CycloneDX SBOM
         run: >-
           python -m pip_audit
@@ -58,9 +98,24 @@ jobs:
           assert sbom.get("components"), "SBOM has no components"
           PY
 
-      - name: Attach SBOM to the release
+      - name: Attach release evidence
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
-          gh release upload "$RELEASE_TAG" sbom.json --clobber
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" \
+            release-dist/release-manifest.json \
+            release-dist/release-provenance.json \
+            release-dist/SHA256SUMS \
+            sbom.json \
+            --clobber
+          printf '%s\n' "$RELEASE_TAG" > release-tag.txt
+
+      - name: Publish smoke target
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-smoke-target
+          path: release-tag.txt
+          if-no-files-found: error
+          retention-days: 7

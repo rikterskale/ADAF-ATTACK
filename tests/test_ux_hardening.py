@@ -10,12 +10,12 @@ import pytest
 from typer.testing import CliRunner
 
 from adaf_attack.cli import app
-from adaf_attack.core import user_config
+from adaf_attack.core import command_templates, user_config
 from adaf_attack.core.command_templates import build_exploit_commands
 from adaf_attack.core.registry import Capability, capability_registry
 from adaf_attack.core.standout_ux import session_timeline
 from adaf_attack.core.target import Target
-from adaf_attack.core.ux import build_ready_command, unified_search
+from adaf_attack.core.ux import build_ready_argv, build_ready_command, unified_search
 from adaf_attack.tui.app import ADAFAttackApp
 
 runner = CliRunner()
@@ -34,6 +34,28 @@ def test_copy_ready_command_quotes_shell_sensitive_values() -> None:
     assert "'dc01.example;touch /tmp/should-not-run'" in command
     assert "'operator one'" in command
     assert "'computer_filter=(sAMAccountName=DC 01$)'" in command
+
+
+def test_copy_ready_command_uses_native_powershell_argv(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(command_templates, "_WINDOWS_SHELL", True)
+    argv = build_ready_argv(
+        "ldap-enum",
+        domain="O'Brien Corp",
+        dc_ip="dc01.example; Write-Output unsafe",
+        username="operator one",
+    )
+    command = build_ready_command(
+        "ldap-enum",
+        domain="O'Brien Corp",
+        dc_ip="dc01.example; Write-Output unsafe",
+        username="operator one",
+    )
+    assert argv[argv.index("--domain") + 1] == "O'Brien Corp"
+    assert "--domain 'O''Brien Corp'" in command
+    assert "--dc-ip 'dc01.example; Write-Output unsafe'" in command
+    assert "--username 'operator one'" in command
 
 
 def test_ready_command_includes_required_param_placeholders() -> None:

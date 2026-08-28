@@ -1,8 +1,9 @@
 name: Published artifact smoke
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Attach release evidence"]
+    types: [completed]
   schedule:
     - cron: "23 7 * * 1"
   workflow_dispatch:
@@ -14,6 +15,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 env:
@@ -24,6 +26,7 @@ env:
 jobs:
   github-release-wheel:
     name: GitHub release wheel (${{ matrix.os }})
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -33,6 +36,15 @@ jobs:
     steps:
       - name: Checkout smoke contract
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download release target from attachment run
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-smoke-target
+          path: release-smoke-target
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -47,6 +59,13 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           tag="$REQUESTED_RELEASE"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
+            tag="$(<release-smoke-target/release-tag.txt)"
+            if [[ -z "$tag" ]]; then
+              echo "Attachment workflow provided an empty release tag." >&2
+              exit 1
+            fi
+          fi
           if [[ "$tag" == "latest" ]]; then
             tag="$(gh release view --json tagName --jq .tagName)" || {
               echo "No published GitHub release exists. Publish a release with wheel assets before running this smoke workflow." >&2
@@ -54,6 +73,29 @@ jobs:
             }
           fi
           mkdir -p published-dist
+          required_assets=(
+            "release-manifest.json"
+            "release-provenance.json"
+            "SHA256SUMS"
+          )
+          for attempt in {1..12}; do
+            asset_names="$(gh release view "$tag" --json assets --jq '.assets[].name')"
+            missing=()
+            for asset in "${required_assets[@]}"; do
+              if ! grep -Fxq "$asset" <<<"$asset_names"; then
+                missing+=("$asset")
+              fi
+            done
+            if [[ "${#missing[@]}" -eq 0 ]]; then
+              break
+            fi
+            if [[ "$attempt" -eq 12 ]]; then
+              echo "Release $tag is still missing required assets: ${missing[*]}" >&2
+              exit 1
+            fi
+            echo "Waiting for release assets (${attempt}/12): ${missing[*]}"
+            sleep 10
+          done
           # Download every artifact named by release-manifest.json so --validate
           # can resolve both the wheel and the sdist checksum rows.
           gh release download "$tag" --dir published-dist \

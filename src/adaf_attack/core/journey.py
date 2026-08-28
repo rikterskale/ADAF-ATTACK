@@ -8,7 +8,8 @@ copy-ready command for the current stage.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,7 @@ from adaf_attack.core.workflow_engine import (
 
 STAGE_LABELS: dict[str, str] = {
     "install-blocked": "Install readiness",
+    "session-blocked": "Session context",
     "first-success": "Safe offline first success",
     "orient": "Authorize scope",
     "discover": "Baseline discovery",
@@ -35,6 +37,7 @@ STAGE_LABELS: dict[str, str] = {
 
 STAGE_PROGRESS: dict[str, float] = {
     "install-blocked": 0.0,
+    "session-blocked": 5.0,
     "first-success": 10.0,
     "orient": 25.0,
     "discover": 40.0,
@@ -53,6 +56,10 @@ STAGE_CRITERIA: dict[str, dict[str, list[str]]] = {
     "first-success": {
         "entry": ["local install is ready", "no demo session under the workspace yet"],
         "exit": ["quickstart or demo created a session with session.json"],
+    },
+    "session-blocked": {
+        "entry": ["an explicit --session path does not contain session.json"],
+        "exit": ["an existing session is selected or --session is omitted"],
     },
     "orient": {
         "entry": ["demo or engagement session exists", "workflow scope is not yet authorized"],
@@ -84,6 +91,7 @@ STAGE_CRITERIA: dict[str, dict[str, list[str]]] = {
 STAGE_FALLBACKS: dict[str, str] = {
     "install-blocked": "adaf-attack doctor --profile user-readiness --explain",
     "first-success": "adaf-attack tour",
+    "session-blocked": "adaf-attack sessions --limit 10",
     "orient": "adaf-attack session show --session <demo-session>",
     "discover": "adaf-attack workflow status --workspace <workspace>",
     "operate": "adaf-attack workflow next --workspace <workspace>",
@@ -93,13 +101,7 @@ STAGE_FALLBACKS: dict[str, str] = {
 }
 
 # Workflow bookkeeping actions that ``guide --advance`` may complete offline.
-SAFE_ADVANCE_ACTIONS = frozenset(
-    {
-        "authorize-scope",
-        "run-discovery",
-        "generate-report",
-    }
-)
+SAFE_ADVANCE_ACTIONS: frozenset[str] = frozenset()
 
 _OFFLINE_BOOKKEEPING = frozenset(
     {
@@ -141,6 +143,8 @@ class JourneyAction:
     fallback: str | None = None
     entry_criteria: list[str] = field(default_factory=list)
     exit_criteria: list[str] = field(default_factory=list)
+    finding_ids: list[str] = field(default_factory=list)
+    evidence_basis: list[dict[str, Any]] = field(default_factory=list)
 
     def document(self) -> dict[str, Any]:
         payload = asdict(self)
@@ -310,6 +314,8 @@ def _decorate_action(
         fallback=fallback,
         entry_criteria=list(criteria.get("entry") or action.entry_criteria),
         exit_criteria=list(criteria.get("exit") or action.exit_criteria),
+        finding_ids=list(action.finding_ids),
+        evidence_basis=list(action.evidence_basis),
     )
 
 
@@ -407,10 +413,9 @@ def suggested_command_for_action(
 
 def action_is_advance_safe(action: WorkflowAction) -> bool:
     """Return whether ``guide --advance`` may complete this action offline."""
-    # Decisions and live capability runs stay review-first.
-    return action.id in SAFE_ADVANCE_ACTIONS or action.id.startswith(
-        ("validate:", "response:", "verify:")
-    )
+    # Workflow actions describe operator work or evidence collection. Merely
+    # marking them complete would make the journey claim work that did not occur.
+    return action.id in SAFE_ADVANCE_ACTIONS
 
 
 def enrich_action(
@@ -418,6 +423,7 @@ def enrich_action(
     *,
     session: Path | None = None,
     workspace: Path | None = None,
+    findings: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Serialize a workflow action with a copy-ready suggested_command."""
     command = suggested_command_for_action(action, session=session, workspace=workspace)
@@ -433,6 +439,7 @@ def enrich_action(
         "consequence": action.consequence,
         "capability_id": action.capability_id,
         "finding_ids": list(action.finding_ids),
+        "evidence_basis": _workflow_evidence_basis(action, findings),
         "unlock_conditions": list(action.unlock_conditions),
         "priority": action.priority,
         "suggested_command": command,
@@ -443,6 +450,70 @@ def enrich_action(
         "rollback_implication": safety["rollback_implication"],
         "recovery_command": recovery,
     }
+
+
+def _workflow_evidence_basis(
+    action: WorkflowAction,
+    findings: Mapping[str, Any] | None,
+) -> list[dict[str, Any]]:
+    """Return redacted durable references supporting a workflow recommendation."""
+    basis: list[dict[str, Any]] = []
+    for finding_id in action.finding_ids:
+        record = findings.get(finding_id) if findings is not None else None
+        if record is None:
+            basis.append(
+                {
+                    "kind": "finding",
+                    "ref": f"finding:{finding_id}",
+                    "summary": "Linked finding evidence is unavailable; refresh workflow state.",
+                }
+            )
+            continue
+        basis.append(
+            {
+                "kind": "finding",
+                "ref": f"finding:{finding_id}",
+                "summary": "Workflow action is linked to this saved finding record.",
+            }
+        )
+        for item in getattr(record, "evidence", []):
+            if not isinstance(item, dict):
+                continue
+            artifact = item.get("artifact")
+            if not isinstance(artifact, str) or not artifact.strip():
+                continue
+            pointer = item.get("pointer", "/")
+            if (
+                not isinstance(pointer, str)
+                or not pointer.startswith("/")
+                or any(ord(char) < 32 for char in pointer)
+            ):
+                pointer = "/"
+            artifact_path = Path(artifact)
+            if artifact_path.is_absolute() or ".." in artifact_path.parts:
+                artifact = artifact_path.name
+            evidence: dict[str, Any] = {
+                "kind": "artifact",
+                "ref": f"{artifact}#{pointer}",
+                "summary": f"Durable artifact supporting {finding_id}.",
+            }
+            digest = item.get("sha256")
+            if (
+                isinstance(digest, str)
+                and len(digest) == 64
+                and all(char in "0123456789abcdefABCDEF" for char in digest)
+            ):
+                evidence["sha256"] = digest.lower()
+            basis.append(evidence)
+    if not basis:
+        basis.append(
+            {
+                "kind": "workflow-action",
+                "ref": action.id,
+                "summary": f"Derived from pending {action.phase} workflow state.",
+            }
+        )
+    return basis
 
 
 def find_demo_session(workspace: Path) -> Path | None:
@@ -558,10 +629,7 @@ def _doctor_blockers(doctor: dict[str, Any] | None) -> list[dict[str, str]]:
 
 
 def _load_engine(workspace: Path) -> WorkflowEngine | None:
-    try:
-        engine = WorkflowEngine(workspace, mode="interactive")
-    except WorkflowError:
-        return None
+    engine = WorkflowEngine(workspace, mode="interactive")
     if not engine.state.audit_log:
         # Mirror CLI auto-start so guidance never hits an empty dead end.
         engine.start(actor="journey")
@@ -607,11 +675,17 @@ def _breadcrumb(
 def _journey_action_from_workflow(
     action: WorkflowAction,
     *,
+    engine: WorkflowEngine,
     session: Path | None,
     workspace: Path,
     stage: str,
 ) -> JourneyAction:
-    enriched = enrich_action(action, session=session, workspace=workspace)
+    enriched = enrich_action(
+        action,
+        session=session,
+        workspace=workspace,
+        findings=engine.state.findings,
+    )
     base = JourneyAction(
         id=enriched["id"],
         title=enriched["title"],
@@ -625,8 +699,145 @@ def _journey_action_from_workflow(
         rollback=str(enriched["rollback"]),
         rollback_implication=str(enriched["rollback_implication"]),
         recovery_command=str(enriched["recovery_command"]),
+        finding_ids=list(enriched["finding_ids"]),
+        evidence_basis=list(enriched["evidence_basis"]),
     )
     return _decorate_action(base, workspace=workspace, session=session, stage=stage)
+
+
+def _state_evidence_basis(
+    action: JourneyAction,
+    *,
+    workspace: Path,
+    session: Path | None,
+    engine: WorkflowEngine | None,
+    blockers: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    """Explain which redacted local state produced a journey action."""
+    if action.evidence_basis:
+        return list(action.evidence_basis)
+    if action.id in {"repair-install", "repair-workflow-state", "doctor-explain"} and blockers:
+        blocker = blockers[0]
+        return [
+            {
+                "kind": "doctor",
+                "ref": f"doctor:{blocker['id']}",
+                "summary": blocker["message"],
+            }
+        ]
+    if action.id == "quickstart":
+        return [
+            {
+                "kind": "workspace",
+                "ref": str(workspace),
+                "summary": "No packaged demo session marker was found in this workspace.",
+            }
+        ]
+    if action.id == "select-session":
+        return [
+            {
+                "kind": "session",
+                "ref": str(workspace),
+                "summary": "The requested session does not contain a readable session.json.",
+            }
+        ]
+    if action.id in {
+        "import-session",
+        "session-show",
+        "generate-report",
+        "engagement-package",
+        "cleanup-status",
+    }:
+        return [
+            {
+                "kind": "session",
+                "ref": str(session) if session is not None else str(workspace),
+                "summary": "Saved session state supplies the context for this action.",
+            }
+        ]
+    workflow_ref = str(workspace / "workflow-state.json")
+    if engine is not None:
+        summary = (
+            f"phase={engine.state.phase}; status={engine.state.status}; pending_action={action.id}"
+        )
+    else:
+        summary = f"Local journey state selected action {action.id}."
+    return [{"kind": "workflow-state", "ref": workflow_ref, "summary": summary}]
+
+
+def journey_evidence_summary(action: Mapping[str, Any]) -> str:
+    """Render a compact, redacted evidence basis for human surfaces."""
+    evidence = action.get("evidence_basis") or []
+    rendered: list[str] = []
+    for item in evidence[:3]:
+        if not isinstance(item, dict):
+            continue
+        kind = str(item.get("kind") or "state")
+        ref = str(item.get("ref") or "unknown")
+        summary = str(item.get("summary") or "Recommendation input.")
+        rendered.append(f"{kind}={ref} - {summary}")
+    remaining = len(evidence) - len(rendered)
+    if remaining > 0:
+        rendered.append(f"+{remaining} more")
+    return "; ".join(rendered) or "state=no durable evidence reference available"
+
+
+def journey_summary_lines(
+    document: Mapping[str, Any],
+    *,
+    compact: bool = False,
+    include_secondary: bool = False,
+) -> list[str]:
+    """Render the shared journey contract for CLI and TUI surfaces."""
+    primary_value = document.get("primary_action")
+    primary = primary_value if isinstance(primary_value, dict) else {}
+    lines = [
+        f"Stage: {document.get('stage_label', document.get('stage', 'unknown'))} "
+        f"({document.get('progress_pct', 0)}%)",
+    ]
+    blocked = document.get("blocked_because")
+    if blocked:
+        lines.append(f"Blocked because: {blocked}")
+    lines.extend(
+        [
+            f"Next: {primary.get('title') or 'Follow the guided journey'}",
+            f"Why: {primary.get('why') or 'Follow the current local evidence and workflow state.'}",
+            f"Evidence: {journey_evidence_summary(primary)}",
+            f"Cmd: {primary.get('suggested_command') or 'adaf-attack guide'}",
+        ]
+    )
+    if not compact:
+        entry = document.get("entry_criteria") or primary.get("entry_criteria") or []
+        exit_criteria = document.get("exit_criteria") or primary.get("exit_criteria") or []
+        approvals = primary.get("approvals") or []
+        lines.extend(
+            [
+                f"Entry: {'; '.join(str(item) for item in entry) or 'none'}",
+                f"Exit: {'; '.join(str(item) for item in exit_criteria) or 'none'}",
+                f"Risk: {primary.get('risk', 'OBSERVE')}",
+                f"Approvals: {', '.join(str(item) for item in approvals) or 'none (offline / review-only)'}",
+                f"Rollback: {primary.get('rollback_implication') or primary.get('rollback') or 'none'}",
+            ]
+        )
+    fallback = document.get("fallback") or primary.get("fallback")
+    if fallback:
+        lines.append(f"Fallback: {fallback}")
+    lines.append(
+        f"If this fails: {document.get('recovery_command') or primary.get('recovery_command') or 'adaf-attack guide'}"
+    )
+    if include_secondary:
+        secondary = document.get("secondary_actions") or []
+        if secondary:
+            lines.append("")
+            lines.append("Also:")
+            for item in secondary:
+                if not isinstance(item, dict):
+                    continue
+                lines.append(
+                    f"- {item.get('title')}: {item.get('suggested_command')} "
+                    f"(evidence: {journey_evidence_summary(item)})"
+                )
+    return lines
 
 
 def snapshot(
@@ -639,8 +850,42 @@ def snapshot(
     root = Path(workspace) if workspace is not None else default_workspace_dir()
     blockers = _doctor_blockers(doctor)
     demo = find_demo_session(root)
-    session_hint = Path(session) if session is not None else find_recent_session(root)
-    engine = _load_engine(root)
+    requested_session = Path(session) if session is not None else None
+    session_failure: str | None = None
+    if requested_session is not None:
+        marker = _load_json(requested_session / "session.json")
+        if not marker:
+            session_failure = (
+                f"The requested session is not usable: {requested_session}. "
+                "A guided session must contain a valid session.json object."
+            )
+    session_hint = (
+        None
+        if session_failure is not None
+        else requested_session
+        if requested_session is not None
+        else find_recent_session(root)
+    )
+    workflow_failure: str | None = None
+    try:
+        engine = _load_engine(root)
+    except WorkflowError as exc:
+        engine = None
+        workflow_failure = str(exc)
+        blockers.insert(
+            0,
+            {
+                "id": "WORKFLOW_STATE_INVALID",
+                "message": f"Workflow state is invalid: {exc}",
+                "remediation": (
+                    "Preserve the workspace for diagnosis and create a redacted support bundle. "
+                    "Do not overwrite or delete workflow-state.json."
+                ),
+                "suggested_command": (
+                    "adaf-attack support-bundle --output adaf-support-bundle.json"
+                ),
+            },
+        )
 
     tui_available = True
     try:
@@ -655,6 +900,8 @@ def snapshot(
         "demo_session": str(demo) if demo else None,
         "tui_available": tui_available,
         "workspace": str(root),
+        "requested_session": str(requested_session) if requested_session else None,
+        "session_valid": session_failure is None,
     }
 
     primary: JourneyAction
@@ -668,12 +915,26 @@ def snapshot(
         first = blockers[0]
         blocked_because = first["message"]
         primary = JourneyAction(
-            id="repair-install",
-            title="Repair installation readiness",
+            id=(
+                "repair-workflow-state"
+                if first["id"] == "WORKFLOW_STATE_INVALID"
+                else "repair-install"
+            ),
+            title=(
+                "Diagnose invalid workflow state"
+                if first["id"] == "WORKFLOW_STATE_INVALID"
+                else "Repair installation readiness"
+            ),
             why=first["remediation"],
             suggested_command=first["suggested_command"],
             kind="required",
-            unlock_conditions=["doctor profile user-readiness reports ready"],
+            unlock_conditions=(
+                [
+                    "workflow-state.json is restored from valid evidence or a fresh workspace is selected"
+                ]
+                if first["id"] == "WORKFLOW_STATE_INVALID"
+                else ["doctor profile user-readiness reports ready"]
+            ),
             advance_safe=False,
         )
         secondary = [
@@ -682,6 +943,37 @@ def snapshot(
                 title="Explain doctor failures",
                 why="See every blocking and advisory check before continuing.",
                 suggested_command="adaf-attack doctor --profile user-readiness --explain",
+                kind="recommended",
+            )
+        ]
+    elif session_failure is not None:
+        stage = "session-blocked"
+        blocked_because = session_failure
+        primary = JourneyAction(
+            id="select-session",
+            title="Select an existing session",
+            why=(
+                "The supplied session cannot provide evidence-backed guidance until "
+                "its session.json is available."
+            ),
+            suggested_command="adaf-attack sessions --limit 10",
+            kind="required",
+            unlock_conditions=["existing session with session.json selected"],
+            advance_safe=False,
+            evidence_basis=[
+                {
+                    "kind": "session",
+                    "ref": str(requested_session),
+                    "summary": "Requested session.json is missing or unreadable.",
+                }
+            ],
+        )
+        secondary = [
+            JourneyAction(
+                id="guide-without-session",
+                title="Continue without the invalid session hint",
+                why="Recompute the journey from valid workspace evidence only.",
+                suggested_command=guide_recovery_command(workspace=root),
                 kind="recommended",
             )
         ]
@@ -752,7 +1044,7 @@ def snapshot(
             suggested_command=f"adaf-attack workflow authorize --workspace {ws_q}",
             kind="required",
             unlock_conditions=["scope and authorization decision recorded"],
-            advance_safe=True,
+            advance_safe=False,
         )
         secondary = []
         if session_hint is not None:
@@ -804,7 +1096,11 @@ def snapshot(
             if recs:
                 secondary = [
                     _journey_action_from_workflow(
-                        item, session=session_hint, workspace=root, stage=stage
+                        item,
+                        engine=engine,
+                        session=session_hint,
+                        workspace=root,
+                        stage=stage,
                     )
                     for item in recs[:3]
                 ]
@@ -844,11 +1140,19 @@ def snapshot(
             else:
                 stage = "operate"
             primary = _journey_action_from_workflow(
-                top, session=session_hint, workspace=root, stage=stage
+                top,
+                engine=engine,
+                session=session_hint,
+                workspace=root,
+                stage=stage,
             )
             secondary = [
                 _journey_action_from_workflow(
-                    item, session=session_hint, workspace=root, stage=stage
+                    item,
+                    engine=engine,
+                    session=session_hint,
+                    workspace=root,
+                    stage=stage,
                 )
                 for item in recs[1:4]
             ]
@@ -888,6 +1192,29 @@ def snapshot(
         _decorate_action(item, workspace=root, session=session_hint, stage=stage)
         for item in secondary
     ]
+    primary = replace(
+        primary,
+        evidence_basis=_state_evidence_basis(
+            primary,
+            workspace=root,
+            session=session_hint,
+            engine=engine,
+            blockers=blockers,
+        ),
+    )
+    secondary = [
+        replace(
+            item,
+            evidence_basis=_state_evidence_basis(
+                item,
+                workspace=root,
+                session=session_hint,
+                engine=engine,
+                blockers=blockers,
+            ),
+        )
+        for item in secondary
+    ]
 
     workflow_view: dict[str, Any] | None = None
     if engine is not None:
@@ -911,8 +1238,8 @@ def snapshot(
     criteria = STAGE_CRITERIA.get(stage, {"entry": [], "exit": []})
     recovery = guide_recovery_command(workspace=root, session=session_hint)
     fallback = primary.fallback or _stage_fallback(stage, workspace=root, session=session_hint)
-    return {
-        "ok": not blockers,
+    payload = {
+        "ok": not blockers and session_failure is None,
         "stage": stage,
         "stage_label": STAGE_LABELS.get(stage, stage),
         "progress_pct": round(progress, 1),
@@ -930,6 +1257,26 @@ def snapshot(
         "suggested_command": primary.suggested_command,
         "recovery_command": recovery,
     }
+    if workflow_failure is not None:
+        payload["error"] = {
+            "code": "WORKFLOW_STATE_INVALID",
+            "message": f"Workflow state is invalid: {workflow_failure}",
+            "remediation": (
+                "Preserve the workspace, create a redacted support bundle, and restore "
+                "workflow-state.json from trusted evidence or select a fresh workspace."
+            ),
+            "suggested_command": primary.suggested_command,
+            "recovery_command": recovery,
+        }
+    elif session_failure is not None:
+        payload["error"] = {
+            "code": "SESSION_NOT_FOUND",
+            "message": session_failure,
+            "remediation": "Select an existing session directory created by a prior run.",
+            "suggested_command": primary.suggested_command,
+            "recovery_command": recovery,
+        }
+    return payload
 
 
 def import_session_findings(
@@ -947,14 +1294,14 @@ def import_session_findings(
     engine = _load_engine(workspace)
     if engine is None:
         raise WorkflowError("Could not load or create workflow state")
+    if "scope-authorized" not in engine.state.completed_steps:
+        raise WorkflowError("Authorize scope before importing session findings")
     imported: list[str] = []
     for finding in findings_from_session(session):
         record = engine.ingest_finding(finding_from_document(finding.document()), actor=actor)
         imported.append(record.id)
     if imported and "discovery-complete" not in engine.state.completed_steps:
         # Mark discovery complete so validation actions unlock without a fake live run.
-        if "scope-authorized" not in engine.state.completed_steps:
-            engine.complete_action("authorize-scope", actor=actor)
         if (
             "run-discovery" in engine.state.pending_actions
             and not engine.state.pending_actions["run-discovery"].completed
@@ -983,6 +1330,8 @@ __all__ = [
     "find_recent_session",
     "guide_recovery_command",
     "import_session_findings",
+    "journey_evidence_summary",
+    "journey_summary_lines",
     "quote_path",
     "snapshot",
     "suggested_command_for_action",

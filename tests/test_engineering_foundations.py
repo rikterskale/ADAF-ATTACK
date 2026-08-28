@@ -8,11 +8,14 @@ from pathlib import Path
 
 import pytest
 
+from adaf_attack.core import engineering
 from adaf_attack.core.engineering import (
     SCHEMA_VERSION,
     SessionStore,
+    distribution_closure,
     execute_with_controls,
     migrate_document,
+    relevant_pip_failures,
     validate_finding,
 )
 
@@ -23,6 +26,36 @@ def test_contract_migration_preserves_fields() -> None:
     assert result["status"] == "open"
     assert result["custom"] is True
     assert validate_finding(result).id == "F-1"
+
+
+def test_distribution_closure_and_pip_failure_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Distribution:
+        def __init__(self, requires: list[str] | None) -> None:
+            self.requires = requires
+
+    installed = {
+        "adaf-attack": Distribution(["Typer==0.27.1", "Rich>=15"]),
+        "typer": Distribution([]),
+        "rich": Distribution(None),
+    }
+
+    def resolve(name: str) -> Distribution:
+        try:
+            return installed[name]
+        except KeyError as exc:
+            raise engineering.PackageNotFoundError(name) from exc
+
+    monkeypatch.setattr(engineering, "distribution", resolve)
+    assert distribution_closure() == {"adaf-attack", "typer", "rich"}
+    output = "\n".join(
+        (
+            "unrelated-tool 1.0 has requirement typer==1, but you have typer 2.",
+            "adaf-attack 0.10.1 has requirement rich==15, but you have rich 14.",
+        )
+    )
+    assert relevant_pip_failures(output, {"adaf-attack", "typer", "rich"}) == [
+        "adaf-attack 0.10.1 has requirement rich==15, but you have rich 14."
+    ]
 
 
 def test_session_store_indexes_and_filters_findings(tmp_path: Path) -> None:

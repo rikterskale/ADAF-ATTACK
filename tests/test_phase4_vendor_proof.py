@@ -8,7 +8,6 @@ backed by the behaviors below (and MANUAL evidence for stranger proofs).
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -169,10 +168,11 @@ def test_operator_docs_carry_stage_labels_and_first_ten_canon() -> None:
     evidence = (ROOT / "docs" / "RELEASE_EVIDENCE.md").read_text(encoding="utf-8")
     assert "## 6. Narrow-terminal TUI spot-check" in evidence
     assert "Do **not** invent a public package URL" in evidence
+    assert "RELEASE_EVIDENCE_0.10.1.md" in evidence
+    published = (ROOT / "docs" / "RELEASE_EVIDENCE_0.10.1.md").read_text(encoding="utf-8")
+    assert "7e5bbc74c48dca50277e92f59535dcb8cc4ee192" in published
+    assert "33112303284" in published
+    assert "Manual evidence not captured" in published
     scorecard = (ROOT / "docs" / "VENDOR_SCORECARD.md").read_text(encoding="utf-8")
-    assert (
-        "No row below 9" in scorecard
-        or "No row below 10" in scorecard
-        or re.search(r"\*\*Overall product\*\*.*\*\*10\*\*", scorecard)
-    )
-    assert re.search(r"Overall product.*(?:~9\.[0-9]|\*\*10\*\*)", scorecard) is not None
+    assert "RELEASE_EVIDENCE_0.10.1.md" in scorecard
+    assert "../tmp/" not in scorecard

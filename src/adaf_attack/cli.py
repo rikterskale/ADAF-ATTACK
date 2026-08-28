@@ -606,6 +606,8 @@ def _installation_kind() -> str:
 
 def _pip_consistency_check() -> tuple[bool, str]:
     """Run pip's installed-distribution consistency check without network access."""
+    from adaf_attack.core.engineering import relevant_pip_failures
+
     try:
         result = subprocess.run(
             [sys.executable, "-m", "pip", "check"],
@@ -617,7 +619,12 @@ def _pip_consistency_check() -> tuple[bool, str]:
     except (OSError, subprocess.TimeoutExpired) as exc:
         return False, f"{type(exc).__name__}: {exc}"
     detail = (result.stdout or result.stderr).strip()
-    return result.returncode == 0, detail or "No broken requirements found."
+    if result.returncode == 0:
+        return True, detail or "No broken requirements found."
+    failures = relevant_pip_failures(detail)
+    if failures:
+        return False, "\n".join(failures)
+    return True, "No broken ADAF requirements found."
 
 
 def _socket_check(host: str, port: int, timeout: float) -> tuple[str, str | None]:
@@ -3643,27 +3650,31 @@ def command_builder_cmd(
     force: bool = typer.Option(False, "--force"),
 ) -> None:
     """Generate a copy-ready command and explain each option in plain language."""
+    from adaf_attack.core.command_templates import render_command, shell_dialect
     from adaf_attack.core.novice import command_option_explanations
     from adaf_attack.core.registry import capability_registry
-    from adaf_attack.core.ux import build_ready_command
+    from adaf_attack.core.ux import build_ready_argv
 
     cap = capability_registry.get(capability)
     if cap is None:
         error = _unknown_capability_error(capability)
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
-    ready = build_ready_command(
+    argv = build_ready_argv(
         cap.id,
         domain=domain or "<domain>",
         dc_ip=dc_ip or "<dc-ip>",
         username=username,
         force=force or cap.requires_force,
     )
+    ready = render_command(argv)
     explanations = command_option_explanations(cap)
     payload = {
         "ok": True,
         "capability": cap.id,
         "command": ready,
+        "command_argv": argv,
+        "shell": shell_dialect(),
         "option_explanations": explanations,
         "next_step": "Review scope, then run the command only against an authorized target.",
     }

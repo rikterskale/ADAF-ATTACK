@@ -6,9 +6,18 @@ command names are checked against the Typer application by
 for current options, defaults, validation, and examples.
 
 Copy-ready commands from `guide`, `plan`, `command`, and related surfaces use
-POSIX/`shlex` quoting (single quotes). On Windows PowerShell, paste into a
-bash-compatible shell when values contain spaces, or prefer values without
-spaces so the unquoted safe-token form applies.
+native PowerShell single-quote escaping on Windows and POSIX `shlex` quoting on
+Linux and macOS. Values containing spaces, apostrophes, or shell metacharacters
+remain one argument in the platform's default shell. JSON output from `command`
+also includes the unquoted `command_argv` and its `shell` dialect so automation
+does not need to parse a rendered command string.
+
+`guide`, `what-next`, and `workflow next` share one journey document. Every
+recommended action includes a redacted `evidence_basis` containing workflow,
+finding, or durable artifact references; no secret evidence values are copied
+into guidance. An invalid explicit `--session` fails with `SESSION_NOT_FOUND`,
+shows `adaf-attack sessions --limit 10`, and preserves a guide recovery command
+that omits the invalid session.
 
 | Command | Surface |
 |---|---|

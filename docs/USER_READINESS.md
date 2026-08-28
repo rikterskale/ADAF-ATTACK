@@ -53,6 +53,7 @@ Journey stage labels match CLI and TUI character-for-character:
 | Stage id | Label |
 |---|---|
 | `install-blocked` | Install readiness |
+| `session-blocked` | Session context |
 | `first-success` | Safe offline first success |
 | `orient` | Authorize scope |
 | `discover` | Baseline discovery |

@@ -548,6 +548,9 @@ def test_tui_operator_safety_and_profile_controls(
                 lambda text: (_ for _ in ()).throw(RuntimeError("clipboard")),
             )
             app._copy_ready_command()
+            assert "Select and copy this shell-safe command manually" in str(
+                app.query_one("#review-panel", Static).render()
+            )
 
             app.selected_cap = None
             app._update_progress()
@@ -783,6 +786,7 @@ def test_tui_guided_workflow_persistence_recommendations_and_exports(
             )
             app._start_run()
             await _wait_for(pilot, lambda: app._capability_running is False)
+            assert any("When lost: adaf-attack guide" in line for line in app._log_lines)
 
     asyncio.run(exercise())
 
@@ -905,3 +909,53 @@ def test_tui_journey_exactly_matches_shared_snapshot_across_states(
     assert actual["recovery_command"] == expected["recovery_command"]
     if expected_stage == "install-blocked":
         assert actual["suggested_command"] == "python -m pip check"
+
+
+def test_tui_journey_surfaces_share_evidence_command_and_recovery(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "adaf_attack.cli._doctor_payload", lambda profile: {"ok": True, "checks": []}
+    )
+
+    async def exercise() -> None:
+        app = ADAFAttackApp(workspace=tmp_path)
+        async with app.run_test():
+            journey = app._journey()
+            command = journey["suggested_command"]
+            recovery = journey["recovery_command"]
+            app._show_home()
+            home = str(app.query_one("#first-launch-panel", Static).render())
+            app._show_what_next()
+            what_next = str(app.query_one("#recommendations-panel", Static).render())
+            app._set_wizard_step(2)
+            wizard = str(app.query_one("#wizard-guide", Static).render())
+            app._refresh_workflow_panel()
+            workflow = str(app.query_one("#workflow-state-panel", Static).render())
+            for surface in (home, what_next, wizard, workflow):
+                assert command in surface
+                assert recovery in surface
+                assert "Evidence:" in surface
+
+    asyncio.run(exercise())
+
+
+def test_tui_corrupt_workflow_state_is_actionable(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (tmp_path / "workflow-state.json").write_text("not-json", encoding="utf-8")
+    monkeypatch.setattr(
+        "adaf_attack.cli._doctor_payload", lambda profile: {"ok": True, "checks": []}
+    )
+
+    async def exercise() -> None:
+        app = ADAFAttackApp(workspace=tmp_path)
+        async with app.run_test():
+            panel = str(app.query_one("#workflow-state-panel", Static).render())
+            assert "Workflow: unavailable" in panel
+            assert "support-bundle" in panel
+            assert "If this fails: adaf-attack guide" in panel
+
+    asyncio.run(exercise())

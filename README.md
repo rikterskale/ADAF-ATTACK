@@ -48,6 +48,7 @@ Journey stage labels (character-for-character with `guide` / TUI Home):
 | Stage id | Label |
 |---|---|
 | `install-blocked` | Install readiness |
+| `session-blocked` | Session context |
 | `first-success` | Safe offline first success |
 | `orient` | Authorize scope |
 | `discover` | Baseline discovery |

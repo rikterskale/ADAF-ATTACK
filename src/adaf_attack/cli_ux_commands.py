@@ -186,6 +186,16 @@ def register_ux_commands(
         if advance:
             non_interactive = bool(ctx.ensure_object(dict).get("non_interactive"))
             primary = payload["primary_action"]
+            if payload.get("error"):
+                error_payload = payload["error"]
+                error = ActionableError(
+                    str(error_payload["code"]),
+                    str(error_payload["message"]),
+                    str(error_payload["remediation"]),
+                    suggested_command=str(error_payload.get("suggested_command") or ""),
+                )
+                _emit_error(ctx, error)
+                raise typer.Exit(code=error.exit_code)
             if non_interactive or _json_mode(ctx):
                 error = error_for(
                     "INTERACTIVE_MODE_DISABLED",
@@ -212,19 +222,12 @@ def register_ux_commands(
             action_id = str(primary["id"])
             try:
                 if action_id == "quickstart":
-                    dest_root = root / "quickstart"
-                    dest = dest_root / "demo-session"
+                    dest_root = root
+                    dest = root / "demo-session"
                     if not dest.exists():
                         materialize_demo_session(dest)
                     payload = snapshot(workspace=dest_root, session=dest, doctor=doctor)
                     payload["advanced"] = {"id": action_id, "session_path": str(dest)}
-                elif action_id == "authorize-scope":
-                    engine = WorkflowEngine(root, mode="interactive")
-                    if not engine.state.audit_log:
-                        engine.start(actor="guide")
-                    engine.complete_action("authorize-scope", actor="guide")
-                    payload = snapshot(workspace=root, session=session, doctor=doctor)
-                    payload["advanced"] = {"id": action_id}
                 elif action_id == "import-session":
                     target = session or Path(str(payload["context"].get("session_hint") or ""))
                     if not target or not target.is_dir():
@@ -235,15 +238,6 @@ def register_ux_commands(
                 elif action_id == "workflow-close":
                     engine = WorkflowEngine(root, mode="interactive")
                     engine.close(actor="guide")
-                    payload = snapshot(workspace=root, session=session, doctor=doctor)
-                    payload["advanced"] = {"id": action_id}
-                elif action_id in {"run-discovery", "generate-report"} or action_id.startswith(
-                    ("validate:", "response:", "verify:")
-                ):
-                    engine = WorkflowEngine(root, mode="interactive")
-                    if not engine.state.audit_log:
-                        engine.start(actor="guide")
-                    engine.complete_action(action_id, actor="guide")
                     payload = snapshot(workspace=root, session=session, doctor=doctor)
                     payload["advanced"] = {"id": action_id}
                 else:
@@ -270,45 +264,14 @@ def register_ux_commands(
             ("✓ " if item["done"] else ("● " if item["current"] else "○ ")) + item["label"]
             for item in payload.get("breadcrumb") or []
         )
-        secondary_lines = [
-            f"- {item['title']}: {item['suggested_command']}"
-            for item in payload.get("secondary_actions") or []
-        ]
-        approvals = primary.get("approvals") or []
-        approval_text = ", ".join(approvals) if approvals else "none (offline / review-only)"
-        blocked_line = (
-            [f"Blocked because: {payload['blocked_because']}", ""]
-            if payload.get("blocked_because")
-            else []
-        )
-        fallback = payload.get("fallback") or primary.get("fallback")
-        fallback_line = [f"Fallback: {fallback}"] if fallback else []
-        entry = payload.get("entry_criteria") or primary.get("entry_criteria") or []
-        exit_c = payload.get("exit_criteria") or primary.get("exit_criteria") or []
-        criteria_lines: list[str] = []
-        if entry:
-            criteria_lines.append("Entry: " + "; ".join(str(item) for item in entry))
-        if exit_c:
-            criteria_lines.append("Exit:  " + "; ".join(str(item) for item in exit_c))
-        if criteria_lines:
-            criteria_lines.append("")
+        from adaf_attack.core.journey import journey_summary_lines
+
         human = Panel(
             "\n".join(
                 [
-                    f"Stage: {payload['stage_label']} ({payload['progress_pct']}%)",
                     breadcrumb,
                     "",
-                    *blocked_line,
-                    *criteria_lines,
-                    f"Next: {primary['title']}",
-                    f"Why:  {primary['why']}",
-                    f"Risk: {primary.get('risk', 'observe')}",
-                    f"Approvals: {approval_text}",
-                    f"Rollback: {primary.get('rollback_implication') or primary.get('rollback')}",
-                    f"Cmd:  {primary['suggested_command']}",
-                    *fallback_line,
-                    f"If this fails: {payload.get('recovery_command') or primary.get('recovery_command')}",
-                    *(["", "Also:", *secondary_lines] if secondary_lines else []),
+                    *journey_summary_lines(payload, include_secondary=True),
                     "",
                     "Tip: `adaf-attack guide --advance` runs safe offline steps only.",
                 ]
@@ -316,6 +279,8 @@ def register_ux_commands(
             title="ADAF-ATTACK guide",
         )
         _emit(ctx, payload, human)
+        if not payload.get("ok"):
+            raise typer.Exit(code=1)
 
     @app.command("explain", rich_help_panel="Guidance & UX helpers")
     def explain_cmd(
@@ -409,7 +374,11 @@ def register_ux_commands(
         ),
     ) -> None:
         """Recommend the next action; always shares guide's suggested_command."""
-        from adaf_attack.core.journey import snapshot
+        from adaf_attack.core.journey import (
+            journey_evidence_summary,
+            journey_summary_lines,
+            snapshot,
+        )
         from adaf_attack.core.novice import beginner_next_actions, home_actions
 
         if capability is None:
@@ -423,6 +392,7 @@ def register_ux_commands(
                     "command": primary["suggested_command"],
                     "why": primary["why"],
                     "risk": primary.get("risk"),
+                    "evidence_basis": primary.get("evidence_basis") or [],
                 }
             ]
             for item in journey.get("secondary_actions") or []:
@@ -432,12 +402,24 @@ def register_ux_commands(
                         "command": item["suggested_command"],
                         "why": item["why"],
                         "risk": item.get("risk"),
+                        "evidence_basis": item.get("evidence_basis") or [],
                     }
                 )
             # Keep classic goal list as additional suggestions for discoverability.
             for item in home_actions(first_run=bool(journey["context"].get("first_run"))):
                 if item["command"] not in {entry["command"] for entry in actions}:
-                    actions.append(item)
+                    actions.append(
+                        {
+                            **item,
+                            "evidence_basis": [
+                                {
+                                    "kind": "catalog",
+                                    "ref": "home-actions",
+                                    "summary": "Static discoverability option; journey action remains primary.",
+                                }
+                            ],
+                        }
+                    )
             session_context: dict[str, Any] | None = None
             if session is not None and session.is_dir():
                 from adaf_attack.core.engagement_dashboard import dashboard
@@ -460,10 +442,17 @@ def register_ux_commands(
                                 "command": command,
                                 "why": str(item.get("why") or ""),
                                 "risk": item.get("risk"),
+                                "evidence_basis": [
+                                    {
+                                        "kind": "session",
+                                        "ref": str(session),
+                                        "summary": "Derived from the saved engagement dashboard.",
+                                    }
+                                ],
                             }
                         )
             payload = {
-                "ok": True,
+                "ok": bool(journey.get("ok")),
                 "context": "journey",
                 "stage": journey["stage"],
                 "suggestions": actions,
@@ -474,15 +463,18 @@ def register_ux_commands(
                 "journey": journey,
                 "session_context": session_context,
             }
+            if journey.get("error"):
+                payload["error"] = journey["error"]
             human = Panel(
                 "\n".join(
                     [
-                        f"Stage: {journey['stage_label']}",
-                        f"Next:  {primary['suggested_command']}",
-                        f"Why:   {primary['why']}",
+                        *journey_summary_lines(journey, compact=True),
                         "",
                         *[
-                            f"{i + 1}. {item['goal']}\n   {item['command']}\n   {item['why']}"
+                            f"{i + 1}. {item['goal']}\n"
+                            f"   {item['command']}\n"
+                            f"   {item['why']}\n"
+                            f"   Evidence: {journey_evidence_summary(item)}"
                             for i, item in enumerate(actions[:6])
                         ],
                     ]
@@ -490,6 +482,8 @@ def register_ux_commands(
                 title="What should I do next?",
             )
             _emit(ctx, payload, human)
+            if not payload["ok"]:
+                raise typer.Exit(code=1)
             return
         from adaf_attack.core.registry import capability_registry
 
@@ -513,15 +507,55 @@ def register_ux_commands(
                 if (follow := capability_registry.get(item["id"])) is not None
                 and safety_summary(follow)["level"] != "RED"
             ]
-        payload = {"ok": True, "context": capability, "suggestions": suggestions}
+        evidence_suggestions: list[dict[str, Any]] = [
+            {
+                **item,
+                "evidence_basis": [
+                    {
+                        "kind": "capability-catalog",
+                        "ref": str(item["id"]),
+                        "summary": f"Static follow-up for completed capability {capability}.",
+                    }
+                ],
+            }
+            for item in suggestions
+        ]
+        doctor = doctor_payload("user-readiness")
+        root = Path(workspace) if workspace is not None else default_workspace_dir()
+        journey = snapshot(workspace=root, session=session, doctor=doctor)
+        primary = journey["primary_action"]
+        payload = {
+            "ok": bool(journey.get("ok")),
+            "context": "journey",
+            "completed_capability": capability,
+            "stage": journey["stage"],
+            "suggestions": evidence_suggestions,
+            "primary_action": primary,
+            "next_step": primary["suggested_command"],
+            "suggested_command": primary["suggested_command"],
+            "recovery_command": journey.get("recovery_command"),
+            "journey": journey,
+        }
+        if journey.get("error"):
+            payload["error"] = journey["error"]
         human = Panel(
             "\n".join(
-                f"{i + 1}. {item['id']} — {item['message']}" for i, item in enumerate(suggestions)
-            )
-            or "No follow-up is recommended yet. Review the session findings first.",
+                [
+                    *journey_summary_lines(journey, compact=True),
+                    "",
+                    "Capability-specific follow-ups:",
+                    *[
+                        f"{i + 1}. {item['id']} — {item['message']}\n"
+                        f"   Evidence: {journey_evidence_summary(item)}"
+                        for i, item in enumerate(evidence_suggestions)
+                    ],
+                ]
+            ),
             title=f"What next after {capability}?",
         )
         _emit(ctx, payload, human)
+        if not payload["ok"]:
+            raise typer.Exit(code=1)
 
     # --- Profile management (named target + opsec profiles) --------------------
     profile_app = typer.Typer(help="Named target and opsec profiles.")

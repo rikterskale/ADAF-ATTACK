@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 from collections import Counter, deque
@@ -11,6 +12,22 @@ from typing import Any
 from adaf_attack.core.redaction import redact
 from adaf_attack.core.tooling import graph_explorer
 from adaf_attack.core.ux import session_findings_dashboard
+
+
+def _artifact_basis(path: Path, *, pointer: str, summary: str) -> list[dict[str, Any]]:
+    """Build a durable, content-addressed reference without copying evidence values."""
+    basis: dict[str, Any] = {
+        "kind": "artifact",
+        "ref": f"{path}#{pointer}",
+        "summary": summary,
+    }
+    if path.is_file():
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        basis["sha256"] = digest.hexdigest()
+    return [basis]
 
 
 def evidence_cockpit(session: Path, *, start: str | None = None, limit: int = 10) -> dict[str, Any]:
@@ -212,6 +229,11 @@ def copilot_recommendations(session: Path) -> dict[str, Any]:
                 "why": f"{triage['open']} finding(s) remain open in the session.",
                 "confidence": "high",
                 "command": f"adaf-attack session show --session {quote_path(session)}",
+                "evidence_basis": _artifact_basis(
+                    session / "findings.json",
+                    pointer="/findings",
+                    summary=f"{triage['open']} open finding(s) were counted.",
+                ),
             }
         )
     if dashboard.get("graph", {}).get("edges", 0):
@@ -221,7 +243,12 @@ def copilot_recommendations(session: Path) -> dict[str, Any]:
                 "action": "Rank evidence-backed attack paths",
                 "why": "The session contains graph relationships that can be analyzed offline.",
                 "confidence": "high",
-                "command": f"adaf-attack rank-paths --graph {session / 'graph.json'}",
+                "command": (f"adaf-attack rank-paths --graph {quote_path(session / 'graph.json')}"),
+                "evidence_basis": _artifact_basis(
+                    session / "graph.json",
+                    pointer="/edges",
+                    summary="Saved graph relationships are available for offline ranking.",
+                ),
             }
         )
     if not recommendations:
@@ -231,7 +258,12 @@ def copilot_recommendations(session: Path) -> dict[str, Any]:
                 "action": "Generate the engagement report",
                 "why": "No higher-priority open finding or graph action was detected.",
                 "confidence": "medium",
-                "command": f"adaf-attack engagement report --session {session}",
+                "command": f"adaf-attack engagement report --session {quote_path(session)}",
+                "evidence_basis": _artifact_basis(
+                    session / "findings.json",
+                    pointer="/findings",
+                    summary="No higher-priority open finding or graph action was derived.",
+                ),
             }
         )
     return {

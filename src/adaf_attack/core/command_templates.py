@@ -5,9 +5,11 @@ Commands are templates for authorized operator use. They never auto-execute.
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
 import string
+from collections.abc import Iterable
 from typing import Any
 
 from ldap3.utils.conv import escape_filter_chars as _ldap_filter_value
@@ -505,24 +507,39 @@ def _sam_from_node_id(node_id: str | None) -> str:
 
 
 _SAFE_COMMAND_VALUE = re.compile(r"^[A-Za-z0-9_./:@%+=,-]+\$?$")
+_WINDOWS_SHELL = os.name == "nt"
 
 
 def shell_quote(value: str) -> str:
     """Quote a value unless it is a safe shell token.
 
-    Computer accounts conventionally end in ``$``. A trailing dollar has no
-    expansion meaning in a POSIX shell, so preserve that familiar display
-    form while still quoting whitespace and shell metacharacters.
+    Computer accounts conventionally end in ``$``. Preserve that familiar
+    display form while still quoting whitespace and shell metacharacters.
 
-    Copy-ready commands use POSIX/`shlex.quote` (single quotes). On Windows
-    PowerShell, paste into bash/`pwsh` with bash-compatible quoting, or wrap
-    the whole invocation in ``cmd /c`` / use the unquoted safe-token form when
-    values have no spaces. Prefer ``adaf-attack command`` / ``plan`` output as
-    the operator contract rather than hand-editing quotes.
+    Copy-ready commands use native PowerShell single-quote escaping on Windows
+    and POSIX ``shlex.quote`` elsewhere. Prefer ``adaf-attack command`` /
+    ``plan`` output as the operator contract rather than hand-editing quotes.
     """
-    if _SAFE_COMMAND_VALUE.fullmatch(value):
+    if _SAFE_COMMAND_VALUE.fullmatch(value) and not (_WINDOWS_SHELL and value.startswith("@")):
         return value
+    if _WINDOWS_SHELL:
+        return "'" + value.replace("'", "''") + "'"
     return shlex.quote(value)
+
+
+def shell_dialect() -> str:
+    """Return the native shell contract used for copy-ready commands."""
+    return "powershell" if _WINDOWS_SHELL else "posix"
+
+
+def render_command(argv: Iterable[str]) -> str:
+    """Render an argument vector for the platform's native operator shell."""
+    values = [str(value) for value in argv]
+    rendered = [shell_quote(value) for value in values]
+    command = " ".join(rendered)
+    if _WINDOWS_SHELL and rendered and rendered[0] != values[0]:
+        return f"& {command}"
+    return command
 
 
 # Backward-compatible alias for in-module call sites.

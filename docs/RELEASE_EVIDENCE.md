@@ -7,10 +7,9 @@ private release record with wheel hashes and `release-manifest.json`.
 Do **not** invent a public package URL. Operators install from the private
 GitHub release channel or an approved internal index / wheelhouse only.
 
-For the `v0.10.1` private cut, a filled pack is retained outside the git tree
-with the release rehearsal artifacts (scratch
-`evidence/RELEASE_EVIDENCE_FILLED.md`). Published smoke:
-https://github.com/rikterskale/ADAF-ATTACK/actions/runs/33112303284
+Published facts for the `v0.10.1` private cut are retained in
+[RELEASE_EVIDENCE_0.10.1.md](RELEASE_EVIDENCE_0.10.1.md). That record explicitly
+separates automated proof from manual evidence that was not captured.
 
 ```text
 Version: __________
@@ -26,9 +25,8 @@ release-provenance.json present: YES / NO (signed: YES / NO)
 ## 1. First-ten-minutes (new operator)
 
 Operator is unfamiliar with the repo and has only an approved wheel +
-SHA256SUMS + release-manifest. No source reading. Prefer the scratch scripts
-`92_first_ten_minutes.sh` / `92_first_ten_minutes.ps1` when available outside
-the tree; otherwise paste the canon below.
+SHA256SUMS + release-manifest. No source reading. Paste the canon below and
+attach the sanitized outputs to the private release record.
 
 | OS | Python | Result | Notes |
 |---|---|---|---|

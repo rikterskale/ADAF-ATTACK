@@ -17,7 +17,8 @@ The product layer turns saved evidence into polished operator and client workflo
 
 The finding-driven `workflow` command group remains the durable spine for
 scoping through closure; `guide` and `workflow next` emit the same copy-ready
-`suggested_command` for the current top action.
+`suggested_command` and redacted `evidence_basis` for the current top action.
+CLI and TUI render that document through the same journey summary composer.
 
 This iteration intentionally excludes collaborative finding rooms (#6) and operator workspace profiles (#10); existing triage and configuration behavior is unchanged.
 

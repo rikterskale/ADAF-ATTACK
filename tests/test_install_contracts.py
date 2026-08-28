@@ -1,12 +1,26 @@
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_release_readiness_script() -> ModuleType:
+    path = ROOT / "scripts" / "check_release_readiness.py"
+    name = "adaf_test_check_release_readiness"
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_install_and_documentation_contracts() -> None:
@@ -64,6 +78,14 @@ def test_windows_installer_workflow_uses_static_shells() -> None:
     assert text.count(r"scripts\Test-WindowsInstaller.ps1") == 2
 
 
+def test_windows_lifecycle_selects_current_or_explicit_wheel() -> None:
+    script = (ROOT / "scripts" / "Test-WindowsInstaller.ps1").read_text(encoding="utf-8")
+    assert "[string]$Package" in script
+    assert "pyproject.toml" in script
+    assert "dist\\adaf_attack-$version-*.whl" in script
+    assert "dist\\*.whl" not in script
+
+
 def test_kali_installer_keeps_non_kali_guard_and_supports_artifacts() -> None:
     script = (ROOT / "scripts" / "install-kali.sh").read_text(encoding="utf-8")
     for token in (
@@ -104,3 +126,49 @@ def test_artifact_smoke_runs_exact_guided_first_success_contract() -> None:
         '"suggested_command"',
     ):
         assert token in script, f"artifact smoke is missing first-ten contract token: {token}"
+
+
+def test_release_readiness_uses_active_console_script(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_release_readiness_script()
+    monkeypatch.delenv("ADAF_CLI", raising=False)
+    monkeypatch.setattr(module.sysconfig, "get_path", lambda name: str(tmp_path))
+    console_name = "adaf-attack.exe" if module.os.name == "nt" else "adaf-attack"
+    assert module._cli_argv() == [str(tmp_path / console_name)]
+
+
+def test_release_readiness_ignores_unrelated_pip_conflicts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_release_readiness_script()
+
+    class Result:
+        returncode = 1
+        stdout = "unrelated-tool 1.0 has requirement typer==1.0, but you have typer 2.0.\n"
+        stderr = ""
+
+    monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: Result())
+    monkeypatch.setattr(
+        module,
+        "distribution_closure",
+        lambda: {"adaf-attack", "typer"},
+    )
+    module._pip_check()
+
+
+def test_release_readiness_rejects_adaf_dependency_conflicts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_release_readiness_script()
+
+    class Result:
+        returncode = 1
+        stdout = "adaf-attack 0.10.1 has requirement typer==0.27.1, but you have typer 0.23.1.\n"
+        stderr = ""
+
+    monkeypatch.setattr(module.subprocess, "run", lambda *args, **kwargs: Result())
+    monkeypatch.setattr(module, "distribution_closure", lambda: {"adaf-attack", "typer"})
+    with pytest.raises(AssertionError, match="ADAF dependencies"):
+        module._pip_check()

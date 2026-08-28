@@ -277,6 +277,8 @@ def test_home_and_command_builder_json() -> None:
     assert command.exit_code == 0, command.output
     payload = json.loads(command.output)
     assert payload["command"].startswith("adaf-attack run ldap-enum")
+    assert payload["command_argv"][:3] == ["adaf-attack", "run", "ldap-enum"]
+    assert payload["shell"] in {"posix", "powershell"}
     assert payload["option_explanations"]
 
 

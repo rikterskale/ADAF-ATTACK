@@ -9,7 +9,7 @@ CLI/TUI/docs agree, a behavioral test locks the contract, and the failure path
 is a product.
 
 Private release: https://github.com/rikterskale/ADAF-ATTACK/releases/tag/v0.10.1  
-Filled MANUAL pack (scratch): `../tmp/adaf-ux-pass/evidence/RELEASE_EVIDENCE_FILLED.md`
+Durable published evidence: [RELEASE_EVIDENCE_0.10.1.md](RELEASE_EVIDENCE_0.10.1.md)
 
 ## Baseline vs current hardening
 
@@ -33,34 +33,35 @@ Filled MANUAL pack (scratch): `../tmp/adaf-ux-pass/evidence/RELEASE_EVIDENCE_FIL
 | 3 | Kill-chain capability discovery | 9.0 | **9.0** | Strong automated contract; stranger proof remains manual |
 | 4 | Plain-language explain / safety | 9.0 | **9.0** | Shared operator contract |
 | 5 | Review-first plans / risk previews | 9.0 | **9.0** | Plan/review operator contract |
-| 6 | Shell-safe copy-ready commands | 8.5 | **9.0** | Quoted path and journey tests |
+| 6 | Shell-safe copy-ready commands | 8.5 | **10.0** | Native argv renderer, declared shell dialect, and manual-copy fallback |
 | 7 | Prerequisite / dependency nav | 8.5 | **9.0** | Extras errors and doctor remediation |
 | 8 | Structured progress stages | 8.5 | **9.0** | Stage labels, breadcrumb, and timeline metadata |
-| 9 | Evidence-backed next actions | 8.5 | **9.0** | `guide` = `what-next` = `workflow next` |
+| 9 | Evidence-backed next actions | 8.5 | **10.0** | Redacted finding/artifact basis is identical across every next-action surface |
 | 10 | Session findings dashboard | 9.0 | **9.0** | Quickstart now produces a meaningful dashboard |
 | 11 | Unified search | 9.0 | **9.0** | Compact layout and evidence search |
 | 12 | Session comparison | 9.0 | **9.0** | Behavioral comparison contract |
 | 13 | Target / OPSEC profiles | 9.0 | **9.0** | Profile and TUI controls |
 | 14 | Favorites / recents / completions | 9.0 | **9.0** | Non-secret persistence contracts |
 | 15 | Timeline / rollback / redacted packaging | 8.5 | **9.0** | Idempotent rollback-kind proof and fail-closed redaction |
-| 16 | Unified guided journey | 8.5 | **9.0** | Offline-first TUI spine and shared snapshot |
+| 16 | Unified guided journey | 8.5 | **10.0** | Shared snapshot/renderer plus fail-closed session and corrupt-state recovery |
 
-**No row below 9.** A score of 10 remains reserved for repeatable stranger proof,
-customer-environment failure evidence, and release-manager sign-off for the exact
-candidate. Kali host behavior and organization air-gap transfer controls remain
-manual release evidence.
+**No row below 9.** Rows 6, 9, and 16 reach 10 through repeatable isolated
+new-operator contracts, cross-surface parity, behavioral locks, and productized
+failure paths. Overall 10 remains reserved for customer-environment evidence and
+release-manager sign-off for the exact candidate. Kali host behavior and
+organization air-gap transfer controls remain manual release evidence.
 
 ## Published v0.10.1 evidence
 
-The published evidence below proves the v0.10.1 artifact as released. The
-current-source hardening scores above apply to the next candidate and require a
-fresh release evidence pack before publication.
+The published evidence below proves the automated v0.10.1 artifact checks. The
+durable record identifies manual evidence that was not captured. Current-source
+hardening applies to the next candidate and requires a fresh completed pack.
 
-1. First-ten-minutes — Windows clean venv + Linux docker wheel — **PASS** (macOS via smoke)
+1. Automated first-ten-minutes — clean artifact environments — **PASS**
 2. Published-artifact smoke — https://github.com/rikterskale/ADAF-ATTACK/actions/runs/33112303284 — **PASS**
 3. Air-gapped wheelhouse `--no-index --find-links` — **PASS**
-4. Release-manager checklist / SECURITY advisory channel — **PASS**
-5. Narrow-terminal TUI compact-layout suite — **PASS**
+4. Release-manager checklist / SECURITY advisory channel — **AUTOMATED CONTRACT PASS**
+5. Narrow-terminal TUI compact-layout suite — **AUTOMATED PASS; MANUAL SPOT-CHECK NOT RECORDED**
 
 ## Local verification commands
 

@@ -65,6 +65,11 @@ def test_cockpit_timeline_copilot_and_collaboration(tmp_path: Path) -> None:
     assert cockpit["priority_focus"][0]["id"] == "F-1"
     assert timeline["replayable"] is True
     assert copilot["recommendations"][0]["id"] == "triage-open-findings"
+    assert copilot["recommendations"][0]["evidence_basis"][0]["ref"].endswith(
+        "findings.json#/findings"
+    )
+    assert len(copilot["recommendations"][0]["evidence_basis"][0]["sha256"]) == 64
+    assert all(item["evidence_basis"] for item in copilot["recommendations"])
     assert collaboration["owners"] == {"alice": 1}
 
 

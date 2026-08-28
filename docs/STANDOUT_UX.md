@@ -3,7 +3,8 @@
 The standout UX layer is evidence-first and works equally from the CLI and TUI:
 
 - `guide` is the single authoritative next-step command; CLI and TUI share
-  `core.journey.snapshot()` so the same copy-ready command appears everywhere.
+  `core.journey.snapshot()` and `journey_summary_lines()` so the same evidence
+  basis, copy-ready command, and recovery appear everywhere.
 - `cockpit` combines findings, graph paths, priority focus, and explainability.
 - `what-if` simulates graph evidence changes in a temporary file and never changes the source graph or contacts a target.
 - `timeline` normalizes the append-only audit log into a replayable sequence.
