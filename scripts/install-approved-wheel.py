@@ -98,7 +98,8 @@ def main() -> int:
     venv.EnvBuilder(with_pip=True).create(venv_root)
     python = venv_root / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     requirement = f"{wheel}[{args.extras}]" if args.extras else str(wheel)
-    _run([str(python), "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
+    if not args.find_links:
+        _run([str(python), "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
     install = [str(python), "-m", "pip", "install", requirement]
     if args.index_url:
         install.extend(["--index-url", args.index_url])

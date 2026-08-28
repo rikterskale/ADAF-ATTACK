@@ -823,10 +823,17 @@ def test_tui_guided_workflow_persistence_recommendations_and_exports(
             monkeypatch.setattr(
                 tui_app,
                 "execute_capability",
-                lambda *_args, **_kwargs: (_ for _ in ()).throw(tui_app.RunError("runner")),
+                lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    tui_app.RunError("connection refused by target")
+                ),
             )
             app._start_run()
             await _wait_for(pilot, lambda: app._capability_running is False)
+            assert any("Error [TARGET_UNREACHABLE]" in line for line in app._log_lines)
+            assert any("Recovery:" in line for line in app._log_lines)
+            assert any(
+                "Cmd: adaf-attack doctor --profile live-ad" in line for line in app._log_lines
+            )
             assert any("When lost: adaf-attack guide" in line for line in app._log_lines)
 
     asyncio.run(exercise())

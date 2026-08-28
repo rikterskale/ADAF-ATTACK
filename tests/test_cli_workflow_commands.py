@@ -10,6 +10,8 @@ import pytest
 from typer.testing import CliRunner
 
 from adaf_attack.cli import app
+from adaf_attack.core.workflow_engine import WorkflowEngine
+from adaf_attack.demo import materialize_demo_session
 
 runner = CliRunner()
 
@@ -50,6 +52,30 @@ def test_status_auto_starts_empty_workflow(tmp_path: Path) -> None:
     assert (tmp_path / "workflow-state.json").is_file()
     again = _json(_run(tmp_path, "status"))
     assert again["workflow_id"] == payload["workflow_id"]
+
+
+def test_cli_import_session_records_discovery_complete(tmp_path: Path) -> None:
+    session = tmp_path / "demo-session"
+    materialize_demo_session(session)
+    _json(_run(tmp_path, "authorize"))
+    imported = _json(_run(tmp_path, "import-session", "--session", str(session)))
+    assert imported["imported_count"] >= 1
+    engine = WorkflowEngine(tmp_path)
+    assert "discovery-complete" in engine.state.completed_steps
+    assert engine.recommendations()[0].id.startswith("validate:")
+
+
+def test_cli_import_empty_session_records_discovery_complete(tmp_path: Path) -> None:
+    session = tmp_path / "empty-session"
+    session.mkdir()
+    _json(_run(tmp_path, "authorize"))
+
+    imported = _json(_run(tmp_path, "import-session", "--session", str(session)))
+
+    assert imported["imported_count"] == 0
+    engine = WorkflowEngine(tmp_path)
+    assert "discovery-complete" in engine.state.completed_steps
+    assert engine.recommendations()[0].id == "generate-report"
 
 
 def test_full_lifecycle_start_to_closure(tmp_path: Path) -> None:

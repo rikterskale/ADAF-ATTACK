@@ -444,8 +444,14 @@ def suggested_command_for_action(
             f"adaf-attack workflow decide {shell_quote(action_id)} mitigate "
             f"--rationale {shell_quote('owner approved')}{workspace_flag}"
         ).strip()
-    if action_id.startswith(("response:", "verify:")):
+    if action_id.startswith("response:"):
         return f"adaf-attack workflow do {shell_quote(action_id)}{workspace_flag}".strip()
+    if action_id.startswith("verify:"):
+        finding_id = action_id.split(":", 1)[1]
+        return (
+            f"adaf-attack workflow transition {shell_quote(finding_id)} closed "
+            f"--note {shell_quote('verification evidence reviewed')}{workspace_flag}"
+        ).strip()
     if action_id.startswith("mitigate:"):
         finding_id = action_id.split(":", 1)[1]
         return (
@@ -457,6 +463,7 @@ def suggested_command_for_action(
             return (
                 "adaf-attack engagement report "
                 f"--session {quote_path(session)} --engagement-id ENGAGEMENT-001"
+                f"{workspace_flag}"
             )
         return f"adaf-attack workflow do generate-report{workspace_flag}".strip()
     if action.capability_id:
@@ -1168,28 +1175,59 @@ def snapshot(
                     for item in recs[:3]
                 ]
         elif not recs:
-            stage = "closeout"
-            primary = JourneyAction(
-                id="workflow-close",
-                title="Close the guided workflow",
-                why="No pending required actions remain; finish and retain the audit trail.",
-                suggested_command=f"adaf-attack workflow close --workspace {ws_q}",
-                kind="required",
-                advance_safe=True,
-            )
-            secondary = [
-                JourneyAction(
-                    id="cleanup-status",
-                    title="Check rollback / cleanup status",
-                    why="Confirm no pending directory mutations remain before closeout.",
-                    suggested_command=(
-                        f"adaf-attack cleanup-status --session {quote_path(session_hint)}"
-                        if session_hint
-                        else "adaf-attack sessions --limit 5"
-                    ),
-                    kind="recommended",
+            closure_blockers = engine.closure_blockers()
+            if not closure_blockers:
+                stage = "closeout"
+                primary = JourneyAction(
+                    id="workflow-close",
+                    title="Close the guided workflow",
+                    why="No pending required actions remain; finish and retain the audit trail.",
+                    suggested_command=f"adaf-attack workflow close --workspace {ws_q}",
+                    kind="required",
+                    advance_safe=True,
                 )
-            ]
+                secondary = [
+                    JourneyAction(
+                        id="cleanup-status",
+                        title="Check rollback / cleanup status",
+                        why="Confirm no pending directory mutations remain before closeout.",
+                        suggested_command=(
+                            f"adaf-attack cleanup-status --session {quote_path(session_hint)}"
+                            if session_hint
+                            else "adaf-attack sessions --limit 5"
+                        ),
+                        kind="recommended",
+                    )
+                ]
+            else:
+                stage = "operate"
+                blocked_because = (
+                    "Workflow state cannot close: "
+                    + "; ".join(engine.closure_blocker_messages())
+                    + "."
+                )
+                primary = JourneyAction(
+                    id="diagnose-workflow-state",
+                    title="Diagnose incomplete workflow state",
+                    why=(
+                        "No executable recommendation is available, but closeout invariants "
+                        "are not satisfied. Preserve the state for diagnosis."
+                    ),
+                    suggested_command=(
+                        "adaf-attack support-bundle --output adaf-support-bundle.json"
+                    ),
+                    kind="required",
+                    advance_safe=False,
+                )
+                secondary = [
+                    JourneyAction(
+                        id="workflow-audit",
+                        title="Review the workflow audit trail",
+                        why="Identify the incomplete transition without overwriting evidence.",
+                        suggested_command=f"adaf-attack workflow audit --workspace {ws_q}",
+                        kind="recommended",
+                    )
+                ]
         else:
             top = recs[0]
             if top.id == "generate-report" or top.phase == "reporting":
@@ -1366,8 +1404,8 @@ def import_session_findings(
     for finding in findings_from_session(session):
         record = engine.ingest_finding(finding_from_document(finding.document()), actor=actor)
         imported.append(record.id)
-    if imported and "discovery-complete" not in engine.state.completed_steps:
-        # Mark discovery complete so validation actions unlock without a fake live run.
+    if "discovery-complete" not in engine.state.completed_steps:
+        # A valid imported session is discovery evidence even when it contains no findings.
         if (
             "run-discovery" in engine.state.pending_actions
             and not engine.state.pending_actions["run-discovery"].completed

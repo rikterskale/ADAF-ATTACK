@@ -532,6 +532,84 @@ def test_engagement_report(monkeypatch: Any, tmp_path: Path) -> None:
     assert "Findings: 5" in result.output
 
 
+def test_engagement_report_advances_ready_workflow_only(
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    import adaf_attack.core.reporting as reporting
+    from adaf_attack.core.workflow_engine import WorkflowEngine
+
+    session = tmp_path / "session"
+    session.mkdir()
+    workspace = tmp_path / "workflow"
+    engine = WorkflowEngine(workspace)
+    engine.start()
+    engine.complete_action("authorize-scope")
+    engine.complete_action("run-discovery")
+    monkeypatch.setattr(
+        reporting,
+        "generate_report_bundle",
+        lambda _session, engagement_id: {
+            "finding_count": 0,
+            "engagement_id": engagement_id,
+        },
+    )
+
+    args = [
+        "--format",
+        "json",
+        "engagement",
+        "report",
+        "--session",
+        str(session),
+        "--workspace",
+        str(workspace),
+    ]
+    payload = json.loads(runner.invoke(app, args).output)
+    assert payload["ok"] is True
+    assert payload["workflow_stage"] == "reporting"
+    assert "report-generated" in WorkflowEngine(workspace).state.completed_steps
+
+    repeated = runner.invoke(app, args)
+    assert repeated.exit_code == 1
+    assert json.loads(repeated.output)["error"]["code"] == "WORKFLOW_TRANSITION_INVALID"
+
+
+def test_engagement_report_rejects_unready_workflow_before_generation(
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    import adaf_attack.core.reporting as reporting
+    from adaf_attack.core.workflow_engine import WorkflowEngine
+
+    session = tmp_path / "session"
+    session.mkdir()
+    workspace = tmp_path / "workflow"
+    WorkflowEngine(workspace).start()
+    called = False
+
+    def generate(_session: Path, engagement_id: str) -> dict[str, int]:
+        nonlocal called
+        called = True
+        return {"finding_count": 0}
+
+    monkeypatch.setattr(reporting, "generate_report_bundle", generate)
+    result = runner.invoke(
+        app,
+        [
+            "engagement",
+            "report",
+            "--session",
+            str(session),
+            "--workspace",
+            str(workspace),
+        ],
+    )
+    assert result.exit_code == 1
+    assert called is False
+    assert "WORKFLOW_TRANSITION_INVALID" in result.output
+
+
 def test_engagement_package(monkeypatch: Any, tmp_path: Path) -> None:
     import adaf_attack.core.control_plane as cp
 

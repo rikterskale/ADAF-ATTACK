@@ -154,10 +154,14 @@ def test_session_show_handles_unreadable_events_file(
     events = session / "events.jsonl"
     events.write_text(json.dumps({"event": "x"}) + "\n", encoding="utf-8")
 
-    def boom(*args: Any, **kwargs: Any) -> str:
-        raise OSError("denied")
+    original_read_text = Path.read_text
 
-    monkeypatch.setattr(Path, "read_text", boom)
+    def unreadable_events(path: Path, *args: Any, **kwargs: Any) -> str:
+        if path == events:
+            raise OSError("denied")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", unreadable_events)
 
     result = runner.invoke(app, ["--format", "json", "session", "show", "--session", str(session)])
 

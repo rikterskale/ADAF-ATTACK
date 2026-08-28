@@ -2,8 +2,7 @@ name: Attach release evidence
 
 # When a private GitHub release is published, generate the SBOM (CycloneDX),
 # manifest, provenance, and checksums from the exact published distributions.
-# The SBOM is generated on the release commit so it reflects the exact locked
-# dependency set that CI proved.
+# The SBOM inventories the exact published wheel installed with operator extras.
 
 on:
   release:
@@ -81,22 +80,15 @@ jobs:
             sha256sum -c SHA256SUMS
           )
 
-      - name: Generate CycloneDX SBOM
-        run: >-
-          python -m pip_audit
-          --requirement requirements-ci.txt
-          --format cyclonedx-json
-          --output sbom.json
-
-      - name: Validate SBOM
+      - name: Generate exact-wheel operator SBOM
         run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          sbom = json.loads(Path("sbom.json").read_text(encoding="utf-8"))
-          assert sbom.get("bomFormat") == "CycloneDX"
-          assert sbom.get("components"), "SBOM has no components"
-          PY
+          set -euo pipefail
+          wheels=(release-dist/adaf_attack-*.whl)
+          test "${#wheels[@]}" -eq 1
+          python scripts/generate_release_sbom.py \
+            --wheel "${wheels[0]}" \
+            --venv "$RUNNER_TEMP/release-sbom-venv" \
+            --output sbom.json
 
       - name: Attach release evidence
         env:

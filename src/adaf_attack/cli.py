@@ -3105,6 +3105,11 @@ def engagement_report(
     ctx: typer.Context,
     session: Path = typer.Option(..., "--session"),
     engagement_id: str = typer.Option("unassigned", "--engagement-id"),
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        help="Guided-workflow workspace to advance after the report is generated.",
+    ),
 ) -> None:
     """Generate executive, technical, and remediation HTML/PDF reports from evidence."""
     from adaf_attack.core.reporting import generate_report_bundle
@@ -3117,7 +3122,37 @@ def engagement_report(
         )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
+    engine = None
+    if workspace is not None:
+        from adaf_attack.core.workflow_engine import WorkflowEngine, WorkflowError
+
+        try:
+            engine = WorkflowEngine(workspace)
+            action = engine.state.pending_actions.get("generate-report")
+            if action is None or action.completed or action.blocked:
+                raise WorkflowError("The guided workflow is not ready to record report generation.")
+        except WorkflowError as exc:
+            error = error_for(
+                "WORKFLOW_TRANSITION_INVALID",
+                message=str(exc),
+                details={"workspace": str(workspace)},
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
     result = generate_report_bundle(session, engagement_id=engagement_id)
+    if engine is not None:
+        try:
+            engine.complete_action("generate-report", actor="engagement-report")
+        except WorkflowError as exc:
+            error = error_for(
+                "WORKFLOW_TRANSITION_INVALID",
+                message=str(exc),
+                details={"workspace": str(workspace), "session": str(session)},
+            )
+            _emit_error(ctx, error)
+            raise typer.Exit(code=error.exit_code) from exc
+        result["workflow_stage"] = engine.state.phase
+        result["workflow_workspace"] = str(workspace)
     _emit(
         ctx,
         {"ok": True, **result},

@@ -454,6 +454,54 @@ jobs:
     needs: [package]
     uses: ./.github/workflows/_artifact-smoke.yml
 
+  wheelhouse-smoke:
+    needs: [package]
+    uses: ./.github/workflows/_wheelhouse-smoke.yml
+    with:
+      artifact-name: python-distributions
+
+  release-sbom:
+    name: Release operator SBOM
+    needs: [package]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install SBOM tooling
+        run: python -m pip install "pip-audit==2.10.1"
+
+      - name: Download exact release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-distributions
+          path: dist
+
+      - name: Generate exact-wheel operator SBOM
+        shell: bash
+        run: |
+          wheels=(dist/adaf_attack-*.whl)
+          test "${#wheels[@]}" -eq 1
+          python scripts/generate_release_sbom.py \
+            --wheel "${wheels[0]}" \
+            --venv "$RUNNER_TEMP/release-sbom-venv" \
+            --output release-sbom.json
+
+      - name: Upload release SBOM
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-sbom
+          path: release-sbom.json
+          if-no-files-found: error
+          retention-days: 30
+
   kali-installer:
     needs: [package, scripts]
     uses: ./.github/workflows/_kali-installer.yml
@@ -465,7 +513,7 @@ jobs:
 
   release-readiness:
     name: New-user release-readiness standard
-    needs: [artifact-smoke]
+    needs: [artifact-smoke, wheelhouse-smoke, release-sbom]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -538,6 +586,8 @@ jobs:
             echo "## ADAF-ATTACK user readiness"
             echo "- Readiness verifier: ${{ needs.release-readiness.result }}"
             echo "- Clean artifact smoke: ${{ needs.artifact-smoke.result }}"
+            echo "- Strict offline wheelhouse: ${{ needs.wheelhouse-smoke.result }}"
+            echo "- Exact-wheel operator SBOM: ${{ needs.release-sbom.result }}"
             echo "- Packaged offline demo: ${{ needs.operator-workflow.result }}"
             echo "- Reports and evidence package: ${{ needs.operator-workflow.result }}"
             echo "- Windows installer: ${{ needs.windows-installer.result }}"
@@ -617,7 +667,7 @@ jobs:
   ci-gate:
     name: Production readiness gate
     if: always()
-    needs: [lint, typecheck, tests, security, codeql, scripts, workflow-contract, package, artifact-smoke, kali-installer, operator-workflow, release-readiness, windows-installer, private-index-smoke]
+    needs: [lint, typecheck, tests, security, codeql, scripts, workflow-contract, package, artifact-smoke, wheelhouse-smoke, release-sbom, kali-installer, operator-workflow, release-readiness, windows-installer, private-index-smoke]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every CI lane to pass
@@ -631,6 +681,8 @@ jobs:
           test "${{ needs.workflow-contract.result }}" = success
           test "${{ needs.package.result }}" = success
           test "${{ needs.artifact-smoke.result }}" = success
+          test "${{ needs.wheelhouse-smoke.result }}" = success
+          test "${{ needs.release-sbom.result }}" = success
           test "${{ needs.kali-installer.result }}" = success
           test "${{ needs.operator-workflow.result }}" = success
           test "${{ needs.release-readiness.result }}" = success

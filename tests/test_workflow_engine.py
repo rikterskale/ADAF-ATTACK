@@ -445,6 +445,8 @@ def test_validation_and_close_guards_cover_unauthorized_and_unstarted_paths(
     no_discovery.state.completed_steps = ["scope-authorized"]
     with pytest.raises(WorkflowError, match="discovery completes"):
         no_discovery.close()
+    assert no_discovery.closure_blockers() == ("discovery",)
+    assert no_discovery.closure_blocker_messages() == ("discovery is incomplete",)
 
 
 def test_recommendations_prioritize_highest_risk_finding_and_explain_unlocks(

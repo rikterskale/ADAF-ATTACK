@@ -29,7 +29,6 @@ from adaf_attack.core.paths import default_workspace_dir
 from adaf_attack.core.workflow_engine import (
     WorkflowEngine,
     WorkflowError,
-    finding_from_document,
 )
 
 
@@ -522,21 +521,19 @@ def register_workflow_commands(
         actor: str = typer.Option("session", "--actor"),
     ) -> None:
         """Adapt canonical session findings into the guided workflow."""
-        from adaf_attack.core.findings import findings_from_session
+        from adaf_attack.core.journey import import_session_findings
 
         try:
             if not session.is_dir():
                 raise error_for("SESSION_NOT_FOUND", details={"session": str(session)})
-            engine = _engine(workspace)
-            imported: list[str] = []
+            root = _resolve_workspace(workspace)
+            _engine(root)
             try:
-                for finding in findings_from_session(session):
-                    record = engine.ingest_finding(
-                        finding_from_document(finding.document()), actor=actor
-                    )
-                    imported.append(record.id)
+                result = import_session_findings(root, session, actor=actor)
             except WorkflowError as exc:
                 raise error_for("WORKFLOW_TRANSITION_INVALID", message=str(exc)) from exc
+            engine = _engine(root)
+            imported = list(result["imported"])
         except ActionableError as error:
             emit_error(ctx, error)
             raise typer.Exit(code=error.exit_code) from error

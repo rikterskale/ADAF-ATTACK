@@ -31,6 +31,7 @@ from textual.widgets import (
 
 from adaf_attack import __version__
 from adaf_attack.core.capability_help_data import capability_option_spec
+from adaf_attack.core.cli_contract import classify_run_error, error_for
 from adaf_attack.core.control_plane import package_evidence
 from adaf_attack.core.engagement_dashboard import MODES, inspect_edge
 from adaf_attack.core.journey import (
@@ -1992,16 +1993,22 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     severity="information",
                 )
             except RunError as exc:
+                error = error_for(classify_run_error(str(exc)), message=str(exc))
                 recovery = guide_recovery_command(
                     workspace=self._workspace,
                     session=self._last_session,
                 )
                 self._write_run_log(
-                    f"[red]Error:[/] {exc}\n"
-                    f"[dim]Check the review panel and capability prerequisites.\n"
+                    f"[red]Error [{error.code}]:[/] {error.message}\n"
+                    f"[dim]Recovery: {error.remediation}\n"
+                    f"Cmd: {error.suggested_command}\n"
                     f"When lost: {recovery}[/]"
                 )
-                self._post_ui(self.notify, str(exc), severity="error")
+                self._post_ui(
+                    self.notify,
+                    f"{error.code}: {error.message}",
+                    severity="error",
+                )
             finally:
                 self._capability_running = False
                 self._active_stage = "next-actions"

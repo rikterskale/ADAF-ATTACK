@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +64,20 @@ def test_suggested_command_for_validate_and_decision() -> None:
     )
     assert journey.suggested_command_for_action(validate).endswith("workflow do validate:F-1")
     assert "workflow decide decision:F-1" in journey.suggested_command_for_action(decide)
+
+
+def test_suggested_command_for_verification_closes_with_durable_note() -> None:
+    verify = WorkflowAction(
+        "verify:F-1",
+        "Verify",
+        "Collect evidence",
+        "verification",
+        "required",
+        finding_ids=["F-1"],
+    )
+    command = journey.suggested_command_for_action(verify, workspace=Path("/tmp/ws"))
+    assert "workflow transition F-1 closed" in command
+    assert "--note" in command
 
 
 def test_journey_first_success_without_demo(tmp_path: Path, monkeypatch) -> None:
@@ -576,6 +591,7 @@ def test_import_session_findings_unlocks_validation(tmp_path: Path) -> None:
     assert result["count"] >= 1
     engine = WorkflowEngine(tmp_path)
     assert "scope-authorized" in engine.state.completed_steps
+    assert "discovery-complete" in engine.state.completed_steps
     assert engine.state.findings
     recs = engine.recommendations(limit=5)
     assert any(item.id.startswith("validate:") for item in recs)
@@ -586,6 +602,83 @@ def test_import_session_findings_requires_authorized_scope(tmp_path: Path) -> No
     materialize_demo_session(session)
     with pytest.raises(WorkflowError, match="Authorize scope"):
         journey.import_session_findings(tmp_path, session, actor="test")
+
+
+def test_guide_never_recommends_close_when_close_invariants_fail(
+    tmp_path: Path,
+) -> None:
+    session = tmp_path / "demo-session"
+    materialize_demo_session(session)
+    engine = WorkflowEngine(tmp_path)
+    engine.start(actor="test")
+    engine.complete_action("authorize-scope", actor="test")
+    engine.complete_action("run-discovery", actor="test")
+    engine.ingest_finding({"id": "F-1", "title": "Issue"})
+    engine.complete_action("validate:F-1")
+    engine.decide("decision:F-1", "mitigate")
+    engine.complete_action("response:F-1")
+    engine.complete_action("verify:F-1")
+
+    payload = journey.snapshot(
+        workspace=tmp_path,
+        session=session,
+        doctor={"ok": True, "checks": []},
+    )
+    assert payload["primary_action"]["id"] == "diagnose-workflow-state"
+    assert "support-bundle" in payload["suggested_command"]
+    assert "findings remain open" in payload["blocked_because"]
+
+
+def test_emitted_offline_guide_commands_reach_complete(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(tmp_path))
+    workspace = tmp_path / "guided"
+    session = workspace / "demo-session"
+    seen: set[str] = set()
+    stages: list[str] = []
+
+    for _ in range(30):
+        guide = _json(
+            runner.invoke(
+                app,
+                [
+                    "--format",
+                    "json",
+                    "guide",
+                    "--workspace",
+                    str(workspace),
+                    "--session",
+                    str(session),
+                ]
+                if session.exists()
+                else ["--format", "json", "guide", "--workspace", str(workspace)],
+            )
+        )
+        stages.append(str(guide["stage"]))
+        if guide["stage"] == "complete":
+            break
+        command = str(guide["suggested_command"])
+        assert command not in seen, f"guide repeated without progress: {command}"
+        seen.add(command)
+        argv = shlex.split(command)
+        assert argv[0] == "adaf-attack"
+        result = runner.invoke(app, ["--format", "json", *argv[1:]])
+        assert result.exit_code == 0, f"{command}\n{result.output}"
+    else:
+        pytest.fail("guide did not reach complete within 30 emitted commands")
+
+    assert {
+        "first-success",
+        "orient",
+        "discover",
+        "operate",
+        "deliver",
+        "closeout",
+        "complete",
+    } <= set(stages)
+    assert (session / "reports" / "executive-report.html").is_file()
 
 
 def test_guide_advance_requires_human_output_mode(tmp_path: Path, monkeypatch) -> None:

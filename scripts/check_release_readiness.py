@@ -514,8 +514,10 @@ _PILLAR_BINDINGS: dict[str, dict[str, Any]] = {
             "package",
             "artifact-smoke",
             "kali-installer",
+            "wheelhouse-smoke",
             "windows-installer",
             "release-readiness",
+            "release-sbom",
         ],
         "steps": ["Install and exercise the clean distribution"],
         "tests": [

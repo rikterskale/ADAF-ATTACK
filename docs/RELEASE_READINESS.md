@@ -23,6 +23,7 @@ Source/editable tests and artifact smoke have different purposes:
 | Source/editable tests | Ubuntu 24.04, Windows 2022, and macOS 14; Python 3.11, 3.12, 3.13, 3.14 |
 | Built wheel | Ubuntu/Python 3.11, Ubuntu/Python 3.14, Windows/Python 3.12, macOS 14/Python 3.13 |
 | Built sdist | Ubuntu/Python 3.13 |
+| Air-gapped wheelhouse | Ubuntu/Python 3.11, Windows/Python 3.12, macOS 14/Python 3.14; network access poisoned during manifest-verified install |
 | Windows installer | Windows PowerShell 5.1/Python 3.11 and PowerShell 7/Python 3.13/3.14 |
 | Kali installer | Pinned Kali rolling container digest/system Python, built wheel |
 | Published release | Scheduled/manual GitHub release-asset workflow on Ubuntu, Windows, macOS/Python 3.12; it can pass only after an asset is published |
@@ -64,7 +65,9 @@ also proven by the full source matrix.
       hashes to the release record.
       **[MANUAL: release manager]**
 - [ ] Reproduce the air-gapped wheelhouse path with candidate artifacts and the
-      organization's transfer controls. **[MANUAL]**
+      organization's transfer controls. The complete wheelhouse and strict
+      `PIP_NO_INDEX=1` install are automated; physical transfer controls remain
+      release evidence. **[CI: wheelhouse-smoke; MANUAL: transfer controls]**
 
 ## 2. Guided onboarding and troubleshooting
 
@@ -112,8 +115,8 @@ also proven by the full source matrix.
       remain consistent. **[CI: workflow-contract; test_install_contracts]**
 - [ ] Changelog, release notes, and known limitations match the candidate.
       **[CI: test_install_contracts; MANUAL: release manager reviews content]**
-- [ ] Dependency audit, SAST, secret scan, and SBOM succeed. **[CI: security;
-      codeql]**
+- [ ] Dependency audit, SAST, secret scan, and the exact-wheel operator SBOM
+      succeed. **[CI: security; codeql; release-sbom]**
 
 ## Release checklist
 
@@ -139,8 +142,8 @@ release record with artifact hashes.
 
 1. Organization-specific proxy, CA, endpoint, and air-gap *transfer* policies
    remain **[MANUAL]** (see [RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md) §3).
-   The wheelhouse *build + offline install recipe* is documented and
-   contract-tested; CI cannot reproduce each customer's media controls.
+   The wheelhouse *build + strict offline install* is exercised on Ubuntu,
+   Windows, and macOS; CI cannot reproduce each customer's media controls.
 2. Published-artifact proof still requires a private release asset plus the
    scheduled/manual workflow. The `v0.10.1` proof is recorded in
    [RELEASE_EVIDENCE_0.10.1.md](RELEASE_EVIDENCE_0.10.1.md); every later

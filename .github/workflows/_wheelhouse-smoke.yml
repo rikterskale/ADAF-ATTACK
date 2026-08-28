@@ -1,0 +1,68 @@
+name: Wheelhouse air-gap smoke
+
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        description: Distribution artifact containing the candidate wheel.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            python-version: "3.11"
+          - os: windows-2022
+            python-version: "3.12"
+          - os: macos-14
+            python-version: "3.14"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Download candidate distribution
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: dist
+
+      - name: Build complete operator wheelhouse
+        shell: bash
+        run: |
+          wheels=(dist/adaf_attack-*.whl)
+          test "${#wheels[@]}" -eq 1
+          python scripts/build-release-wheelhouse.py \
+            --wheel "${wheels[0]}" \
+            --output "$RUNNER_TEMP/wheelhouse" \
+            --extras operator
+
+      - name: Install strictly offline through verified bootstrap
+        shell: bash
+        env:
+          PIP_NO_INDEX: "1"
+          PIP_INDEX_URL: https://pypi.invalid/simple
+        run: |
+          wheels=("$RUNNER_TEMP"/wheelhouse/adaf_attack-*.whl)
+          test "${#wheels[@]}" -eq 1
+          python scripts/install-approved-wheel.py \
+            --wheel "${wheels[0]}" \
+            --manifest "$RUNNER_TEMP/wheelhouse/release-manifest.json" \
+            --venv "$RUNNER_TEMP/airgap-venv" \
+            --extras operator \
+            --find-links "$RUNNER_TEMP/wheelhouse"

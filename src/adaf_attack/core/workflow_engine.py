@@ -22,6 +22,12 @@ from uuid import uuid4
 
 FindingStatus = Literal["open", "validated", "exploited", "mitigated", "closed"]
 WorkflowMode = Literal["interactive", "automated", "agent"]
+ClosureBlocker = Literal[
+    "required-actions",
+    "scope-authorization",
+    "discovery",
+    "open-findings",
+]
 
 PHASES: tuple[str, ...] = (
     "scoping",
@@ -42,6 +48,13 @@ STATUS_ORDER: dict[FindingStatus, int] = {
     "exploited": 2,
     "mitigated": 3,
     "closed": 4,
+}
+
+CLOSURE_BLOCKER_MESSAGES: dict[ClosureBlocker, str] = {
+    "required-actions": "required workflow actions remain",
+    "scope-authorization": "scope authorization is incomplete",
+    "discovery": "discovery is incomplete",
+    "open-findings": "findings remain open",
 }
 
 
@@ -373,6 +386,23 @@ class WorkflowEngine:
             for action in source.values()
             if action.kind == "required" and not action.completed and not action.blocked
         ]
+
+    def closure_blockers(self) -> tuple[ClosureBlocker, ...]:
+        """Return stable reasons the workflow cannot be closed yet."""
+        blockers: list[ClosureBlocker] = []
+        if self._required_actions():
+            blockers.append("required-actions")
+        if "scope-authorized" not in self.state.completed_steps:
+            blockers.append("scope-authorization")
+        if "discovery-complete" not in self.state.completed_steps:
+            blockers.append("discovery")
+        if self.state.open_findings:
+            blockers.append("open-findings")
+        return tuple(blockers)
+
+    def closure_blocker_messages(self) -> tuple[str, ...]:
+        """Return operator-facing explanations for the current close blockers."""
+        return tuple(CLOSURE_BLOCKER_MESSAGES[item] for item in self.closure_blockers())
 
     def _action_priority(self, action: WorkflowAction) -> float:
         """Return the highest linked finding priority for recommendation ordering."""
@@ -881,15 +911,14 @@ class WorkflowEngine:
         # keep the no-finding path one-call closeable for automation clients.
         if not self.state.findings and "generate-report" in self.state.pending_actions:
             self.complete_action("generate-report", actor=actor)
-        if self._required_actions():
+        blockers = self.closure_blockers()
+        if "required-actions" in blockers:
             raise WorkflowError("Cannot close workflow while required actions remain")
-        if "scope-authorized" not in self.state.completed_steps:
+        if "scope-authorization" in blockers:
             raise WorkflowError("Cannot close workflow before scope authorization")
-        if "discovery-complete" not in self.state.completed_steps:
+        if "discovery" in blockers:
             raise WorkflowError("Cannot close workflow before discovery completes")
-        if self.state.findings and any(
-            item.status != "closed" for item in self.state.findings.values()
-        ):
+        if "open-findings" in blockers:
             raise WorkflowError("Cannot close workflow while findings remain open")
         self.state.phase = "closure"
         self.complete_step("final-report", actor=actor, phase="closure")

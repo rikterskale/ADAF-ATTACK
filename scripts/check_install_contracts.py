@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 import tomllib
@@ -100,6 +101,8 @@ def _check_ci() -> None:
         "workflow-contract",
         "package",
         "artifact-smoke",
+        "wheelhouse-smoke",
+        "release-sbom",
         "kali-installer",
         "operator-workflow",
         "release-readiness",
@@ -127,6 +130,28 @@ def _check_ci() -> None:
     )
     kinds = {entry["artifact"] for entry in includes}
     _require(kinds == {"wheel", "sdist"}, f"artifact-smoke must cover wheel and sdist; got {kinds}")
+    wheelhouse_includes = _resolve_job(jobs, "wheelhouse-smoke")["strategy"]["matrix"]["include"]
+    wheelhouse_systems = {entry["os"] for entry in wheelhouse_includes}
+    _require(
+        {"ubuntu-24.04", "windows-2022", "macos-14"} <= wheelhouse_systems,
+        "wheelhouse-smoke must cover Ubuntu, Windows, and macOS",
+    )
+    wheelhouse_text = (ROOT / ".github" / "workflows" / "_wheelhouse-smoke.yml").read_text(
+        encoding="utf-8"
+    )
+    for token in (
+        "build-release-wheelhouse.py",
+        "install-approved-wheel.py",
+        '--wheel "${wheels[0]}"',
+        'PIP_NO_INDEX: "1"',
+        "https://pypi.invalid/simple",
+    ):
+        _require(
+            token in wheelhouse_text, f"wheelhouse-smoke missing strict offline contract: {token}"
+        )
+    release_sbom_text = json.dumps(jobs["release-sbom"])
+    for token in ("generate_release_sbom.py", "release-sbom.json", "release-sbom"):
+        _require(token in release_sbom_text, f"release-sbom job missing contract: {token}")
     kali_image = _resolve_job(jobs, "kali-installer")["container"]["image"]
     _require(
         re.fullmatch(r"kalilinux/kali-rolling@sha256:[0-9a-f]{64}", kali_image) is not None,
