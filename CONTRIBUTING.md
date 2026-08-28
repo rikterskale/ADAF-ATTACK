@@ -17,9 +17,9 @@ python -m pip install -e ".[dev,operator]"
 
 > **Tooling versions must match CI.** The linters are version-sensitive:
 > different `ruff` releases format and sort imports differently. CI pins
-> `ruff==0.16.2` (see `requirements-ci.txt`). The `[dev]` extra only sets a
+> `ruff==0.16.3` (see `requirements-ci.txt`). The `[dev]` extra only sets a
 > lower bound, so either install the pinned linters explicitly
-> (`pip install "ruff==0.16.2"`) or — simpler — use the pre-commit hooks below,
+> (`pip install "ruff==0.16.3"`) or — simpler — use the pre-commit hooks below,
 > which are pinned to the same version.
 
 ## 2. Install the pre-commit hooks (recommended)
