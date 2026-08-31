@@ -522,6 +522,35 @@ adaf-attack engagement validate ad-recon.yaml
 adaf-attack engagement run ad-recon.yaml --workspace ./workspaces -u <authorized-user>
 ```
 
+For curated grouped execution, review a capability profile before running it:
+
+```bash
+adaf-attack capability-profile list
+adaf-attack capability-profile show recon
+adaf-attack capability-profile plan adcs --include-mutating
+adaf-attack capability-profile run recon --domain corp.example --dc-ip 10.0.0.10 --yes
+```
+
+Profiles are deterministic groups for `recon`, `adcs`, `lateral-movement`, and
+`persistence`. Approval-gated capabilities are skipped by default and only
+become eligible with `--include-mutating`; grouped runs still use the scoped
+engagement, approval-token, session, rollback, and findings controls.
+
+For environments where no user credentials are available, review the
+credential-free profile:
+
+```bash
+adaf-attack capability-profile show unauthenticated
+adaf-attack capability-profile show unauthenticated --include-username-dependent
+adaf-attack capability-profile show unauthenticated --include-noisy
+```
+
+It covers anonymous LDAP capability measurement, low-noise AD endpoint posture,
+external exposure checks, and Timeroast. AS-REP/user-hunt checks are marked as
+requiring a username list, while legacy Pre-Windows 2000 checks are marked as
+high-noise active authentication. Use `offline-analysis` to plan saved
+evidence correlation and reporting without contacting a target.
+
 `rank-paths` also emits `exploit_chains`: evidence-backed chains for findings
 that are otherwise represented as self-loops in the graph (such as AD CS,
 credential exposure, delegation, GPO control, and directory replication).

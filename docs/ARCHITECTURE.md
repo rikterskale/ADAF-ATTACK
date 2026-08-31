@@ -1,5 +1,23 @@
 # Architecture
 
+## Curated capability profiles
+
+`core.capability_profiles` provides deterministic groups for common operator
+activities. `recon` uses the existing read-only AD reconnaissance baseline;
+`adcs`, `lateral-movement`, and `persistence` select registered capabilities
+by category or tag. Force- or approval-gated capabilities are excluded unless
+`--include-mutating` is explicit. `capability-profile run` constructs one
+scoped engagement and delegates to the existing engagement runner, preserving
+target validation, OPSEC, approval tokens, event logging, rollback tracking,
+and findings aggregation.
+
+Credential-free capabilities expose `auth_modes`, `requires_username_list`,
+`active_authentication`, `noise_level`, and `data_sensitivity` in generated
+catalog and JSON output. The `unauthenticated` profile uses those fields to
+keep username-dependent and high-noise checks out of the default selection.
+The `offline-analysis` profile is plan-only: its workflow steps operate on
+existing session/BloodHound evidence and never create a network target.
+
 This document describes the component boundaries, data flow, trust model, and
 session lifecycle of ADAF-ATTACK.
 

@@ -172,6 +172,11 @@ class Capability:
     fixture: str | None = None
     runner: CapabilityRunner | None = None
     safety: SafetyProfile | None = None
+    auth_modes: tuple[str, ...] = field(default_factory=tuple)
+    requires_username_list: bool = False
+    active_authentication: bool = False
+    noise_level: str = "unspecified"
+    data_sensitivity: str = "metadata"
 
     def __post_init__(self) -> None:
         if self.safety is None:
@@ -238,6 +243,11 @@ def register_capability(
     environment: str = "unknown",
     tools: tuple[str, ...] = (),
     fixture: str | None = None,
+    auth_modes: tuple[str, ...] = (),
+    requires_username_list: bool = False,
+    active_authentication: bool = False,
+    noise_level: str = "unspecified",
+    data_sensitivity: str = "metadata",
 ) -> Callable[[type], type]:
     """Decorator that registers a capability class implementing .run()."""
 
@@ -259,6 +269,11 @@ def register_capability(
                 tools=tools,
                 fixture=fixture,
                 runner=runner,
+                auth_modes=auth_modes,
+                requires_username_list=requires_username_list,
+                active_authentication=active_authentication,
+                noise_level=noise_level,
+                data_sensitivity=data_sensitivity,
             )
         )
         return cls

@@ -1,5 +1,26 @@
 # Engagement and campaign YAML schema
 
+## Capability profiles
+
+Common grouped runs can use the curated profile surface:
+
+```bash
+adaf-attack capability-profile list
+adaf-attack capability-profile show recon
+adaf-attack capability-profile plan adcs --include-mutating
+adaf-attack capability-profile run recon --domain corp.local --dc-ip 10.0.0.10 --yes
+```
+
+Available profiles are `recon`, `adcs`, `lateral-movement`, `persistence`,
+`unauthenticated`, and `offline-analysis`.
+`recon` is read-only by design. The other profiles omit force/approval-gated
+capabilities unless `--include-mutating` is explicit. Review the selection
+before running; mutating profiles still require the normal scoped approval
+token, and grouped execution creates one shared session and graph. The
+`unauthenticated` profile also excludes username-dependent and high-noise
+checks unless explicitly enabled. `offline-analysis` is plan-only and lists
+the saved-evidence commands to run.
+
 This document defines the YAML schemas for engagement plans and campaign
 manifests used by `adaf-attack engagement` and `adaf-attack campaign-run`.
 

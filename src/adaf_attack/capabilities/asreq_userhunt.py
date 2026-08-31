@@ -85,6 +85,10 @@ def _probe_user(username: str, domain: str, dc_ip: str) -> dict[str, Any]:
     summary="Validate usernames via Kerberos AS-REQ without incrementing badPwdCount",
     category="enumeration",
     tags=("kerberos", "as-req", "user-enum", "asrep-roast"),
+    auth_modes=("anonymous",),
+    requires_username_list=True,
+    noise_level="low",
+    data_sensitivity="directory-metadata",
 )
 class AsreqUserhunt:
     def run(

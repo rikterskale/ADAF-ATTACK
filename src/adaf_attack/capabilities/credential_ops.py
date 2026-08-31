@@ -93,7 +93,13 @@ class GmsaRead:
             conn.unbind()
 
 
-@register_from_catalog("pre2k-spray")
+@register_from_catalog(
+    "pre2k-spray",
+    auth_modes=("anonymous",),
+    active_authentication=True,
+    noise_level="high",
+    data_sensitivity="credential-material",
+)
 class Pre2kSpray:
     def run(
         self,
@@ -173,7 +179,12 @@ def _udp_query(host: str, payload: bytes, timeout: float = 2.0) -> bytes:
         sock.close()
 
 
-@register_from_catalog("timeroast")
+@register_from_catalog(
+    "timeroast",
+    auth_modes=("anonymous",),
+    noise_level="low",
+    data_sensitivity="credential-material",
+)
 class Timeroast:
     def run(
         self,

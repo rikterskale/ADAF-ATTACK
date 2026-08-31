@@ -20,8 +20,8 @@ This document is regenerated from the running package by
 `scripts/generate_capability_catalog.py`. Do not edit by hand; run the
 script (CI enforces parity).
 
-| ID | Category | Maturity | Environment | Tools | Fixture | Difficulty | Risk | Approval | Rollback | Summary |
-|----|----------|----------|-------------|-------|---------|------------|------|----------|----------|---------|
+| ID | Category | Maturity | Environment | Tools | Fixture | Difficulty | Risk | Approval | Rollback | Auth modes | Username list | Active auth | Noise | Sensitivity | Summary |
+|----|----------|----------|-------------|-------|---------|------------|------|----------|----------|------------|---------------|-------------|-------|-------------|---------|
 """
 
 
@@ -59,9 +59,15 @@ def _rows() -> list[str]:
         )
         tools = ", ".join(getattr(cap, "tools", ()) or ()) or "-"
         fixture = getattr(cap, "fixture", None) or "-"
+        auth_modes = ", ".join(getattr(cap, "auth_modes", ()) or ()) or "-"
+        username_list = "yes" if getattr(cap, "requires_username_list", False) else "no"
+        active_auth = "yes" if getattr(cap, "active_authentication", False) else "no"
+        noise = getattr(cap, "noise_level", "unspecified") or "unspecified"
+        sensitivity = getattr(cap, "data_sensitivity", "metadata") or "metadata"
         lines.append(
             f"| `{cap.id}` | {category} | {maturity} | {environment} | {tools} | "
-            f"{fixture} | {difficulty} | {risk} | {approval} | {rollback} | {summary} |"
+            f"{fixture} | {difficulty} | {risk} | {approval} | {rollback} | {auth_modes} | "
+            f"{username_list} | {active_auth} | {noise} | {sensitivity} | {summary} |"
         )
     return lines
 

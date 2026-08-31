@@ -40,6 +40,11 @@ includes the rollback command and what is not rolled back.
 | `adaf-attack capability show` | Show capability details |
 | `adaf-attack capability dependencies` | Show capability prerequisite relationships |
 | `adaf-attack capability-help` | Show generated capability help |
+| `adaf-attack capability-profile` | Curated grouped capability execution |
+| `adaf-attack capability-profile list` | List grouped capability profiles |
+| `adaf-attack capability-profile show` | Review selected capabilities and skipped safety-gated items |
+| `adaf-attack capability-profile plan` | Produce a non-executing grouped-run plan |
+| `adaf-attack capability-profile run` | Execute a reviewed profile as one scoped session |
 | `adaf-attack check` | Check beginner setup or preflight an authorized target |
 | `adaf-attack cleanup` | Execute recorded cleanup with explicit force |
 | `adaf-attack cleanup-status` | Show rollback readiness and restored-state status |

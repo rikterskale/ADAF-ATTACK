@@ -28,6 +28,9 @@ console = Console()
     summary="Identify and roast accounts that do not require pre-authentication",
     category="credential-access",
     tags=("kerberos", "asrep", "preauth"),
+    auth_modes=("anonymous",),
+    noise_level="low",
+    data_sensitivity="credential-material",
 )
 class AsrepRoast:
     def run(

@@ -53,7 +53,7 @@ def generate_completion(shell: str) -> str:
     top_commands = (
         "home doctor check list-capabilities paths capability-help plan review tour help-me "
         "command search sessions cleanup finding run rank-paths start engagement config "
-        "capability session path profile demo start-demo favorites targets errors completions "
+        "capability capability-profile session path profile demo start-demo favorites targets errors completions "
         "credential-exposure bloodhound-reconcile trust-correlation delegation-validation "
         "adcs-validation campaign-compose forest-campaign campaign-run purple-handoff "
         "gpo-impact-plan coercion-fixtures workflow-profiles start-here explain what-next "

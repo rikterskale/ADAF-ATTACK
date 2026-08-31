@@ -435,7 +435,16 @@ def catalog_entry(
     raise KeyError(capability_id)
 
 
-def register_from_catalog(cap_id: str, extra_tags: tuple[str, ...] = ()) -> Callable[[type], type]:
+def register_from_catalog(
+    cap_id: str,
+    extra_tags: tuple[str, ...] = (),
+    *,
+    auth_modes: tuple[str, ...] = (),
+    requires_username_list: bool = False,
+    active_authentication: bool = False,
+    noise_level: str = "unspecified",
+    data_sensitivity: str = "metadata",
+) -> Callable[[type], type]:
     item = catalog_entry(cap_id)
     return register_capability(
         id=item[0],
@@ -447,4 +456,9 @@ def register_from_catalog(cap_id: str, extra_tags: tuple[str, ...] = ()) -> Call
         tools=item[6],
         fixture=item[7],
         maturity="fixture-tested",
+        auth_modes=auth_modes,
+        requires_username_list=requires_username_list,
+        active_authentication=active_authentication,
+        noise_level=noise_level,
+        data_sensitivity=data_sensitivity,
     )

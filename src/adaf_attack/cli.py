@@ -274,6 +274,8 @@ engagement_app = typer.Typer(help="Scoped engagement plans, execution, and repor
 app.add_typer(engagement_app, name="engagement")
 ad_recon_app = typer.Typer(help="First-class, read-only Active Directory reconnaissance.")
 app.add_typer(ad_recon_app, name="ad-recon")
+capability_profile_app = typer.Typer(help="Curated capability groups with explicit safety review.")
+app.add_typer(capability_profile_app, name="capability-profile")
 
 
 def _console(ctx: typer.Context) -> Console:
@@ -1472,6 +1474,11 @@ def _capability_payload(cap: Any) -> dict[str, Any]:
         "maturity": cap.maturity,
         "environment": cap.environment,
         "tools": list(cap.tools),
+        "auth_modes": list(getattr(cap, "auth_modes", ())),
+        "requires_username_list": bool(getattr(cap, "requires_username_list", False)),
+        "active_authentication": bool(getattr(cap, "active_authentication", False)),
+        "noise_level": getattr(cap, "noise_level", "unspecified"),
+        "data_sensitivity": getattr(cap, "data_sensitivity", "metadata"),
         "fixture": cap.fixture,
         "difficulty": capability_difficulty(cap),
         "tags": list(cap.tags),
@@ -3675,6 +3682,203 @@ def workflow_profiles_cmd(
         Panel(
             "\n".join(f"{name}: {item['description']}" for name, item in selected.items()),
             title="Operator workflow profiles",
+        ),
+    )
+
+
+@capability_profile_app.command("list")
+def capability_profile_list(ctx: typer.Context) -> None:
+    """List curated capability groups without executing them."""
+    from adaf_attack.core.capability_profiles import PROFILE_DEFINITIONS, profile_names
+
+    profiles = [
+        {
+            "id": name,
+            "description": PROFILE_DEFINITIONS[name]["description"],
+            "category": PROFILE_DEFINITIONS[name].get("category"),
+                "read_only": PROFILE_DEFINITIONS[name].get("read_only", False),
+                "mode": "offline" if PROFILE_DEFINITIONS[name].get("offline") else "live",
+        }
+        for name in profile_names()
+    ]
+    _emit(
+        ctx,
+        {"ok": True, "profiles": profiles, "count": len(profiles)},
+        Panel("\n".join(f"{item['id']}: {item['description']}" for item in profiles), title="Capability profiles"),
+    )
+
+
+def _profile_payload(
+    ctx: typer.Context,
+    name: str,
+    include_mutating: bool,
+    include_noisy: bool = False,
+    include_username_dependent: bool = False,
+) -> dict[str, Any]:
+    from adaf_attack.core.capability_profiles import profile_plan
+
+    try:
+        return {
+            "ok": True,
+            "profile": profile_plan(
+                name,
+                include_mutating=include_mutating,
+                include_noisy=include_noisy,
+                include_username_dependent=include_username_dependent,
+            ),
+        }
+    except KeyError as exc:
+        error = ActionableError(
+            "UNKNOWN_CAPABILITY_PROFILE",
+            f"Unknown capability profile: {name}",
+            "Run `adaf-attack capability-profile list` to list valid profiles.",
+            suggested_command="adaf-attack capability-profile list",
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+
+
+@capability_profile_app.command("show")
+def capability_profile_show(
+    ctx: typer.Context,
+    profile: str = typer.Argument(..., help="Profile name."),
+    include_mutating: bool = typer.Option(
+        False, "--include-mutating", help="Include capabilities requiring force or approval."
+    ),
+    include_noisy: bool = typer.Option(False, "--include-noisy", help="Include high-noise probes."),
+    include_username_dependent: bool = typer.Option(
+        False, "--include-username-dependent", help="Include checks requiring a username list."
+    ),
+) -> None:
+    """Show the selected capabilities, safety, tools, and skipped items."""
+    payload = _profile_payload(
+        ctx, profile, include_mutating, include_noisy, include_username_dependent
+    )
+    value = payload["profile"]
+    _emit(
+        ctx,
+        payload,
+        Panel(
+            "\n".join(
+                [
+                    f"Profile: {profile}",
+                    f"Selected: {value['count']}",
+                    f"Skipped: {len(value['skipped'])}",
+                    *[f"  {item['id']} [{item['risk']}]" for item in value["capabilities"]],
+                    *[f"  skipped {item['id']}: {item['reason']}" for item in value["skipped"]],
+                ]
+            ),
+            title="Capability profile",
+        ),
+    )
+
+
+@capability_profile_app.command("plan")
+def capability_profile_plan(
+    ctx: typer.Context,
+    profile: str = typer.Argument(..., help="Profile name."),
+    include_mutating: bool = typer.Option(
+        False, "--include-mutating", help="Include capabilities requiring force or approval."
+    ),
+    include_noisy: bool = typer.Option(False, "--include-noisy", help="Include high-noise probes."),
+    include_username_dependent: bool = typer.Option(
+        False, "--include-username-dependent", help="Include checks requiring a username list."
+    ),
+) -> None:
+    """Create a reviewed, non-executing grouped-run plan."""
+    payload = _profile_payload(
+        ctx, profile, include_mutating, include_noisy, include_username_dependent
+    )
+    _emit(ctx, payload, Panel(str(payload["profile"]), title="Capability profile plan"))
+
+
+@capability_profile_app.command("run")
+def capability_profile_run(
+    ctx: typer.Context,
+    profile: str = typer.Argument(..., help="Profile name."),
+    domain: str = typer.Option(..., "--domain", "-d"),
+    dc_ip: str = typer.Option(..., "--dc-ip"),
+    workspace: Path = typer.Option(Path("workspaces"), "--workspace"),
+    username: str | None = typer.Option(None, "--username", "-u"),
+    password: str | None = typer.Option(None, "--password", "-p"),
+    approval_token: str | None = typer.Option(
+        None, "--approval-token", envvar="ADAF_APPROVAL_TOKEN"
+    ),
+    include_mutating: bool = typer.Option(
+        False, "--include-mutating", help="Include force/approval-gated capabilities."
+    ),
+    include_noisy: bool = typer.Option(False, "--include-noisy", help="Include high-noise probes."),
+    include_username_dependent: bool = typer.Option(
+        False, "--include-username-dependent", help="Include checks requiring a username list."
+    ),
+    param: list[str] | None = typer.Option(
+        None, "--param", "-P", help="Capability parameter as key=value; repeat as needed."
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm execution after profile review."),
+    opsec_profile: str = typer.Option("balanced", "--opsec-profile"),
+) -> None:
+    """Execute a reviewed profile as one scoped engagement session."""
+    if not yes:
+        error = ActionableError(
+            "PROFILE_CONFIRMATION_REQUIRED",
+            "Grouped execution requires explicit --yes after reviewing the profile.",
+            f"Run `adaf-attack capability-profile show {profile}` first, then repeat with --yes.",
+            suggested_command=f"adaf-attack capability-profile run {profile} --domain {domain} --dc-ip {dc_ip} --yes",
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    from adaf_attack.core.capability_profiles import profile_plan
+    from adaf_attack.core.engagement import EngagementError, EngagementPlan, run_engagement
+
+    try:
+        selected = profile_plan(
+            profile,
+            include_mutating=include_mutating,
+            include_noisy=include_noisy,
+            include_username_dependent=include_username_dependent,
+        )
+        if selected.get("mode") == "offline":
+            raise EngagementError(
+                "offline-analysis is a plan-only profile; run its workflow_steps against saved evidence"
+            )
+        ids = [item["id"] for item in selected["capabilities"]]
+        if not ids:
+            raise EngagementError("Profile selected no runnable capabilities")
+        plan = EngagementPlan(
+            engagement_id=f"PROFILE-{profile}",
+            domain=domain,
+            dc_ip=dc_ip,
+            allowed_capabilities=tuple(ids),
+            phases=(
+                {
+                    "name": profile,
+                    "capabilities": ids,
+                    "options": _parse_extra_params(param),
+                },
+            ),
+            allowed_targets=(dc_ip,),
+            opsec_profile=opsec_profile,
+        )
+        result = run_engagement(
+            plan,
+            workspace=workspace,
+            username=username,
+            password=password,
+            approval_token=approval_token,
+        )
+    except (KeyError, EngagementError) as exc:
+        error = ActionableError(
+            "PROFILE_RUN_BLOCKED", str(exc), "Review the profile, authorization, and approval token."
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
+    _emit(
+        ctx,
+        {"ok": True, "profile": profile, "selected": ids, **result},
+        Panel(
+            f"Profile: {profile}\nCapabilities: {len(result['capabilities'])}\n"
+            f"Findings: {result['finding_count']}\nSession: {result['session_path']}",
+            title="Capability profile complete",
         ),
     )
 

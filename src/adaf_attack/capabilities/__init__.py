@@ -21,6 +21,7 @@ from adaf_attack.capabilities import (
     cert_request,
     coerce,
     coercion_map,
+    credential_free,
     computer_takeover,
     credential_inventory,
     credential_ops,
