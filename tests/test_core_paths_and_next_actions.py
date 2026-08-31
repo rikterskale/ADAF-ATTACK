@@ -107,6 +107,50 @@ def test_ldap_connect_wraps_ldap_exception(monkeypatch: Any) -> None:
         )
 
 
+def test_ldap_connect_starttls(monkeypatch: Any) -> None:
+    class _StartTlsConn(_FakeConnection):
+        def __init__(self, *a: Any, **k: Any) -> None:
+            super().__init__(*a, **k)
+            self.bound = False
+            self.opened = False
+            self.tls_started = False
+
+        def open(self) -> None:
+            self.opened = True
+
+        def start_tls(self, **_kwargs: Any) -> bool:
+            self.tls_started = True
+            return True
+
+    monkeypatch.setattr(ldap_util, "Server", _FakeServer)
+    monkeypatch.setattr(ldap_util, "Connection", _StartTlsConn)
+    conn, _dn, _cfg = ldap_util.ldap_connect(
+        Target(domain="corp.test", dc_ip="10.0.0.1", username="a", password="p", starttls=True)
+    )
+    assert conn.opened
+    assert conn.tls_started
+    assert conn.bound
+
+
+def test_ldap_connect_kerberos_sasl(monkeypatch: Any) -> None:
+    class _SaslConn(_FakeConnection):
+        def __init__(self, *a: Any, **k: Any) -> None:
+            super().__init__(*a, **k)
+            self.bound = False
+
+        def open(self) -> None:
+            return None
+
+    monkeypatch.setattr(ldap_util, "Server", _FakeServer)
+    monkeypatch.setattr(ldap_util, "Connection", _SaslConn)
+    conn, _dn, _cfg = ldap_util.ldap_connect(
+        Target(domain="corp.test", dc_ip="10.0.0.1", use_kerberos=True, ccache="ticket.ccache")
+    )
+    assert conn.kwargs["authentication"] == "SASL"
+    assert conn.kwargs["sasl_mechanism"] == "GSSAPI"
+    assert conn.bound
+
+
 # --------------------------- workflows ---------------------------
 
 

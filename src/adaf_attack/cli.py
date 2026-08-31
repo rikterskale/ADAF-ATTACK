@@ -2220,6 +2220,7 @@ def _build_target(
     ccache: str | None,
     use_kerberos: bool,
     ldaps: bool,
+    starttls: bool,
 ) -> Target:
     return Target(
         domain=domain,
@@ -2231,6 +2232,7 @@ def _build_target(
         ccache=ccache,
         use_kerberos=use_kerberos,
         ldaps=ldaps,
+        starttls=starttls,
     )
 
 
@@ -2428,6 +2430,7 @@ def run_capability(
         False, "-k", "--kerberos", help="Prefer Kerberos ticket auth (ccache / KRB5CCNAME)"
     ),
     ldaps: bool = typer.Option(False, "--ldaps", help="Use LDAPS"),
+    starttls: bool = typer.Option(False, "--starttls", help="Use LDAP StartTLS"),
     force: bool = typer.Option(
         False, "--force", help="Required for approved side-effect capabilities"
     ),
@@ -2615,7 +2618,16 @@ def run_capability(
         )
 
     target = _build_target(
-        domain, dc_ip, username, password, hashes, aes_key, ccache, use_kerberos, ldaps
+        domain,
+        dc_ip,
+        username,
+        password,
+        hashes,
+        aes_key,
+        ccache,
+        use_kerberos,
+        ldaps,
+        starttls,
     )
 
     # Resolve capability early so we can gate confirmation

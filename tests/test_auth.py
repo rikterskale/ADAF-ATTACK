@@ -43,3 +43,16 @@ def test_ldap3_bind_kwargs_password() -> None:
     assert kw["authentication"] == "NTLM"
     user = str(kw["user"]).lower()
     assert user == "alice" or user.endswith("\\alice") or "corp.local\\alice" in user
+
+
+def test_ldap3_bind_kwargs_kerberos_uses_gssapi() -> None:
+    t = Target(domain="corp.local", dc_ip="10.0.0.1", use_kerberos=True, ccache="ticket.ccache")
+    kw = ldap3_bind_kwargs(t)
+    assert kw["auto_bind"] is False
+    assert kw["authentication"] == "SASL"
+    assert kw["sasl_mechanism"] == "GSSAPI"
+
+
+def test_target_supports_starttls() -> None:
+    t = Target(domain="corp.local", dc_ip="10.0.0.1", starttls=True)
+    assert t.starttls

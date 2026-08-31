@@ -27,6 +27,7 @@ class Target:
     ccache: str | None = None  # path to ccache (or rely on KRB5CCNAME)
     use_kerberos: bool = False  # prefer Kerberos (-k style) when tickets present
     ldaps: bool = False
+    starttls: bool = False
     port: int | None = None
 
     @property

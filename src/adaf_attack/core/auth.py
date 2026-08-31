@@ -106,7 +106,18 @@ def ldap3_bind_kwargs(target: Target) -> dict[str, Any]:
     Hash/AES/ccache binds are not fully supported by ldap3; callers that need
     those should use Impacket-backed capabilities or get_kerberos_tgt first.
     """
-    kwargs: dict[str, Any] = {"auto_bind": True}
+    kwargs: dict[str, Any] = {"auto_bind": not target.starttls}
+    if target.use_kerberos or target.ccache:
+        kwargs.update(
+            {
+                "auto_bind": False,
+                "authentication": "SASL",
+                "sasl_mechanism": "GSSAPI",
+            }
+        )
+        if target.username:
+            kwargs["user"] = target.username
+        return kwargs
     if target.username and target.password:
         kwargs["user"] = target.auth_user or target.username
         kwargs["password"] = target.password
