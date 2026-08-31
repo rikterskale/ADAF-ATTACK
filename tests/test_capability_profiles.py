@@ -104,12 +104,14 @@ def test_credential_free_network_capabilities_write_redacted_posture(
 ) -> None:
     session = Session(base_dir=tmp_path)
     target = Target(domain="corp.example", dc_ip="192.0.2.10")
+
     def fake_probe(host: str, port: int, timeout: float) -> dict[str, object]:
         return {
             "port": port,
             "service": credential_free._POSTURE_PORTS[port],
             "reachable": port in {389, 443},
         }
+
     monkeypatch.setattr(credential_free, "_tcp_probe", fake_probe)
 
     passive = credential_free.PassiveDiscovery().run(target, session, AttackGraph())

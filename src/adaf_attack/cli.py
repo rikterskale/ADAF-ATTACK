@@ -3696,15 +3696,18 @@ def capability_profile_list(ctx: typer.Context) -> None:
             "id": name,
             "description": PROFILE_DEFINITIONS[name]["description"],
             "category": PROFILE_DEFINITIONS[name].get("category"),
-                "read_only": PROFILE_DEFINITIONS[name].get("read_only", False),
-                "mode": "offline" if PROFILE_DEFINITIONS[name].get("offline") else "live",
+            "read_only": PROFILE_DEFINITIONS[name].get("read_only", False),
+            "mode": "offline" if PROFILE_DEFINITIONS[name].get("offline") else "live",
         }
         for name in profile_names()
     ]
     _emit(
         ctx,
         {"ok": True, "profiles": profiles, "count": len(profiles)},
-        Panel("\n".join(f"{item['id']}: {item['description']}" for item in profiles), title="Capability profiles"),
+        Panel(
+            "\n".join(f"{item['id']}: {item['description']}" for item in profiles),
+            title="Capability profiles",
+        ),
     )
 
 
@@ -3868,7 +3871,9 @@ def capability_profile_run(
         )
     except (KeyError, EngagementError) as exc:
         error = ActionableError(
-            "PROFILE_RUN_BLOCKED", str(exc), "Review the profile, authorization, and approval token."
+            "PROFILE_RUN_BLOCKED",
+            str(exc),
+            "Review the profile, authorization, and approval token.",
         )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code) from exc
