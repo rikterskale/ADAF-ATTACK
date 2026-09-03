@@ -9,8 +9,8 @@ This roadmap turns the 2026-09-03 repository audit into trackable enhancements. 
 | Source inventory and imports | 135 Python source files; module import sweep passed | ✅ Verified |
 | Compilation | `python -m compileall -q src tests` passed | ✅ Verified |
 | Static checks | Ruff check and strict mypy passed | ✅ Verified |
-| Tests | 1,502 passed, 2 warnings, using the repository Windows test wrapper | ✅ Verified |
-| Branch coverage | 96.27% total (`--cov-branch`), above the 95% gate but not exhaustive | ⚠️ Improve |
+| Tests | 1,542 passed, 2 warnings, using the repository Windows test wrapper | ✅ Verified |
+| Branch coverage | 97.61% total (`--cov-branch`), above the 95% gate with the RM-003 adapter paths closed | ✅ Verified |
 | Formatting | Ruff format check reports 13 files requiring formatting | ⚠️ Open |
 | CLI documentation and install contracts | Both validators passed | ✅ Verified |
 | Release readiness | Default AppData paths are not writable in this environment, so the documented offline doctor command returns `ok: false` | ⚠️ Environment-gated |
@@ -24,7 +24,7 @@ The test result above is reproducible through `scripts/Invoke-Tests.ps1`, which 
 | ---: | --- | --- | --- | --- | --- |
 | 1 | RM-001 | P0 | Restore the caller's working directory in `capabilities/ticket_forge.py` and add a regression test covering success and failure paths | ✅ Implemented and verified; full suite passes with 1,503 tests | Ticket forging cannot leak a changed process CWD, including when the underlying forger raises |
 | 2 | RM-002 | P0 | Add behavioral evidence for native protocol paths: `core/drs_addentry.py`, `core/unpac.py`, `capabilities/pkinit_auth.py`, `capabilities/esc_chain.py`, and `capabilities/impacket_exec.py` | ✅ Implemented and verified with 12 focused tests; targeted coverage is 96%, 96%, 97%, 99%, and 100% respectively | Mocked protocol harnesses cover success, dependency absence, malformed responses, dispatch, and cleanup/error paths |
-| 3 | RM-003 | P1 | Close capability edge-path coverage for campaign, credential, relay, spray, and workflow adapters | Several modules are 85–99% covered with identifiable missing branches | Each listed branch has a behavior-focused test or is documented as an intentionally unreachable/platform-gated path |
+| 3 | RM-003 | P1 | Close capability edge-path coverage for campaign, credential, relay, spray, and workflow adapters | ✅ Implemented and verified with 27 focused tests; listed adapter modules are line-complete and the full branch gate passes | Each listed branch has a behavior-focused test or is documented as an intentionally unreachable/platform-gated path |
 | 4 | RM-004 | P1 | Close CLI, workflow, journey, and TUI interaction branches | CLI 93%; journey 87%; TUI 96%; wrapper modules have smaller gaps | User-visible failure, cancellation, JSON, approval, and recovery paths are tested without weakening the CLI contract |
 | 5 | RM-005 | P1 | Close core safety and portability branches: LDAP/auth, paths, redaction, rollback, runner, target, vault, and UX helpers | Most are 93–99%; `ldap_util.py` is 83% | Boundary conditions, permission errors, cleanup, rollback, and platform-specific branches are behaviorally covered |
 | 6 | RM-006 | P2 | Decide and implement deferred ADCS enumeration checks, beginning with ESC5 and then the remaining explicitly deferred checks | `adcs_enum.py` documents an ESC5 ACL check as “not in this pass”; other ADCS capability gaps remain evidence items | Capability output either implements the check with tests and operator guidance or records a deliberate supported limitation |
@@ -59,6 +59,19 @@ Tests use the repository's mocked LDAP/impacket patterns and prove observable be
 ### RM-003 — Capability adapter closure
 
 Prioritize missing branches in `campaign_run.py`, `credential_free.py`, `credential_inventory.py`, `ntlm_relay.py`, `relay_ops.py`, `unpac_the_hash.py`, `next_actions.py`, `password_spray.py`, `workflow_wrappers.py`, and the remaining small ADCS/attack-path gaps. Include timeout, partial-result, denial, cancellation, and JSON-output behavior where applicable.
+
+The dedicated evidence suite is `tests/test_rm003_capability_adapter_evidence.py`. It now covers:
+
+- campaign dispatch failures, unavailable capabilities, reserved parameters, scoped approval, modern execution, and legacy runner compatibility;
+- credential-free TCP success/failure, anonymous LDAP naming-context fallback, per-probe denial, and bind failure;
+- credential inventory path traversal rejection and purge safety;
+- NTLM relay option validation, malformed shell input, timeout handling, and relay execution boundaries;
+- DCShadow duplicate-SPN handling, SPN denial, native push failure, and optional-Impacket fallback;
+- UnPAC decryption/parser failures, ccache environment restoration, missing AS-REP keys, U2U denial, and recovery hand-off;
+- next-action fallback deduplication, empty examples, mapped fallback command remapping, and password-spray delay behavior;
+- workflow computer-account normalization/credential gating plus the remaining ADCS native-forge and attack-path wrapper branches.
+
+The full Windows-wrapper run passes at 1,542 tests with 97.61% branch coverage. The remaining partial coverage entry is a defensive UnPAC parser transition with no missing executable lines; it is retained as an intentionally defensive malformed-object guard rather than forced with a synthetic implementation-only test.
 
 ### RM-004 — Operator journey closure
 
@@ -95,4 +108,4 @@ The audit also found empty `pass` statements used for marker classes, empty exce
 
 ## Decision
 
-**RM-001 and RM-002 are complete.** Ticket forging restores CWD safely, and native protocol evidence now covers the five priority paths. The full suite passes with 1,515 tests at 97.23% branch coverage. Implement **RM-003 next**, the remaining capability adapter edge paths.
+**RM-001, RM-002, and RM-003 are complete.** Ticket forging restores CWD safely, native protocol evidence covers the five priority paths, and capability adapter edge behavior is covered by focused tests. The full suite passes with 1,542 tests at 97.61% branch coverage. Implement **RM-004 next**, the remaining CLI, workflow, journey, and TUI interaction branches.
