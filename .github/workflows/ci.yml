@@ -576,7 +576,9 @@ jobs:
           source "$RUNNER_TEMP/newuser/bin/activate"
           # Drive the installed console script, exactly as a new user would.
           PYTHONUNBUFFERED=1 ADAF_CLI="$(command -v adaf-attack)" \
-            python scripts/check_release_readiness.py --repo-root "$PWD"
+            python scripts/check_release_readiness.py \
+              --repo-root "$PWD" \
+              --writable-root "$RUNNER_TEMP/adaf-readiness-paths"
 
       - name: Publish readiness summary
         if: always()

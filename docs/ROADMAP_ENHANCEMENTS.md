@@ -9,7 +9,7 @@ This roadmap turns the 2026-09-03 repository audit into trackable enhancements. 
 | Source inventory and imports | 135 Python source files; module import sweep passed | ✅ Verified |
 | Compilation | `python -m compileall -q src tests` passed | ✅ Verified |
 | Static checks | Ruff check and strict mypy passed | ✅ Verified |
-| Tests | 1,582 passed, 2 warnings, using the repository Windows test wrapper | ✅ Verified |
+| Tests | 1,585 passed, 2 warnings, using the repository Windows test wrapper | ✅ Verified |
 | Branch coverage | 99.17% total (`--cov-branch`), above the 95% gate with the RM-006 ADCS paths closed | ✅ Verified |
 | Formatting | Ruff format check reports 13 files requiring formatting | ⚠️ Open |
 | CLI documentation and install contracts | Both validators passed | ✅ Verified |
@@ -28,7 +28,7 @@ The test result above is reproducible through `scripts/Invoke-Tests.ps1`, which 
 | 4 | RM-004 | P1 | Close CLI, workflow, journey, and TUI interaction branches | ✅ Implemented and verified with 19 focused tests; CLI 98%, journey 94%, TUI 98%, and wrapper modules 96–100% | User-visible failure, cancellation, JSON, approval, and recovery paths are tested without weakening the CLI contract |
 | 5 | RM-005 | P1 | Close core safety and portability branches: LDAP/auth, paths, redaction, rollback, runner, target, vault, and UX helpers | ✅ Implemented and verified with 19 focused tests; targeted core modules are 97–100% except intentionally defensive partial branches | Boundary conditions, permission errors, cleanup, rollback, and platform-specific branches are behaviorally covered |
 | 6 | RM-006 | P2 | Decide and implement deferred ADCS enumeration checks, beginning with ESC5 and then the remaining explicitly deferred checks | ✅ Implemented and verified with 2 focused tests; ESC5 CA-server and PKI-container ACL evidence is persisted and graphed; ESC6/10/11/13 remain explicit policy/RPC limitations | Capability output either implements the check with tests and operator guidance or records a deliberate supported limitation |
-| 7 | RM-007 | P2 | Make supported-environment readiness validation explicit for writable data/config/workspace paths | Release readiness is blocked only by the current host's locked default AppData paths | CI and release validation run in a writable supported environment and distinguish host configuration failures from product failures |
+| 7 | RM-007 | P2 | Make supported-environment readiness validation explicit for writable data/config/workspace paths | ✅ Implemented and verified with 3 focused tests; release readiness uses an isolated writable root and CI passes an explicit runner-temp root | CI and release validation run in a writable supported environment and distinguish host configuration failures from product failures |
 | 8 | RM-008 | P2 | Resolve the 13 Ruff formatting failures and keep the CI-pinned Ruff version aligned locally | `ruff check` passes; `ruff format --check` does not | Format check passes under the CI-pinned toolchain, with no unrelated behavior changes |
 | 9 | RM-009 | P2 | Re-run release, install, offline-command, and user-acceptance certification after the P0/P1 work | Install/docs contracts pass; full release readiness is not currently certified | Release readiness, packaging, offline demos, rollback, and documented CLI journeys pass in a clean supported environment |
 
@@ -115,7 +115,18 @@ Each limitation remains named in the capability result notes with its next evide
 
 ### RM-007 — Environment-gated release evidence
 
-The release-readiness failure was caused by denied access to the host's default AppData data/config/workspace locations. Add or document a supported writable-path setup for readiness validation, then rerun the exact offline commands. Do not hide a real permission failure by changing the command's result semantics.
+The release-readiness verifier now allocates an isolated writable root for the
+installed-artifact checks. It injects separate data, config, and workspace
+directories, validates that the installed CLI reports and can write all three,
+and removes implicit temporary roots after the run. CI passes
+`$RUNNER_TEMP/adaf-readiness-paths` explicitly; local runs may provide
+`--writable-root <directory>` when retaining the evidence directory is useful.
+This separates host-specific default AppData/XDG permissions from product
+failures without weakening the CLI doctor's honest `user-readiness` behavior.
+
+The focused regression evidence is in `tests/test_install_contracts.py`, and
+the standalone verifier passes all installation, troubleshooting, offline
+feature, recovery, documentation, and CI-binding checks.
 
 ### RM-008 — Formatting gate
 
@@ -133,4 +144,4 @@ The audit also found empty `pass` statements used for marker classes, empty exce
 
 ## Decision
 
-**RM-001 through RM-006 are complete.** Ticket forging restores CWD safely, native protocol evidence covers the five priority paths, capability adapter edge behavior is covered by focused tests, user-visible CLI/workflow/journey/TUI paths are covered by focused behavioral evidence, core safety/portability boundaries now have direct evidence, and the deferred ADCS decision is closed with ESC5 implementation plus explicit limitations for the remaining evidence-dependent checks. The full suite passes with 1,582 tests at 99.17% branch coverage. Implement **RM-007 next**, beginning with supported-environment readiness validation.
+**RM-001 through RM-007 are complete.** Ticket forging restores CWD safely, native protocol evidence covers the five priority paths, capability adapter edge behavior is covered by focused tests, user-visible CLI/workflow/journey/TUI paths are covered by focused behavioral evidence, core safety/portability boundaries now have direct evidence, the deferred ADCS decision is closed with ESC5 implementation plus explicit limitations for the remaining evidence-dependent checks, and release-readiness validation now runs against explicit writable paths. The full suite passes with 1,585 tests at 99.17% branch coverage, and the standalone release-readiness verifier passes end-to-end. Implement **RM-008 next**, beginning with the remaining formatter failures.

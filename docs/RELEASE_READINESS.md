@@ -32,6 +32,13 @@ The focused artifact matrix validates supported platform families without
 duplicating the complete source test suite on every row. Python compatibility is
 also proven by the full source matrix.
 
+The release-readiness verifier always tests application data, configuration, and
+workspace writes under an explicit writable root. CI supplies
+`$RUNNER_TEMP/adaf-readiness-paths`; a local run creates and removes a temporary
+root unless `--writable-root <directory>` is provided. This keeps a host's
+locked default AppData/XDG directories from being reported as product failures,
+while the installed CLI still proves that the configured paths are writable.
+
 ## 1. Proven installation and lifecycle
 
 - [ ] Build wheel/sdist once, validate metadata, generate checksums and a

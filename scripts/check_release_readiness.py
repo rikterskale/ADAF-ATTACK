@@ -49,7 +49,8 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -93,11 +94,19 @@ class Cmd:
 # wrapping. Rich otherwise colourises error text on CI (splitting tokens like
 # ``--force`` with escape codes) and wraps at the terminal width.
 _CLI_ENV = {**os.environ, "NO_COLOR": "1", "TERM": "dumb", "COLUMNS": "200"}
+_READINESS_PATH_ENV: dict[str, str] = {}
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def strip_ansi(text: str) -> str:
     return _ANSI.sub("", text)
+
+
+def _cli_env(overrides: dict[str, str] | None = None) -> dict[str, str]:
+    environment = {**_CLI_ENV, **_READINESS_PATH_ENV}
+    if overrides:
+        environment.update(overrides)
+    return environment
 
 
 def run_cli(*args: str, env: dict[str, str] | None = None) -> Cmd:
@@ -106,7 +115,7 @@ def run_cli(*args: str, env: dict[str, str] | None = None) -> Cmd:
             [*_ARGV, *args],
             capture_output=True,
             text=True,
-            env=env if env is not None else _CLI_ENV,
+            env=_cli_env(env),
             timeout=120,
         )
     except FileNotFoundError as exc:
@@ -114,6 +123,27 @@ def run_cli(*args: str, env: dict[str, str] | None = None) -> Cmd:
     except subprocess.TimeoutExpired as exc:
         return Cmd(124, exc.stdout or "", f"CLI timed out after 120 seconds: {exc}")
     return Cmd(proc.returncode, proc.stdout, proc.stderr)
+
+
+def _readiness_path_environment(root: Path) -> dict[str, str]:
+    """Return isolated writable locations for the installed-artifact checks."""
+    return {
+        "ADAF_ATTACK_DATA_DIR": str(root / "data"),
+        "ADAF_ATTACK_CONFIG_DIR": str(root / "config"),
+        "ADAF_ATTACK_WORKSPACE": str(root / "workspace"),
+    }
+
+
+@contextmanager
+def _writable_root(requested: str | None) -> Iterator[Path]:
+    """Yield a writable readiness root, cleaning up implicit roots afterwards."""
+    if requested:
+        root = Path(requested).expanduser().resolve()
+        root.mkdir(parents=True, exist_ok=True)
+        yield root
+        return
+    with tempfile.TemporaryDirectory(prefix="adaf-release-readiness-") as value:
+        yield Path(value)
 
 
 # --------------------------------------------------------------------------- #
@@ -181,6 +211,37 @@ def _entry_points() -> None:
         {"platform", "data", "config", "workspace"} <= paths.json().keys(),
         "paths json is missing workspace locations",
     )
+
+
+@installation.check("installed artifact uses isolated writable readiness paths")
+def _writable_path_contract() -> None:
+    _require(
+        _READINESS_PATH_ENV.keys()
+        >= {
+            "ADAF_ATTACK_DATA_DIR",
+            "ADAF_ATTACK_CONFIG_DIR",
+            "ADAF_ATTACK_WORKSPACE",
+        },
+        "readiness verifier did not configure an explicit writable path root",
+    )
+    payload = run_cli("--format", "json", "paths").json()
+    path_keys = {
+        "data": "ADAF_ATTACK_DATA_DIR",
+        "config": "ADAF_ATTACK_CONFIG_DIR",
+        "workspace": "ADAF_ATTACK_WORKSPACE",
+    }
+    entries = {str(item.get("name")): item for item in payload.get("entries") or []}
+    for output_key, environment_key in path_keys.items():
+        expected = Path(_READINESS_PATH_ENV[environment_key]).resolve()
+        actual = Path(str(payload.get(output_key) or "")).resolve()
+        _require(
+            actual == expected,
+            f"paths {output_key} does not honor {environment_key}: {actual} != {expected}",
+        )
+        _require(
+            entries.get(output_key, {}).get("writable") is True,
+            f"readiness path is not writable: {output_key} ({expected})",
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -327,12 +388,13 @@ def _documented_offline_runs() -> None:
 @features.check("offline engagement product surfaces execute from a clean demo")
 def _offline_product_surfaces() -> None:
     with tempfile.TemporaryDirectory(prefix="adaf-readiness-surfaces-") as root:
-        surface_env = {
-            **_CLI_ENV,
-            "ADAF_ATTACK_CONFIG_DIR": str(Path(root) / "config"),
-            "ADAF_ATTACK_DATA_DIR": str(Path(root) / "data"),
-            "ADAF_ATTACK_WORKSPACE": str(Path(root) / "workspace"),
-        }
+        surface_env = _cli_env(
+            {
+                "ADAF_ATTACK_CONFIG_DIR": str(Path(root) / "config"),
+                "ADAF_ATTACK_DATA_DIR": str(Path(root) / "data"),
+                "ADAF_ATTACK_WORKSPACE": str(Path(root) / "workspace"),
+            }
+        )
         demo = run_cli("--format", "json", "demo", "--workspace", root)
         _require(demo.code == 0, f"demo failed: {demo.err or demo.out}")
         session = demo.json().get("session_path")
@@ -638,27 +700,10 @@ def _pillars_are_wired() -> None:
 _PILLARS = [installation, troubleshooting, features, recovery, documentation, binding]
 
 
-def main() -> int:
-    global REPO_ROOT
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--repo-root",
-        default=str(REPO_ROOT),
-        help="Repository root (for docs and workflow binding checks).",
-    )
-    parser.add_argument(
-        "--skip-binding",
-        action="store_true",
-        help="Skip the CI-binding layer (behavioral checks only).",
-    )
-    args = parser.parse_args()
-
-    REPO_ROOT = Path(args.repo_root).resolve()
-
-    print(f"Release-readiness standard - driving: {' '.join(_ARGV)}\n")
+def _run_checks(skip_binding: bool) -> int:
     failures: list[str] = []
     for pillar in _PILLARS:
-        if pillar is binding and args.skip_binding:
+        if pillar is binding and skip_binding:
             continue
         print(f"== {pillar.title} ==")
         for name, fn in pillar.checks:
@@ -681,6 +726,42 @@ def main() -> int:
         return 1
     print("AUTOMATED READINESS PASSED.")
     return 0
+
+
+def main() -> int:
+    global REPO_ROOT, _READINESS_PATH_ENV
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--repo-root",
+        default=str(REPO_ROOT),
+        help="Repository root (for docs and workflow binding checks).",
+    )
+    parser.add_argument(
+        "--skip-binding",
+        action="store_true",
+        help="Skip the CI-binding layer (behavioral checks only).",
+    )
+    parser.add_argument(
+        "--writable-root",
+        help=(
+            "Writable root for isolated data/config/workspace checks. "
+            "Defaults to a temporary directory removed after the run."
+        ),
+    )
+    args = parser.parse_args()
+
+    REPO_ROOT = Path(args.repo_root).resolve()
+
+    with _writable_root(args.writable_root) as root:
+        _READINESS_PATH_ENV = _readiness_path_environment(root)
+        print(
+            f"Release-readiness standard - driving: {' '.join(_ARGV)}\n"
+            f"Writable readiness root: {root}\n"
+        )
+        try:
+            return _run_checks(args.skip_binding)
+        finally:
+            _READINESS_PATH_ENV = {}
 
 
 if __name__ == "__main__":

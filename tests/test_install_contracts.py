@@ -137,6 +137,11 @@ def test_artifact_smoke_runs_exact_guided_first_success_contract() -> None:
         assert token in script, f"artifact smoke is missing first-ten contract token: {token}"
 
 
+def test_release_readiness_ci_uses_a_writable_runner_path_root() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert '--writable-root "$RUNNER_TEMP/adaf-readiness-paths"' in workflow
+
+
 def test_release_readiness_uses_active_console_script(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -146,6 +151,48 @@ def test_release_readiness_uses_active_console_script(
     monkeypatch.setattr(module.sysconfig, "get_path", lambda name: str(tmp_path))
     console_name = "adaf-attack.exe" if module.os.name == "nt" else "adaf-attack"
     assert module._cli_argv() == [str(tmp_path / console_name)]
+
+
+def test_release_readiness_allocates_and_cleans_implicit_writable_root() -> None:
+    module = _load_release_readiness_script()
+    with module._writable_root(None) as root:
+        assert root.is_dir()
+        environment = module._readiness_path_environment(root)
+        assert environment["ADAF_ATTACK_DATA_DIR"] == str(root / "data")
+        assert environment["ADAF_ATTACK_CONFIG_DIR"] == str(root / "config")
+        assert environment["ADAF_ATTACK_WORKSPACE"] == str(root / "workspace")
+    assert not root.exists()
+
+
+def test_release_readiness_cli_inherits_explicit_path_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_release_readiness_script()
+    module._READINESS_PATH_ENV = module._readiness_path_environment(tmp_path)
+    captured: dict[str, dict[str, str]] = {}
+
+    class Result:
+        returncode = 0
+        stdout = "{}"
+        stderr = ""
+
+    def fake_run(*args, **kwargs):
+        captured["env"] = kwargs["env"]
+        return Result()
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    try:
+        module.run_cli("--format", "json", "paths")
+    finally:
+        module._READINESS_PATH_ENV = {}
+
+    assert captured["env"] == {
+        **module._CLI_ENV,
+        "ADAF_ATTACK_DATA_DIR": str(tmp_path / "data"),
+        "ADAF_ATTACK_CONFIG_DIR": str(tmp_path / "config"),
+        "ADAF_ATTACK_WORKSPACE": str(tmp_path / "workspace"),
+    }
 
 
 def test_release_readiness_ignores_unrelated_pip_conflicts(
