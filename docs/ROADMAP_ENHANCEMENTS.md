@@ -13,7 +13,7 @@ This roadmap turns the 2026-09-03 repository audit into trackable enhancements. 
 | Branch coverage | 99.17% total (`--cov-branch`), above the 95% gate with the RM-006 ADCS paths closed | ✅ Verified |
 | Formatting | Ruff 0.16.3 format check passes for all 274 source and test files | ✅ Verified |
 | CLI documentation and install contracts | Both validators passed | ✅ Verified |
-| Release readiness | Default AppData paths are not writable in this environment, so the documented offline doctor command returns `ok: false` | ⚠️ Environment-gated |
+| Release readiness | Automated verifier passes with an isolated writable root; this host's default AppData paths remain host-specific and are not used as release evidence | ✅ Automated / ⚠️ Environment-gated |
 | Skipped protocol tests | Key credential/RBCD tests require impacket; TGT capture tests require socket permissions | ⚠️ Evidence gap |
 
 The test result above is reproducible through `scripts/Invoke-Tests.ps1`, which redirects temporary state to repository-local directories on Windows. Direct pytest execution against the locked global temp directory is not a valid product failure signal for this checkout.
@@ -30,7 +30,7 @@ The test result above is reproducible through `scripts/Invoke-Tests.ps1`, which 
 | 6 | RM-006 | P2 | Decide and implement deferred ADCS enumeration checks, beginning with ESC5 and then the remaining explicitly deferred checks | ✅ Implemented and verified with 2 focused tests; ESC5 CA-server and PKI-container ACL evidence is persisted and graphed; ESC6/10/11/13 remain explicit policy/RPC limitations | Capability output either implements the check with tests and operator guidance or records a deliberate supported limitation |
 | 7 | RM-007 | P2 | Make supported-environment readiness validation explicit for writable data/config/workspace paths | ✅ Implemented and verified with 3 focused tests; release readiness uses an isolated writable root and CI passes an explicit runner-temp root | CI and release validation run in a writable supported environment and distinguish host configuration failures from product failures |
 | 8 | RM-008 | P2 | Resolve the 13 Ruff formatting failures and keep the CI-pinned Ruff version aligned locally | ✅ Implemented and verified with the CI-pinned Ruff 0.16.3; all 274 source and test files pass format and lint checks | Format check passes under the CI-pinned toolchain, with no unrelated behavior changes |
-| 9 | RM-009 | P2 | Re-run release, install, offline-command, and user-acceptance certification after the P0/P1 work | Install/docs contracts pass; full release readiness is not currently certified | Release readiness, packaging, offline demos, rollback, and documented CLI journeys pass in a clean supported environment |
+| 9 | RM-009 | P2 | Re-run release, install, offline-command, and user-acceptance certification after the P0/P1 work | ⚠️ Windows certification and fresh artifact packaging pass; clean artifact installation is blocked by host network/permission constraints, while Linux/macOS matrix, published-artifact, air-gap, and manual UAT evidence remain pending | Release readiness, packaging, offline demos, rollback, and documented CLI journeys pass in a clean supported environment |
 
 ## Detailed backlog
 
@@ -145,7 +145,31 @@ needed after aligning the formatter, and no behavior changes were introduced.
 
 ### RM-009 — Release/UAT certification
 
-After implementation work, certify the user-facing contracts again: clean editable install, CLI documentation parity, JSON output with `ok: true`, offline demo flows, rollback behavior, package/install contracts, and the full Windows/Linux/macOS test matrix. Record any remaining host-only limitations separately from product defects.
+The current Windows/Python 3.14.7 checkout completed the automated
+certification spine in an isolated writable environment:
+
+- `pip check`, version, `paths --repair`, user-readiness doctor, quickstart,
+  guide, `workflow next`, safe-capability listing, report generation, evidence
+  packaging, and cleanup-status all passed;
+- `scripts/check_install_contracts.py` passed;
+- `scripts/check_release_readiness.py --repo-root .` passed all installation,
+  troubleshooting, offline feature, recovery, documentation, and CI-binding
+  checks;
+- the full Windows-wrapper suite passes with 1,585 tests at 99.17% branch
+  coverage;
+- `pyproject.toml` and runtime metadata both report `0.10.1`, with the
+  `0.10.1` changelog heading present.
+- fresh wheel and sdist artifacts build successfully with `--no-isolation`,
+  both pass `twine check`, and a generated release manifest validates both
+  artifact hashes.
+
+Remaining RM-009 evidence is environment- or release-specific and stays open:
+the clean wheel/sdist installation could not complete because the host blocks
+outbound package access and the checked-in `dist` artifacts are unreadable;
+the Linux/macOS test matrix, published private-release smoke, air-gapped
+transfer controls, stranger first-ten-minute walkthrough, and narrow-terminal
+TUI spot-check also remain pending. These are recorded as evidence gaps, not
+local product failures.
 
 ## Intentionally not counted as defects yet
 
