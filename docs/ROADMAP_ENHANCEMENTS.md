@@ -30,7 +30,7 @@ The test result above is reproducible through `scripts/Invoke-Tests.ps1`, which 
 | 6 | RM-006 | P2 | Decide and implement deferred ADCS enumeration checks, beginning with ESC5 and then the remaining explicitly deferred checks | ✅ Implemented and verified with 2 focused tests; ESC5 CA-server and PKI-container ACL evidence is persisted and graphed; ESC6/10/11/13 remain explicit policy/RPC limitations | Capability output either implements the check with tests and operator guidance or records a deliberate supported limitation |
 | 7 | RM-007 | P2 | Make supported-environment readiness validation explicit for writable data/config/workspace paths | ✅ Implemented and verified with 3 focused tests; release readiness uses an isolated writable root and CI passes an explicit runner-temp root | CI and release validation run in a writable supported environment and distinguish host configuration failures from product failures |
 | 8 | RM-008 | P2 | Resolve the 13 Ruff formatting failures and keep the CI-pinned Ruff version aligned locally | ✅ Implemented and verified with the CI-pinned Ruff 0.16.3; all 274 source and test files pass format and lint checks | Format check passes under the CI-pinned toolchain, with no unrelated behavior changes |
-| 9 | RM-009 | P2 | Re-run release, install, offline-command, and user-acceptance certification after the P0/P1 work | ⚠️ Windows automated certification, fresh-wheel UAT, and artifact packaging pass; clean artifact installation is blocked by host network/permission constraints, while Linux/macOS matrix, published-artifact, air-gap, and manual UAT evidence remain pending | Release readiness, packaging, offline demos, rollback, and documented CLI journeys pass in a clean supported environment |
+| 9 | RM-009 | P2 | Re-run release, install, offline-command, and user-acceptance certification after the P0/P1 work | ⚠️ Local Windows UAT plus remote Linux/macOS matrix, clean-artifact, offline-wheelhouse, and production-gate certification pass; published private-release smoke and manual UAT evidence remain pending | Release readiness, packaging, offline demos, rollback, and documented CLI journeys pass in a clean supported environment |
 
 ## Detailed backlog
 
@@ -180,13 +180,16 @@ installed into an isolated target site with provisioned runtime dependencies:
   findings document shapes, empty search returns a stable result, and template
   initialization plus semantic safety errors honor the JSON output contract.
 
-Remaining RM-009 evidence is environment- or release-specific and stays open:
-the clean wheel/sdist installation could not complete because the host blocks
-outbound package access and the checked-in `dist` artifacts are unreadable;
-the Linux/macOS test matrix, published private-release smoke, air-gapped
-transfer controls, stranger first-ten-minute walkthrough, and narrow-terminal
-TUI spot-check also remain pending. These are recorded as evidence gaps, not
-local product failures.
+The pushed commit was then certified by the remote CI production gate
+([run 33804057476](https://github.com/rikterskale/ADAF-ATTACK/actions/runs/33804057476)):
+all Linux, macOS, and Windows test lanes passed, as did CodeQL, clean artifact
+installation, release-manifest validation, offline wheelhouse installation,
+and the final production-readiness gate.
+
+Remaining RM-009 evidence is release- or operator-specific and stays open:
+published private-release smoke, the stranger first-ten-minute walkthrough,
+and the narrow-terminal TUI spot-check. These are recorded as evidence gaps,
+not local product failures.
 
 ## Intentionally not counted as defects yet
 
@@ -194,4 +197,4 @@ The audit also found empty `pass` statements used for marker classes, empty exce
 
 ## Decision
 
-**RM-001 through RM-008 are complete.** Ticket forging restores CWD safely, native protocol evidence covers the five priority paths, capability adapter edge behavior is covered by focused tests, user-visible CLI/workflow/journey/TUI paths are covered by focused behavioral evidence, core safety/portability boundaries now have direct evidence, the deferred ADCS decision is closed with ESC5 implementation plus explicit limitations for the remaining evidence-dependent checks, release-readiness validation now runs against explicit writable paths, and the formatter gate passes under Ruff 0.16.3. The full suite passes with 1,585 tests at 99.17% branch coverage, and the standalone release-readiness verifier passes end-to-end. Implement **RM-009 next**, beginning with release, install, offline-command, and user-acceptance certification.
+**RM-001 through RM-008 are complete.** Ticket forging restores CWD safely, native protocol evidence covers the five priority paths, capability adapter edge behavior is covered by focused tests, user-visible CLI/workflow/journey/TUI paths are covered by focused behavioral evidence, core safety/portability boundaries now have direct evidence, the deferred ADCS decision is closed with ESC5 implementation plus explicit limitations for the remaining evidence-dependent checks, release-readiness validation now runs against explicit writable paths, and the formatter gate passes under Ruff 0.16.3. RM-009's local UAT and remote production-gate certification now pass, including the cross-platform matrix, clean artifact installation, and offline wheelhouse smoke. The tool is **not yet certified production-ready** because published private-release smoke and manual operator UAT evidence remain outstanding.
