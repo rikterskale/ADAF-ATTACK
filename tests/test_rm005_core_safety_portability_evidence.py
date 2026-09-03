@@ -337,7 +337,7 @@ def test_redaction_hit_detection_deduplicates_and_honors_limit() -> None:
         "password=hunter"
     ]
     hits = redaction.unredacted_secret_hits(
-        "password=one AKIAABCDEFGHIJKLMNOP ghp_" + "a" * 30,
+        "password=one " + "AKIA" + "ABCDEFGHIJKLMNOP " + "ghp_" + "a" * 30,
         limit=1,
     )
     assert len(hits) == 1

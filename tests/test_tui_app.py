@@ -59,7 +59,9 @@ def test_tui_compact_layout_keeps_review_run_and_param_form_reachable() -> None:
     async def exercise() -> None:
         app = ADAFAttackApp()
         async with app.run_test(size=(80, 50)) as pilot:
-            await pilot.pause()
+            # The compact-size initial resize can delay descendant mounting on
+            # slower Textual/Python combinations (notably macOS arm64).
+            await _wait_for(pilot, lambda: bool(app.query("#cap-list")))
             app.on_resize(SimpleNamespace(size=SimpleNamespace(width=80, height=50)))
             assert app.has_class("compact")
             search = app.query_one("#search", Input)
