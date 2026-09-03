@@ -11,7 +11,7 @@ This roadmap turns the 2026-09-03 repository audit into trackable enhancements. 
 | Static checks | Ruff check and strict mypy passed | ✅ Verified |
 | Tests | 1,585 passed, 2 warnings, using the repository Windows test wrapper | ✅ Verified |
 | Branch coverage | 99.17% total (`--cov-branch`), above the 95% gate with the RM-006 ADCS paths closed | ✅ Verified |
-| Formatting | Ruff format check reports 13 files requiring formatting | ⚠️ Open |
+| Formatting | Ruff 0.16.3 format check passes for all 274 source and test files | ✅ Verified |
 | CLI documentation and install contracts | Both validators passed | ✅ Verified |
 | Release readiness | Default AppData paths are not writable in this environment, so the documented offline doctor command returns `ok: false` | ⚠️ Environment-gated |
 | Skipped protocol tests | Key credential/RBCD tests require impacket; TGT capture tests require socket permissions | ⚠️ Evidence gap |
@@ -29,7 +29,7 @@ The test result above is reproducible through `scripts/Invoke-Tests.ps1`, which 
 | 5 | RM-005 | P1 | Close core safety and portability branches: LDAP/auth, paths, redaction, rollback, runner, target, vault, and UX helpers | ✅ Implemented and verified with 19 focused tests; targeted core modules are 97–100% except intentionally defensive partial branches | Boundary conditions, permission errors, cleanup, rollback, and platform-specific branches are behaviorally covered |
 | 6 | RM-006 | P2 | Decide and implement deferred ADCS enumeration checks, beginning with ESC5 and then the remaining explicitly deferred checks | ✅ Implemented and verified with 2 focused tests; ESC5 CA-server and PKI-container ACL evidence is persisted and graphed; ESC6/10/11/13 remain explicit policy/RPC limitations | Capability output either implements the check with tests and operator guidance or records a deliberate supported limitation |
 | 7 | RM-007 | P2 | Make supported-environment readiness validation explicit for writable data/config/workspace paths | ✅ Implemented and verified with 3 focused tests; release readiness uses an isolated writable root and CI passes an explicit runner-temp root | CI and release validation run in a writable supported environment and distinguish host configuration failures from product failures |
-| 8 | RM-008 | P2 | Resolve the 13 Ruff formatting failures and keep the CI-pinned Ruff version aligned locally | `ruff check` passes; `ruff format --check` does not | Format check passes under the CI-pinned toolchain, with no unrelated behavior changes |
+| 8 | RM-008 | P2 | Resolve the 13 Ruff formatting failures and keep the CI-pinned Ruff version aligned locally | ✅ Implemented and verified with the CI-pinned Ruff 0.16.3; all 274 source and test files pass format and lint checks | Format check passes under the CI-pinned toolchain, with no unrelated behavior changes |
 | 9 | RM-009 | P2 | Re-run release, install, offline-command, and user-acceptance certification after the P0/P1 work | Install/docs contracts pass; full release readiness is not currently certified | Release readiness, packaging, offline demos, rollback, and documented CLI journeys pass in a clean supported environment |
 
 ## Detailed backlog
@@ -130,9 +130,18 @@ feature, recovery, documentation, and CI-binding checks.
 
 ### RM-008 — Formatting gate
 
-The formatter reports these files: `capabilities/__init__.py`, `capabilities/asrep_roast.py`, `capabilities/asreq_userhunt.py`, `capabilities/capability_catalog.py`, `capabilities/credential_ops.py`, `cli.py`, `core/auth.py`, `core/completions.py`, `core/ldap_util.py`, `core/registry.py`, `core/target.py`, `tests/test_auth.py`, and `tests/test_core_paths_and_next_actions.py`.
+The 13 files identified by the audit were rechecked as a focused mechanical
+formatting scope: `capabilities/__init__.py`, `capabilities/asrep_roast.py`,
+`capabilities/asreq_userhunt.py`, `capabilities/capability_catalog.py`,
+`capabilities/credential_ops.py`, `cli.py`, `core/auth.py`,
+`core/completions.py`, `core/ldap_util.py`, `core/registry.py`,
+`core/target.py`, `tests/test_auth.py`, and
+`tests/test_core_paths_and_next_actions.py`.
 
-Apply formatting as a focused mechanical change, then rerun the CI-matching check. Do not combine it with behavior changes unless review explicitly wants that bundling.
+The local environment is now aligned to the CI-pinned `ruff==0.16.3`.
+`python -m ruff format --check src tests` reports all 274 files formatted, and
+the matching Ruff lint check passes. No source or test content changes were
+needed after aligning the formatter, and no behavior changes were introduced.
 
 ### RM-009 — Release/UAT certification
 
@@ -144,4 +153,4 @@ The audit also found empty `pass` statements used for marker classes, empty exce
 
 ## Decision
 
-**RM-001 through RM-007 are complete.** Ticket forging restores CWD safely, native protocol evidence covers the five priority paths, capability adapter edge behavior is covered by focused tests, user-visible CLI/workflow/journey/TUI paths are covered by focused behavioral evidence, core safety/portability boundaries now have direct evidence, the deferred ADCS decision is closed with ESC5 implementation plus explicit limitations for the remaining evidence-dependent checks, and release-readiness validation now runs against explicit writable paths. The full suite passes with 1,585 tests at 99.17% branch coverage, and the standalone release-readiness verifier passes end-to-end. Implement **RM-008 next**, beginning with the remaining formatter failures.
+**RM-001 through RM-008 are complete.** Ticket forging restores CWD safely, native protocol evidence covers the five priority paths, capability adapter edge behavior is covered by focused tests, user-visible CLI/workflow/journey/TUI paths are covered by focused behavioral evidence, core safety/portability boundaries now have direct evidence, the deferred ADCS decision is closed with ESC5 implementation plus explicit limitations for the remaining evidence-dependent checks, release-readiness validation now runs against explicit writable paths, and the formatter gate passes under Ruff 0.16.3. The full suite passes with 1,585 tests at 99.17% branch coverage, and the standalone release-readiness verifier passes end-to-end. Implement **RM-009 next**, beginning with release, install, offline-command, and user-acceptance certification.
