@@ -83,12 +83,13 @@ class TicketForge:
 
         out_dir = session.path("tickets")
         os.makedirs(out_dir, exist_ok=True)
+        previous_cwd = os.getcwd()
         os.chdir(out_dir)
         try:
             forger = TICKETER(impersonate, target.password or "", target.domain, options)
             forger.run()
         finally:
-            pass
+            os.chdir(previous_cwd)
 
         artifacts: list[str] = []
         for name in os.listdir(out_dir):

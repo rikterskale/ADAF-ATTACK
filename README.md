@@ -96,7 +96,8 @@ start from their platform guide below rather than pip directly.
   [Vault operations](docs/VAULT_OPERATIONS.md) ·
   [Rollback matrix](docs/ROLLBACK_MATRIX.md) ·
   [Plugin authoring](docs/PLUGIN_AUTHORING.md) ·
-  [Engineering](docs/ENGINEERING.md)
+  [Engineering](docs/ENGINEERING.md) ·
+  [Verified completion roadmap](docs/ROADMAP_ENHANCEMENTS.md)
 
 ## Philosophy
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -329,16 +330,55 @@ def test_ticket_forge_ignores_non_ccache_files(monkeypatch: Any, tmp_path: Path)
     monkeypatch.setattr(ticket_forge, "require_impacket", lambda name: None)
     forge_session = Session(tmp_path / "forge")
     forge_session.path("tickets/notes.txt").write_text("not a ticket", encoding="utf-8")
-    forged = ticket_forge.TicketForge().run(
-        _target(),
-        forge_session,
-        AttackGraph(),
-        impersonate="administrator",
-        nt="aa" * 16,
-        domain_sid="S-1-5-21-1-2-3",
-        variant="golden",
-    )
+    original_cwd = os.getcwd()
+    try:
+        forged = ticket_forge.TicketForge().run(
+            _target(),
+            forge_session,
+            AttackGraph(),
+            impersonate="administrator",
+            nt="aa" * 16,
+            domain_sid="S-1-5-21-1-2-3",
+            variant="golden",
+        )
+    finally:
+        os.chdir(original_cwd)
+
+    assert os.getcwd() == original_cwd
     assert forged["ccache_paths"] == []
+
+
+def test_ticket_forge_restores_cwd_when_forger_fails(monkeypatch: Any, tmp_path: Path) -> None:
+    forge_module = ModuleType("impacket.examples.ticketer")
+
+    class Ticketer:
+        def __init__(self, *args: Any) -> None:
+            pass
+
+        def run(self) -> None:
+            raise RuntimeError("ticketer failed")
+
+    forge_module.TICKETER = Ticketer
+    monkeypatch.setitem(sys.modules, "impacket.examples.ticketer", forge_module)
+    monkeypatch.setattr(ticket_forge, "require_impacket", lambda name: None)
+    forge_session = Session(tmp_path / "forge")
+    original_cwd = os.getcwd()
+
+    try:
+        with pytest.raises(RuntimeError, match="ticketer failed"):
+            ticket_forge.TicketForge().run(
+                _target(),
+                forge_session,
+                AttackGraph(),
+                impersonate="administrator",
+                nt="aa" * 16,
+                domain_sid="S-1-5-21-1-2-3",
+                variant="golden",
+            )
+    finally:
+        os.chdir(original_cwd)
+
+    assert os.getcwd() == original_cwd
 
 
 def test_extract_nt_from_pac_skips_other_buffer_types(monkeypatch: Any) -> None:
