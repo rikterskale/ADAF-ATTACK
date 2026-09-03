@@ -9,8 +9,8 @@ This roadmap turns the 2026-09-03 repository audit into trackable enhancements. 
 | Source inventory and imports | 135 Python source files; module import sweep passed | ✅ Verified |
 | Compilation | `python -m compileall -q src tests` passed | ✅ Verified |
 | Static checks | Ruff check and strict mypy passed | ✅ Verified |
-| Tests | 1,580 passed, 2 warnings, using the repository Windows test wrapper | ✅ Verified |
-| Branch coverage | 99.20% total (`--cov-branch`), above the 95% gate with the RM-005 core safety paths closed | ✅ Verified |
+| Tests | 1,582 passed, 2 warnings, using the repository Windows test wrapper | ✅ Verified |
+| Branch coverage | 99.17% total (`--cov-branch`), above the 95% gate with the RM-006 ADCS paths closed | ✅ Verified |
 | Formatting | Ruff format check reports 13 files requiring formatting | ⚠️ Open |
 | CLI documentation and install contracts | Both validators passed | ✅ Verified |
 | Release readiness | Default AppData paths are not writable in this environment, so the documented offline doctor command returns `ok: false` | ⚠️ Environment-gated |
@@ -27,7 +27,7 @@ The test result above is reproducible through `scripts/Invoke-Tests.ps1`, which 
 | 3 | RM-003 | P1 | Close capability edge-path coverage for campaign, credential, relay, spray, and workflow adapters | ✅ Implemented and verified with 27 focused tests; listed adapter modules are line-complete and the full branch gate passes | Each listed branch has a behavior-focused test or is documented as an intentionally unreachable/platform-gated path |
 | 4 | RM-004 | P1 | Close CLI, workflow, journey, and TUI interaction branches | ✅ Implemented and verified with 19 focused tests; CLI 98%, journey 94%, TUI 98%, and wrapper modules 96–100% | User-visible failure, cancellation, JSON, approval, and recovery paths are tested without weakening the CLI contract |
 | 5 | RM-005 | P1 | Close core safety and portability branches: LDAP/auth, paths, redaction, rollback, runner, target, vault, and UX helpers | ✅ Implemented and verified with 19 focused tests; targeted core modules are 97–100% except intentionally defensive partial branches | Boundary conditions, permission errors, cleanup, rollback, and platform-specific branches are behaviorally covered |
-| 6 | RM-006 | P2 | Decide and implement deferred ADCS enumeration checks, beginning with ESC5 and then the remaining explicitly deferred checks | `adcs_enum.py` documents an ESC5 ACL check as “not in this pass”; other ADCS capability gaps remain evidence items | Capability output either implements the check with tests and operator guidance or records a deliberate supported limitation |
+| 6 | RM-006 | P2 | Decide and implement deferred ADCS enumeration checks, beginning with ESC5 and then the remaining explicitly deferred checks | ✅ Implemented and verified with 2 focused tests; ESC5 CA-server and PKI-container ACL evidence is persisted and graphed; ESC6/10/11/13 remain explicit policy/RPC limitations | Capability output either implements the check with tests and operator guidance or records a deliberate supported limitation |
 | 7 | RM-007 | P2 | Make supported-environment readiness validation explicit for writable data/config/workspace paths | Release readiness is blocked only by the current host's locked default AppData paths | CI and release validation run in a writable supported environment and distinguish host configuration failures from product failures |
 | 8 | RM-008 | P2 | Resolve the 13 Ruff formatting failures and keep the CI-pinned Ruff version aligned locally | `ruff check` passes; `ruff format --check` does not | Format check passes under the CI-pinned toolchain, with no unrelated behavior changes |
 | 9 | RM-009 | P2 | Re-run release, install, offline-command, and user-acceptance certification after the P0/P1 work | Install/docs contracts pass; full release readiness is not currently certified | Release readiness, packaging, offline demos, rollback, and documented CLI journeys pass in a clean supported environment |
@@ -102,10 +102,16 @@ The full Windows-wrapper run passes with 1,580 tests at 99.20% branch coverage. 
 
 ### RM-006 — Explicit ADCS limitation decisions
 
-`adcs_enum.py` contains an explicit ESC5 caveat: the CA server computer-object ACL check is not implemented in that pass. Treat this as a product decision item, not an accidental stub. For each deferred ESC check, choose one of:
+ESC5 is now implemented in `adcs_enum.py`: each CA's `dNSHostName` is safely escaped and used to locate its domain computer object; write-capable ACLs are persisted in `esc5_ca_server_acl` and represented as ESC5 graph edges. The scan also covers the Certificate Templates and Enrollment Services containers in the existing `esc5_pki_acl` evidence.
 
-- implement, test, document, and include in the capability contract; or
-- retain as a named limitation with a safe operator-facing next action.
+The remaining checks are deliberate supported limitations:
+
+- ESC6 remains RPC/CA-configuration dependent and is probed through `esc6_probe.py`.
+- ESC9 is assessed from certificate-template flags.
+- ESC10 and ESC11 remain delegated to the authorized policy artifact consumed by `adcs-policy-probe`.
+- ESC13 remains delegated to issuance-policy validation in that same policy artifact.
+
+Each limitation remains named in the capability result notes with its next evidence source. Operator reports now include both ESC5 ACL evidence counts. The focused regression suite is `tests/test_rm006_adcs_esc5.py`.
 
 ### RM-007 — Environment-gated release evidence
 
@@ -127,4 +133,4 @@ The audit also found empty `pass` statements used for marker classes, empty exce
 
 ## Decision
 
-**RM-001 through RM-005 are complete.** Ticket forging restores CWD safely, native protocol evidence covers the five priority paths, capability adapter edge behavior is covered by focused tests, user-visible CLI/workflow/journey/TUI paths are covered by focused behavioral evidence, and core safety/portability boundaries now have direct evidence. The full suite passes with 1,580 tests at 99.20% branch coverage. Implement **RM-006 next**, beginning with the deferred ADCS enumeration decisions.
+**RM-001 through RM-006 are complete.** Ticket forging restores CWD safely, native protocol evidence covers the five priority paths, capability adapter edge behavior is covered by focused tests, user-visible CLI/workflow/journey/TUI paths are covered by focused behavioral evidence, core safety/portability boundaries now have direct evidence, and the deferred ADCS decision is closed with ESC5 implementation plus explicit limitations for the remaining evidence-dependent checks. The full suite passes with 1,582 tests at 99.17% branch coverage. Implement **RM-007 next**, beginning with supported-environment readiness validation.

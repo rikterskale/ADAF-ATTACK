@@ -6,7 +6,8 @@ import json
 import logging
 from typing import Any
 
-from ldap3 import LEVEL
+from ldap3 import LEVEL, SUBTREE
+from ldap3.utils.conv import escape_filter_chars
 from rich.console import Console
 
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
@@ -47,6 +48,9 @@ CA_ATTRS = [
     "msPKI-Enrollment-Flag",
     "msPKI-RA-Policies",
 ]
+ESC5_WRITE_RIGHTS = frozenset(
+    {"GenericAll", "GenericWrite", "WriteDacl", "WriteOwner", "WriteProperty"}
+)
 
 
 EKU_CLIENT_AUTH = "1.3.6.1.5.5.7.3.2"
@@ -129,6 +133,69 @@ def _analyze_template(entry: Any) -> dict[str, Any]:
     }
 
 
+def _scan_ca_server_acls(
+    conn: Any,
+    base_dn: str,
+    cas: list[dict[str, Any]],
+    graph: AttackGraph,
+    result: dict[str, Any],
+) -> None:
+    """Collect ESC5 ACL evidence from each CA server computer object.
+
+    The enrollment-service object identifies the CA host by ``dNSHostName``;
+    the corresponding computer object may live anywhere in the domain naming
+    context, so resolve it with a subtree search before reading its DACL.
+    This helper only reports existing permissions and never changes directory
+    state.
+    """
+    hits = result.setdefault("esc5_ca_server_acl", [])
+    for ca in cas:
+        dns = str(ca.get("dns") or "").strip().rstrip(".")
+        if not dns:
+            continue
+        try:
+            escaped_dns = str(escape_filter_chars(dns))
+            conn.search(
+                base_dn,
+                f"(&(objectClass=computer)(dNSHostName={escaped_dns}))",
+                search_scope=SUBTREE,
+                attributes=["distinguishedName", "sAMAccountName", "dNSHostName"],
+            )
+            for entry in conn.entries:
+                raw_dn = getattr(entry, "entry_dn", None) or getattr(
+                    entry, "distinguishedName", None
+                )
+                server_dn = str(raw_dn or "")
+                if not server_dn:
+                    continue
+                sd = fetch_sd(conn, server_dn)
+                if not sd:
+                    continue
+                server_id = f"CA-SERVER@{dns.upper()}"
+                graph.add_node(server_id, "Computer", dn=server_dn, dns=dns)
+                try:
+                    for ace in parse_interesting_aces(sd):
+                        if ace.right not in ESC5_WRITE_RIGHTS:
+                            continue
+                        hit = {
+                            "ca": ca.get("cn"),
+                            "server": dns,
+                            "dn": server_dn,
+                            "sid": ace.principal_sid,
+                            "right": ace.right,
+                        }
+                        if hit in hits:
+                            continue
+                        hits.append(hit)
+                        source = f"SID@{ace.principal_sid}"
+                        graph.add_node(source, "Base", sid=ace.principal_sid)
+                        graph.add_edge(source, server_id, "ESC5", right=ace.right)
+                except Exception:
+                    _logger.debug("Could not parse ESC5 CA server ACL", exc_info=True)
+        except Exception as exc:
+            console.print(f"[yellow]ESC5 CA server scan limited for {dns}: {exc}[/yellow]")
+
+
 @register_capability(
     id="adcs-enum",
     summary="Enumerate AD CS CAs/templates, ESC1-ESC9 signals, and enrollment rights",
@@ -159,7 +226,7 @@ class AdcsEnum:
     ) -> dict[str, Any]:
         console.print(f"[bold]ADCS enum[/bold] → {target.domain} @ {target.dc_ip}")
 
-        conn, _default_nc, config_nc = ldap_connect(target)
+        conn, default_nc, config_nc = ldap_connect(target)
         if not config_nc:
             conn.unbind()
             raise RuntimeError("Could not resolve configurationNamingContext")
@@ -178,6 +245,7 @@ class AdcsEnum:
             "esc3_agent_templates": [],
             "esc3_ra_required_templates": [],
             "esc4_acl_templates": [],
+            "esc5_ca_server_acl": [],
             "esc7_ca_acl": [],
             "esc8_web_enrollment": [],
             "esc9_candidates": [],
@@ -186,7 +254,10 @@ class AdcsEnum:
             "esc13_candidates": [],
             "esc1_with_enroll_principals": [],
             "notes": {
-                "ESC5": "Check CA server computer object ACL separately (not in this pass)",
+                "ESC5": (
+                    "CA server computer-object and PKI-container ACLs are checked; "
+                    "review write-capable principals in esc5_ca_server_acl and esc5_pki_acl"
+                ),
                 "ESC6": "EDITF_ATTRIBUTESUBJECTALTNAME2 requires RPC/CA config inspection",
                 "ESC9": "No-security-extension + client-auth template flag assessment",
                 "ESC10": "Weak certificate mapping requires DC policy validation (adcs-policy-probe)",
@@ -270,6 +341,8 @@ class AdcsEnum:
                 f"CN=NTAuthCertificates,{pki_base}",
                 f"CN=KRA,{pki_base}",
                 f"CN=OID,{pki_base}",
+                f"CN=Certificate Templates,{pki_base}",
+                f"CN=Enrollment Services,{pki_base}",
             ]
             for dn in pki_objects:
                 sd = fetch_sd(conn, dn)
@@ -296,6 +369,12 @@ class AdcsEnum:
                 console.print(f"  [red]ESC5 PKI ACL hits[/red]: {len(result['esc5_pki_acl'])}")
         except Exception as exc:
             console.print(f"[yellow]ESC5 PKI ACL scan limited: {exc}[/yellow]")
+
+        _scan_ca_server_acls(conn, default_nc, result["cas"], graph, result)
+        if result["esc5_ca_server_acl"]:
+            console.print(
+                f"  [red]ESC5 CA server ACL hits[/red]: {len(result['esc5_ca_server_acl'])}"
+            )
 
         # Templates + enrollment rights + ESC1-4 / ESC9
         try:
@@ -450,6 +529,7 @@ class AdcsEnum:
             esc2=len(result["esc2_candidates"]),
             esc3=len(result["esc3_agent_templates"]),
             esc4=len(result["esc4_acl_templates"]),
+            esc5=len(result["esc5_pki_acl"]) + len(result["esc5_ca_server_acl"]),
             esc7=len(result["esc7_ca_acl"]),
             esc8=len(result["esc8_web_enrollment"]),
             esc9=len(result["esc9_candidates"]),
@@ -463,6 +543,7 @@ class AdcsEnum:
             f"ESC2={len(result['esc2_candidates'])}  "
             f"ESC3={len(result['esc3_agent_templates'])}  "
             f"ESC4={len(result['esc4_acl_templates'])}  "
+            f"ESC5={len(result['esc5_pki_acl']) + len(result['esc5_ca_server_acl'])}  "
             f"ESC7={len(result['esc7_ca_acl'])}  "
             f"ESC8={len(result['esc8_web_enrollment'])}  "
             f"ESC9={len(result['esc9_candidates'])}"

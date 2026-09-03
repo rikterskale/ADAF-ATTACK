@@ -131,6 +131,8 @@ class Report:
                 lines.append(f"- ESC4 ACL templates: {len(data.get('esc4_acl_templates') or [])}")
                 lines.append(f"- ESC7: {len(data.get('esc7_ca_acl') or [])}")
                 lines.append(f"- ESC8: {len(data.get('esc8_web_enrollment') or [])}")
+                lines.append(f"- ESC5 PKI ACLs: {len(data.get('esc5_pki_acl') or [])}")
+                lines.append(f"- ESC5 CA server ACLs: {len(data.get('esc5_ca_server_acl') or [])}")
                 esc6 = data.get("esc6") or {}
                 lines.append(f"- ESC6 resolved: {esc6.get('resolved')} value={esc6.get('esc6')}")
             elif fname == "kerberoast.json":
