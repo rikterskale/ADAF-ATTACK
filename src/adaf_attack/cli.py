@@ -1976,8 +1976,13 @@ def search(
     from adaf_attack.core.ux import unified_search
 
     payload = unified_search(query, session=session, limit=limit)
-    lines = [f"{item['type']}: {item['title']} — {item['summary']}" for item in payload["results"]]
-    _emit(ctx, {"ok": True, **payload}, Panel("\n".join(lines) or "No matches.", title="Search"))
+    results = payload.get("results") or []
+    lines = [f"{item['type']}: {item['title']} — {item['summary']}" for item in results]
+    _emit(
+        ctx,
+        {"ok": True, **payload, "results": results},
+        Panel("\n".join(lines) or "No matches.", title="Search"),
+    )
 
 
 @app.command("query", rich_help_panel="Guidance & UX helpers")
@@ -2128,7 +2133,15 @@ def cleanup_cmd(
 ) -> None:
     """Execute recorded session rollbacks; requires explicit force."""
     if not force:
-        raise typer.BadParameter("cleanup execution requires --force")
+        error = error_for(
+            "DESTRUCTIVE_CONFIRMATION_REQUIRED",
+            message="cleanup execution requires --force",
+            suggested_command=(
+                f"adaf-attack cleanup --session {session} --domain {domain} --dc-ip {dc_ip} --force"
+            ),
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
     from adaf_attack.core.cleanup import execute_cleanup
 
     result = execute_cleanup(
@@ -2203,7 +2216,14 @@ def detection_status_cmd(
             session, status=status, notes=notes, telemetry=telemetry
         )
     except ValueError as exc:
-        raise typer.BadParameter(str(exc), param_hint="--status") from exc
+        error = ActionableError(
+            "INVALID_DETECTION_STATUS",
+            str(exc),
+            "Choose detected, not-detected, inconclusive, or not-recorded.",
+            suggested_command=f"adaf-attack detection-status --session {session} --status not-recorded",
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code) from exc
     payload = {"ok": True, "session": str(session), "detection": detection}
     _emit(
         ctx,
@@ -2985,6 +3005,7 @@ def _execute_with_spinner(
 
 @engagement_app.command("init")
 def engagement_init(
+    ctx: typer.Context,
     output: Path = typer.Option(Path("engagement.yaml"), "--output", "-o"),
     template: str = typer.Option("standard", "--template", help="standard or ad-recon"),
 ) -> None:
@@ -3020,15 +3041,20 @@ phases:
 """,
             encoding="utf-8",
         )
-    typer.echo(f"Wrote {output}")
+    _emit(
+        ctx,
+        {"ok": True, "output": str(output), "template": template},
+        Panel(f"Wrote {output}", title="Engagement template"),
+    )
 
 
 @ad_recon_app.command("init")
 def ad_recon_init(
+    ctx: typer.Context,
     output: Path = typer.Option(Path("ad-recon.yaml"), "--output", "-o"),
 ) -> None:
     """Write the reviewed, read-only AD reconnaissance engagement template."""
-    engagement_init(output=output, template="ad-recon")
+    engagement_init(ctx=ctx, output=output, template="ad-recon")
 
 
 @ad_recon_app.command("profile")
@@ -4239,7 +4265,12 @@ def finding_triage_cmd(
         try:
             path = session / "findings.json"
             document = json.loads(path.read_text(encoding="utf-8"))
-            values = document.get("findings") if isinstance(document, dict) else None
+            if isinstance(document, dict):
+                values = document.get("findings")
+            elif isinstance(document, list):
+                values = document
+            else:
+                values = None
             if not isinstance(values, list):
                 raise ValueError("findings.json does not contain a findings list")
             target_key = str(

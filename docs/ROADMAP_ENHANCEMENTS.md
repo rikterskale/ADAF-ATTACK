@@ -30,7 +30,7 @@ The test result above is reproducible through `scripts/Invoke-Tests.ps1`, which 
 | 6 | RM-006 | P2 | Decide and implement deferred ADCS enumeration checks, beginning with ESC5 and then the remaining explicitly deferred checks | ✅ Implemented and verified with 2 focused tests; ESC5 CA-server and PKI-container ACL evidence is persisted and graphed; ESC6/10/11/13 remain explicit policy/RPC limitations | Capability output either implements the check with tests and operator guidance or records a deliberate supported limitation |
 | 7 | RM-007 | P2 | Make supported-environment readiness validation explicit for writable data/config/workspace paths | ✅ Implemented and verified with 3 focused tests; release readiness uses an isolated writable root and CI passes an explicit runner-temp root | CI and release validation run in a writable supported environment and distinguish host configuration failures from product failures |
 | 8 | RM-008 | P2 | Resolve the 13 Ruff formatting failures and keep the CI-pinned Ruff version aligned locally | ✅ Implemented and verified with the CI-pinned Ruff 0.16.3; all 274 source and test files pass format and lint checks | Format check passes under the CI-pinned toolchain, with no unrelated behavior changes |
-| 9 | RM-009 | P2 | Re-run release, install, offline-command, and user-acceptance certification after the P0/P1 work | ⚠️ Windows certification and fresh artifact packaging pass; clean artifact installation is blocked by host network/permission constraints, while Linux/macOS matrix, published-artifact, air-gap, and manual UAT evidence remain pending | Release readiness, packaging, offline demos, rollback, and documented CLI journeys pass in a clean supported environment |
+| 9 | RM-009 | P2 | Re-run release, install, offline-command, and user-acceptance certification after the P0/P1 work | ⚠️ Windows automated certification, fresh-wheel UAT, and artifact packaging pass; clean artifact installation is blocked by host network/permission constraints, while Linux/macOS matrix, published-artifact, air-gap, and manual UAT evidence remain pending | Release readiness, packaging, offline demos, rollback, and documented CLI journeys pass in a clean supported environment |
 
 ## Detailed backlog
 
@@ -162,6 +162,23 @@ certification spine in an isolated writable environment:
 - fresh wheel and sdist artifacts build successfully with `--no-isolation`,
   both pass `twine check`, and a generated release manifest validates both
   artifact hashes.
+
+The Windows Phase 3 UAT also passed against a freshly built `0.10.1` wheel
+installed into an isolated target site with provisioned runtime dependencies:
+
+- 92 registered capabilities were enumerated; the seven offline-safe entries,
+  help surfaces, offline-analysis profile, and documented saved-evidence
+  commands were exercised without contacting a target;
+- quickstart → report → redacted package → finding triage completed
+  successfully, along with session dashboards, workflow guidance, detection
+  export, support bundle, scope validation, profiles, configuration, and
+  completion generation;
+- invalid session, graph, manifest, BloodHound, capability, finding, and
+  interactive-mode inputs returned actionable failures; empty search now
+  returns a stable empty JSON result;
+- UAT exposed and closed CLI defects: triage now preserves both canonical
+  findings document shapes, empty search returns a stable result, and template
+  initialization plus semantic safety errors honor the JSON output contract.
 
 Remaining RM-009 evidence is environment- or release-specific and stays open:
 the clean wheel/sdist installation could not complete because the host blocks

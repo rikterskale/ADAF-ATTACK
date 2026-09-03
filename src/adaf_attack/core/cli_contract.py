@@ -38,6 +38,11 @@ ERROR_CATALOG: dict[str, tuple[str, ...]] = {
         "Review `adaf-attack plan <capability> ...`, then re-run with --force if authorized.",
         "adaf-attack plan <capability> -d <domain> --dc-ip <dc>",
     ),
+    "INVALID_DETECTION_STATUS": (
+        "The defensive detection status is not recognized.",
+        "Choose detected, not-detected, inconclusive, or not-recorded.",
+        "adaf-attack detection-status --session <session> --status not-recorded",
+    ),
     "FIRST_DESTRUCTIVE_USE_CONFIRMATION_REQUIRED": (
         "The first destructive use of this capability in the workspace needs acknowledgement.",
         "Review the plan, then re-run with --i-understand when authorized.",

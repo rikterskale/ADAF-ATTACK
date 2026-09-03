@@ -770,7 +770,7 @@ def test_finding_triage_view_only_skips_write(tmp_path: Path) -> None:
     assert (session / "findings.json").read_text(encoding="utf-8") == before
 
 
-def test_finding_triage_write_fails_when_document_is_not_a_mapping(tmp_path: Path) -> None:
+def test_finding_triage_updates_canonical_list_document(tmp_path: Path) -> None:
     session = _finding_session(tmp_path, json.dumps([_FINDING]))
 
     result = runner.invoke(
@@ -789,8 +789,11 @@ def test_finding_triage_write_fails_when_document_is_not_a_mapping(tmp_path: Pat
         ],
     )
 
-    assert result.exit_code == 1
-    assert "FINDING_TRIAGE_WRITE_FAILED" in result.output
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["updated"] is True
+    saved = json.loads((session / "findings.json").read_text(encoding="utf-8"))
+    assert saved[0]["status"] == "open"
 
 
 def test_finding_triage_write_fails_when_finding_vanishes(

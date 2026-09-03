@@ -32,6 +32,55 @@ def test_no_subcommand_prints_help() -> None:
     assert result.exit_code == 0
 
 
+def test_search_empty_returns_an_empty_json_result() -> None:
+    result = runner.invoke(app, ["--format", "json", "search", ""])
+    _ok(result)
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["results"] == []
+    assert payload["count"] == 0
+
+
+def test_cleanup_force_gate_returns_actionable_json(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--format",
+            "json",
+            "cleanup",
+            "--session",
+            str(tmp_path),
+            "--domain",
+            "corp.example",
+            "--dc-ip",
+            "192.0.2.10",
+        ],
+    )
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["error"]["code"] == "DESTRUCTIVE_CONFIRMATION_REQUIRED"
+    assert "--force" in payload["error"]["suggested_command"]
+
+
+def test_detection_status_validation_returns_actionable_json(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "--format",
+            "json",
+            "detection-status",
+            "--session",
+            str(tmp_path),
+            "--status",
+            "invalid",
+        ],
+    )
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["error"]["code"] == "INVALID_DETECTION_STATUS"
+    assert "not-recorded" in payload["error"]["remediation"]
+
+
 def test_doctor_human_explain() -> None:
     result = runner.invoke(app, ["doctor", "--explain"])
     _ok(result)
@@ -98,6 +147,13 @@ def test_ad_recon_profile_and_template(tmp_path: Path) -> None:
     text = output.read_text(encoding="utf-8")
     assert "identity-and-topology" in text
     assert "gmsa-laps-enum" in text
+
+    json_result = runner.invoke(
+        app,
+        ["--format", "json", "ad-recon", "init", "--output", str(tmp_path / "ad-recon-json.yaml")],
+    )
+    _ok(json_result)
+    assert json.loads(json_result.output)["ok"] is True
 
 
 # --------------------------- sessions + cleanup ---------------------------
@@ -461,6 +517,15 @@ def test_engagement_init_and_refuse_overwrite(tmp_path: Path) -> None:
         app, ["engagement", "init", "--output", str(tmp_path / "bad.yaml"), "--template", "bad"]
     )
     assert invalid.exit_code != 0
+
+    json_result = runner.invoke(
+        app,
+        ["--format", "json", "engagement", "init", "--output", str(tmp_path / "eng-json.yaml")],
+    )
+    _ok(json_result)
+    payload = json.loads(json_result.output)
+    assert payload["ok"] is True
+    assert payload["template"] == "standard"
 
 
 def test_engagement_validate(tmp_path: Path) -> None:
