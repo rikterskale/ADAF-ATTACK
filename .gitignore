@@ -27,6 +27,8 @@ htmlcov/
 .pytest_cache/
 .pytest-local/
 .pytest-runtime/
+.pytest-python314-check/
+.pytest314-temp*/
 .mypy_cache/
 .ruff_cache/
 
