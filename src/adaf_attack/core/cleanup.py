@@ -42,10 +42,12 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
             item.setdefault("classification", classification)
             if classification == "advisory":
                 item["result"] = "Manual review required; no automatic rollback handler"
+                item["status"] = "acknowledged"
                 advisory += 1
                 continue
             if classification == "unsupported":
                 item["result"] = "Unsupported cleanup kind; manual review required"
+                item["status"] = "acknowledged"
                 unsupported += 1
                 continue
             if kind == "computer-identity":
@@ -66,12 +68,11 @@ def execute_cleanup(session: Path, target: Target) -> dict[str, Any]:
                     item["target"],
                     {"msDS-AllowedToActOnBehalfOfOtherIdentity": [(MODIFY_REPLACE, previous)]},
                 )
-            elif kind == "acl":
+            elif kind in {"acl", "acl-write"}:
+                from adaf_attack.core.acl import modify_security_descriptor
+
                 previous_bytes = bytes.fromhex(item["previous_hex"])
-                ok = conn.modify(
-                    item["target"],
-                    {"nTSecurityDescriptor": [(MODIFY_REPLACE, [previous_bytes])]},
-                )
+                ok = modify_security_descriptor(conn, item["target"], previous_bytes)
             elif kind == "gpo-link":
                 ok = conn.modify(
                     item["target"],

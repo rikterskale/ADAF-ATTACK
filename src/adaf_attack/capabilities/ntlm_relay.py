@@ -30,7 +30,13 @@ HASH_LINE_RE = re.compile(
     r"(?P<user>[^:\s]+)::(?P<domain>[^:\s]+):(?P<lm>[0-9A-Fa-f]{32})?:?(?P<nt>[0-9A-Fa-f]{32})?"
 )
 NTLM_RE = re.compile(r"(?P<label>NTLMv[12])\s+(?P<body>.+)", re.IGNORECASE)
-_SAFE_EXTRA_OPTIONS = {"--http-port": 1, "--https-port": 1, "-c": 1, "--command": 1}
+_SAFE_EXTRA_OPTIONS = {
+    "--http-port": 1,
+    "--https-port": 1,
+    "-c": 1,
+    "--command": 1,
+    "--smb-port": 1,
+}
 
 
 def _validate_extras(extras: list[str]) -> list[str]:
@@ -48,14 +54,14 @@ def _validate_extras(extras: list[str]) -> list[str]:
         if arity is None:
             raise RuntimeError(
                 f"ntlm-relay extra {option!r} is not allowed; supported extras are "
-                "--http-port, --https-port, -c, and --command"
+                "--http-port, --https-port, --smb-port, -c, and --command"
             )
         if index + arity >= len(extras):
             raise RuntimeError(f"ntlm-relay extra {option!r} requires a value")
         value = extras[index + 1]
         if not value or value.startswith("-"):
             raise RuntimeError(f"ntlm-relay extra {option!r} requires a non-option value")
-        if option in {"--http-port", "--https-port"}:
+        if option in {"--http-port", "--https-port", "--smb-port"}:
             try:
                 port = int(value)
             except ValueError as exc:
@@ -68,22 +74,38 @@ def _validate_extras(extras: list[str]) -> list[str]:
 
 
 def _build_argv(
-    target: Target, relay_targets: list[str], listen_port: int, output_dir: str, extras: list[str]
+    target: Target,
+    relay_targets: list[str],
+    listen_port: int,
+    output_dir: str,
+    extras: list[str],
+    *,
+    targets_file: str,
+    enable_http: bool = True,
+    enable_smb: bool = True,
 ) -> list[str]:
+    del target  # domain/dc are recorded in session metadata, not ntlmrelayx identity.
     argv = [
         "impacket-ntlmrelayx",
-        "--no-http-server",
         "--no-wcf-server",
         "--no-raw-server",
-        "--no-smb-server",
+        "--no-rpc-server",
+        "--no-winrm-server",
+        "--no-mssql-server",
+        "--no-rdp-server",
         "-tf",
-        "-",
+        targets_file,
         "-of",
         output_dir,
         "-smb2support",
     ]
-    for host in relay_targets:
-        argv.extend(["-t", host])
+    if not enable_http:
+        argv.append("--no-http-server")
+    if not enable_smb:
+        argv.append("--no-smb-server")
+    extra_keys = set(extras[::2]) if extras else set()
+    if enable_smb and "--smb-port" not in extra_keys:
+        argv.extend(["--smb-port", str(listen_port)])
     argv.extend(_validate_extras(extras or []))
     return argv
 
@@ -186,7 +208,18 @@ class NtlmRelay:
 
         out_dir = session.path("relay-artifacts")
         out_dir.mkdir(parents=True, exist_ok=True)
-        argv = _build_argv(target, relay_targets, listen_port, str(out_dir), extras)
+        targets_file = session.path("relay-targets.txt")
+        targets_file.write_text("\n".join(relay_targets) + "\n", encoding="utf-8")
+        argv = _build_argv(
+            target,
+            relay_targets,
+            listen_port,
+            str(out_dir),
+            extras,
+            targets_file=str(targets_file),
+            enable_http=True,
+            enable_smb=True,
+        )
         argv[0] = binary
 
         console.print(

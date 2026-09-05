@@ -277,7 +277,9 @@ def test_dcsync_single_principal_and_hash_login(
     target = _target(username="alice", hashes=":" + "a" * 32)
 
     with pytest.raises(RuntimeError, match="offline hash login"):
-        dcsync.Dcsync().run(target, Session(tmp_path), AttackGraph(), principals="administrator")
+        dcsync.Dcsync().run(
+            target, Session(tmp_path), AttackGraph(), principals="administrator", force=True
+        )
 
 
 # ---------------------------------------------------------------------------

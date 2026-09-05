@@ -96,8 +96,12 @@ def test_dcsync_without_principal_filter(monkeypatch: Any, tmp_path: Path) -> No
             pass
 
     monkeypatch.setattr("impacket.smbconnection.SMBConnection", lambda *a, **k: _Smb())
-    result = dcsync.Dcsync().run(_target(), Session(tmp_path), AttackGraph())
-    assert result["principal_filter"] == []
+    with pytest.raises(RuntimeError, match="requires -P sam"):
+        dcsync.Dcsync().run(_target(), Session(tmp_path), AttackGraph(), force=True)
+    result = dcsync.Dcsync().run(
+        _target(), Session(tmp_path), AttackGraph(), force=True, just_user="*"
+    )
+    assert result["principal_filter"] == ["*"]
     assert result["count"] == 1
 
 

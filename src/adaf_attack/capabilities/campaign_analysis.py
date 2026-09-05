@@ -77,6 +77,33 @@ class BlastRadius:
 
 
 @register_capability(
+    id="campaign-analysis",
+    summary="Read-only campaign analysis of saved graph paths and high-value impact",
+    category="analysis",
+    tags=("campaign", "graph", "offline"),
+)
+class CampaignAnalysis:
+    def run(
+        self, target: Target, session: Session, graph: AttackGraph, **kwargs: Any
+    ) -> dict[str, Any]:
+        graph = _load_graph(session, graph)
+        summary = graph.summary() if hasattr(graph, "summary") else {"nodes": len(graph.nodes)}
+        interesting = graph.interesting_summary() if hasattr(graph, "interesting_summary") else {}
+        result = {
+            "ok": True,
+            "graph": summary,
+            "interesting": interesting,
+            "edge_count": len(graph.edges),
+            "node_count": len(graph.nodes),
+        }
+        session.path("campaign-analysis.json").write_text(
+            json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8"
+        )
+        session.log("campaign-analysis.complete", nodes=result["node_count"])
+        return result
+
+
+@register_capability(
     id="purple-feedback",
     summary="Generate updated detection hypotheses from session events",
     category="export",

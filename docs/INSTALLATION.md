@@ -137,7 +137,7 @@ adaf-attack --format json doctor --explain
 If the shim is not yet visible, use the installer environment directly:
 
 ```powershell
-& "$env:LOCALAPPDATA\adaf-attack\venv\Scripts\python.exe" -m adaf_attack.cli --version
+.\.venv\Scripts\adaf-attack.exe --version
 ```
 
 ## 5. Kali Linux: installer-assisted setup

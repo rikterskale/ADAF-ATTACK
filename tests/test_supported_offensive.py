@@ -358,6 +358,18 @@ def test_credential_ops(monkeypatch: Any, tmp_path: Path) -> None:
         }
     )
     _patch_ldap(monkeypatch, credential_ops, conn)
+    import adaf_attack.core.ldap_util as ldap_util
+    import adaf_attack.core.lockout as lockout
+
+    monkeypatch.setattr(ldap_util, "ldap_connect", lambda target: (conn, "DC=corp,DC=test", None))
+    monkeypatch.setattr(
+        lockout,
+        "read_domain_lockout_policy",
+        lambda *a, **k: {"lockout_threshold": 5, "observation_window_seconds": 1800},
+    )
+    monkeypatch.setattr(lockout, "locate_pdc_emulator", lambda *a, **k: "dc01.corp.test")
+    monkeypatch.setattr(lockout, "domain_has_pso", lambda *a, **k: False)
+    monkeypatch.setattr(lockout, "account_lockout_state", lambda *a, **k: (0, None, None))
     monkeypatch.setattr(credential_ops, "try_ntlm_bind", lambda *a, **k: (True, "ok"))
     session = Session(tmp_path)
     graph = AttackGraph()
@@ -365,10 +377,12 @@ def test_credential_ops(monkeypatch: Any, tmp_path: Path) -> None:
     assert one["count"] == 1
     all_g = credential_ops.GmsaRead().run(_target(), session, graph)
     assert all_g["count"] >= 1
-    pre = credential_ops.Pre2kSpray().run(_target(), session, graph, max_attempts=1, max_objects=10)
+    pre = credential_ops.Pre2kSpray().run(
+        _target(), session, graph, max_attempts=1, max_objects=10, force=True
+    )
     assert pre["hit_count"] == 1
     monkeypatch.setattr(credential_ops, "try_ntlm_bind", lambda *a, **k: (False, "no"))
-    pre2 = credential_ops.Pre2kSpray().run(_target(), session, graph, max_attempts=1)
+    pre2 = credential_ops.Pre2kSpray().run(_target(), session, graph, max_attempts=1, force=True)
     assert pre2["hit_count"] == 0
     monkeypatch.setattr(credential_ops, "_udp_query", lambda *a, **k: b"\x00" * 68)
     roast = credential_ops.Timeroast().run(
@@ -399,10 +413,10 @@ def test_credential_ops(monkeypatch: Any, tmp_path: Path) -> None:
             return {"ok": True, "count": 1}
 
     monkeypatch.setattr(credential_ops, "Dcsync", _Dcsync)
-    aad = credential_ops.AadConnectDcsync().run(_target(), session, graph)
+    aad = credential_ops.AadConnectDcsync().run(_target(), session, graph, force=True)
     assert aad["ok"] is True
     conn.by_filter["MSOL_"] = []
-    none = credential_ops.AadConnectDcsync().run(_target(), session, graph)
+    none = credential_ops.AadConnectDcsync().run(_target(), session, graph, force=True)
     assert none["ok"] is False
 
 

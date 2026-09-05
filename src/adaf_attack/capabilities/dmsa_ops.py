@@ -17,6 +17,7 @@ from adaf_attack.core.ldap_ops import (
     finish,
     lookup_sam,
     register_object_rollback,
+    require_confidentiality,
     require_force,
     require_param,
 )
@@ -97,6 +98,7 @@ class BadSuccessor:
         **kwargs: Any,
     ) -> dict[str, Any]:
         require_force("badsuccessor", force)
+        require_confidentiality(target, "badsuccessor")
         preceded = require_param(kwargs, "preceded_by", "target", "sam")
         name = str(kwargs.get("name") or kwargs.get("computer") or f"adaf{secrets.token_hex(3)}")
         password = str(kwargs.get("password") or (secrets.token_urlsafe(12) + "Aa1!"))
@@ -144,6 +146,7 @@ class DmsaOuroboros:
         **kwargs: Any,
     ) -> dict[str, Any]:
         require_force("dmsa-ouroboros", force)
+        require_confidentiality(target, "dmsa-ouroboros")
         sam = kwargs.get("sam") or kwargs.get("dmsa")
         conn, base_dn, _cfg = ldap_connect(target)
         try:

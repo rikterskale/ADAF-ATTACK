@@ -99,6 +99,21 @@ class TemplateMod:
             "msPKI-Certificate-Name-Flag": [(MODIFY_REPLACE, [new_name_flag])],
             "msPKI-Enrollment-Flag": [(MODIFY_REPLACE, [new_enrollment_flag])],
         }
+        rollback_file = session.path(f"template-mod-{template}.rollback.json")
+        rollback_file.write_text(
+            json.dumps({"dn": dn, "attrs": original}, indent=2), encoding="utf-8"
+        )
+        session.register_cleanup(
+            {
+                "kind": "template-mod",
+                "target": dn,
+                "artifact": str(rollback_file),
+                "rollback": (
+                    "LDAP MODIFY_REPLACE the three saved attributes back to their original values "
+                    "recorded in the rollback file."
+                ),
+            }
+        )
         ok = conn.modify(dn, changes)
         modify_result = str(conn.result)
 
@@ -114,24 +129,7 @@ class TemplateMod:
             },
             "ldap_result": modify_result,
         }
-
-        rollback_file = session.path(f"template-mod-{template}.rollback.json")
-        rollback_file.write_text(
-            json.dumps({"dn": dn, "attrs": original}, indent=2), encoding="utf-8"
-        )
-
         if ok:
-            session.register_cleanup(
-                {
-                    "kind": "template-mod",
-                    "target": dn,
-                    "artifact": str(rollback_file),
-                    "rollback": (
-                        "LDAP MODIFY_REPLACE the three saved attributes back to their original values "
-                        "recorded in the rollback file."
-                    ),
-                }
-            )
             console.print(f"[green]LDAP MODIFY ok[/green]  {dn}")
         else:
             console.print(f"[red]LDAP MODIFY failed[/red]  {modify_result}")

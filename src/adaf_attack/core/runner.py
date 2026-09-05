@@ -304,7 +304,10 @@ def execute_capability(
                 retries=retries,
                 mutating=active_safety.is_mutating,
             )
+        from adaf_attack.core.redaction import redact as redact_result
+
         result = normalize_capability_result(result)
+        result = redact_result(result, include_secrets=include_secrets)
         resolved = graph.resolve_dn_edges()
         if resolved:
             graph.save(session.path("graph.json"))

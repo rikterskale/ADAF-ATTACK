@@ -160,10 +160,11 @@ class GpoSysvol:
                         item["sysvol_reachable"] = False
                         item["sysvol_error"] = f"list: {exc}"
 
-                    # Write probe: try create a temp file then delete (only if force)
-                    if force and (
-                        stage_gpo is None
-                        or stage_gpo.lower() in (cn.lower(), (display or "").lower())
+                    # Write probe only the selected GPO. Force without -P gpo= is enum-only.
+                    if (
+                        force
+                        and stage_gpo
+                        and (stage_gpo.lower() in (cn.lower(), (display or "").lower()))
                     ):
                         probe_name = check_path + "/Machine/adaf_write_probe.txt"
                         try:
@@ -171,8 +172,17 @@ class GpoSysvol:
                             smb.writeFile(tid, fid, b"adaf-attack write probe\n")
                             smb.closeFile(tid, fid)
                             item["sysvol_writable"] = True
+                            probe_unc = probe_name.replace("/", "\\")
+                            session.register_cleanup(
+                                {
+                                    "kind": "gpo-sysvol",
+                                    "target": probe_unc,
+                                    "host": host,
+                                    "rollback": "Remove the SYSVOL write-probe file.",
+                                }
+                            )
                             with suppress(Exception):
-                                smb.deleteFile(share, probe_name.replace("/", "\\"))
+                                smb.deleteFile(share, probe_unc)
                             writable_sysvol.append(item)
                             console.print(f"  [red]WRITABLE SYSVOL[/red]  {display}  {unc}")
                         except Exception as exc:

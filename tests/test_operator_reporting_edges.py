@@ -345,7 +345,9 @@ def test_dcsync_mocked_collection_and_redaction(monkeypatch: Any, tmp_path: Path
     monkeypatch.setattr("impacket.examples.secretsdump.NTDSHashes", _Hashes)
     target = Target(domain="corp.test", dc_ip="192.0.2.10", username="alice", password="pw")
     graph = AttackGraph()
-    result = dcsync.Dcsync().run(target, Session(tmp_path / "session"), graph, just_user="alice")
+    result = dcsync.Dcsync().run(
+        target, Session(tmp_path / "session"), graph, just_user="alice", force=True
+    )
     assert result["count"] == 1 and result["entries"][0]["nt_hash"] == "[REDACTED]"
     assert graph.nodes and result["principal_filter"] == ["alice"]
     included = dcsync.Dcsync().run(
@@ -354,6 +356,7 @@ def test_dcsync_mocked_collection_and_redaction(monkeypatch: Any, tmp_path: Path
         AttackGraph(),
         just_user="alice",
         include_secrets=True,
+        force=True,
     )
     assert included["entries"][0]["nt_hash"] == "nthash"
 
@@ -364,15 +367,27 @@ def test_password_spray_policy_and_safety_paths(monkeypatch: Any, tmp_path: Path
             self.entries: list[Any] = []
             self.unbound = False
 
-        def search(self, _base: str, search_filter: str, **_kwargs: Any) -> None:
-            if search_filter == "(objectClass=domain)":
+        def search(self, _base: str, search_filter: str, **kwargs: Any) -> None:
+            attrs = list(kwargs.get("attributes") or [])
+            if "fSMORoleOwner" in attrs or search_filter in (
+                "(objectClass=domainDNS)",
+                "(objectClass=domain)",
+            ):
                 self.entries = [
                     SimpleNamespace(
                         lockoutThreshold=_Attr(5),
                         lockoutObservationWindow=_Attr(-300000000),
                         minPwdLength=_Attr(12),
+                        fSMORoleOwner=_Attr(
+                            "CN=NTDS Settings,CN=DC01,CN=Servers,CN=Default-First-Site-Name,"
+                            "CN=Sites,CN=Configuration,DC=corp,DC=test"
+                        ),
                     )
                 ]
+            elif "dNSHostName" in attrs:
+                self.entries = [SimpleNamespace(dNSHostName=_Attr("192.0.2.10"))]
+            elif "msDS-PasswordSettings" in search_filter:
+                self.entries = []
             elif search_filter.startswith("(sAMAccountName="):
                 sam = search_filter.split("=", 1)[1].rstrip(")")
                 self.entries = [

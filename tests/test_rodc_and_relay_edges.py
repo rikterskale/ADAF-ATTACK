@@ -122,7 +122,7 @@ def test_ntlm_relay_executes_offline_and_ingests_artifacts(
     )
     assert result["return_code"] == 0 and len(result["relay_targets"]) == 2
     with pytest.raises(RuntimeError, match="not allowed"):
-        ntlm_relay._build_argv(_target(), ["x"], 445, "out", ["--x"])
+        ntlm_relay._build_argv(_target(), ["x"], 445, "out", ["--x"], targets_file="targets.txt")
     artifact = tmp_path / "hashes.txt"
     artifact.write_text(
         "user::CORP:00000000000000000000000000000000:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nNTLMv2 payload",

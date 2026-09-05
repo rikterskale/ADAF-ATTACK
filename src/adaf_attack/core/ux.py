@@ -345,9 +345,20 @@ def build_ready_argv(
                 continue
             if option.startswith("--"):
                 flag = option.split("=", 1)[0]
-                if flag in emitted_flags or flag in _READY_COMMAND_KWARG_FLAGS:
+                if flag in emitted_flags:
                     continue
-                # Capability-specific flags (--set-on, --sam, ...) get placeholders.
+                if flag == "--domain":
+                    parts.extend(["--domain", domain or "<domain>"])
+                    emitted_flags.add(flag)
+                    continue
+                if flag == "--dc-ip":
+                    parts.extend(["--dc-ip", dc_ip or "<dc-ip>"])
+                    emitted_flags.add(flag)
+                    continue
+                if flag == "--username":
+                    parts.extend(["--username", username or "<username>"])
+                    emitted_flags.add(flag)
+                    continue
                 name = flag.lstrip("-").replace("-", "_")
                 parts.extend([flag, f"<{name}>"])
                 emitted_flags.add(flag)

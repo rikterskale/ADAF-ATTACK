@@ -116,11 +116,25 @@ def test_gmsa_read_parsed_without_current_password(monkeypatch: Any, tmp_path: P
 
 
 def test_pre2k_spray_without_attempt_limit(monkeypatch: Any, tmp_path: Path) -> None:
+    import adaf_attack.core.ldap_util as ldap_util
+    import adaf_attack.core.lockout as lockout
+
     computer = _Entry(sAMAccountName="WS01$", distinguishedName="CN=WS01,DC=corp,DC=test")
     conn = _Conn({"objectClass=computer": [computer]})
     _patch_ldap(monkeypatch, credential_ops, conn)
+    monkeypatch.setattr(ldap_util, "ldap_connect", lambda target: (conn, "DC=corp,DC=test", None))
+    monkeypatch.setattr(
+        lockout,
+        "read_domain_lockout_policy",
+        lambda *a, **k: {"lockout_threshold": 5, "observation_window_seconds": 1800},
+    )
+    monkeypatch.setattr(lockout, "locate_pdc_emulator", lambda *a, **k: "dc01.corp.test")
+    monkeypatch.setattr(lockout, "domain_has_pso", lambda *a, **k: False)
+    monkeypatch.setattr(lockout, "account_lockout_state", lambda *a, **k: (0, None, None))
     monkeypatch.setattr(credential_ops, "try_ntlm_bind", lambda *a, **k: (False, "no"))
-    result = credential_ops.Pre2kSpray().run(_target(), Session(tmp_path), AttackGraph())
+    result = credential_ops.Pre2kSpray().run(
+        _target(), Session(tmp_path), AttackGraph(), force=True
+    )
     assert result["attempt_count"] == 1 and result["hit_count"] == 0
 
 

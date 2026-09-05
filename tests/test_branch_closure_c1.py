@@ -86,7 +86,7 @@ class _Conn:
 
 
 def _target(**kwargs: Any) -> Target:
-    values = {"domain": "corp.test", "dc_ip": "10.0.0.1"}
+    values = {"domain": "corp.test", "dc_ip": "10.0.0.1", "ldaps": True}
     values.update(kwargs)
     return Target(**values)
 

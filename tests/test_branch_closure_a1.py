@@ -71,6 +71,7 @@ def _target(**kwargs: Any) -> Target:
         "dc_ip": "10.0.0.1",
         "username": "alice",
         "password": "Secret1!",
+        "ldaps": True,
     }
     values.update(kwargs)
     return Target(**values)

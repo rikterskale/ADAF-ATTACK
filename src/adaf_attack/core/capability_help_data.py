@@ -47,7 +47,11 @@ _SPEC: dict[str, OptionSpec] = {
     "sysvol-hunt": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
     "coercion-map": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
     "gpo-link": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
-    "identity-bridge": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
+    "identity-bridge": OptionSpec(
+        _OFFLINE_REQUIRED,
+        (*_OFFLINE_OPTIONAL, "--artifact"),
+        notes="Historical alias of bloodhound-import. Offline JSON import.",
+    ),
     "rodc-delegation": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
     # Certificate operations
     "cert-request": OptionSpec(
@@ -74,9 +78,9 @@ _SPEC: dict[str, OptionSpec] = {
         notes="Destructive; --force required.",
     ),
     "rbcd": OptionSpec(
-        (*_UNIVERSAL_REQUIRED, "--set-on", "--set-from", "--force"),
-        _UNIVERSAL_OPTIONAL,
-        notes="Destructive; --force required.",
+        _UNIVERSAL_REQUIRED,
+        (*_UNIVERSAL_OPTIONAL, "--set-on", "--set-from", "--force"),
+        notes="Enumerate without --force. Set path requires --set-on, --set-from, and --force.",
     ),
     "gpo-abuse": OptionSpec(
         (*_UNIVERSAL_REQUIRED, "--gpo", "--payload", "--force"),
@@ -451,6 +455,23 @@ _SPEC: dict[str, OptionSpec] = {
         (*_UNIVERSAL_OPTIONAL, "-P sam=MSOL_..."),
     ),
     "dpapi-domain-backup": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
+    "bloodhound-import": OptionSpec(
+        ("--artifact",),
+        _OFFLINE_OPTIONAL,
+        notes="Offline BloodHound JSON import. No DC contact.",
+    ),
+    "purple-feedback": OptionSpec(_OFFLINE_REQUIRED, _OFFLINE_OPTIONAL),
+    "credential-inventory": OptionSpec(_OFFLINE_REQUIRED, _OFFLINE_OPTIONAL),
+    "hybrid-signals": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
+    "anonymous-ldap-probe": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
+    "passive-discovery": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
+    "external-exposure": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
+    "campaign-run": OptionSpec((*_UNIVERSAL_REQUIRED, "--force"), _UNIVERSAL_OPTIONAL),
+    "rollback": OptionSpec(
+        (*_UNIVERSAL_REQUIRED, "--force"),
+        (*_UNIVERSAL_OPTIONAL, "-P session=<session-dir>"),
+        notes="Prefer `adaf-attack rollback --session <dir> --domain <domain> --dc-ip <dc> --force`.",
+    ),
 }
 
 

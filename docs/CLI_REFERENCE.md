@@ -139,6 +139,7 @@ includes the rollback command and what is not rolled back.
 | `adaf-attack session list` | List workspace sessions |
 | `adaf-attack session show` | Inspect a session |
 | `adaf-attack sessions` | Navigate persisted sessions |
+| `adaf-attack tui` | Launch the Textual TUI (`--workspace` matches guide) |
 | `adaf-attack start` | Launch the Textual TUI (`--workspace` matches guide) |
 | `adaf-attack start-demo` | Start the safe offline demo |
 | `adaf-attack support-bundle` | Write a redacted diagnostic bundle |

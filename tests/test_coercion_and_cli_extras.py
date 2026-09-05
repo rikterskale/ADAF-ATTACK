@@ -220,7 +220,9 @@ def test_run_capability_unavailable(monkeypatch: Any) -> None:
             RunError("Capability 'x' has no runner implemented yet.")
         ),
     )
-    result = runner.invoke(app, ["run", "x", "--domain", "corp.test", "--dc-ip", "10.0.0.1"])
+    result = runner.invoke(
+        app, ["run", "ldap-enum", "--domain", "corp.test", "--dc-ip", "10.0.0.1"]
+    )
     assert result.exit_code == 1
     assert "CAPABILITY_UNAVAILABLE" in result.output
 
@@ -267,7 +269,7 @@ def test_run_all_optional_flags(monkeypatch: Any, tmp_path: Path) -> None:
             "--format",
             "json",
             "run",
-            "cap",
+            "ldap-enum",
             "--domain",
             "corp.test",
             "--dc-ip",

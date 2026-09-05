@@ -50,7 +50,7 @@ def register_workflow_commands(
     workflow_app = typer.Typer(
         help="Finding-driven guided workflow: start to closure, interactive or agent-driven.",
     )
-    app.add_typer(workflow_app, name="workflow")
+    app.add_typer(workflow_app, name="workflow", rich_help_panel="Guidance & UX helpers")
 
     def _doctor() -> dict[str, Any] | None:
         if doctor_payload is None:

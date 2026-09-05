@@ -90,7 +90,7 @@ def test_run_attribute_and_sam_options(monkeypatch: Any, tmp_path: Path) -> None
             "--format",
             "json",
             "run",
-            "cap",
+            "ldap-enum",
             "--domain",
             "corp.test",
             "--dc-ip",

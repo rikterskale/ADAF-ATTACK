@@ -6,7 +6,7 @@ script (CI enforces parity).
 
 | ID | Category | Maturity | Environment | Tools | Fixture | Difficulty | Risk | Approval | Rollback | Auth modes | Username list | Active auth | Noise | Sensitivity | Summary |
 |----|----------|----------|-------------|-------|---------|------------|------|----------|----------|------------|---------------|-------------|-------|-------------|---------|
-| `aadconnect-dcsync` | credential-access | fixture-tested | live-read-only | impacket | hybrid-fixture | - | observe | none | none | - | no | no | unspecified | metadata | Identify and use Azure AD Connect MSOL_* replication rights |
+| `aadconnect-dcsync` | credential-access | fixture-tested | live-mutating | impacket | hybrid-fixture | - | destructive | force_and_ack | manual | - | no | no | unspecified | metadata | Identify and use Azure AD Connect MSOL_* replication rights |
 | `acl-abuse` | privilege-escalation | fixture-tested | live-mutating | - | delegated-acl-target | - | destructive | force_and_ack | manual | - | no | no | unspecified | metadata | Operator ACL abuse: GenericAll / GenericWrite / WriteDacl / WriteOwner / Owns |
 | `acl-enum` | enumeration | implemented | live-read-only | - | - | - | observe | none | none | - | no | no | unspecified | metadata | Enumerate interesting ACL edges (high-value or domain-wide scope) |
 | `acl-write` | privilege-escalation | implemented | live-mutating | - | - | - | destructive | force_and_ack | manual | - | no | no | unspecified | metadata | Apply an approved raw ACL descriptor with rollback capture |
@@ -26,6 +26,7 @@ script (CI enforces parity).
 | `blast-radius` | analysis | implemented | offline | - | - | - | observe | none | none | - | no | no | unspecified | metadata | Calculate reachable high-value impact from a graph principal |
 | `bloodhound-export` | export | implemented | offline | - | - | - | observe | none | none | - | no | no | unspecified | metadata | Export attack graph to BloodHound CE JSON + ingest zip |
 | `bloodhound-import` | export | implemented | offline | - | - | - | observe | none | none | - | no | no | unspecified | metadata | Import BloodHound-compatible JSON, enrich locally, and re-export |
+| `campaign-analysis` | analysis | implemented | offline | - | - | - | observe | none | none | - | no | no | unspecified | metadata | Read-only campaign analysis of saved graph paths and high-value impact |
 | `campaign-run` | analysis | implemented | live-mutating | - | - | - | destructive | force_and_ack | manual | - | no | no | unspecified | metadata | Run ordered engagement phases with vault hand-off and purple package |
 | `cert-request` | credential-access | implemented | live-mutating | - | - | - | destructive | force_and_ack | manual | - | no | no | unspecified | metadata | Request a certificate from AD CS (ESC1 enroll path); requires --force |
 | `coerce` | credential-access | implemented | live-mutating | - | - | - | side_effect | scoped_token | none | - | no | no | unspecified | metadata | Trigger coercion only against an approved host allowlist |
@@ -70,7 +71,7 @@ script (CI enforces parity).
 | `passive-discovery` | enumeration | implemented | live-read-only | - | - | - | observe | none | none | anonymous | no | no | low | endpoint-metadata | Probe common AD service endpoints without credentials or authentication |
 | `password-spray` | credential-access | implemented | live-mutating | - | - | - | side_effect | scoped_token | none | - | no | no | unspecified | metadata | Lockout-aware password spray against user accounts |
 | `pkinit-auth` | credential-access | implemented | live-mutating | - | - | - | destructive | force_and_ack | manual | - | no | no | unspecified | metadata | PKINIT TGT using shadow-cred key/cert from session (requires --force) |
-| `pre2k-spray` | credential-access | fixture-tested | live-read-only | - | baseline-directory | - | observe | none | none | anonymous | no | yes | high | credential-material | Pre-Windows 2000 compatible computer accounts (password = sAMAccountName) |
+| `pre2k-spray` | credential-access | fixture-tested | live-mutating | - | baseline-directory | - | destructive | force_and_ack | manual | anonymous | no | yes | high | credential-material | Pre-Windows 2000 compatible computer accounts (password = sAMAccountName) |
 | `purple-feedback` | export | implemented | offline | - | - | - | observe | none | none | - | no | no | unspecified | metadata | Generate updated detection hypotheses from session events |
 | `rbcd` | lateral-movement | implemented | live-read-only | - | - | - | observe | none | none | - | no | no | unspecified | metadata | Enumerate RBCD + constrained delegation; optional set requires --force |
 | `rbcd-ticket-workflow` | lateral-movement | implemented | live-mutating | - | - | - | destructive | force_and_ack | manual | - | no | no | unspecified | metadata | Set RBCD then request an S4U service ticket as the controlled computer |

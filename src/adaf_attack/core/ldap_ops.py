@@ -18,6 +18,14 @@ def require_force(capability_id: str, force: bool) -> None:
         raise RuntimeError(f"{capability_id} is destructive and requires --force")
 
 
+def require_confidentiality(target: Target, capability_id: str) -> None:
+    """unicodePwd and similar attributes require 128-bit LDAP (LDAPS or StartTLS)."""
+    if not (target.ldaps or target.starttls):
+        raise RuntimeError(
+            f"{capability_id} requires LDAPS or StartTLS (unicodePwd cannot be set over plain LDAP)."
+        )
+
+
 def require_param(kwargs: dict[str, Any], *names: str) -> str:
     for name in names:
         value = kwargs.get(name)

@@ -35,30 +35,31 @@ METHODS = ("wmiexec", "smbexec", "dcomexec", "atexec")
 
 
 def _run_smbexec(target: Target, host: str, command: str, share: str) -> dict[str, Any]:
-    from impacket.examples.smbexec import CMDEXEC
+    from adaf_attack.core.impacket_scripts import load_impacket_example
 
-    lm, nt = target.lm_nt_hashes()
-    executor = CMDEXEC(
-        f"{target.domain}/{target.username}",
+    hashes = target.hashes
+    cmdexec_cls = load_impacket_example("smbexec.py", "CMDEXEC")
+    executor = cmdexec_cls(
+        target.username or "",
         target.password or "",
         target.domain,
-        lm,
-        nt,
-        target.aes_key or "",
+        hashes,
+        target.aes_key or None,
         target.use_kerberos,
         target.dc_ip,
-        None,
+        "SHARE",
         share,
+        445,
         None,
-        command,
         None,
-        "445/SMB",
     )
     try:
-        executor.run(host)
+        executor.run(host, host)
     finally:
         with contextlib.suppress(Exception):
-            executor.finish()
+            finish = getattr(executor, "finish", None)
+            if callable(finish):
+                finish()
     return {"note": "smbexec streams stdout to console; artifact capture is not automatic."}
 
 

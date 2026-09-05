@@ -15,6 +15,7 @@ from adaf_attack.core.ldap_ops import (
     encode_unicode_pwd,
     finish,
     register_object_rollback,
+    require_confidentiality,
     require_force,
 )
 from adaf_attack.core.ldap_util import ldap_connect
@@ -71,6 +72,7 @@ class MaqAddComputer:
         **kwargs: Any,
     ) -> dict[str, Any]:
         require_force("maq-add-computer", force)
+        require_confidentiality(target, "maq-add-computer")
         name = str(
             kwargs.get("computer")
             or kwargs.get("sam")

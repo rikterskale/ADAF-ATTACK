@@ -87,7 +87,9 @@ def test_unauthenticated_profile_labels_username_and_noise_requirements() -> Non
     assert any(item["id"] == "asreq-userhunt" for item in default["skipped"])
     assert "asreq-userhunt" in [item["id"] for item in with_user_list["capabilities"]]
     assert any(item["id"] == "pre2k-spray" for item in default["skipped"])
-    assert "pre2k-spray" in [item["id"] for item in with_noise["capabilities"]]
+    assert any(item["id"] == "pre2k-spray" for item in with_noise["skipped"])
+    with_mutating = profile_plan("unauthenticated", include_noisy=True, include_mutating=True)
+    assert "pre2k-spray" in [item["id"] for item in with_mutating["capabilities"]]
 
 
 def test_offline_profile_is_plan_only_and_lists_saved_evidence_steps() -> None:

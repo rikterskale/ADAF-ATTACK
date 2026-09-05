@@ -139,7 +139,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     #toolbar { height: auto; padding: 0 1; border-bottom: solid $accent; }
     #toolbar { overflow-x: auto; }
     #sidebar { width: 44; border: solid $accent; padding: 0 1; }
-    #main { border: solid $primary; }
+    #main { border: solid $primary; height: 1fr; }
     #target-form { height: auto; padding: 1; border-bottom: solid $accent; }
     #log-panel { height: 1fr; }
     #status, #progress, #credential-strip { height: auto; border-top: solid $accent; padding: 0 1; }
@@ -166,7 +166,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     SUB_TITLE = "Authorized internal red team operations — review-first execution"
 
     BINDINGS: ClassVar[list[Binding | tuple[str, str] | tuple[str, str, str]]] = [
-        Binding("q", "quit", "Quit", priority=True),
+        Binding("ctrl+q", "quit", "Quit", priority=True),
         Binding("r", "run_selected", "Run"),
         Binding("v", "review_run", "Review"),
         Binding("d", "dry_run", "Dry run"),
@@ -178,6 +178,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
         Binding("e", "jump_to_error", "Last error"),
         Binding("u", "undo_form_reset", "Undo reset"),
         Binding("?", "show_cheat_sheet", "Key help"),
+        Binding("ctrl+p", "command_palette", "Commands"),
     ]
 
     def __init__(self, workspace: Path | None = None) -> None:
@@ -429,6 +430,8 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                         yield Switch(id="kerberos", value=bool(defaults.get("target.kerberos")))
                         yield Label("  LDAPS")
                         yield Switch(id="ldaps", value=bool(defaults.get("target.ldaps")))
+                        yield Label("  StartTLS")
+                        yield Switch(id="starttls", value=False)
                         yield Label("  Include secrets")
                         yield Switch(id="include_secrets", value=False)
                         yield Label("  Force")
@@ -448,7 +451,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                         yield Button("Review", id="review-btn")
                         yield Button("Dry run", id="dry-run-btn")
                         yield Button("Run selected", id="run-btn", variant="success")
-                        yield Button("Cancel", id="cancel-btn", variant="error", disabled=True)
+                        yield Button(
+                            "Request stop", id="cancel-btn", variant="error", disabled=True
+                        )
                     yield Static("Credential material: none", id="credential-strip")
                 yield Static(
                     "Select a capability and choose Review before execution.", id="review-panel"
@@ -510,6 +515,9 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 severity="information",
             )
             self.query_one("#quickstart-btn", Button).focus()
+            for widget_id in ("template-panel", "attack-path-panel", "attack-edge-list"):
+                with suppress(Exception):
+                    self.query_one(f"#{widget_id}").display = False
         elif not self.query_one("#domain", Input).value:
             self.query_one("#domain", Input).focus()
 
@@ -639,15 +647,13 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             "advanced-creds-btn",
             "scope",
             "start",
-            "kerberos",
-            "ldaps",
             "include_secrets",
         ):
             self.query_one(f"#{widget_id}").display = not enabled
         if enabled:
             self._set_advanced_credentials_visible(False)
         self.query_one("#novice-panel", Static).update(
-            "Beginner Mode: essential fields only; advanced controls stay hidden."
+            "Beginner Mode: Kerberos/LDAPS stay visible; optional hash/ccache fields collapse."
             if enabled
             else "Advanced Mode: optional credentials and targeting controls are available."
         )
@@ -1406,11 +1412,32 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     def action_show_cheat_sheet(self) -> None:
         self.notify(
             "Keys: r run · v review · d dry run · l refresh · s sessions · e last error\n"
-            "p show/hide password · u undo reset · Ctrl-K search · q quit",
+            "p show/hide password · u undo reset · Ctrl-K search · Ctrl-P commands · Ctrl-Q quit",
             title="Keybinding cheat sheet",
             severity="information",
             timeout=8,
         )
+
+    def action_command_palette(self) -> None:
+        workspace = self._workspace
+        session = self._last_session
+        from adaf_attack.core.journey import guide_recovery_command
+
+        guide = guide_recovery_command(workspace=workspace, session=session)
+        lines = [
+            guide,
+            "adaf-attack doctor --profile user-readiness --explain",
+            "adaf-attack list-capabilities --novice",
+            "adaf-attack capability-help <id>",
+            "adaf-attack plan <id> --domain <domain> --dc-ip <dc>",
+            "adaf-attack rollback --session <dir> --domain <domain> --dc-ip <dc> --force",
+            "adaf-attack sessions --limit 10",
+            "adaf-attack support-bundle --output adaf-support-bundle.json",
+        ]
+        self.query_one("#review-panel", Static).update(
+            "[bold]Command palette (CLI; not hidden)[/bold]\n" + "\n".join(lines)
+        )
+        self.notify("CLI commands listed in the review panel.", severity="information")
 
     def _update_status(self) -> None:
         domain = self.query_one("#domain", Input).value or "(none)"
@@ -1637,6 +1664,15 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
     def _validate_target(self) -> tuple[str, str] | None:
         domain = self.query_one("#domain", Input).value.strip()
         dc_ip = self.query_one("#dc_ip", Input).value.strip()
+        cap = self._selected()
+        needs_target = True
+        if cap is not None:
+            from adaf_attack.core.capability_help_data import capability_option_spec
+
+            spec = capability_option_spec(cap.id, cap.requires_force)
+            needs_target = "--domain" in spec.required or "--dc-ip" in spec.required
+        if not needs_target:
+            return domain or "offline.invalid", dc_ip or "127.0.0.1"
         if not domain:
             self.notify("Domain and DC IP are required", severity="error")
             self.query_one("#domain", Input).focus()
@@ -1912,6 +1948,14 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 "Enable Force only when authorized for this mutating capability.", severity="error"
             )
             return
+        if cap and cap.requires_force:
+            if getattr(self, "_confirmed_run", None) != capability_id:
+                self._confirmed_run = capability_id
+                self.notify(
+                    f"Confirm mutating {capability_id}: press Run again. Rollback will not reverse tickets, hashes, or telemetry.",
+                    severity="warning",
+                )
+                return
         target = Target(
             domain=domain,
             dc_ip=dc_ip,
@@ -1922,6 +1966,7 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             ccache=ccache,
             use_kerberos=kerberos,
             ldaps=ldaps,
+            starttls=self.query_one("#starttls", Switch).value,
         )
         try:
             self._ensure_workflow_started()
@@ -1961,12 +2006,16 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
             if start:
                 extra["start"] = start
             extra.update(param_values)
+            if capability_id == "rollback" and self._last_session:
+                extra["session"] = str(self._last_session)
+                extra["from_session"] = str(self._last_session)
             try:
                 out = execute_capability(
                     capability_id,
                     target,
                     force=force,
-                    acknowledged=self._reviewed_cap == capability_id,
+                    acknowledged=self._reviewed_cap == capability_id
+                    or getattr(self, "_confirmed_run", None) == capability_id,
                     approval_token=approval_token,
                     approval_engagement_id=engagement_id,
                     include_secrets=include_secrets,
@@ -2021,14 +2070,14 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                 self._post_ui(self._update_engagement_dashboard)
                 self._post_ui(self._refresh_first_launch_panel)
 
-        self._worker_thread = threading.Thread(target=worker, daemon=True, name="adaf-tui-run")
+        self._worker_thread = threading.Thread(target=worker, daemon=False, name="adaf-tui-run")
         self._worker_thread.start()
 
     def _cancel(self) -> None:
         if self._capability_running:
             self._cancel_requested.set()
             self.notify(
-                "Cancellation requested; the active runner will finish its safe boundary.",
+                "Stop requested. The current LDAP/Impacket step still finishes; this cannot force-kill a mutation.",
                 severity="warning",
             )
 
@@ -2054,9 +2103,12 @@ class ADAFAttackApp(App[None]):  # type: ignore[misc,unused-ignore]
                     f"{meta.get('session_id', session.name)}  {meta.get('created_at', '')[:19]}  "
                     f"findings:{sum(severity.values())} [{heat}]"
                 )
+                if self._last_session is None:
+                    self._last_session = session
         if rows:
+            active = f"Active: {self._last_session}\n" if self._last_session else ""
             self.query_one("#session-panel", Static).update(
-                "[bold]Recent sessions[/bold]\n" + "\n".join(rows[:8])
+                "[bold]Recent sessions[/bold]\n" + active + "\n".join(rows[:8])
             )
             return
         self.query_one("#session-panel", Static).update(

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "adaf-attack"
 version = "0.10.1"
-description = "Aggressive Active Directory offensive toolkit for senior internal red teamers"
+description = "Authorized Active Directory offensive toolkit. Start with adaf-attack guide."
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 license = "LicenseRef-Proprietary"

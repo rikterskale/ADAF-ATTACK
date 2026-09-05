@@ -19,7 +19,7 @@ def register_tool_commands(
 ) -> None:
     """Register tool-oriented aliases without changing execution safeguards."""
     tool_app = typer.Typer(help="Offline graph, evidence, scope, detection, and manifest tools.")
-    app.add_typer(tool_app, name="tool")
+    app.add_typer(tool_app, name="tool", rich_help_panel="Discovery & analysis")
 
     @tool_app.command("graph")
     def tool_graph(

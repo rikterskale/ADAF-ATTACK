@@ -493,7 +493,8 @@ def test_spinner_handles_unknown_capability_hint(
         ["run", "mystery-cap", "--domain", "corp.test", "--dc-ip", "10.0.0.1"],
     )
 
-    assert result.exit_code == 0, result.output
+    assert result.exit_code == 1
+    assert "UNKNOWN_CAPABILITY" in result.output
 
 
 # --------------------------- interactive prompts ---------------------------

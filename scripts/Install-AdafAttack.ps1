@@ -45,6 +45,12 @@ param(
     [string]$Package,
 
     [Parameter(Mandatory = $false)]
+    [string]$Manifest,
+
+    [Parameter(Mandatory = $false)]
+    [string]$Sha256,
+
+    [Parameter(Mandatory = $false)]
     [switch]$Editable,
 
     [Parameter(Mandatory = $false)]
@@ -321,6 +327,16 @@ Invoke-Native $venvPython @("-m", "pip", "install", "--upgrade", "pip", "setupto
 
 if ($Package) {
     $installTarget = (Resolve-Path $Package).Path
+    $verifyScript = Join-Path $PSScriptRoot "verify_install_artifact.py"
+    $verifyArgs = @($verifyScript, "--artifact", $installTarget)
+    if ($Manifest) {
+        $verifyArgs += @("--manifest", (Resolve-Path $Manifest).Path)
+    }
+    if ($Sha256) {
+        $verifyArgs += @("--sha256", $Sha256)
+    }
+    Write-Step "Verifying package digest"
+    Invoke-Native $pythonExe $verifyArgs
 } else {
     $installTarget = (Resolve-Path $RepoRoot).Path
 }

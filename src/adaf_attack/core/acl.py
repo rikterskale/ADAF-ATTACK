@@ -27,6 +27,15 @@ GUID_DS_REPLICATION_GET_CHANGES_ALL = "1131f6ad-9c07-11d1-f79f-00c04fc2dcd2"
 GUID_DS_REPLICATION_GET_CHANGES_IN_FILTERED_SET = "89e95b76-444d-4c62-991a-0facbeda640c"
 GUID_CERTIFICATE_ENROLLMENT = "0e10c968-78fb-11d2-90d4-00c04f79dc55"
 GUID_CERTIFICATE_AUTOENROLLMENT = "a05b8cc2-17bc-4802-a710-e7c15ab866a2"
+GUID_MEMBER = "bf9679c0-0de6-11d0-a285-00aa003049e2"
+GUID_LAPS_PASSWORD = "FAKESECRET_c4d5e6f7g8h9i0j1k2l3"
+GUID_GMSA_PASSWORD = "FAKESECRET_q1r2s3t4u5v6w7x8y9z0"
+GUID_MANAGE_CA = "0ba7ea17-7269-4771-8374-367c8d5a5770"
+GUID_MANAGE_CERTIFICATES = "e48d0154-bcf8-11d1-8702-00c04fb96050"
+ACE_ACCESS_ALLOWED = 0x00
+ACE_ACCESS_DENIED = 0x01
+ACE_ACCESS_ALLOWED_OBJECT = 0x05
+ACE_ACCESS_DENIED_OBJECT = 0x06
 
 RIGHT_PRIORITY = [
     "GenericAll",
@@ -42,6 +51,8 @@ RIGHT_PRIORITY = [
     "AutoEnroll",
     "ReadLAPS",
     "ReadGMSA",
+    "ManageCA",
+    "ManageCertificates",
 ]
 
 
@@ -99,17 +110,23 @@ def parse_interesting_aces(sd_bytes: bytes) -> list[InterestingAce]:
     if sd["Dacl"] is None:  # pragma: no cover - defensive for non-standard SDs
         return []
 
-    results: list[InterestingAce] = []
+    denied: set[tuple[str, str]] = set()
+    allowed: list[InterestingAce] = []
     for ace in sd["Dacl"]["Data"]:
         ace_type = ace["AceType"]
-        if ace_type not in (0x00, 0x05):  # pragma: no cover - deny/audit ACEs
+        if ace_type not in {
+            ACE_ACCESS_ALLOWED,
+            ACE_ACCESS_DENIED,
+            ACE_ACCESS_ALLOWED_OBJECT,
+            ACE_ACCESS_DENIED_OBJECT,
+        }:
             continue
 
         mask = int(ace["Ace"]["Mask"]["Mask"])
         sid = _sid_to_str(ace["Ace"]["Sid"].getData())
         object_guid = None
 
-        if ace_type == 0x05:  # pragma: no cover - object-type ACEs, rarely emitted by AD
+        if ace_type in {ACE_ACCESS_ALLOWED_OBJECT, ACE_ACCESS_DENIED_OBJECT}:
             try:
                 flags = int(ace["Ace"]["Flags"])
                 if flags & 0x01:  # ACE_OBJECT_TYPE_PRESENT
@@ -118,8 +135,12 @@ def parse_interesting_aces(sd_bytes: bytes) -> list[InterestingAce]:
                 _logger.debug("Could not parse object ACE GUID", exc_info=True)
 
         rights = _mask_to_rights(mask, object_guid)
+        is_deny = ace_type in {ACE_ACCESS_DENIED, ACE_ACCESS_DENIED_OBJECT}
         for right in rights:
-            results.append(
+            if is_deny:
+                denied.add((sid, right))
+                continue
+            allowed.append(
                 InterestingAce(
                     principal_sid=sid,
                     right=right,
@@ -128,7 +149,7 @@ def parse_interesting_aces(sd_bytes: bytes) -> list[InterestingAce]:
                 )
             )
 
-    return results
+    return [ace for ace in allowed if (ace.principal_sid, ace.right) not in denied]
 
 
 def _mask_to_rights(mask: int, object_guid: str | None) -> list[str]:
@@ -156,11 +177,25 @@ def _mask_to_rights(mask: int, object_guid: str | None) -> list[str]:
             rights.append("Enroll")
         elif g == GUID_CERTIFICATE_AUTOENROLLMENT:
             rights.append("AutoEnroll")
+        elif g == GUID_MANAGE_CA:
+            rights.append("ManageCA")
+        elif g == GUID_MANAGE_CERTIFICATES:
+            rights.append("ManageCertificates")
         elif not g:
             rights.append("AllExtendedRights")
 
-    if mask & WRITE_PROPERTY and not rights:
-        rights.append("WriteProperty")
+    if mask & WRITE_PROPERTY:
+        g = (object_guid or "").lower()
+        if g == GUID_MEMBER:
+            rights.append("AddMember")
+        elif not rights:
+            rights.append("WriteProperty")
+    if mask & READ_PROPERTY:
+        g = (object_guid or "").lower()
+        if g == GUID_LAPS_PASSWORD:
+            rights.append("ReadLAPS")
+        elif g == GUID_GMSA_PASSWORD:
+            rights.append("ReadGMSA")
     if mask & READ_PROPERTY:
         rights.append("ReadProperty")
 
@@ -187,6 +222,25 @@ def fetch_sd(conn: Any, dn: str) -> bytes | None:
         return None
     raw = entry.nTSecurityDescriptor.raw_values[0]
     return bytes(raw) if isinstance(raw, bytes | bytearray) else None
+
+
+def sd_controls(sdflags: int = 0x04) -> list[Any]:
+    """LDAP_SERVER_SD_FLAGS_OID controls for nTSecurityDescriptor reads/writes."""
+    from ldap3.protocol.microsoft import security_descriptor_control
+
+    return list(security_descriptor_control(sdflags=sdflags))
+
+
+def modify_security_descriptor(conn: Any, dn: str, sd_bytes: bytes, *, sdflags: int = 0x04) -> bool:
+    """REPLACE nTSecurityDescriptor with the same SD flags used by fetch_sd."""
+    from ldap3 import MODIFY_REPLACE
+
+    changes = {"nTSecurityDescriptor": [(MODIFY_REPLACE, [sd_bytes])]}
+    controls = sd_controls(sdflags)
+    try:
+        return bool(conn.modify(dn, changes, controls=controls))
+    except TypeError:
+        return bool(conn.modify(dn, changes))
 
 
 def sid_string_to_bytes(canonical: str) -> bytes:

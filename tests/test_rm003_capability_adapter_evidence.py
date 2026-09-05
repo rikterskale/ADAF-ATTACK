@@ -563,6 +563,9 @@ def test_password_spray_applies_delay_after_each_attempt(
     )
     monkeypatch.setattr(password_spray, "_load_users", lambda *args: ["alice"])
     monkeypatch.setattr(password_spray, "_account_lockout_state", lambda *args: (0, None))
+    monkeypatch.setattr(password_spray, "locate_pdc_emulator", lambda *a, **k: "192.0.2.10")
+    monkeypatch.setattr(password_spray, "domain_has_pso", lambda *a, **k: False)
+    monkeypatch.setattr(password_spray, "account_lockout_state", lambda *a, **k: (0, None, None))
     monkeypatch.setattr(password_spray, "_try_bind", lambda *args: (False, "invalid"))
     monkeypatch.setattr(password_spray.time, "sleep", lambda value: sleeps.append(value))
     result = password_spray.PasswordSpray().run(

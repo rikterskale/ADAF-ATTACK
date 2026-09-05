@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import yaml
 
@@ -184,6 +184,79 @@ def _b64(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode().rstrip("=")
 
 
+def _jwks_configured() -> bool:
+    return bool(
+        os.environ.get("ADAF_APPROVAL_JWKS_URL", "").strip()
+        or os.environ.get("ADAF_APPROVAL_JWKS_FILE", "").strip()
+    )
+
+
+def _load_jwks() -> dict[str, Any]:
+    url = os.environ.get("ADAF_APPROVAL_JWKS_URL", "").strip()
+    path = os.environ.get("ADAF_APPROVAL_JWKS_FILE", "").strip()
+    if path:
+        payload = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
+    elif url:
+        import httpx
+
+        response = httpx.get(url, timeout=10.0)
+        response.raise_for_status()
+        payload = response.json()
+    else:
+        raise EngagementError(
+            "JWKS verifier requires ADAF_APPROVAL_JWKS_URL or ADAF_APPROVAL_JWKS_FILE"
+        )
+    if not isinstance(payload, dict) or not isinstance(payload.get("keys"), list):
+        raise EngagementError("JWKS document is malformed")
+    return payload
+
+
+def _b64url_decode(value: str) -> bytes:
+    padded = value + "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(padded.encode())
+
+
+def _verify_jwks_jwt(token: str) -> dict[str, Any]:
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise EngagementError("JWKS approval tokens must be compact JWS (header.payload.signature)")
+    header_raw, payload_raw, signature_raw = parts
+    try:
+        header = json.loads(_b64url_decode(header_raw))
+        payload = json.loads(_b64url_decode(payload_raw))
+        signature = _b64url_decode(signature_raw)
+    except Exception as exc:
+        raise EngagementError("Invalid JWKS token encoding") from exc
+    if not isinstance(header, dict) or not isinstance(payload, dict):
+        raise EngagementError("Invalid JWKS token claims")
+    if header.get("alg") != "RS256" or header.get("typ", "JWT") not in {"JWT", "jwt"}:
+        raise EngagementError("JWKS tokens must use alg=RS256")
+    jwks = _load_jwks()
+    kid = header.get("kid")
+    keys = [item for item in jwks["keys"] if isinstance(item, dict)]
+    if kid:
+        keys = [item for item in keys if item.get("kid") == kid]
+    if not keys:
+        raise EngagementError("No matching JWKS key for the approval token")
+    signed = f"{header_raw}.{payload_raw}".encode()
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding
+    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicNumbers
+
+    last_error: Exception | None = None
+    for jwk in keys:
+        try:
+            n = int.from_bytes(_b64url_decode(str(jwk["n"])), "big")
+            e = int.from_bytes(_b64url_decode(str(jwk["e"])), "big")
+            public = RSAPublicNumbers(e, n).public_key()
+            public.verify(signature, signed, padding.PKCS1v15(), hashes.SHA256())
+            return payload
+        except Exception as exc:
+            last_error = exc
+            continue
+    raise EngagementError("JWKS token signature is invalid") from last_error
+
+
 def verify_scoped_approval(
     token: str,
     *,
@@ -192,32 +265,41 @@ def verify_scoped_approval(
     capability: str,
     parameters: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Verify an HMAC-signed approval scoped to one campaign and target.
+    """Verify an approval scoped to one campaign and target.
 
-    The service and CLI share a rotation-managed verification key in this
-    minimal deployment. Production deployments should replace this with
-    asymmetric JWKS.
+    Production default is an RS256 JWKS verifier (ADAF_APPROVAL_JWKS_URL or
+    ADAF_APPROVAL_JWKS_FILE). HMAC remains available outside prod, or in prod
+    only with ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD=1.
     """
     env_name = os.environ.get("ADAF_ATTACK_ENV", "").strip().lower()
-    if env_name in ("prod", "production"):
+    use_jwks = _jwks_configured()
+    if env_name in ("prod", "production") and not use_jwks:
         ack = os.environ.get("ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD", "").strip()
         if ack not in ("1", "true", "yes"):
             raise EngagementError(
-                "APPROVAL_VERIFIER_INSECURE: the built-in HMAC verifier is not permitted "
-                "when ADAF_ATTACK_ENV=prod. Deploy an asymmetric JWKS verifier or set "
+                "APPROVAL_VERIFIER_INSECURE: production requires an RS256 JWKS verifier "
+                "(ADAF_APPROVAL_JWKS_URL or ADAF_APPROVAL_JWKS_FILE), or set "
                 "ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD=1 to accept the shared-secret verifier."
             )
-    key = os.environ.get("ADAF_APPROVAL_HMAC_KEY")
-    if not key:
-        raise EngagementError("ADAF_APPROVAL_HMAC_KEY is required for approval verification")
-    try:
-        encoded, signature = token.split(".", 1)
+    if use_jwks:
+        payload = _verify_jwks_jwt(token)
+    else:
+        key = os.environ.get("ADAF_APPROVAL_HMAC_KEY")
+        if not key:
+            raise EngagementError("ADAF_APPROVAL_HMAC_KEY is required for approval verification")
+        try:
+            encoded, signature = token.split(".", 1)
+        except ValueError as exc:
+            raise EngagementError("Invalid approval token format") from exc
         expected = _b64(hmac.new(key.encode(), encoded.encode(), hashlib.sha256).digest())
-        payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
-    except Exception as exc:
-        raise EngagementError("Invalid approval token format") from exc
-    if not isinstance(payload, dict) or not hmac.compare_digest(expected, signature):
-        raise EngagementError("Approval token signature is invalid")
+        if not hmac.compare_digest(expected, signature):
+            raise EngagementError("Approval token signature is invalid")
+        try:
+            payload = json.loads(base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4)))
+        except Exception as exc:
+            raise EngagementError("Invalid approval token format") from exc
+        if not isinstance(payload, dict):
+            raise EngagementError("Approval token payload is malformed")
     capabilities = payload.get("capabilities", [])
     targets = payload.get("targets", [])
     if not isinstance(capabilities, list) or not isinstance(targets, list):
@@ -235,9 +317,18 @@ def verify_scoped_approval(
         expires_at = int(payload.get("exp", 0))
     except (TypeError, ValueError) as exc:
         raise EngagementError("Approval token expiry is malformed") from exc
-    if expires_at <= int(datetime.now(UTC).timestamp()):
+    now = int(datetime.now(UTC).timestamp())
+    if expires_at <= now:
         raise EngagementError("Approval token has expired")
-    return cast(dict[str, Any], payload)
+    nbf = payload.get("nbf")
+    if nbf is not None:
+        try:
+            not_before = int(nbf)
+        except (TypeError, ValueError) as exc:
+            raise EngagementError("Approval token nbf is malformed") from exc
+        if now + 60 < not_before:
+            raise EngagementError("Approval token is not yet valid")
+    return dict(payload)
 
 
 def verify_approval(token: str, plan: EngagementPlan, capability: str) -> dict[str, Any]:

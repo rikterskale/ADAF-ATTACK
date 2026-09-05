@@ -21,14 +21,16 @@ ADAF-ATTACK. Variables are grouped by subsystem.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ADAF_APPROVAL_HMAC_KEY` | *(none — required for approval verification)* | Shared HMAC-SHA256 key used to sign and verify scoped approval tokens. Required whenever a capability's `ApprovalPolicy` is `SCOPED_TOKEN` or when running engagement plans with side-effect/destructive phases. |
+| `ADAF_APPROVAL_HMAC_KEY` | *(none — required for HMAC verification)* | Shared HMAC-SHA256 key used to sign and verify compact HMAC tokens when JWKS is not configured. |
+| `ADAF_APPROVAL_JWKS_URL` | *(none)* | HTTPS JWKS URL for RS256 production approval tokens. Preferred when `ADAF_ATTACK_ENV=prod`. |
+| `ADAF_APPROVAL_JWKS_FILE` | *(none)* | Local JWKS JSON file used instead of `ADAF_APPROVAL_JWKS_URL`. |
 | `ADAF_APPROVAL_TOKEN` | *(none)* | Pre-set approval token passed to the CLI instead of the `--approval-token` flag. Useful in scripted pipelines where the token is injected from a secret store. |
 
 ## Environment and safety
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ADAF_ATTACK_ENV` | *(empty)* | When set to `prod` or `production`, the built-in HMAC approval verifier is blocked. This forces operators to either deploy an asymmetric JWKS verifier or explicitly acknowledge the shared-secret risk. |
+| `ADAF_ATTACK_ENV` | *(empty)* | When set to `prod` or `production`, HMAC is blocked unless JWKS is configured or `ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD` is set. |
 | `ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD` | *(empty)* | Set to `1`, `true`, or `yes` to explicitly accept the built-in HMAC verifier when `ADAF_ATTACK_ENV=prod`. This is a deliberate opt-in for environments that have not yet migrated to JWKS. |
 
 ## Container and platform

@@ -86,6 +86,8 @@ _CAPABILITY_ROLLBACK: dict[str, tuple[str, str]] = {
     "dnsadmin-srv": ("ldap-object", "revertable"),
     "sccm-takeover": ("ntlm-relay", "advisory"),
     "sccm-client-push": ("sccm-push", "advisory"),
+    "pre2k-spray": ("pre2k-spray", "advisory"),
+    "aadconnect-dcsync": ("dcsync", "advisory"),
 }
 
 

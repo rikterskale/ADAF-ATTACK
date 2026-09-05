@@ -20,9 +20,9 @@ Durable published evidence: [RELEASE_EVIDENCE_0.10.1.md](RELEASE_EVIDENCE_0.10.1
 | Failures as products | 7.0 | **9.0** | Classified failures plus support-bundle recovery; customer-environment proof remains MANUAL |
 | CLI / TUI / docs one product | 8.0 | **9.5** | Empty surfaces and destructive confirm quote the same `guide` / rollback contract |
 | Vendor packaging / release UX | 8.0 | **9.5** | Score honesty locked; published-artifact smoke green; physical transfer remains MANUAL |
-| Safety as product | 9.0 | **9.5** | Gates intact; confirmation copy names rollback and what is not rolled back |
+| Safety as product | 9.0 | **8.5** | Gates exist; mixed-mode and live-AD adapter gaps were remediated in source after v0.10.1. Do not treat mocked CI as live-DC proof. |
 | Engineering bar | 9.0 | **9.5** | Phase 1–3 behavioral locks plus catalog Environment inference |
-| **Overall product** | **~7.8** | **~9.3** | No 10/10 claim without repeatable stranger and customer-environment proof |
+| **Overall product** | **~7.8** | **~8.5** | No 10/10 claim without repeatable stranger and customer-environment proof. Live-AD adapters and first-contact UX remain material. |
 
 ## UX_ACCEPTANCE_MATRIX row scores
 

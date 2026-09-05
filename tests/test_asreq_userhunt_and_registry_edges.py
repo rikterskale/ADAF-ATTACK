@@ -351,8 +351,9 @@ def test_mocked_remote_adapters(monkeypatch: Any) -> None:
         def __init__(self, *args: Any) -> None:
             self.finished = False
 
-        def run(self, host: str) -> None:
+        def run(self, host: str, target_name: str | None = None) -> None:
             assert host
+            del target_name
 
         def finish(self) -> None:
             self.finished = True
@@ -557,10 +558,10 @@ def test_cli_run_uses_saved_target_defaults_and_validates_required_options(
         "execute_capability",
         lambda *args, **kwargs: {"ok": True, "session_path": str(tmp_path)},
     )
-    result = CliRunner().invoke(cli.app, ["--format", "json", "run", "report"])
+    result = CliRunner().invoke(cli.app, ["--format", "json", "run", "ldap-enum"])
     assert result.exit_code == 0, result.stdout
     monkeypatch.setattr(cli, "load_user_config", dict)
-    result = CliRunner().invoke(cli.app, ["--format", "json", "run", "report"])
+    result = CliRunner().invoke(cli.app, ["--format", "json", "run", "ldap-enum"])
     assert result.exit_code != 0
 
 
@@ -608,7 +609,9 @@ def test_optional_ad_and_impacket_branches(monkeypatch: Any, tmp_path: Path) -> 
     assert Path(result["json_path"]).is_file()
 
     with pytest.raises(RuntimeError, match="replicating"):
-        dcsync.Dcsync().run(Target(domain="corp.test", dc_ip="10.0.0.1"), session, AttackGraph())
+        dcsync.Dcsync().run(
+            Target(domain="corp.test", dc_ip="10.0.0.1"), session, AttackGraph(), force=True
+        )
 
     prior = tmp_path / "adcs"
     prior.mkdir()
@@ -855,6 +858,9 @@ def test_remaining_capability_success_and_guard_branches(monkeypatch: Any, tmp_p
     )
     monkeypatch.setattr(password_spray, "_load_users", lambda *args: ["alice", "bob"])
     monkeypatch.setattr(password_spray, "_account_lockout_state", lambda *args: (0, None))
+    monkeypatch.setattr(password_spray, "locate_pdc_emulator", lambda *a, **k: "10.0.0.1")
+    monkeypatch.setattr(password_spray, "domain_has_pso", lambda *a, **k: False)
+    monkeypatch.setattr(password_spray, "account_lockout_state", lambda *a, **k: (0, None, None))
     monkeypatch.setattr(password_spray, "_try_bind", lambda *args: (False, "invalid"))
     result = password_spray.PasswordSpray().run(
         _target(),
@@ -968,6 +974,9 @@ def test_more_evidence_and_recommendation_branches(monkeypatch: Any, tmp_path: P
     )
     monkeypatch.setattr(password_spray, "_load_users", lambda *args: ["alice"])
     monkeypatch.setattr(password_spray, "_account_lockout_state", lambda *args: (0, None))
+    monkeypatch.setattr(password_spray, "locate_pdc_emulator", lambda *a, **k: "10.0.0.1")
+    monkeypatch.setattr(password_spray, "domain_has_pso", lambda *a, **k: False)
+    monkeypatch.setattr(password_spray, "account_lockout_state", lambda *a, **k: (0, None, None))
     monkeypatch.setattr(password_spray, "_try_bind", lambda *args: (False, "invalid"))
     with pytest.raises(RuntimeError, match="non-zero lockoutThreshold"):
         password_spray.PasswordSpray().run(

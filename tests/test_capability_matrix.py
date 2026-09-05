@@ -431,8 +431,23 @@ def _(mr: Any) -> dict[str, Any]:
 
 @_setup("pre2k-spray")
 def _(mr: Any) -> dict[str, Any]:
-    patch_ldap(mr.monkeypatch, credential_ops, _credential_conn())
+    import adaf_attack.core.ldap_util as ldap_util
+    import adaf_attack.core.lockout as lockout
+
+    conn = _credential_conn()
+    patch_ldap(mr.monkeypatch, credential_ops, conn)
+    mr.monkeypatch.setattr(
+        ldap_util, "ldap_connect", lambda target: (conn, "DC=corp,DC=test", None)
+    )
     mr.monkeypatch.setattr(credential_ops, "try_ntlm_bind", lambda *a, **k: (True, "ok"))
+    mr.monkeypatch.setattr(
+        lockout,
+        "read_domain_lockout_policy",
+        lambda *a, **k: {"lockout_threshold": 5, "observation_window_seconds": 1800},
+    )
+    mr.monkeypatch.setattr(lockout, "locate_pdc_emulator", lambda *a, **k: "dc01.corp.test")
+    mr.monkeypatch.setattr(lockout, "domain_has_pso", lambda *a, **k: False)
+    mr.monkeypatch.setattr(lockout, "account_lockout_state", lambda *a, **k: (0, None, None))
     return {"max_objects": 10, "max_attempts": 1}
 
 

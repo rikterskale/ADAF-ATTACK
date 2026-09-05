@@ -64,7 +64,13 @@ def safety_for_operation(capability: Capability, parameters: dict[str, Any]) -> 
     if profile is None:  # pragma: no cover - Capability normalizes this in __post_init__.
         raise PolicyError(f"Capability '{capability.id}' has no safety profile")
     operation = str(parameters.get("operation", "")).strip().lower()
-    if capability.id in {"credential-inventory", "shadow-creds", "gpo-sysvol", "rbcd"}:
+    if capability.id in {
+        "credential-inventory",
+        "shadow-creds",
+        "gpo-sysvol",
+        "rbcd",
+        "computer-takeover",
+    }:
         write_requested = bool(
             parameters.get("write_target")
             or parameters.get("set_on")
@@ -72,8 +78,10 @@ def safety_for_operation(capability: Capability, parameters: dict[str, Any]) -> 
             or parameters.get("payload")
             or parameters.get("gpo")
             or parameters.get("cn")
+            or parameters.get("attribute")
+            or parameters.get("value")
             or operation in {"purge", "delete", "clear", "write", "set", "stage"}
-            or parameters.get("_force")
+            or (capability.id != "computer-takeover" and parameters.get("_force"))
         )
         read_operations = {
             "",

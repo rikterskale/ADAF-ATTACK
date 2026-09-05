@@ -120,10 +120,10 @@ multi-operator production environments.
 When `ADAF_ATTACK_ENV` is set to `prod` or `production`, the HMAC verifier
 is blocked by default. You must either:
 
-1. **Deploy an asymmetric JWKS verifier** — replace `verify_scoped_approval()`
-   with your organization's JWT/JWKS verification against a key published by
-   the authorization service.
-2. **Acknowledge the risk** — set `ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD=1` to
+1. **Use the built-in RS256 JWKS verifier** — set `ADAF_APPROVAL_JWKS_URL` or
+   `ADAF_APPROVAL_JWKS_FILE` to the authorization service JWKS. Tokens must be
+   compact JWS (`header.payload.signature`) with `alg=RS256`.
+2. **Acknowledge HMAC risk** — set `ADAF_APPROVAL_HMAC_ACKNOWLEDGE_PROD=1` to
    accept the shared-secret verifier explicitly.
 
 ### Recommended production architecture

@@ -94,22 +94,21 @@ class ComputerTakeover:
                 raise RuntimeError("Computer target not found")
             entry = conn.entries[0]
             old = [str(item) for item in (entry[attribute].value or [])] if entry[attribute] else []
+            session.register_cleanup(
+                {
+                    "kind": "computer-identity",
+                    "target": str(entry.distinguishedName),
+                    "attribute": attribute,
+                    "previous": old,
+                    "rollback": "Restore the recorded attribute value.",
+                }
+            )
             ok = conn.modify(str(entry.distinguishedName), {attribute: [(MODIFY_REPLACE, [value])]})
             change = {
                 "target": str(entry.distinguishedName),
                 "attribute": attribute,
                 "ok": bool(ok),
             }
-            if ok:
-                session.register_cleanup(
-                    {
-                        "kind": "computer-identity",
-                        "target": str(entry.distinguishedName),
-                        "attribute": attribute,
-                        "previous": old,
-                        "rollback": "Restore the recorded attribute value.",
-                    }
-                )
         conn.unbind()
         result = {
             "domain": target.domain,

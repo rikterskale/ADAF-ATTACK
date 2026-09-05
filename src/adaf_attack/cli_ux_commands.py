@@ -149,7 +149,7 @@ def register_ux_commands(
             ),
         )
 
-    @app.command("start-here", hidden=True)
+    @app.command("start-here", rich_help_panel="Setup & diagnostics")
     def start_here_cmd(
         ctx: typer.Context,
         workspace: Path | None = typer.Option(
@@ -565,7 +565,7 @@ def register_ux_commands(
 
     # --- Profile management (named target + opsec profiles) --------------------
     profile_app = typer.Typer(help="Named target and opsec profiles.")
-    app.add_typer(profile_app, name="profile")
+    app.add_typer(profile_app, name="profile", rich_help_panel="Guidance & UX helpers")
 
     @profile_app.command("list")
     def profile_list(ctx: typer.Context) -> None:
@@ -848,7 +848,7 @@ def register_ux_commands(
         )
         _emit(ctx, payload, human)
 
-    @app.command("start-demo", hidden=True)
+    @app.command("start-demo", rich_help_panel="Setup & diagnostics")
     def start_demo_cmd(
         ctx: typer.Context,
         workspace: Path | None = typer.Option(

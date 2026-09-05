@@ -18,9 +18,9 @@
 - The automated test suite mocks LDAP, Kerberos, and impacket adapters. A green
   run verifies control flow, argument construction, parsing, redaction, and
   evidence handling — it does not prove behavior against a live domain
-  controller. Validate live-target paths against the engagement scope before
-  relying on them, and use `--debug` for diagnostic logging when a live run
-  misbehaves.
+  controller. Do not treat 95% coverage as live-AD production evidence.
+  Validate live-target paths against the engagement scope before relying on
+  them, and use `--debug` for diagnostic logging when a live run misbehaves.
 - Kali is validated against a pinned digest of the rolling container. The pin
   must be deliberately refreshed to cover later Kali snapshots.
 - Generic Linux distributions share the Python package contract but are not all

@@ -46,7 +46,7 @@ Recommended wheel path:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install "./dist/adaf_attack-0.10.1-py3-none-any.whl[full]"
+python -m pip install "./adaf_attack-0.10.1-py3-none-any.whl[full]"
 ```
 
 Authorized source path:

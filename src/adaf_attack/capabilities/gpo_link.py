@@ -44,16 +44,6 @@ class GpoLink:
             if not conn.entries:
                 raise RuntimeError("GPO link target not found")
             previous = str(conn.entries[0].gPLink) if conn.entries[0].gPLink else ""
-            ok = conn.modify(dn, {"gPLink": [(MODIFY_REPLACE, [link])]})
-            result = {
-                "target": dn,
-                "ok": bool(ok),
-                "result": dict(conn.result),
-            }
-        finally:
-            conn.unbind()
-
-        if result["ok"]:
             session.register_cleanup(
                 {
                     "kind": "gpo-link",
@@ -62,6 +52,14 @@ class GpoLink:
                     "rollback": "Restore the recorded gPLink value.",
                 }
             )
+            ok = conn.modify(dn, {"gPLink": [(MODIFY_REPLACE, [link])]})
+            result = {
+                "target": dn,
+                "ok": bool(ok),
+                "result": dict(conn.result),
+            }
+        finally:
+            conn.unbind()
 
         session.path("gpo-link.json").write_text(
             json.dumps(result, indent=2, default=str) + "\n", encoding="utf-8"

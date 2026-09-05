@@ -12,6 +12,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from importlib import metadata as importlib_metadata
 from pathlib import Path
@@ -23,6 +24,7 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
+from typer.core import TyperGroup
 
 from adaf_attack import __version__
 from adaf_attack.cli_product_commands import register_product_commands
@@ -262,20 +264,67 @@ def _path_check(path_id: str, path: Path) -> dict[str, Any]:
     }
 
 
+class AdafTyperGroup(TyperGroup):
+    """Unknown-command errors that do not suggest the unrelated `command` surface."""
+
+    def main(
+        self,
+        args: Sequence[str] | None = None,
+        prog_name: str | None = None,
+        complete_var: str | None = None,
+        standalone_mode: bool = True,
+        windows_expand_args: bool = True,
+        **extra: Any,
+    ) -> Any:
+        from adaf_attack.core.cli_argv import hoist_global_options
+
+        if args is None:
+            args = sys.argv[1:]
+        return super().main(
+            args=hoist_global_options(list(args)),
+            prog_name=prog_name,
+            complete_var=complete_var,
+            standalone_mode=standalone_mode,
+            windows_expand_args=windows_expand_args,
+            **extra,
+        )
+
+    def get_command(self, ctx: Any, cmd_name: str) -> Any:
+        command = super().get_command(ctx, cmd_name)
+        if command is not None:
+            return command
+        import difflib
+
+        import click
+
+        names = list(self.list_commands(ctx))
+        matches = [
+            item
+            for item in difflib.get_close_matches(cmd_name, names, n=3, cutoff=0.62)
+            if item != "command" or cmd_name.startswith("comm")
+        ]
+        hint = f" Did you mean: {', '.join(matches)}?" if matches else ""
+        raise click.UsageError(f"No such command '{cmd_name}'.{hint} When lost: adaf-attack guide")
+
+
 app = typer.Typer(
     name="adaf-attack",
-    help="Aggressive Active Directory offensive toolkit for senior internal red teamers.",
-    no_args_is_help=True,
+    cls=AdafTyperGroup,
+    help="Authorized Active Directory offensive toolkit. Start with `adaf-attack guide`. Full catalog: `adaf-attack --help`.",
+    no_args_is_help=False,
     invoke_without_command=True,
     rich_markup_mode="rich",
-    suggest_commands=True,
+    suggest_commands=False,
+    epilog="When lost: adaf-attack guide",
 )
 engagement_app = typer.Typer(help="Scoped engagement plans, execution, and report bundles.")
-app.add_typer(engagement_app, name="engagement")
+app.add_typer(engagement_app, name="engagement", rich_help_panel="Engagement")
 ad_recon_app = typer.Typer(help="First-class, read-only Active Directory reconnaissance.")
-app.add_typer(ad_recon_app, name="ad-recon")
+app.add_typer(ad_recon_app, name="ad-recon", rich_help_panel="Discovery & analysis")
 capability_profile_app = typer.Typer(help="Curated capability groups with explicit safety review.")
-app.add_typer(capability_profile_app, name="capability-profile")
+app.add_typer(
+    capability_profile_app, name="capability-profile", rich_help_panel="Discovery & analysis"
+)
 
 
 def _console(ctx: typer.Context) -> Console:
@@ -338,6 +387,20 @@ def _emit(ctx: typer.Context, payload: dict[str, Any], human: Any) -> None:
         typer.echo(json.dumps(payload, indent=2, sort_keys=True, default=str))
     elif _output_format(ctx) == "summary":
         _console(ctx).print("\n".join(_summary_lines(payload)))
+    elif _output_format(ctx) == "table":
+        if isinstance(human, Table):
+            _console(ctx).print(human)
+        else:
+            table = Table(title="ADAF-ATTACK", show_header=True)
+            table.add_column("Field")
+            table.add_column("Value")
+            for line in _summary_lines(payload):
+                if ": " in line:
+                    key, value = line.split(": ", 1)
+                    table.add_row(key, value)
+                else:
+                    table.add_row("", line)
+            _console(ctx).print(table)
     elif _output_format(ctx) == "beginner":
         _console(ctx).print(Panel("\n".join(_beginner_lines(payload)), title="Beginner summary"))
     else:
@@ -366,6 +429,7 @@ def _emit_error(ctx: typer.Context, error: ActionableError) -> None:
     if isinstance(error_body, dict) and "recovery_command" not in error_body:
         error_body = {**error_body, "recovery_command": recovery}
         payload = {**payload, "error": error_body}
+    payload = {"ok": False, **payload}
     if _json_mode(ctx):
         typer.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
@@ -419,7 +483,29 @@ def main(
         _emit(ctx, {"ok": True, "version": __version__}, f"adaf-attack {__version__}")
         raise typer.Exit()
     if ctx.invoked_subcommand is None:
-        _console(ctx).print(ctx.get_help())
+        from adaf_attack.core.journey import snapshot as journey_snapshot
+
+        doctor = _doctor_payload("user-readiness")
+        journey = journey_snapshot(doctor=doctor)
+        next_cmd = str(journey.get("suggested_command") or "adaf-attack guide")
+        _console(ctx).print(
+            Panel(
+                "\n".join(
+                    [
+                        f"adaf-attack {__version__}",
+                        f"Stage: {journey.get('stage_label') or journey.get('stage')}",
+                        f"Next: {next_cmd}",
+                        "",
+                        "Start here:  adaf-attack guide",
+                        "First install:  adaf-attack quickstart",
+                        "Catalog:  adaf-attack --help",
+                        "Capabilities:  adaf-attack list-capabilities --novice",
+                        "TUI:  adaf-attack tui",
+                    ]
+                ),
+                title="ADAF-ATTACK",
+            )
+        )
         raise typer.Exit()
 
 
@@ -1177,9 +1263,24 @@ def list_capabilities(
     table, table_rows = adaptive_table("Registered Capabilities", columns, rows, full=full)
     clipboard = copy_to_clipboard(table_text(columns, table_rows)) if copy else None
 
+    def _compact(cap: Any) -> dict[str, Any]:
+        return {
+            "id": cap.id,
+            "summary": cap.summary,
+            "category": cap.category,
+            "risk": cap.safety.risk.value if cap.safety else None,
+            "destructive": cap.destructive,
+            "environment": cap.environment,
+            "requires_force": cap.requires_force,
+        }
+
     payload: dict[str, Any] = {
         "ok": True,
-        "capabilities": [_capability_payload(cap) for cap in display_caps],
+        "capabilities": (
+            [_capability_payload(cap) for cap in display_caps]
+            if full
+            else [_compact(cap) for cap in display_caps]
+        ),
         "count": len(display_caps),
         "full": full,
         "safe_only": safe_only,
@@ -1451,11 +1552,23 @@ def support_bundle(
 
 def _capability_payload(cap: Any) -> dict[str, Any]:
     spec = capability_option_spec(cap.id, cap.requires_force)
-    example = f"adaf-attack run {cap.id}"
-    if "--domain" in spec.required:
-        example += " --domain corp.example --dc-ip 10.0.0.10"
-    if cap.requires_force:
-        example += " --force"
+    example_parts = ["adaf-attack", "run", cap.id]
+    for option in spec.required:
+        if option == "--domain":
+            example_parts.extend(["--domain", "corp.example"])
+        elif option == "--dc-ip":
+            example_parts.extend(["--dc-ip", "10.0.0.10"])
+        elif option == "--force":
+            if "--force" not in example_parts:
+                example_parts.append("--force")
+        elif option.startswith("-P "):
+            example_parts.extend(["-P", option[3:]])
+        elif option.startswith("--"):
+            flag = option.split("=", 1)[0]
+            example_parts.extend([flag, f"<{flag.lstrip('-')}>"])
+    if cap.requires_force and "--force" not in example_parts:
+        example_parts.append("--force")
+    example = " ".join(example_parts)
     from adaf_attack.core.engagement_dashboard import capability_review
     from adaf_attack.core.novice import capability_difficulty
     from adaf_attack.core.ux import (
@@ -1594,8 +1707,8 @@ def capability_help(
 def plan(
     ctx: typer.Context,
     capability: str = typer.Argument(..., help="Capability ID to preview."),
-    domain: str = typer.Option(..., "--domain", "-d"),
-    dc_ip: str = typer.Option(..., "--dc-ip"),
+    domain: str | None = typer.Option(None, "--domain", "-d"),
+    dc_ip: str | None = typer.Option(None, "--dc-ip"),
     force: bool = typer.Option(
         False, "--force", help="Indicate that execution would be authorized."
     ),
@@ -1613,6 +1726,20 @@ def plan(
             "UNKNOWN_CAPABILITY",
             message=f"Unknown capability: {capability}",
             details={"capability": capability},
+        )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
+    from adaf_attack.core.capability_help_data import capability_option_spec
+
+    plan_spec = capability_option_spec(cap.id, cap.requires_force)
+    if ("--domain" in plan_spec.required or "--dc-ip" in plan_spec.required) and (
+        not domain or not dc_ip
+    ):
+        error = error_for(
+            "REQUIRED_INPUT_MISSING",
+            message="--domain and --dc-ip are required for this capability.",
+            details={"capability": capability},
+            suggested_command=f"adaf-attack capability-help {capability}",
         )
         _emit_error(ctx, error)
         raise typer.Exit(code=error.exit_code)
@@ -1674,8 +1801,8 @@ def plan(
         export.write_text(
             export_plan_markdown(
                 capability_id=cap.id,
-                domain=domain,
-                dc_ip=dc_ip,
+                domain=domain or "",
+                dc_ip=dc_ip or "",
                 risk=risk_payload,
                 checklist=checklist,
                 ready_command=ready,
@@ -1847,7 +1974,7 @@ def review(
     )
 
 
-@app.command("help-me", hidden=True)
+@app.command("help-me", rich_help_panel="Guidance & UX helpers")
 def help_me(
     ctx: typer.Context,
     workspace: Path | None = typer.Option(
@@ -1888,7 +2015,7 @@ def recent(ctx: typer.Context) -> None:
 
 
 favorites_app = typer.Typer(help="Pin frequently used capabilities.")
-app.add_typer(favorites_app, name="favorites")
+app.add_typer(favorites_app, name="favorites", rich_help_panel="Guidance & UX helpers")
 
 
 @favorites_app.command("list")
@@ -2519,37 +2646,129 @@ def run_capability(
         "-P",
         help="Extra capability parameter as key=value; repeat as needed (e.g. -P template=User).",
     ),
-    graph: Path | None = typer.Option(None, "--graph", hidden=True),
-    start: str | None = typer.Option(None, "--start", hidden=True),
-    max_depth: int = typer.Option(6, "--max-depth", hidden=True),
-    limit: int = typer.Option(25, "--limit", hidden=True),
-    scope: str = typer.Option("high-value", "--scope", hidden=True),
-    max_objects: int = typer.Option(500, "--max-objects", hidden=True),
-    template: str | None = typer.Option(None, "--template", hidden=True),
-    ca: str | None = typer.Option(None, "--ca", hidden=True),
-    alt_name: str | None = typer.Option(None, "--alt-name", hidden=True),
-    write_target: str | None = typer.Option(None, "--write-target", hidden=True),
-    attribute: str | None = typer.Option(None, "--attribute", hidden=True),
-    value: str | None = typer.Option(None, "--value", hidden=True),
-    descriptor_hex: str | None = typer.Option(None, "--descriptor-hex", hidden=True),
-    set_on: str | None = typer.Option(None, "--set-on", hidden=True),
-    set_from: str | None = typer.Option(None, "--set-from", hidden=True),
-    sam: str | None = typer.Option(None, "--sam", hidden=True),
-    key: str | None = typer.Option(None, "--key", hidden=True),
-    cert: str | None = typer.Option(None, "--cert", hidden=True),
-    pfx: str | None = typer.Option(None, "--pfx", hidden=True),
-    gpo: str | None = typer.Option(None, "--gpo", hidden=True),
-    payload: str | None = typer.Option(None, "--payload", hidden=True),
-    operation: str | None = typer.Option(None, "--operation", hidden=True),
-    artifact: str | None = typer.Option(None, "--artifact", hidden=True),
-    impersonate: str | None = typer.Option(None, "--impersonate", hidden=True),
-    spn: str | None = typer.Option(None, "--spn", hidden=True),
+    graph: Path | None = typer.Option(
+        None,
+        "--graph",
+        help="Saved graph.json for offline analysis.",
+        rich_help_panel="Capability parameters",
+    ),
+    start: str | None = typer.Option(
+        None,
+        "--start",
+        help="Attack-path start principal.",
+        rich_help_panel="Capability parameters",
+    ),
+    max_depth: int = typer.Option(
+        6, "--max-depth", help="Attack-path search depth.", rich_help_panel="Capability parameters"
+    ),
+    limit: int = typer.Option(
+        25, "--limit", help="Maximum ranked paths.", rich_help_panel="Capability parameters"
+    ),
+    scope: str = typer.Option(
+        "high-value",
+        "--scope",
+        help="ACL enumeration scope.",
+        rich_help_panel="Capability parameters",
+    ),
+    max_objects: int = typer.Option(
+        500, "--max-objects", help="LDAP size limit.", rich_help_panel="Capability parameters"
+    ),
+    template: str | None = typer.Option(
+        None, "--template", help="AD CS template name.", rich_help_panel="Capability parameters"
+    ),
+    ca: str | None = typer.Option(
+        None, "--ca", help="Certification authority name.", rich_help_panel="Capability parameters"
+    ),
+    alt_name: str | None = typer.Option(
+        None, "--alt-name", help="Certificate SAN / UPN.", rich_help_panel="Capability parameters"
+    ),
+    write_target: str | None = typer.Option(
+        None,
+        "--write-target",
+        help="DN of the object to modify.",
+        rich_help_panel="Capability parameters",
+    ),
+    attribute: str | None = typer.Option(
+        None,
+        "--attribute",
+        help="LDAP attribute to write.",
+        rich_help_panel="Capability parameters",
+    ),
+    value: str | None = typer.Option(
+        None,
+        "--value",
+        help="Value to write (or spray candidate).",
+        rich_help_panel="Capability parameters",
+    ),
+    descriptor_hex: str | None = typer.Option(
+        None,
+        "--descriptor-hex",
+        help="Raw nTSecurityDescriptor hex.",
+        rich_help_panel="Capability parameters",
+    ),
+    set_on: str | None = typer.Option(
+        None,
+        "--set-on",
+        help="RBCD computer to grant AllowedToAct.",
+        rich_help_panel="Capability parameters",
+    ),
+    set_from: str | None = typer.Option(
+        None,
+        "--set-from",
+        help="RBCD computer that may act.",
+        rich_help_panel="Capability parameters",
+    ),
+    sam: str | None = typer.Option(
+        None,
+        "--sam",
+        help="sAMAccountName for the capability.",
+        rich_help_panel="Capability parameters",
+    ),
+    key: str | None = typer.Option(
+        None, "--key", help="PEM private key path.", rich_help_panel="Capability parameters"
+    ),
+    cert: str | None = typer.Option(
+        None, "--cert", help="PEM certificate path.", rich_help_panel="Capability parameters"
+    ),
+    pfx: str | None = typer.Option(
+        None, "--pfx", help="PFX path.", rich_help_panel="Capability parameters"
+    ),
+    gpo: str | None = typer.Option(
+        None, "--gpo", help="GPO CN or display name.", rich_help_panel="Capability parameters"
+    ),
+    payload: str | None = typer.Option(
+        None,
+        "--payload",
+        help="GPO payload text or @path.",
+        rich_help_panel="Capability parameters",
+    ),
+    operation: str | None = typer.Option(
+        None,
+        "--operation",
+        help="ticket-lifecycle operation.",
+        rich_help_panel="Capability parameters",
+    ),
+    artifact: str | None = typer.Option(
+        None,
+        "--artifact",
+        help="Offline artifact path (BloodHound JSON, ticket, …).",
+        rich_help_panel="Capability parameters",
+    ),
+    impersonate: str | None = typer.Option(
+        None,
+        "--impersonate",
+        help="User to impersonate (S4U / ticket forge).",
+        rich_help_panel="Capability parameters",
+    ),
+    spn: str | None = typer.Option(
+        None, "--spn", help="Service principal name.", rich_help_panel="Capability parameters"
+    ),
 ) -> None:
     """Run a capability against a target.
 
-    Use `-P key=value` (repeatable) for capability-specific parameters instead
-    of a long list of flags. See `capability-help <id>` for what each capability
-    accepts.
+    Capability-specific flags are listed under Capability parameters. `-P key=value`
+    is equivalent. See `adaf-attack capability-help <id>` for required options.
+
     """
     defaults = load_user_config()
     if domain is None:
@@ -2624,14 +2843,28 @@ def run_capability(
             merged.extend(extra_params)
             param = merged
 
-    if not domain or not dc_ip:
-        raise typer.BadParameter(
-            "--domain and --dc-ip are required (or set via `adaf-attack config set`)"
+    from adaf_attack.core.capability_help_data import capability_option_spec
+    from adaf_attack.core.registry import capability_registry as _run_registry
+
+    run_cap = _run_registry.get(capability)
+    run_spec = capability_option_spec(
+        capability, bool(run_cap.requires_force) if run_cap is not None else False
+    )
+    needs_domain = "--domain" in run_spec.required or "--dc-ip" in run_spec.required
+    if needs_domain and (not domain or not dc_ip):
+        error = error_for(
+            "REQUIRED_INPUT_MISSING",
+            message="--domain and --dc-ip are required (or set via `adaf-attack config set`).",
+            details={"capability": capability},
+            suggested_command=f"adaf-attack capability-help {capability}",
         )
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
 
     from adaf_attack.core.user_config import record_recent_target
 
-    record_recent_target(domain, dc_ip, scope)
+    if domain and dc_ip:
+        record_recent_target(domain, dc_ip, scope)
 
     if dry_run:
         return plan(
@@ -2645,8 +2878,8 @@ def run_capability(
         )
 
     target = _build_target(
-        domain,
-        dc_ip,
+        domain or "offline.invalid",
+        dc_ip or "127.0.0.1",
         username,
         password,
         hashes,
@@ -2661,6 +2894,10 @@ def run_capability(
     from adaf_attack.core.registry import capability_registry
 
     cap = capability_registry.get(capability)
+    if cap is None:
+        error = _unknown_capability_error(capability)
+        _emit_error(ctx, error)
+        raise typer.Exit(code=error.exit_code)
 
     extra: dict[str, Any] = {}
     if graph is not None:
@@ -3983,7 +4220,7 @@ def glossary_cmd(
     _emit(ctx, payload, table)
 
 
-@app.command("home", hidden=True)
+@app.command("home", rich_help_panel="Guidance & UX helpers")
 def home_cmd(
     ctx: typer.Context,
     workspace: Path | None = typer.Option(
@@ -4096,7 +4333,7 @@ def command_builder_cmd(
 
 
 finding_app = typer.Typer(help="Explain findings and build remediation checklists.")
-app.add_typer(finding_app, name="finding")
+app.add_typer(finding_app, name="finding", rich_help_panel="Discovery & analysis")
 
 
 def _load_session_finding(session: Path, finding_id: str) -> dict[str, Any]:
@@ -4319,7 +4556,7 @@ def finding_triage_cmd(
 
 
 config_app = typer.Typer(help="Persistent per-user defaults for CLI and TUI.")
-app.add_typer(config_app, name="config")
+app.add_typer(config_app, name="config", rich_help_panel="Setup & diagnostics")
 
 
 @config_app.command("show")
@@ -4412,9 +4649,9 @@ def config_keys(ctx: typer.Context) -> None:
 capability_app = typer.Typer(help="Capability listing, help, planning, and running.")
 session_app = typer.Typer(help="Workspace session inspection.")
 path_app = typer.Typer(help="Attack-path ranking.")
-app.add_typer(capability_app, name="capability")
-app.add_typer(session_app, name="session")
-app.add_typer(path_app, name="path")
+app.add_typer(capability_app, name="capability", rich_help_panel="Discovery & analysis")
+app.add_typer(session_app, name="session", rich_help_panel="Execution & sessions")
+app.add_typer(path_app, name="path", rich_help_panel="Discovery & analysis")
 
 # Register the optional operator-experience command group after the shared
 # output helpers and noun-verb subgroups are available.
@@ -4872,8 +5109,8 @@ def setup_cmd(
         )
 
 
-@app.command("start", rich_help_panel="Setup & diagnostics")
-def start(
+@app.command("tui", rich_help_panel="Setup & diagnostics")
+def tui_cmd(
     ctx: typer.Context,
     workspace: Path | None = typer.Option(
         None,
@@ -4902,6 +5139,19 @@ def start(
         raise typer.Exit(code=error.exit_code) from exc
 
     run_tui(workspace=workspace or default_workspace_dir())
+
+
+@app.command("start", rich_help_panel="Setup & diagnostics")
+def start(
+    ctx: typer.Context,
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        help="Workflow workspace shared with guide / what-next (default: platform workspace).",
+    ),
+) -> None:
+    """Launch the interactive Textual TUI shell (alias of `tui`)."""
+    tui_cmd(ctx, workspace)
 
 
 if __name__ == "__main__":  # pragma: no cover - module CLI entry point

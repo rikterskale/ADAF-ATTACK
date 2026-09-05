@@ -48,6 +48,9 @@ ADVISORY_KINDS = {
     "cert-enroll",
     "certificate-enroll",
     "dcshadow-push",
+    "dcsync",
+    "password-spray",
+    "pre2k-spray",
 }
 
 SUPPORTED_KINDS = REVERTABLE_KINDS | ADVISORY_KINDS

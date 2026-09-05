@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ldap3 import MODIFY_REPLACE
-
 from adaf_attack.core.acl import fetch_sd
 from adaf_attack.core.graph import AttackGraph
 from adaf_attack.core.ldap_util import ldap_connect
@@ -49,9 +47,9 @@ class AclWrite:
                 "rollback": "Restore original nTSecurityDescriptor.",
             }
         )
-        ok = conn.modify(
-            dn, {"nTSecurityDescriptor": [(MODIFY_REPLACE, [bytes.fromhex(descriptor_hex)])]}
-        )
+        from adaf_attack.core.acl import modify_security_descriptor
+
+        ok = modify_security_descriptor(conn, dn, bytes.fromhex(descriptor_hex))
         conn.unbind()
         result = {"target": dn, "ok": bool(ok)}
         session.path("acl-write.json").write_text(

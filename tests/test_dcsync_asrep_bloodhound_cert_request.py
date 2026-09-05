@@ -323,6 +323,7 @@ def test_dcsync_principal_file_and_kerberos_error_path(
             target,
             Session(tmp_path / "session"),
             AttackGraph(),
+            force=True,
             principals=str(principal_file),
         )
 

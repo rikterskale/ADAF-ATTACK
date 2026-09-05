@@ -9,10 +9,12 @@ Use an approved private wheel or source checkout; this project is not on
 PyPI. From the installed environment:
 
 ```bash
-adaf-attack doctor --profile user-readiness
-adaf-attack --format json doctor --explain > doctor.json
+python -m pip check
+adaf-attack --version
+adaf-attack --format json doctor --profile user-readiness --explain
 adaf-attack quickstart --workspace ./quickstart
-adaf-attack guide --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack --format json guide --workspace ./quickstart --session ./quickstart/demo-session
+adaf-attack --format json paths
 ```
 
 The quickstart is offline. Before a live command, verify the target, account,
@@ -32,20 +34,20 @@ adaf-attack plan ldap-enum -d corp.example --dc-ip 10.0.0.10
 adaf-attack run ldap-enum -d corp.example --dc-ip 10.0.0.10 -u operator
 adaf-attack workflow import-session --session <session>
 adaf-attack guide
-adaf-attack run attack-paths -d corp.example --dc-ip 10.0.0.10
-adaf-attack run next-actions -d corp.example --dc-ip 10.0.0.10
+adaf-attack run attack-paths
+adaf-attack run next-actions
 ```
 
-Use `-P key=value` for capability-specific options. Review the plan and the
-session artifacts before any operation requiring `--force`; destructive and
-network-side-effect operations also require the acknowledgement or scoped
-approval required by the capability safety profile. Direct target-interacting
-execution also requires `--approval-token` and its matching `--engagement-id`;
-the engagement workflow supplies these automatically after scope validation.
+Use `-P key=value` or the documented capability flags for extra options. Review
+the plan and session artifacts before any operation requiring `--force`.
+Mutating and network-side-effect capabilities also require the acknowledgement
+and/or scoped `--approval-token` + `--engagement-id` named by
+`capability-help`. Observe-only commands such as `ldap-enum` do not need a
+token. Undo directory mutations with `adaf-attack rollback --session <dir>
+--domain <domain> --dc-ip <dc> --force`.
 
-Useful daily commands are `doctor`, `paths`, `capability-help`, `plan`,
-`run ldap-enum`, `run acl-enum`, `run adcs-enum`, `run attack-paths`, `run
-next-actions`, `session show`, and `rollback`.
+Useful daily commands are `guide`, `doctor`, `paths`, `capability-help`,
+`plan`, `run ldap-enum`, `run attack-paths`, `session show`, and `rollback`.
 
 ## 3. JSON scripting
 

@@ -40,6 +40,10 @@ SENSITIVE_KEYS = {
     "plaintext",
     "decrypted_password",
     "recovered_secret",
+    "asrep_key",
+    "asrep",
+    "nt_hash",
+    "lm_hash",
 }
 
 

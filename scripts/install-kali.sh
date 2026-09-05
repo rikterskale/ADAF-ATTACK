@@ -7,6 +7,8 @@ extras="full"
 install_system_deps=1
 install_completion=1
 package=""
+manifest=""
+sha256=""
 python_command="python3"
 venv_path="$repo_root/.venv"
 uninstall=0
@@ -46,6 +48,8 @@ Usage: bash scripts/install-kali.sh [options]
 
 Options:
   --package PATH          Install a wheel or sdist instead of the source checkout
+  --manifest PATH         release-manifest.json used to verify --package
+  --sha256 HEX            Expected SHA-256 of --package
   --extras NAME           base, dev, tui, kerberos, reports, or full (default: full)
   --python COMMAND        Python command to use (default: python3)
   --venv PATH             Virtual environment path (default: repository .venv)
@@ -60,6 +64,8 @@ EOF
 while (($#)); do
   case "$1" in
     --package) package="${2:?--package requires a path}"; shift 2 ;;
+    --manifest) manifest="${2:?--manifest requires a path}"; shift 2 ;;
+    --sha256) sha256="${2:?--sha256 requires a digest}"; shift 2 ;;
     --extras) extras="${2:?--extras requires a value}"; shift 2 ;;
     --python) python_command="${2:?--python requires a command}"; shift 2 ;;
     --venv)
@@ -159,6 +165,16 @@ venv_python="$venv_path/bin/python"
 install_target="${package:-$repo_root}"
 if [[ -n "$package" && ! -f "$package" ]]; then
   fail "INPUT_FILE_INVALID" "Package artifact does not exist: $package" "Pass an existing approved wheel path with --package." "ls -la \"$package\""
+fi
+if [[ -n "$package" ]]; then
+  verify_args=( "$repo_root/scripts/verify_install_artifact.py" --artifact "$package" )
+  if [[ -n "$manifest" ]]; then
+    verify_args+=( --manifest "$manifest" )
+  fi
+  if [[ -n "$sha256" ]]; then
+    verify_args+=( --sha256 "$sha256" )
+  fi
+  "$python_command" "${verify_args[@]}" || fail "INPUT_FILE_INVALID" "Package digest verification failed." "Place SHA256SUMS next to the wheel or pass --manifest / --sha256." "ls -la \"$(dirname "$package")\""
 fi
 if [[ "$extras" != "base" ]]; then
   install_target="${install_target}[${extras}]"
