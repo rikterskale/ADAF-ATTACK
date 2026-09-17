@@ -145,6 +145,21 @@ Discovery / enumeration:
 | `bloodhound-import` | Import BloodHound identity evidence for offline analysis |
 | `hybrid-signals` | Correlate hybrid identity signals |
 
+`adcs-policy-probe` analyzes operator-supplied evidence; it does not collect CA
+or DC policy itself. Pass `--artifact` with an authorized JSON file containing
+the applicable keys (use `false` or an empty list when evidence is negative):
+
+```json
+{
+  "weak_certificate_mapping": false,
+  "rpc_encryption_not_enforced": false,
+  "issuance_policy_group_links": [],
+  "application_policy_maps_to_group": false,
+  "shell_access_via_certificate": false,
+  "privileged_enrollment_agent": false
+}
+```
+
 Credential access:
 
 | ID | Description |

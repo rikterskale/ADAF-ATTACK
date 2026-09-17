@@ -178,7 +178,7 @@ def fetch_sd(conn: Any, dn: str) -> bytes | None:
         "(objectClass=*)",
         search_scope=BASE,
         attributes=["nTSecurityDescriptor"],
-        controls=[controls],
+        controls=controls,
     )
     if not ok or not conn.entries:
         return None

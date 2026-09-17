@@ -39,7 +39,11 @@ _SPEC: dict[str, OptionSpec] = {
     "ldap-enum": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
     "trusts-enum": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
     "adcs-enum": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
-    "adcs-policy-probe": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
+    "adcs-policy-probe": OptionSpec(
+        (*_UNIVERSAL_REQUIRED, "--artifact"),
+        _UNIVERSAL_OPTIONAL,
+        notes="Requires an authorized CA/DC policy JSON artifact.",
+    ),
     "acl-enum": OptionSpec(_UNIVERSAL_REQUIRED, (*_UNIVERSAL_OPTIONAL, "--scope", "--max-objects")),
     "gmsa-laps-enum": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),
     "kerberoast": OptionSpec(_UNIVERSAL_REQUIRED, _UNIVERSAL_OPTIONAL),

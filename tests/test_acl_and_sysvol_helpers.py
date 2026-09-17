@@ -70,11 +70,13 @@ def test_sysvol_unc_parser_accepts_policy_paths_and_rejects_non_unc_values() -> 
 class _SearchConnection:
     def __init__(self, found: bool, raw: bytes | None) -> None:
         self.found = found
+        self.search_kwargs: dict[str, object] = {}
         self.entries = (
             [] if raw is None else [type("Entry", (), {"nTSecurityDescriptor": _RawAttr(raw)})()]
         )
 
     def search(self, *args: object, **kwargs: object) -> bool:
+        self.search_kwargs = kwargs
         return self.found
 
 
@@ -89,4 +91,9 @@ class _RawAttr:
 def test_fetch_sd_returns_only_successful_binary_security_descriptors() -> None:
     assert fetch_sd(_SearchConnection(False, b"ignored"), "CN=Missing") is None
     assert fetch_sd(_SearchConnection(True, None), "CN=Missing") is None
-    assert fetch_sd(_SearchConnection(True, b"binary-sd"), "CN=Present") == b"binary-sd"
+    conn = _SearchConnection(True, b"binary-sd")
+    assert fetch_sd(conn, "CN=Present") == b"binary-sd"
+    controls = conn.search_kwargs["controls"]
+    assert isinstance(controls, list)
+    assert len(controls) == 1
+    assert not isinstance(controls[0], list)

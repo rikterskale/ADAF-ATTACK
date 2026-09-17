@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ssl
+from collections.abc import Iterable
+from typing import Any
 
 from ldap3 import ALL, Connection, Server, Tls
 from ldap3.core.exceptions import LDAPException
@@ -12,6 +14,38 @@ from adaf_attack.core.auth import describe_auth, ldap3_bind_kwargs
 from adaf_attack.core.target import Target
 
 console = Console()
+
+
+def schema_supported_attributes(conn: Any, requested: Iterable[str]) -> tuple[list[str], list[str]]:
+    """Return canonical supported and unsupported LDAP attribute names.
+
+    ldap3 validates requested attributes against the server schema before it
+    sends a search. Optional AD extensions such as legacy/Windows LAPS and
+    Exchange are not present in every forest, so callers must not request
+    their attributes unconditionally. If schema metadata is unavailable, keep
+    the original request so connections created without ``get_info=ALL``
+    retain their existing behavior.
+    """
+    names = list(dict.fromkeys(str(name) for name in requested))
+    schema = getattr(getattr(conn, "server", None), "schema", None)
+    attribute_types = getattr(schema, "attribute_types", None)
+    if not attribute_types:
+        return names, []
+
+    canonical: dict[str, str] = {}
+    for key, info in attribute_types.items():
+        key_name = str(key)
+        canonical.setdefault(key_name.casefold(), key_name)
+        aliases = getattr(info, "name", ())
+        if isinstance(aliases, str):
+            aliases = (aliases,)
+        for alias in aliases or ():
+            alias_name = str(alias)
+            canonical[alias_name.casefold()] = alias_name
+
+    supported = [canonical[name.casefold()] for name in names if name.casefold() in canonical]
+    unsupported = [name for name in names if name.casefold() not in canonical]
+    return supported, unsupported
 
 
 def ldap_connect(target: Target) -> tuple[Connection, str, str | None]:

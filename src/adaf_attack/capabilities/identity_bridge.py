@@ -14,12 +14,12 @@ from ldap3 import SUBTREE
 
 from adaf_attack.core.bloodhound import import_bloodhound, save_bloodhound, save_bloodhound_zip
 from adaf_attack.core.graph import AttackGraph
-from adaf_attack.core.ldap_util import ldap_connect
+from adaf_attack.core.ldap_util import ldap_connect, schema_supported_attributes
 from adaf_attack.core.registry import register_capability
 from adaf_attack.core.session import Session
 from adaf_attack.core.target import Target
 
-HYBRID_USER_ATTRS = [
+HYBRID_CORE_ATTRS = [
     "sAMAccountName",
     "distinguishedName",
     "description",
@@ -27,14 +27,26 @@ HYBRID_USER_ATTRS = [
     "userPrincipalName",
     "mail",
     "proxyAddresses",
+]
+HYBRID_OPTIONAL_ATTRS = [
     "msDS-cloudExtensionAttribute1",
     "msDS-ExternalDirectoryObjectId",
     "msDS-DeviceObjectVersion",
-    "msDS-ConsistencyGuid",
+    "mS-DS-ConsistencyGuid",
     "msExchRecipientTypeDetails",
     "msExchRemoteRecipientType",
     "onPremisesSamAccountName",
 ]
+HYBRID_USER_ATTRS = [*HYBRID_CORE_ATTRS, *HYBRID_OPTIONAL_ATTRS]
+
+
+def _entry_attr(entry: Any, name: str | None) -> Any | None:
+    if not name:
+        return None
+    try:
+        return entry[name]
+    except (AttributeError, KeyError, TypeError):
+        return getattr(entry, name, None)
 
 
 @register_capability(
@@ -92,11 +104,15 @@ class HybridSignals:
         infra_principals: list[dict[str, str]] = []
 
         max_objects = int(kwargs.get("max_objects") or 3000)
+        supported_optional, skipped_optional = schema_supported_attributes(
+            conn, HYBRID_OPTIONAL_ATTRS
+        )
+        optional_by_name = {name.casefold(): name for name in supported_optional}
         conn.search(
             base_dn,
             "(|(objectClass=user)(objectClass=computer)(objectClass=msDS-GroupManagedServiceAccount))",
             search_scope=SUBTREE,
-            attributes=HYBRID_USER_ATTRS,
+            attributes=[*HYBRID_CORE_ATTRS, *supported_optional],
             size_limit=max_objects,
         )
 
@@ -129,8 +145,8 @@ class HybridSignals:
                     infra_principals.append(row)
 
             # Cloud directory object id / consistency guid → synced or cloud-linked
-            ext_id = getattr(entry, "msDS-ExternalDirectoryObjectId", None)
-            consistency = getattr(entry, "msDS-ConsistencyGuid", None)
+            ext_id = _entry_attr(entry, optional_by_name.get("msds-externaldirectoryobjectid"))
+            consistency = _entry_attr(entry, optional_by_name.get("ms-ds-consistencyguid"))
             if (ext_id and ext_id.value) or (consistency and consistency.value):
                 cloud_linked.append(
                     {
@@ -143,8 +159,10 @@ class HybridSignals:
                 signals.append({"principal": sam, "signal": "CloudDirectoryObjectLink", "dn": dn})
 
             # Exchange remote recipient / hybrid mailbox indicators
-            remote_type = getattr(entry, "msExchRemoteRecipientType", None)
-            recipient_details = getattr(entry, "msExchRecipientTypeDetails", None)
+            remote_type = _entry_attr(entry, optional_by_name.get("msexchremoterecipienttype"))
+            recipient_details = _entry_attr(
+                entry, optional_by_name.get("msexchrecipienttypedetails")
+            )
             if remote_type and remote_type.value is not None:
                 synced_accounts.append(
                     {
@@ -219,6 +237,10 @@ class HybridSignals:
             "cloud_linked_sample": cloud_linked[:50],
             "synced_sample": synced_accounts[:50],
             "infra_sample": infra_principals[:20],
+            "schema_coverage": {
+                "queried_optional_attributes": supported_optional,
+                "skipped_optional_attributes": skipped_optional,
+            },
             "note": (
                 "Read-only on-prem signals only. No Entra Graph calls are made. "
                 "Treat markers as review paths, not confirmed cloud compromise."

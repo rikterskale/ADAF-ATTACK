@@ -273,6 +273,10 @@ _PROMPT_LABELS: dict[str, dict[str, str]] = {
         "label": "Certificate Authority name",
         "help": "e.g. CORP-CA. Use adcs-enum first if you do not know it.",
     },
+    "--artifact": {
+        "label": "Authorized evidence file path",
+        "help": "Path to an operator-supplied evidence file approved for this engagement.",
+    },
     "--write-target": {
         "label": "DN of the object to modify",
         "help": "The exact distinguishedName that will receive the write.",

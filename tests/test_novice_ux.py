@@ -53,6 +53,17 @@ def test_required_prompts_for_destructive_capability() -> None:
     assert "--force" in options
 
 
+def test_adcs_policy_probe_requires_an_authorized_artifact_prompt() -> None:
+    import adaf_attack.capabilities  # noqa: F401
+
+    cap = capability_registry.get("adcs-policy-probe")
+    assert cap is not None
+    prompts = required_prompts(cap)
+    artifact = next(entry for entry in prompts if entry["option"] == "--artifact")
+    assert artifact["label"] == "Authorized evidence file path"
+    assert "approved" in artifact["help"]
+
+
 def test_list_capabilities_novice_view_json() -> None:
     result = runner.invoke(app, ["--format", "json", "list-capabilities", "--novice"])
     assert result.exit_code == 0, result.output
