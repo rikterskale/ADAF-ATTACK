@@ -31,6 +31,7 @@ htmlcov/
 .pytest314-temp*/
 .mypy_cache/
 .ruff_cache/
+.codex/
 
 # IDE
 .idea/
