@@ -101,9 +101,9 @@ def test_read_exact_variants() -> None:
 
 
 def test_listener_bind_error(tmp_path: Any) -> None:
-    first = TgtCaptureListener(tmp_path, port=44592)
+    first = TgtCaptureListener(tmp_path, host="127.0.0.1", port=44592)
     _start_or_skip(first)
-    second = TgtCaptureListener(tmp_path / "other", port=44592)
+    second = TgtCaptureListener(tmp_path / "other", host="127.0.0.1", port=44592)
     try:
         assert second.start() is False
         assert second.error is not None

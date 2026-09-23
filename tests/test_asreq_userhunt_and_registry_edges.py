@@ -121,6 +121,12 @@ def test_impacket_exec_all_methods_and_subprocess_helpers(monkeypatch: Any, tmp_
     session = Session(base_dir=tmp_path)
     monkeypatch.setattr(impacket_exec, "require_impacket", lambda feature: None)
     monkeypatch.setattr(impacket_exec, "_run_wmiexec", lambda *args: {"pid": 1})
+    monkeypatch.setattr(impacket_exec, "_run_smbexec", lambda *args: {"adapter": "smbexec"})
+    monkeypatch.setattr(
+        impacket_exec,
+        "_run_script_exec",
+        lambda target, host, command, method, timeout: {"adapter": method},
+    )
     result = impacket_exec.ImpacketExec().run(
         _target(), session, AttackGraph(), force=True, command="whoami"
     )
@@ -130,6 +136,8 @@ def test_impacket_exec_all_methods_and_subprocess_helpers(monkeypatch: Any, tmp_
             _target(), session, AttackGraph(), force=True, method=method, command="whoami"
         )
         assert result["method"] == method
+        assert result["ok"] is True
+        assert result["outcome"] == {"adapter": method}
     with pytest.raises(RuntimeError, match="unknown method"):
         impacket_exec.ImpacketExec().run(
             _target(), session, AttackGraph(), force=True, method="bad", command="x"
