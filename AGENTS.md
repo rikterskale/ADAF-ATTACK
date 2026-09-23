@@ -16,21 +16,30 @@
 
 ```bash
 python -m pip install -e ".[dev,operator]"
-pre-commit install   # pins ruff/mypy to CI versions
+python -m pip install "ruff==0.16.3" "mypy==2.3.1"
+python -m pip install pre-commit
+pre-commit install
 ```
 
-CI gate order (mirror before pushing):
+Ruff hooks use a pinned pre-commit environment. The mypy hook uses the active
+project environment and the pin installed above. Keep both tool pins synchronized
+with `requirements-ci.txt`.
+
+Local source checks (run in the active project environment before pushing):
 
 ```bash
-ruff check src tests
-ruff format --check src tests
-mypy src/adaf_attack            # strict mode
+python -m ruff check src tests
+python -m ruff format --check src tests
+python -m mypy src/adaf_attack   # strict mode
 python -m compileall -q src tests
-pytest --cov=adaf_attack --cov-fail-under=95    # branch coverage (--cov-branch in CI)
+python -m pytest --cov=adaf_attack --cov-branch --cov-report=term-missing --cov-fail-under=95
 python scripts/check_cli_documentation.py
 ```
 
-Single test: `pytest tests/test_foo.py::test_bar` (mocked harnesses mean no network/AD needed).
+Hosted CI additionally writes coverage XML and runs the full platform, security,
+installer, and artifact validation lanes.
+
+Single test: `python -m pytest tests/test_foo.py::test_bar` (mocked harnesses mean no network/AD needed).
 
 ## Hard-won gotchas
 
