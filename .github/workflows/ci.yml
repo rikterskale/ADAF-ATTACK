@@ -370,6 +370,7 @@ jobs:
           export TZ=UTC
           export LC_ALL=C
           python -m build --no-isolation
+          python scripts/normalize_sdist.py dist
 
       - name: Verify reproducible distributions and checksums
         run: |
@@ -379,9 +380,12 @@ jobs:
           export TZ=UTC
           export LC_ALL=C
           python -m build --no-isolation --outdir dist
+          python scripts/normalize_sdist.py dist
           rm -rf dist-repro-a dist-repro-b
           python -m build --no-isolation --outdir dist-repro-a
+          python scripts/normalize_sdist.py dist-repro-a
           python -m build --no-isolation --outdir dist-repro-b
+          python scripts/normalize_sdist.py dist-repro-b
           python - <<'PY'
           import gzip
           import hashlib
@@ -413,6 +417,9 @@ jobs:
           second = digests("dist-repro-b")
           assert first and first == second, (first, second)
           PY
+          # Prove byte-for-byte reproducibility of the normalized distributions.
+          cmp dist-repro-a/adaf_attack-*.tar.gz dist-repro-b/adaf_attack-*.tar.gz
+          cmp dist-repro-a/adaf_attack-*.whl dist-repro-b/adaf_attack-*.whl
           python scripts/generate_release_provenance.py \
             --repo-root . \
             --dist dist \
