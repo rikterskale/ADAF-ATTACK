@@ -5,8 +5,14 @@ declared in `pyproject.toml`.
 
 ## Unreleased
 
-> Empty after the `0.10.1` private release cut. New work lands here until the
-> next versioned heading.
+### Fixed
+
+- Preserve literal bracket-containing paths and repair commands in quickstart output.
+
+### Changed
+
+- Align contributor setup and local verification commands with CI-pinned tools
+  and the branch-coverage gate.
 
 ## 0.10.1
 
