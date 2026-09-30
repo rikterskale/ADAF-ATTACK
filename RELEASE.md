@@ -61,6 +61,13 @@ Commands:
 python -c "import tomllib, pathlib; from adaf_attack import __version__; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version'], __version__)"
 python scripts/check_install_contracts.py
 python scripts/check_release_readiness.py --repo-root .
+
+# Build the candidate wheel + byte-reproducible sdist once from the release commit.
+# normalize_sdist.py pins sdist tar mtimes/ownership and the gzip header so the
+# shipped .tar.gz is byte-identical on rebuild (setuptools alone is not).
+export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" PYTHONHASHSEED=0 TZ=UTC LC_ALL=C
+python -m build --no-isolation
+python scripts/normalize_sdist.py dist
 ```
 
 ### B. Automated gates

@@ -48,6 +48,14 @@ closeout (CLI and TUI share the same journey). `tour`, `home`, `what-next`, and
 `workflow next` consume the same snapshot and support the same workspace/session
 hints for parity checks.
 
+Use the same workspace and session throughout the walkthrough. Paths containing
+spaces should be quoted when pasted into a terminal. A command typo should
+return a short usage error and the `guide` recovery command, without a traceback.
+The artifact smoke checks exercise this walkthrough and orientation agreement
+in paths containing spaces, Unicode characters, and brackets on each OS family.
+These automated checks complement the unfamiliar-operator exercise recorded in
+[RELEASE_EVIDENCE.md](RELEASE_EVIDENCE.md).
+
 Journey stage labels match CLI and TUI character-for-character:
 
 | Stage id | Label |

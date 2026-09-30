@@ -365,23 +365,29 @@ jobs:
 
       - name: Build source distribution and wheel
         run: |
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
           export PYTHONHASHSEED=0
           export TZ=UTC
           export LC_ALL=C
           python -m build --no-isolation
+          python scripts/normalize_sdist.py dist
 
       - name: Verify reproducible distributions and checksums
         run: |
           set -euo pipefail
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
           export PYTHONHASHSEED=0
           export TZ=UTC
           export LC_ALL=C
           python -m build --no-isolation --outdir dist
+          python scripts/normalize_sdist.py dist
           rm -rf dist-repro-a dist-repro-b
           python -m build --no-isolation --outdir dist-repro-a
+          python scripts/normalize_sdist.py dist-repro-a
           python -m build --no-isolation --outdir dist-repro-b
+          python scripts/normalize_sdist.py dist-repro-b
           python - <<'PY'
           import gzip
           import hashlib
@@ -413,6 +419,9 @@ jobs:
           second = digests("dist-repro-b")
           assert first and first == second, (first, second)
           PY
+          # Prove byte-for-byte reproducibility of the normalized distributions.
+          cmp dist-repro-a/adaf_attack-*.tar.gz dist-repro-b/adaf_attack-*.tar.gz
+          cmp dist-repro-a/adaf_attack-*.whl dist-repro-b/adaf_attack-*.whl
           python scripts/generate_release_provenance.py \
             --repo-root . \
             --dist dist \
@@ -424,7 +433,7 @@ jobs:
             --validate
           (
             cd dist
-            sha256sum * > SHA256SUMS
+            sha256sum -- * > SHA256SUMS
             sha256sum -c SHA256SUMS
           )
 
@@ -513,7 +522,7 @@ jobs:
 
   release-readiness:
     name: New-user release-readiness standard
-    needs: [artifact-smoke, wheelhouse-smoke, release-sbom]
+    needs: [artifact-smoke, wheelhouse-smoke, release-sbom, operator-workflow, windows-installer, kali-installer]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -569,6 +578,7 @@ jobs:
           command -v adaf-attack
 
       - name: Enforce the five-pillar release-readiness standard
+        id: readiness
         shell: bash
         run: |
           set -euo pipefail
@@ -586,7 +596,7 @@ jobs:
         run: |
           {
             echo "## ADAF-ATTACK user readiness"
-            echo "- Readiness verifier: ${{ needs.release-readiness.result }}"
+            echo "- Readiness verifier: ${{ steps.readiness.outcome }}"
             echo "- Clean artifact smoke: ${{ needs.artifact-smoke.result }}"
             echo "- Strict offline wheelhouse: ${{ needs.wheelhouse-smoke.result }}"
             echo "- Exact-wheel operator SBOM: ${{ needs.release-sbom.result }}"

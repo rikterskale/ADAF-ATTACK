@@ -1,8 +1,8 @@
 # Contributing
 
 Thanks for improving ADAF-ATTACK. This project runs a strict CI gate — every
-lane must pass, including a **95% full-source coverage** requirement. The steps
-below reproduce that gate locally so your first push goes green.
+lane must pass, including a **95% full-source branch coverage** requirement.
+The steps below prepare CI-matched Ruff/mypy versions and local source checks.
 
 ## 1. Set up a development environment
 
@@ -13,14 +13,13 @@ python -m venv .venv
 
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev,operator]"
+python -m pip install "ruff==0.16.3" "mypy==2.3.1"
 ```
 
-> **Tooling versions must match CI.** The linters are version-sensitive:
-> different `ruff` releases format and sort imports differently. CI pins
-> `ruff==0.16.3` (see `requirements-ci.txt`). The `[dev]` extra only sets a
-> lower bound, so either install the pinned linters explicitly
-> (`pip install "ruff==0.16.3"`) or — simpler — use the pre-commit hooks below,
-> which are pinned to the same version.
+> **Tooling versions must match CI.** The `[dev]` extra specifies lower bounds
+> for Ruff and mypy. The command above installs their current pins from
+> `requirements-ci.txt`. Keep these versions synchronized with that file when
+> CI tooling changes.
 
 ## 2. Install the pre-commit hooks (recommended)
 
@@ -29,23 +28,28 @@ python -m pip install pre-commit
 pre-commit install
 ```
 
-Now `ruff` (lint + format) and `mypy` run automatically on every commit, pinned
-to the versions CI uses. Run them across the whole tree at any time:
+Ruff's lint and format hooks run in a pinned pre-commit environment. The mypy
+hook uses `python -m mypy` from your active project environment, so it relies
+on the explicit mypy pin installed above. Keep that environment active when
+committing or running the hooks:
 
 ```bash
 pre-commit run --all-files
 ```
 
-## 3. The checks CI runs
+## 3. Run the local source checks
 
-Run these before pushing; they mirror `.github/workflows/ci.yml`:
+Run these before pushing, with the project environment active. They match
+CI's source-check commands and coverage measurement. Hosted CI additionally
+writes coverage XML and runs the full platform, security, installer, and
+artifact validation lanes defined in `.github/workflows/ci.yml`.
 
 ```bash
-ruff check src tests
-ruff format --check src tests
-mypy src/adaf_attack
+python -m ruff check src tests
+python -m ruff format --check src tests
+python -m mypy src/adaf_attack
 python -m compileall -q src tests
-pytest --cov=adaf_attack --cov-report=term-missing --cov-fail-under=95
+python -m pytest --cov=adaf_attack --cov-branch --cov-report=term-missing --cov-fail-under=95
 python scripts/check_cli_documentation.py
 ```
 
@@ -73,7 +77,7 @@ full-suite run.
 
 The gate is **95%**, not 100%. The intent is high confidence without creating
 pressure to write tests that exist only to move the number. New code needs
-tests that exercise it — including error and edge branches. `pytest ...
+tests that exercise it — including error and edge branches. `python -m pytest ...
 --cov-report=term-missing` lists uncovered lines under `Missing`; add *behavioral*
 tests (named for what they verify) until the important branches are covered.
 
