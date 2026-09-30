@@ -97,9 +97,10 @@ def main() -> int:
 
     venv.EnvBuilder(with_pip=True).create(venv_root)
     python = venv_root / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-    requirement = f"{wheel}[{args.extras}]" if args.extras else str(wheel)
-    if not args.find_links:
-        _run([str(python), "-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel"])
+    project = (
+        f"adaf-attack[{args.extras}]" if args.extras and args.extras != "base" else "adaf-attack"
+    )
+    requirement = f"{project} @ {wheel.as_uri()}"
     install = [str(python), "-m", "pip", "install", requirement]
     if args.index_url:
         install.extend(["--index-url", args.index_url])

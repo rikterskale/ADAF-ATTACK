@@ -100,6 +100,22 @@ Open PowerShell in the authorized checkout or release bundle. The installer
 creates an isolated environment, installs a user-level command shim, and
 preserves workspaces during uninstall.
 
+The installer supports spaces, Unicode names, and brackets in checkout and
+application-data paths. For an air-gapped install, pass `-FindLinks` with a
+complete approved wheelhouse; this disables package-index access for installation.
+The wheelhouse must contain the runtime dependencies and the selected extras.
+Source distributions additionally need the build dependencies pinned in
+`pyproject.toml`. Installing a wheel uses the pip provided by the virtual
+environment and does not require downloading contributor build tools.
+
+```powershell
+.\scripts\Install-AdafAttack.ps1 -Package .\adaf_attack-0.10.1-py3-none-any.whl -FindLinks .\wheelhouse -SkipCompletion
+```
+
+Keep `SHA256SUMS` beside the wheel, or supply `-Manifest` or `-Sha256` so the
+installer can verify it. Open a new terminal after installation to load the
+updated user PATH, then follow the first-ten-minutes sequence below.
+
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 Unblock-File .\scripts\Install-AdafAttack.ps1
