@@ -21,9 +21,15 @@ def test_user_data_dir_is_path() -> None:
     assert "adaf-attack" in str(p).lower() or p.name == "adaf-attack"
 
 
-def test_default_workspace_under_data() -> None:
-    ws = default_workspace_dir()
-    assert ws.name == "workspaces" or "workspaces" in str(ws)
+def test_default_workspace_under_data(monkeypatch) -> None:
+    monkeypatch.delenv("ADAF_ATTACK_WORKSPACE", raising=False)
+    assert default_workspace_dir() == user_data_dir() / "workspaces"
+
+
+def test_workspace_override_accepts_an_arbitrary_directory(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "engagement-data"
+    monkeypatch.setenv("ADAF_ATTACK_WORKSPACE", str(workspace))
+    assert default_workspace_dir() == workspace
 
 
 def test_default_workspace_falls_back_to_user_data(monkeypatch) -> None:

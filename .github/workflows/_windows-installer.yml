@@ -42,10 +42,10 @@ jobs:
       - name: Run lifecycle with Windows PowerShell 5.1
         if: matrix.shell == 'powershell'
         shell: powershell
-        run: .\scripts\Test-WindowsInstaller.ps1 -RepoRoot $PWD
+        run: .\scripts\Test-WindowsInstaller.ps1 -RepoRoot $PWD -UnicodePaths
 
       - name: Run lifecycle with PowerShell 7
         if: matrix.shell == 'pwsh'
         shell: pwsh
-        run: .\scripts\Test-WindowsInstaller.ps1 -RepoRoot $PWD -PreexistingConfig
+        run: .\scripts\Test-WindowsInstaller.ps1 -RepoRoot $PWD -UnicodePaths -PreexistingConfig:([bool]::Parse('${{ matrix.preexisting-config }}'))
 

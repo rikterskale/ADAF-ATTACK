@@ -365,7 +365,8 @@ jobs:
 
       - name: Build source distribution and wheel
         run: |
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
           export PYTHONHASHSEED=0
           export TZ=UTC
           export LC_ALL=C
@@ -375,7 +376,8 @@ jobs:
       - name: Verify reproducible distributions and checksums
         run: |
           set -euo pipefail
-          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export SOURCE_DATE_EPOCH
           export PYTHONHASHSEED=0
           export TZ=UTC
           export LC_ALL=C
@@ -431,7 +433,7 @@ jobs:
             --validate
           (
             cd dist
-            sha256sum * > SHA256SUMS
+            sha256sum -- * > SHA256SUMS
             sha256sum -c SHA256SUMS
           )
 
@@ -520,7 +522,7 @@ jobs:
 
   release-readiness:
     name: New-user release-readiness standard
-    needs: [artifact-smoke, wheelhouse-smoke, release-sbom]
+    needs: [artifact-smoke, wheelhouse-smoke, release-sbom, operator-workflow, windows-installer, kali-installer]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -576,6 +578,7 @@ jobs:
           command -v adaf-attack
 
       - name: Enforce the five-pillar release-readiness standard
+        id: readiness
         shell: bash
         run: |
           set -euo pipefail
@@ -593,7 +596,7 @@ jobs:
         run: |
           {
             echo "## ADAF-ATTACK user readiness"
-            echo "- Readiness verifier: ${{ needs.release-readiness.result }}"
+            echo "- Readiness verifier: ${{ steps.readiness.outcome }}"
             echo "- Clean artifact smoke: ${{ needs.artifact-smoke.result }}"
             echo "- Strict offline wheelhouse: ${{ needs.wheelhouse-smoke.result }}"
             echo "- Exact-wheel operator SBOM: ${{ needs.release-sbom.result }}"

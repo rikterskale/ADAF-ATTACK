@@ -5,20 +5,24 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
-    [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
+    [string]$RepoRoot,
 
     [Parameter(Mandatory = $false)]
     [string]$Package,
 
     [Parameter(Mandatory = $false)]
-    [switch]$PreexistingConfig
+    [switch]$PreexistingConfig,
+
+    [switch]$UnicodePaths
 )
 
 $ErrorActionPreference = "Stop"
+if (-not $RepoRoot) { $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path }
+$sourceRoot = $RepoRoot
 $env:PYTHONUTF8 = "1"
 $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP "adaf-localappdata"
 if ($Package) {
-    $wheel = Get-Item (Resolve-Path $Package)
+    $wheel = Get-Item -LiteralPath (Resolve-Path -LiteralPath $Package).Path
 } else {
     $project = Get-Content (Join-Path $RepoRoot "pyproject.toml") -Raw
     $versionMatch = [regex]::Match($project, '(?m)^version\s*=\s*"([^"]+)"')
@@ -31,6 +35,13 @@ if ($Package) {
         throw "Expected exactly one wheel for version $version, found $($candidates.Count)"
     }
     $wheel = $candidates[0]
+}
+
+if ($UnicodePaths) {
+    $pathLabel = "adaf caf$([char]0x00e9) $([char]0x6f22)$([char]0x5b57) [paths]"
+    $RepoRoot = Join-Path $env:RUNNER_TEMP ($pathLabel + " checkout")
+    $env:LOCALAPPDATA = Join-Path $env:RUNNER_TEMP ($pathLabel + " state")
+    New-Item -ItemType Directory -Force -Path $RepoRoot | Out-Null
 }
 
 $python = (Get-Command python).Source
@@ -46,7 +57,7 @@ if ($PreexistingConfig) {
     )
 }
 
-$installer = Join-Path $RepoRoot "scripts\Install-AdafAttack.ps1"
+$installer = Join-Path $sourceRoot "scripts\Install-AdafAttack.ps1"
 & $installer `
     -RepoRoot $RepoRoot `
     -Package $wheel.FullName `
@@ -59,7 +70,9 @@ $venvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 if ($LASTEXITCODE -ne 0) { throw "pip check failed" }
 
 $shim = Join-Path $shimDir "adaf-attack.cmd"
-if (-not (Test-Path $shim)) { throw "Installer PATH shim missing: $shim" }
+if (-not (Test-Path -LiteralPath $shim)) { throw "Installer PATH shim missing: $shim" }
+$launcher = Join-Path $shimDir "adaf-attack.exe"
+if (-not (Test-Path -LiteralPath $launcher)) { throw "Installer console launcher missing: $launcher" }
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($userPath -notlike "*$shimDir*") {
     throw "Installer shim directory missing from user PATH"
@@ -80,7 +93,7 @@ if ($LASTEXITCODE -ne 0) { throw "paths failed through shim" }
 
 New-Item -ItemType Directory -Force $workspace | Out-Null
 $sentinel = Join-Path $workspace "preserve-me.txt"
-Set-Content $sentinel "operator data"
+Set-Content -LiteralPath $sentinel "operator data"
 
 # Re-running the installer is the supported in-place upgrade path.
 & $installer `
@@ -90,8 +103,9 @@ Set-Content $sentinel "operator data"
     -Python $python `
     -SkipCompletion
 & $installer -Uninstall
-if (Test-Path $shim) { throw "Uninstall left the PATH shim behind" }
-if (-not (Test-Path $sentinel)) { throw "Default uninstall deleted workspace data" }
+if (Test-Path -LiteralPath $shim) { throw "Uninstall left the PATH shim behind" }
+if (Test-Path -LiteralPath $launcher) { throw "Uninstall left the console launcher behind" }
+if (-not (Test-Path -LiteralPath $sentinel)) { throw "Default uninstall deleted workspace data" }
 
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 $restoredWorkspace = [Environment]::GetEnvironmentVariable(
@@ -121,4 +135,4 @@ if ($PreexistingConfig) {
     -Python $python `
     -SkipCompletion
 & $installer -Uninstall -RemoveWorkspace
-if (Test-Path $workspace) { throw "Explicit workspace removal did not delete data" }
+if (Test-Path -LiteralPath $workspace) { throw "Explicit workspace removal did not delete data" }
