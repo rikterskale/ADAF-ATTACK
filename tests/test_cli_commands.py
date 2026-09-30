@@ -597,6 +597,32 @@ def test_engagement_report(monkeypatch: Any, tmp_path: Path) -> None:
     assert "Findings: 5" in result.output
 
 
+def test_report_and_package_show_literal_bracketed_paths(monkeypatch: Any, tmp_path: Path) -> None:
+    import adaf_attack.core.control_plane as control_plane
+    import adaf_attack.core.reporting as reporting
+
+    session = tmp_path / "café [client]"
+    session.mkdir()
+    monkeypatch.setattr(
+        reporting, "generate_report_bundle", lambda s, engagement_id: {"finding_count": 5}
+    )
+    monkeypatch.setattr(
+        control_plane,
+        "package_evidence",
+        lambda *args, **kwargs: {
+            "archive": "café [client].zip",
+            "file_count": 1,
+            "profile": "client",
+        },
+    )
+    report = runner.invoke(app, ["engagement", "report", "--session", str(session)])
+    package = runner.invoke(app, ["engagement", "package", "--session", str(session)])
+    _ok(report)
+    _ok(package)
+    assert "[client]" in report.output
+    assert "café [client].zip" in package.output
+
+
 def test_engagement_report_advances_ready_workflow_only(
     monkeypatch: Any,
     tmp_path: Path,
