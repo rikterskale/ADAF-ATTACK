@@ -71,7 +71,7 @@ operator = [
 full = [
     "adaf-attack[operator]",
 ]
-reports = ["reportlab==5.0.0", "pypdf==6.16.1"]
+reports = ["reportlab==5.0.0", "pypdf==6.16.2"]
 
 [tool.setuptools.package-data]
 adaf_attack = ["mappings/*.yaml", "demo_data/*.json"]
