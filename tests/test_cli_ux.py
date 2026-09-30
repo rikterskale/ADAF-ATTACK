@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from rich.console import Console
 from typer.testing import CliRunner
 
 from adaf_attack.cli import app
@@ -118,6 +119,86 @@ def test_quickstart_runs_safe_offline_acceptance(tmp_path: Path, monkeypatch) ->
     assert findings["ok"] is True
     assert findings["findings"]
     assert payload["dashboard"]["finding_count"] > 0
+
+
+@pytest.mark.parametrize("output_format", ["human", "json"])
+def test_quickstart_preserves_literal_paths_in_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output_format: str
+) -> None:
+    import adaf_attack.cli as cli
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ADAF_ATTACK_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("ADAF_ATTACK_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setattr(cli, "_doctor_payload", lambda *args, **kwargs: {"ok": True, "checks": []})
+    monkeypatch.setattr(
+        cli, "_console", lambda ctx: Console(width=240, no_color=True, highlight=False)
+    )
+    workspace = Path("demo [red]")
+    session = workspace / "demo-session"
+    expected_command = (
+        f"adaf-attack guide --workspace '{workspace.as_posix()}' --session '{session.as_posix()}'"
+    )
+
+    result = runner.invoke(
+        app, ["--format", output_format, "quickstart", "--workspace", str(workspace)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (session / "session.json").is_file()
+    if output_format == "json":
+        payload = json.loads(result.output)
+        assert payload["ok"] is True
+        assert payload["session_path"] == str(session)
+        assert payload["suggested_command"] == expected_command
+        assert payload["next_step"] == payload["recovery_command"] == expected_command
+    else:
+        assert f"Session: {session}" in result.output
+        assert f"Next: {expected_command}" in result.output
+
+
+@pytest.mark.parametrize("output_format", ["human", "json"])
+@pytest.mark.parametrize("workspace_name", ["demo [red]", "demo [/red]"])
+def test_quickstart_preserves_literal_repair_commands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output_format: str, workspace_name: str
+) -> None:
+    import adaf_attack.cli as cli
+
+    monkeypatch.setenv("ADAF_ATTACK_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("ADAF_ATTACK_CONFIG_DIR", str(tmp_path / "config"))
+    repair_command = f"adaf-attack quickstart --workspace './{workspace_name}'"
+    doctor = {
+        "ok": False,
+        "checks": [
+            {
+                "id": "application-paths",
+                "status": "error",
+                "value": "Readiness repair required.",
+                "repair_command": repair_command,
+            }
+        ],
+    }
+    monkeypatch.setattr(cli, "_doctor_payload", lambda *args, **kwargs: doctor)
+    monkeypatch.setattr(
+        cli, "_console", lambda ctx: Console(width=240, no_color=True, highlight=False)
+    )
+    workspace = tmp_path / "workspace"
+
+    result = runner.invoke(
+        app, ["--format", output_format, "quickstart", "--workspace", str(workspace)]
+    )
+
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, SystemExit)
+    assert not (workspace / "demo-session").exists()
+    if output_format == "json":
+        payload = json.loads(result.output)
+        assert payload["ok"] is False
+        assert payload["stage"] == "doctor"
+        assert payload["error"]["code"] == "QUICKSTART_READINESS_BLOCKED"
+        assert payload["suggested_command"] == payload["next_step"] == repair_command
+    else:
+        assert f"Next: {repair_command}" in result.output
 
 
 def test_quickstart_does_not_overwrite_existing_session(tmp_path: Path, monkeypatch) -> None:

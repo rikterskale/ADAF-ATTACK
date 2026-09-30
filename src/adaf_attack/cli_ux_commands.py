@@ -9,6 +9,7 @@ from typing import Any
 import typer
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from adaf_attack.core.cli_contract import ActionableError, error_for
 from adaf_attack.core.paths import default_workspace_dir
@@ -79,7 +80,7 @@ def register_ux_commands(
                 ctx,
                 payload,
                 Panel(
-                    f"Quickstart stopped at doctor.\nNext: {payload['next_step']}",
+                    Text(f"Quickstart stopped at doctor.\nNext: {payload['next_step']}"),
                     title="ADAF-ATTACK quickstart",
                 ),
             )
@@ -141,10 +142,12 @@ def register_ux_commands(
             ctx,
             payload,
             Panel(
-                "Installation and offline demo passed.\n"
-                f"Session: {dest}\n"
-                f"Findings: {dashboard.get('finding_count', 0)}\n"
-                f"Next: {next_guide}",
+                Text(
+                    "Installation and offline demo passed.\n"
+                    f"Session: {dest}\n"
+                    f"Findings: {dashboard.get('finding_count', 0)}\n"
+                    f"Next: {next_guide}"
+                ),
                 title="ADAF-ATTACK quickstart",
             ),
         )

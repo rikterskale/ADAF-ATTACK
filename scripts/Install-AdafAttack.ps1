@@ -28,7 +28,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $false)]
-    [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path,
+    [string]$RepoRoot,
 
     [Parameter(Mandatory = $false)]
     [ValidateSet("base", "dev", "tui", "kerberos", "reports", "full")]
@@ -49,6 +49,9 @@ param(
 
     [Parameter(Mandatory = $false)]
     [string]$Sha256,
+
+    [Parameter(Mandatory = $false)]
+    [string]$FindLinks,
 
     [Parameter(Mandatory = $false)]
     [switch]$Editable,
@@ -95,16 +98,16 @@ function Resolve-AdafInstallerError([string]$Message) {
             remediation = "Configure the organization CA with pip --cert / pip.ini, or install from an approved wheelhouse with --no-index."
         }
     }
+    if ($lower -match 'unowned|ownership|refusing to') {
+        return [pscustomobject]@{
+            code = "INSTALLER_OWNERSHIP"
+            remediation = "Inspect %LOCALAPPDATA%\adaf-attack\install.json and restore its original paths if damaged. For an unowned environment, use a separate checkout."
+        }
+    }
     if ($lower -match 'path|shim|console entry point|not found') {
         return [pscustomobject]@{
             code = "PATH_NOT_FOUND"
             remediation = "Open a new terminal after install, or invoke .\.venv\Scripts\adaf-attack.exe directly, then rerun doctor."
-        }
-    }
-    if ($lower -match 'unowned|ownership|refusing to') {
-        return [pscustomobject]@{
-            code = "INSTALLER_OWNERSHIP"
-            remediation = "Uninstall the installer-owned environment first, or choose a different venv/shim path."
         }
     }
     return [pscustomobject]@{
@@ -130,9 +133,10 @@ function Fail-Adaf(
             }
         } | ConvertTo-Json -Depth 4 -Compress
     } else {
-        Write-Error "Error [$Code]: $Message"
-        Write-Error "Next step: $Remediation"
-        Write-Error "Recovery: adaf-attack doctor --profile user-readiness --explain"
+        # The installer uses Stop globally; emit every recovery line before exiting.
+        Write-Error "Error [$Code]: $Message" -ErrorAction Continue
+        Write-Error "Next step: $Remediation" -ErrorAction Continue
+        Write-Error "Recovery: adaf-attack doctor --profile user-readiness --explain" -ErrorAction Continue
     }
     exit 1
 }
@@ -142,16 +146,21 @@ trap {
     $resolved = Resolve-AdafInstallerError $message
     Fail-Adaf -Code $resolved.code -Message $message -Remediation $resolved.remediation
 }
+if (-not $RepoRoot) {
+    # Windows PowerShell 5.1 may evaluate parameter defaults before PSScriptRoot is set.
+    $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+}
 $minimumPython = [Version]"3.11"
 $maximumPython = [Version]"3.15"
 $installRoot = Join-Path $env:LOCALAPPDATA "adaf-attack"
 $shimDir = Join-Path $installRoot "bin"
 $shim = Join-Path $shimDir "adaf-attack.cmd"
+$launcher = Join-Path $shimDir "adaf-attack.exe"
 $markerPath = Join-Path $installRoot "install.json"
 $workspace = Join-Path $installRoot "workspaces"
 $existingMarker = $null
-if (Test-Path $markerPath -PathType Leaf) {
-    $existingMarker = Get-Content -Raw $markerPath | ConvertFrom-Json
+if (Test-Path -LiteralPath $markerPath -PathType Leaf) {
+    $existingMarker = Get-Content -LiteralPath $markerPath -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 $preservePriorOwnership = $existingMarker -and $existingMarker.install_complete
 
@@ -181,17 +190,57 @@ function Invoke-Native([string]$Command, [string[]]$Arguments) {
     }
 }
 
+function Write-AdafOwnership([object]$Record, [string]$Path) {
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, ($Record | ConvertTo-Json), $utf8)
+}
+
+function Write-AdafLauncher([string]$Console, [string]$Directory) {
+    New-Item -ItemType Directory -Force -Path $Directory | Out-Null
+    # The installed executable embeds its interpreter path as Unicode. Copy it
+    # intact; cmd expands dp0 at runtime, without decoding a literal user path.
+    Copy-Item -LiteralPath $Console -Destination (Join-Path $Directory "adaf-attack.exe") -Force
+    @('@echo off', '@setlocal DisableDelayedExpansion', '@"%~dp0adaf-attack.exe" %*') |
+        Set-Content -LiteralPath (Join-Path $Directory "adaf-attack.cmd") -Encoding ASCII
+}
+
+function Assert-OwnedUninstallPath([string]$Recorded, [string]$Expected) {
+    if (-not $Recorded -or -not [System.IO.Path]::IsPathRooted($Recorded)) {
+        throw "Refusing to remove an invalid installer ownership path: $Recorded"
+    }
+    $recordedPath = [System.IO.Path]::GetFullPath($Recorded).TrimEnd("\")
+    $expectedPath = [System.IO.Path]::GetFullPath($Expected).TrimEnd("\")
+    if (-not [string]::Equals($recordedPath, $expectedPath, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to remove a path outside installer ownership: $Recorded (expected $Expected)"
+    }
+}
+
 if ($Uninstall) {
-    if (-not (Test-Path $markerPath -PathType Leaf)) {
+    if (-not (Test-Path -LiteralPath $markerPath -PathType Leaf)) {
         throw "No installer ownership record exists at $markerPath. Nothing was removed."
     }
     $marker = $existingMarker
-    Write-Step "Removing installer-owned virtual environment and shim"
-    if (Test-Path $marker.venv) {
-        Remove-Item -Recurse -Force $marker.venv
+    # Validate the entire record before deleting anything or changing user settings.
+    if (-not $marker.repo_root -or -not [System.IO.Path]::IsPathRooted([string]$marker.repo_root)) {
+        throw "Refusing to remove an environment with an invalid installer ownership root."
     }
-    if (Test-Path $marker.shim) {
-        Remove-Item -Force $marker.shim
+    Assert-OwnedUninstallPath ([string]$marker.venv) (Join-Path $marker.repo_root ".venv")
+    Assert-OwnedUninstallPath ([string]$marker.shim) $shim
+    Assert-OwnedUninstallPath ([string]$marker.shim_dir) $shimDir
+    Assert-OwnedUninstallPath ([string]$marker.workspace) $workspace
+    if ($marker.PSObject.Properties.Name -contains "launcher") {
+        Assert-OwnedUninstallPath ([string]$marker.launcher) $launcher
+    }
+    Write-Step "Removing installer-owned virtual environment and shim"
+    if (Test-Path -LiteralPath $marker.venv) {
+        Remove-Item -LiteralPath $marker.venv -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $marker.shim) {
+        Remove-Item -LiteralPath $marker.shim -Force
+    }
+    if (($marker.PSObject.Properties.Name -contains "launcher") -and
+        (Test-Path -LiteralPath $launcher)) {
+        Remove-Item -LiteralPath $launcher -Force
     }
     if ($marker.path_added) {
         Remove-OwnedPathEntry $marker.shim_dir
@@ -211,29 +260,43 @@ if ($Uninstall) {
         )
     }
     if ($RemoveWorkspace) {
-        if ($ownedWorkspace -and (Test-Path $ownedWorkspace)) {
-            Remove-Item -Recurse -Force $ownedWorkspace
+        if ($ownedWorkspace -and (Test-Path -LiteralPath $ownedWorkspace)) {
+            Remove-Item -LiteralPath $ownedWorkspace -Recurse -Force
             Write-Ok "Removed workspace data: $ownedWorkspace"
         }
     } else {
         Write-Ok "Preserved workspace data: $ownedWorkspace"
     }
-    Remove-Item -Force $markerPath
-    if ((Test-Path $shimDir) -and -not (Get-ChildItem -Force $shimDir)) {
-        Remove-Item -Force $shimDir
+    Remove-Item -LiteralPath $markerPath -Force
+    if ((Test-Path -LiteralPath $shimDir) -and -not (Get-ChildItem -LiteralPath $shimDir -Force)) {
+        Remove-Item -LiteralPath $shimDir -Force
     }
     Write-Ok "Uninstall complete. Open a new terminal to refresh PATH."
     exit 0
 }
 
-if (-not (Test-Path $RepoRoot -PathType Container)) {
+if (-not (Test-Path -LiteralPath $RepoRoot -PathType Container)) {
     throw "RepoRoot does not exist: $RepoRoot"
 }
-if (-not $Package -and -not (Test-Path (Join-Path $RepoRoot "pyproject.toml"))) {
+$RepoRoot = (Resolve-Path -LiteralPath $RepoRoot).Path
+if ($Editable -and $Package) {
+    Fail-Adaf -Code "INSTALLER_ARGUMENT" -Message "-Editable cannot be combined with -Package." -Remediation "Use -Package for an approved artifact, or -Editable for a source checkout."
+}
+if ($FindLinks) {
+    if (-not (Test-Path -LiteralPath $FindLinks -PathType Container)) {
+        Fail-Adaf -Code "INSTALLER_ARGUMENT" -Message "Wheelhouse directory does not exist: $FindLinks" -Remediation "Pass -FindLinks with an existing complete approved wheelhouse directory."
+    }
+    $FindLinks = (Resolve-Path -LiteralPath $FindLinks).Path
+}
+if (-not $Package -and -not (Test-Path -LiteralPath (Join-Path $RepoRoot "pyproject.toml"))) {
     throw "RepoRoot does not look like ADAF-ATTACK: $RepoRoot"
 }
-if ((Test-Path $shim -PathType Leaf) -and -not $existingMarker) {
+if ((Test-Path -LiteralPath $shim -PathType Leaf) -and -not $existingMarker) {
     throw "Refusing to overwrite unowned shim: $shim. Move it or remove it explicitly."
+}
+if ((Test-Path -LiteralPath $launcher) -and
+    (-not $existingMarker -or $existingMarker.launcher -ne $launcher)) {
+    throw "Refusing to overwrite unowned launcher: $launcher. Move it or remove it explicitly."
 }
 
 $pythonCommand = $Python.Trim()
@@ -242,7 +305,12 @@ if ($pythonCommand -match "^(py(?:\.exe)?)\s+(.+)$") {
     $pythonCommand = $Matches[1]
     $pythonPrefix = @($Matches[2].Split(" ", [StringSplitOptions]::RemoveEmptyEntries))
 }
-$resolvedPython = Get-Command $pythonCommand -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $pythonCommand -PathType Leaf) {
+    $pythonCommand = (Resolve-Path -LiteralPath $pythonCommand).Path
+    $resolvedPython = Get-Item -LiteralPath $pythonCommand
+} else {
+    $resolvedPython = Get-Command $pythonCommand -ErrorAction SilentlyContinue
+}
 if (-not $resolvedPython) {
     Fail-Adaf -Code "PYTHON_UNSUPPORTED" -Message "Python command not found: $pythonCommand." -Remediation "Install Python 3.11-3.14 or pass -Python with a full path, then retry."
 }
@@ -256,27 +324,29 @@ if ((Split-Path $pythonCommand -Leaf) -match "^py(?:\.exe)?$" -and $pythonPrefix
 Write-Step "Validating Python 3.11 through 3.14"
 $probeArgs = @($pythonPrefix) + @(
     "-c",
-    "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}|{sys.executable}')"
+    "import json, sys; print(json.dumps({'version': f'{sys.version_info.major}.{sys.version_info.minor}', 'executable': sys.executable}))"
 )
 $probeOutput = & $pythonCommand @probeArgs
 if ($LASTEXITCODE -ne 0) {
     throw "Python probe failed with exit code $LASTEXITCODE`: $pythonCommand $($pythonPrefix -join ' ')"
 }
 $probe = [string]($probeOutput | Select-Object -Last 1)
-$probeParts = $probe.Trim().Split("|")
-if ($probeParts.Count -ne 2) {
+try { $probeParts = $probe.Trim() | ConvertFrom-Json } catch {
     throw "Could not parse Python version and executable from: $probe"
 }
-$detectedVersion = [Version]$probeParts[0]
+if (-not $probeParts.version -or -not $probeParts.executable) {
+    throw "Could not parse Python version and executable from: $probe"
+}
+$detectedVersion = [Version]$probeParts.version
 if ($detectedVersion -lt $minimumPython -or $detectedVersion -ge $maximumPython) {
     Fail-Adaf -Code "PYTHON_UNSUPPORTED" -Message "Python $detectedVersion is unsupported. ADAF-ATTACK requires Python 3.11 through 3.14." -Remediation "Install Python 3.11-3.14 or pass -Python with a supported interpreter, then retry."
 }
-$pythonExe = $probeParts[1]
+$pythonExe = [string]$probeParts.executable
 Write-Ok "Using Python $detectedVersion at $pythonExe"
 
 $venv = Join-Path $RepoRoot ".venv"
 $venvPython = Join-Path $venv "Scripts\python.exe"
-if ((Test-Path $venv) -and -not $existingMarker) {
+if ((Test-Path -LiteralPath $venv) -and -not $existingMarker) {
     throw "Refusing to modify unowned virtual environment: $venv. Move it or remove it explicitly."
 }
 if ($existingMarker -and -not [string]::Equals(
@@ -288,11 +358,12 @@ if ($existingMarker -and -not [string]::Equals(
 }
 if (-not $existingMarker) {
     New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
-    @{
-        repo_root = (Resolve-Path $RepoRoot).Path
+    $ownership = @{
+        repo_root = $RepoRoot
         venv = $venv
         shim = $shim
         shim_dir = $shimDir
+        launcher = $launcher
         path_added = $false
         workspace = $workspace
         previous_workspace = [Environment]::GetEnvironmentVariable(
@@ -300,21 +371,24 @@ if (-not $existingMarker) {
             "User"
         )
         install_complete = $false
-    } | ConvertTo-Json | Set-Content -Path $markerPath -Encoding ASCII
-    $existingMarker = Get-Content -Raw $markerPath | ConvertFrom-Json
+    }
+    Write-AdafOwnership $ownership $markerPath
+    $existingMarker = Get-Content -LiteralPath $markerPath -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 Write-Step "Creating or refreshing virtual environment at $venv"
-if (-not (Test-Path $venvPython)) {
+if (-not (Test-Path -LiteralPath $venvPython)) {
     Invoke-Native $pythonExe @("-m", "venv", $venv)
 } else {
-    $selectedBase = & $pythonExe -c "import os, sys; print(os.path.normcase(os.path.realpath(sys.base_prefix)))"
+    $selectedBaseJson = & $pythonExe -c "import json, os, sys; print(json.dumps(os.path.normcase(os.path.realpath(sys.base_prefix))))"
     if ($LASTEXITCODE -ne 0) {
         throw "Could not identify the selected Python base interpreter."
     }
-    $existingBase = & $venvPython -c "import os, sys; print(os.path.normcase(os.path.realpath(sys.base_prefix)))"
+    $existingBaseJson = & $venvPython -c "import json, os, sys; print(json.dumps(os.path.normcase(os.path.realpath(sys.base_prefix))))"
     if ($LASTEXITCODE -ne 0) {
         throw "Could not identify the existing virtual environment interpreter."
     }
+    $selectedBase = $selectedBaseJson | ConvertFrom-Json
+    $existingBase = $existingBaseJson | ConvertFrom-Json
     if (-not [string]::Equals(
         ([string]$selectedBase).Trim(),
         ([string]$existingBase).Trim(),
@@ -323,14 +397,12 @@ if (-not (Test-Path $venvPython)) {
         throw "Existing $venv uses $existingBase, not selected interpreter $selectedBase. Uninstall first or select the matching Python."
     }
 }
-Invoke-Native $venvPython @("-m", "pip", "install", "--upgrade", "pip", "setuptools", "wheel")
-
 if ($Package) {
-    $installTarget = (Resolve-Path $Package).Path
+    $installTarget = (Resolve-Path -LiteralPath $Package).Path
     $verifyScript = Join-Path $PSScriptRoot "verify_install_artifact.py"
     $verifyArgs = @($verifyScript, "--artifact", $installTarget)
     if ($Manifest) {
-        $verifyArgs += @("--manifest", (Resolve-Path $Manifest).Path)
+        $verifyArgs += @("--manifest", (Resolve-Path -LiteralPath $Manifest).Path)
     }
     if ($Sha256) {
         $verifyArgs += @("--sha256", $Sha256)
@@ -338,14 +410,21 @@ if ($Package) {
     Write-Step "Verifying package digest"
     Invoke-Native $pythonExe $verifyArgs
 } else {
-    $installTarget = (Resolve-Path $RepoRoot).Path
+    $installTarget = $RepoRoot
 }
-if ($Extras -ne "base") {
-    $installTarget = "$installTarget[$Extras]"
+$installTarget = ([System.Uri]$installTarget).AbsoluteUri
+$projectRequirement = "adaf-attack"
+if ($Extras -ne "base") { $projectRequirement = "adaf-attack[$Extras]" }
+if ($Editable) {
+    $installTarget = "$installTarget#egg=$projectRequirement"
+} else {
+    $installTarget = "$projectRequirement @ $installTarget"
 }
 $installArgs = @("-m", "pip", "install", "--upgrade")
+if ($FindLinks) {
+    $installArgs += @("--no-index", "--find-links", $FindLinks)
+}
 if ($Editable) {
-    if ($Package) { throw "-Editable cannot be combined with -Package." }
     $installArgs += "--editable"
 }
 $installArgs += $installTarget
@@ -354,15 +433,11 @@ Invoke-Native $venvPython $installArgs
 Invoke-Native $venvPython @("-m", "pip", "check")
 
 $scriptsAdaf = Join-Path $venv "Scripts\adaf-attack.exe"
-if (-not (Test-Path $scriptsAdaf -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath $scriptsAdaf -PathType Leaf)) {
     Fail-Adaf -Code "PATH_NOT_FOUND" -Message "Installation completed without the expected console entry point: $scriptsAdaf" -Remediation "Inspect the venv Scripts directory, open a new terminal, or invoke the venv adaf-attack.exe directly."
 }
 
-New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
-@(
-    "@echo off"
-    "`"$scriptsAdaf`" %*"
-) | Set-Content -Path $shim -Encoding ASCII
+Write-AdafLauncher $scriptsAdaf $shimDir
 
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 $pathEntries = @()
@@ -394,16 +469,18 @@ if ($existingMarker.PSObject.Properties.Name -contains "previous_workspace") {
 }
 [Environment]::SetEnvironmentVariable("ADAF_ATTACK_WORKSPACE", $workspace, "User")
 
-@{
-    repo_root = (Resolve-Path $RepoRoot).Path
+$ownership = @{
+    repo_root = $RepoRoot
     venv = $venv
     shim = $shim
     shim_dir = $shimDir
+    launcher = $launcher
     path_added = $pathAdded
     workspace = $workspace
     previous_workspace = $previousWorkspace
     install_complete = $true
-} | ConvertTo-Json | Set-Content -Path $markerPath -Encoding ASCII
+}
+Write-AdafOwnership $ownership $markerPath
 
 if (-not $SkipCompletion) {
     Write-Step "Installing PowerShell completion"

@@ -5,8 +5,28 @@ declared in `pyproject.toml`.
 
 ## Unreleased
 
-> Empty after the `0.10.1` private release cut. New work lands here until the
-> next versioned heading.
+### Fixed
+
+- Preserve literal bracket-containing paths and repair commands in quickstart output.
+- Preserve Unicode Windows ownership records and launchers, quote artifact URLs,
+  and show literal report/package paths containing brackets.
+- Return a normal usage error for unknown commands with the pinned Typer runtime.
+- Remove unnecessary build-tool downloads from wheel installation and support
+  complete offline wheelhouses in the Windows installer and artifact smoke.
+- Exercise base/full artifacts on all three OS families, Unicode-path Windows
+  lifecycle checks, and agreement between first-run orientation commands.
+- Resolve the Windows installer default repository path after parameter binding
+  for direct Windows PowerShell 5.1 launches, and print all recovery instructions
+  before exiting on an installation error.
+- Validate all Windows uninstall ownership paths before deleting data or changing
+  user settings; use literal paths and classify ownership failures correctly.
+- Isolate the default-workspace test from operator environment overrides and
+  verify arbitrary configured workspace names.
+
+### Changed
+
+- Align contributor setup and local verification commands with CI-pinned tools
+  and the branch-coverage gate.
 
 ## 0.10.1
 
