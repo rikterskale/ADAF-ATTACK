@@ -3,7 +3,7 @@
 textual==8.2.8
 impacket==0.13.1
 reportlab==5.0.0
-pypdf==6.16.1
+pypdf==6.16.2
 
 # Certipy remains a separate dependency boundary because of cryptography
 # compatibility constraints. Install it in a dedicated environment when needed.

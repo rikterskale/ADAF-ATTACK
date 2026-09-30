@@ -74,7 +74,7 @@ if (-not (Test-Path -LiteralPath $shim)) { throw "Installer PATH shim missing: $
 $launcher = Join-Path $shimDir "adaf-attack.exe"
 if (-not (Test-Path -LiteralPath $launcher)) { throw "Installer console launcher missing: $launcher" }
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($userPath -notlike "*$shimDir*") {
+if (@($userPath -split ";") -notcontains $shimDir) {
     throw "Installer shim directory missing from user PATH"
 }
 $workspace = [Environment]::GetEnvironmentVariable("ADAF_ATTACK_WORKSPACE", "User")
@@ -113,14 +113,14 @@ $restoredWorkspace = [Environment]::GetEnvironmentVariable(
     "User"
 )
 if ($PreexistingConfig) {
-    if ($userPath -notlike "*$shimDir*") {
+    if (@($userPath -split ";") -notcontains $shimDir) {
         throw "Uninstall removed a pre-existing PATH entry"
     }
     if ($restoredWorkspace -ne $previousWorkspace) {
         throw "Uninstall did not restore the previous workspace environment value"
     }
 } else {
-    if ($userPath -like "*$shimDir*") {
+    if (@($userPath -split ";") -contains $shimDir) {
         throw "Uninstall left its user PATH entry behind"
     }
     if ($restoredWorkspace) {
