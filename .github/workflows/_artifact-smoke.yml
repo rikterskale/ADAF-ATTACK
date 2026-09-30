@@ -39,6 +39,14 @@ jobs:
             python-version: "3.12"
             artifact: wheel
             extras: full
+          - os: windows-2022
+            python-version: "3.14"
+            artifact: wheel
+            extras: full
+          - os: macos-14
+            python-version: "3.12"
+            artifact: wheel
+            extras: full
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,5 +100,5 @@ jobs:
           fi
           python scripts/smoke_distribution.py \
             --artifact "${artifacts[0]}" \
-            --venv "$RUNNER_TEMP/adaf-artifact-smoke" \
+            --venv "$RUNNER_TEMP/adaf smoke café [paths]" \
             --extras "${{ matrix.extras }}"

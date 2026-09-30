@@ -295,8 +295,6 @@ class AdafTyperGroup(TyperGroup):
             return command
         import difflib
 
-        import click
-
         names = list(self.list_commands(ctx))
         matches = [
             item
@@ -304,7 +302,7 @@ class AdafTyperGroup(TyperGroup):
             if item != "command" or cmd_name.startswith("comm")
         ]
         hint = f" Did you mean: {', '.join(matches)}?" if matches else ""
-        raise click.UsageError(f"No such command '{cmd_name}'.{hint} When lost: adaf-attack guide")
+        return ctx.fail(f"No such command '{cmd_name}'.{hint} When lost: adaf-attack guide")
 
 
 app = typer.Typer(
@@ -3439,7 +3437,7 @@ def engagement_report(
         ctx,
         {"ok": True, **result},
         Panel(
-            f"Findings: {result['finding_count']}\nReport directory: {session / 'reports'}",
+            f"Findings: {result['finding_count']}\nReport directory: {escape(str(session / 'reports'))}",
             title="Client report bundle",
         ),
     )
@@ -3521,7 +3519,7 @@ def engagement_package(
         ctx,
         {"ok": True, **result},
         Panel(
-            f"Archive: {result['archive']}\nFiles: {result['file_count']}\nProfile: {result['profile']}",
+            f"Archive: {escape(str(result['archive']))}\nFiles: {result['file_count']}\nProfile: {escape(str(result['profile']))}",
             title="Engagement evidence package",
         ),
     )

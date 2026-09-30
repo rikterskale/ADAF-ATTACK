@@ -15,6 +15,14 @@ from adaf_attack.core.runner import RunError
 runner = CliRunner()
 
 
+def test_unknown_command_returns_usage_error_without_a_traceback() -> None:
+    result = runner.invoke(app, ["no-such-command"])
+    assert result.exit_code == 2
+    assert "When lost: adaf-attack guide" in result.output
+    assert "Traceback" not in result.output
+    assert isinstance(result.exception, SystemExit)
+
+
 def test_doctor_json_has_stable_remediation_contract() -> None:
     result = runner.invoke(app, ["--format", "json", "doctor", "--explain"])
 
